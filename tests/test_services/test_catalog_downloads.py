@@ -175,7 +175,7 @@ async def test_queues_poster_and_background_for_incomplete_movie(
     item = media_item_factory(
         id=None,
         server_item_id="overture-1",
-        library_id="lib-1",
+        library_id="1:lib-1",
         folder_path="/media/Movie One",
     )
     db_session.add(item)
@@ -217,7 +217,7 @@ async def test_skips_art_type_that_is_already_complete(
     item = media_item_factory(
         id=None,
         server_item_id="overture-2",
-        library_id="lib-1",
+        library_id="1:lib-1",
         folder_path="/media/Movie Two",
         art={"poster": {"file_hash": "abc123"}},
     )
@@ -253,7 +253,7 @@ async def test_no_candidates_means_no_job_queued(
     item = media_item_factory(
         id=None,
         server_item_id="overture-3",
-        library_id="lib-1",
+        library_id="1:lib-1",
         folder_path="/media/Movie Three",
     )
     db_session.add(item)
@@ -288,7 +288,7 @@ async def test_show_seasons_are_queued_and_zero_file_count_skipped(
         id=None,
         media_type=MediaType.SHOW,
         server_item_id="overture-4",
-        library_id="lib-1",
+        library_id="1:lib-1",
         folder_path="/media/Show One",
     )
     db_session.add(item)
@@ -343,7 +343,7 @@ async def test_created_false_does_not_increment_stats(
     item = media_item_factory(
         id=None,
         server_item_id="overture-5",
-        library_id="lib-1",
+        library_id="1:lib-1",
         folder_path="/media/Movie Five",
     )
     db_session.add(item)
@@ -378,7 +378,7 @@ async def test_theme_is_queued_when_incomplete(
     item = media_item_factory(
         id=None,
         server_item_id="overture-6",
-        library_id="lib-1",
+        library_id="1:lib-1",
         folder_path="/media/Movie Six",
     )
     db_session.add(item)
@@ -416,7 +416,7 @@ async def test_existing_local_theme_is_never_replaced(
     item = media_item_factory(
         id=None,
         server_item_id="overture-7",
-        library_id="lib-1",
+        library_id="1:lib-1",
         folder_path="/media/Movie Seven",
         theme_file_hash="theme-hash",
         youtube_id=youtube_id,
@@ -450,7 +450,7 @@ async def test_theme_not_queued_when_no_youtube_id_found(
     item = media_item_factory(
         id=None,
         server_item_id="overture-8",
-        library_id="lib-1",
+        library_id="1:lib-1",
         folder_path="/media/Movie Eight",
     )
     db_session.add(item)
@@ -483,7 +483,7 @@ async def test_theme_priority_ordering(
     item = media_item_factory(
         id=None,
         server_item_id="overture-theme-prio",
-        library_id="lib-1",
+        library_id="1:lib-1",
         folder_path="/media/Movie Priority",
     )
     db_session.add(item)
@@ -548,7 +548,7 @@ async def test_theme_priority_fallback(
     item = media_item_factory(
         id=None,
         server_item_id="overture-theme-fallback",
-        library_id="lib-1",
+        library_id="1:lib-1",
         folder_path="/media/Movie Fallback",
     )
     db_session.add(item)
@@ -589,13 +589,13 @@ async def test_error_for_one_item_is_recorded_and_loop_continues(
     broken = media_item_factory(
         id=None,
         server_item_id="overture-9",
-        library_id="lib-1",
+        library_id="1:lib-1",
         folder_path="/media/Broken",
     )
     healthy = media_item_factory(
         id=None,
         server_item_id="overture-10",
-        library_id="lib-1",
+        library_id="1:lib-1",
         folder_path="/media/Healthy",
     )
     db_session.add_all([broken, healthy])

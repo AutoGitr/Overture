@@ -1,9 +1,10 @@
 """Application configuration from the environment and the configuration file."""
 
 lazy import os
+lazy import re
 lazy import tempfile
 lazy import zoneinfo
-lazy from collections.abc import Mapping
+lazy from collections.abc import Iterable, Mapping
 lazy from ipaddress import (
     IPv4Address,
     IPv4Network,
@@ -12,23 +13,33 @@ lazy from ipaddress import (
     ip_address,
     ip_network,
 )
-lazy from pathlib import Path
-lazy from typing import Annotated, Literal, Self, cast
+lazy from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
+lazy from typing import Annotated, Any, Literal, NamedTuple, Self, cast, override
 lazy from urllib.parse import unquote, urlsplit, urlunsplit
 
 lazy from dotenv import dotenv_values
 lazy from pydantic import (
     AfterValidator,
     AnyHttpUrl,
+    BaseModel,
     BeforeValidator,
+    ConfigDict,
     Field,
     PrivateAttr,
     SecretStr,
     UrlConstraints,
+    ValidationError,
     field_validator,
     model_validator,
 )
-lazy from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+lazy from pydantic_settings import (
+    BaseSettings,
+    EnvSettingsSource,
+    NoDecode,
+    PydanticBaseSettingsSource,
+    SecretsSettingsSource,
+    SettingsConfigDict,
+)
 
 lazy from .domain import ServerType
 lazy from .passwords import validate_hash
@@ -150,11 +161,6 @@ def _service_url(value: str, setting_name: str) -> str:
     return f"{origin}{path}"
 
 
-def _media_server_url(value: str) -> str:
-    """Normalize MEDIA_SERVER_URL."""
-    return _service_url(value, "MEDIA_SERVER_URL")
-
-
 def _radarr_url(value: str) -> str:
     """Normalize RADARR_URL."""
     return _service_url(value, "RADARR_URL")
@@ -185,14 +191,296 @@ def _lowercase(value: object) -> object:
     return value.strip().lower() if isinstance(value, str) else value
 
 
-def _media_server(value: object) -> object:
-    """Require a media server kind, in any case; ``none`` runs without one."""
-    if not value:
+#: How a server's name is written; its upper-case form names its variables.
+_SERVER_NAME = re.compile(r"[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*")
+#: Every variable that configures media servers starts with this.
+_SERVER_VARIABLE_PREFIX = "MEDIA_SERVER"
+#: The fields each server's ``MEDIA_SERVER_<NAME>_<FIELD>`` variables set.
+_SERVER_FIELDS = (
+    "type",
+    "url",
+    "api_key",
+    "verify_tls",
+    "path_map",
+    "collections_path",
+)
+
+
+class PathMapping(NamedTuple):
+    """A folder as the media server reports it, and where Overture sees it."""
+
+    server: str
+    local: str
+
+
+def _pure_server_path(path: str) -> PurePath:
+    """Interpret a server path by its syntax, independent of Overture's OS."""
+    return (
+        PureWindowsPath(path)
+        if "\\" in path or path[1:2] == ":"
+        else (PurePosixPath(path))
+    )
+
+
+def _path_map(value: object) -> object:
+    """Split ``server=local`` pairs, separated by commas, longest server path first."""
+    if not isinstance(value, str):
+        return value
+    mappings: list[PathMapping] = []
+    for entry in filter(None, (part.strip() for part in value.split(","))):
+        server, separator, local = (side.strip() for side in entry.partition("="))
+        if not separator or not server or not local:
+            raise ValueError(
+                f"PATH_MAP entry {entry!r} must be written server_path=local_path"
+            )
+        if not Path(local).is_absolute():
+            raise ValueError(f"PATH_MAP local path {local!r} must be absolute")
+        mappings.append(PathMapping(server, local))
+    return tuple(
+        sorted(mappings, key=lambda mapping: len(mapping.server), reverse=True)
+    )
+
+
+class MediaServerConfig(BaseModel):
+    """One media server Overture talks to, as its variables configure it."""
+
+    model_config = ConfigDict(frozen=True, hide_input_in_errors=True)
+
+    #: As written in MEDIA_SERVERS; its lower-case form identifies the server.
+    name: Annotated[str, Field(pattern=_SERVER_NAME.pattern, max_length=40)]
+    type: Annotated[ServerType, BeforeValidator(_lowercase)]
+    url: str
+    api_key: SecretStr
+    verify_tls: bool = True
+    #: Where Overture sees the folders the server reports, longest first.
+    path_map: Annotated[tuple[PathMapping, ...], BeforeValidator(_path_map)] = ()
+    #: Jellyfin's collections metadata folder, mounted into Overture, where it
+    #: writes each collection's theme.mp3.
+    collections_path: Path | None = None
+
+    _plex_secure_origin: str | None = PrivateAttr(default=None)
+
+    @field_validator("url")
+    @classmethod
+    def normalise_url(cls, value: str) -> str:
+        """Require a credential-free HTTP URL, keeping a base path."""
+        url = _service_url(value, "URL")
+        if not url:
+            raise ValueError("URL is required")
+        return url
+
+    @field_validator("api_key")
+    @classmethod
+    def require_api_key(cls, value: SecretStr) -> SecretStr:
+        """Require a token or API key."""
+        if not value.get_secret_value():
+            raise ValueError("API_KEY is required")
+        return value
+
+    def variable(self, field: str) -> str:
+        """Return the variable that sets *field* of this server."""
+        return _server_variable(self.name, field)
+
+    @property
+    def key(self) -> str:
+        """The name the database identifies the server by."""
+        return self.name.lower()
+
+    @property
+    def title(self) -> str:
+        """How the server is named to users."""
+        return self.name.replace("_", " ")
+
+    @property
+    def identity(self) -> str:
+        """Identify the server by kind and address, which a rename keeps."""
+        return media_server_identity(self.type, self.url)
+
+    def local_path(self, path: str) -> str:
+        """Return where Overture sees a path the server reports."""
+        for mapping in self.path_map:
+            prefix = _pure_server_path(mapping.server)
+            try:
+                rest = type(prefix)(path).relative_to(prefix).parts
+            except ValueError:
+                continue
+            return str(Path(mapping.local).joinpath(*rest))
+        return path
+
+    def is_trusted_url(self, url: str) -> bool:
+        """Return whether *url* is this server's configured or verified origin."""
+        origin = normalise_origin(url)
+        return bool(origin) and origin in {
+            normalise_origin(self.url),
+            self._plex_secure_origin,
+        }
+
+    def plex_direct_origin(self, url: str) -> str:
+        """Return *url* as a bare plex.direct HTTPS origin, or ``""``.
+
+        Only a credential-free, path-free HTTPS URL in Plex's connection
+        domain qualifies, and only for a Plex server.
+        """
+        try:
+            parsed = urlsplit(url)
+            _ = parsed.port
+        except ValueError:
+            return ""
+        if (
+            self.type is not ServerType.PLEX
+            or parsed.scheme.lower() != "https"
+            or not is_plex_direct_host(parsed.hostname or "")
+            or parsed.path not in {"", "/"}
+            or parsed.query
+            or parsed.fragment
+        ):
+            return ""
+        return normalise_origin(url)
+
+    def trust_plex_secure_url(self, url: str) -> str:
+        """Record the exact verified plex.direct origin used by this process."""
+        origin = self.plex_direct_origin(url)
+        if not origin:
+            raise ValueError("Plex returned an invalid secure connection URL")
+        self._plex_secure_origin = origin
+        return origin
+
+    def verify_tls_for(self, url: str | None = None) -> bool:
+        """Return the TLS policy for a request to this server at *url*."""
+        origin = normalise_origin(url or self.url)
+        if origin and origin == self._plex_secure_origin:
+            return True
+        if url is not None and not self.is_trusted_url(url):
+            return True
+        return self.verify_tls
+
+
+def _server_value(variables: Mapping[str, str], name: str) -> str | None:
+    value = variables.get(name)
+    return value or None
+
+
+def _server_variable(name: str, field: str) -> str:
+    """Return the variable that sets *field* of the server named *name*."""
+    return f"{_SERVER_VARIABLE_PREFIX}_{name.upper()}_{field.upper()}"
+
+
+def _configured_server(name: str, variables: Mapping[str, str]) -> MediaServerConfig:
+    """Build the server named *name* from its ``MEDIA_SERVER_<NAME>_*`` variables."""
+    values = {
+        field: value
+        for field in _SERVER_FIELDS
+        if (value := _server_value(variables, _server_variable(name, field)))
+        is not None
+    }
+    if "type" not in values:
         raise ValueError(
-            "MEDIA_SERVER is required and must be 'plex', 'jellyfin', 'emby' or 'none'."
+            f"{_server_variable(name, 'type')} is required and must be 'plex', "
+            "'jellyfin' or 'emby'"
         )
-    value = _lowercase(value)
-    return None if value == "none" else value
+    try:
+        return MediaServerConfig.model_validate({"name": name, **values})
+    except ValidationError as exc:
+        problems = "; ".join(
+            (
+                _server_variable(name, str(error["loc"][0]))
+                if error["loc"]
+                else "MEDIA_SERVERS"
+            )
+            + ": "
+            + error["msg"].removeprefix("Value error, ")
+            for error in exc.errors()
+        )
+        raise ValueError(f"Media server {name!r} is misconfigured: {problems}") from exc
+
+
+def parse_media_servers(variables: Mapping[str, str]) -> tuple[MediaServerConfig, ...]:
+    """Build the media servers MEDIA_SERVERS names, the lead first.
+
+    Each name is configured by ``MEDIA_SERVER_<NAME>_*`` variables; ``none``
+    runs without a media server.
+
+    Raises:
+        ValueError: When the servers are missing, repeated or misconfigured.
+    """
+    listed = _server_value(variables, "MEDIA_SERVERS")
+    if not listed:
+        raise ValueError(
+            "MEDIA_SERVERS is required: list the names of your media servers, "
+            "each configured by MEDIA_SERVER_<NAME>_TYPE, _URL and _API_KEY, "
+            "or set it to 'none'"
+        )
+    if listed.strip().lower() == "none":
+        return ()
+    names = [part.strip() for part in listed.split(",") if part.strip()]
+    keys = [name.lower() for name in names]
+    if repeated := sorted({key for key in keys if keys.count(key) > 1}):
+        raise ValueError(f"MEDIA_SERVERS names {', '.join(repeated)} more than once")
+    servers: list[MediaServerConfig] = []
+    for name in names:
+        if not _SERVER_NAME.fullmatch(name):
+            raise ValueError(
+                f"MEDIA_SERVERS name {name!r} must start with a letter and hold only "
+                "letters, digits and single underscores"
+            )
+        servers.append(_configured_server(name, variables))
+    return tuple(servers)
+
+
+def _is_server_variable(name: str) -> bool:
+    return name.startswith(_SERVER_VARIABLE_PREFIX)
+
+
+class _MediaServerVariables(PydanticBaseSettingsSource):
+    """Every media-server variable the other sources hold.
+
+    A server's variables are named after it, so the settings model cannot
+    declare them as fields for the environment, file and secret sources to
+    read; this source collects them from each, in the same priority.
+    """
+
+    def __init__(
+        self,
+        settings_cls: type[BaseSettings],
+        sources: Iterable[PydanticBaseSettingsSource],
+    ) -> None:
+        super().__init__(settings_cls)
+        self._sources = tuple(sources)
+
+    @override
+    def get_field_value(self, field: Any, field_name: str) -> tuple[Any, str, bool]:
+        """Answer no field; :meth:`__call__` reads the variables."""
+        return None, field_name, False
+
+    @override
+    def __call__(self) -> dict[str, Any]:
+        """Return the variables, a higher-priority source winning."""
+        found: dict[str, str] = {}
+        for source in reversed(self._sources):
+            found.update(_variables_of(source))
+        return found
+
+
+def _variables_of(source: PydanticBaseSettingsSource) -> dict[str, str]:
+    """Return the media-server variables one source holds, upper-cased."""
+    if isinstance(source, EnvSettingsSource):
+        entries: Iterable[tuple[str, str | None]] = source.env_vars.items()
+    elif isinstance(source, SecretsSettingsSource):
+        folders = source.secrets_dir
+        entries = (
+            (path.name, path.read_text().strip())
+            for folder in (folders if isinstance(folders, (list, tuple)) else [folders])
+            if folder is not None and Path(str(folder)).is_dir()
+            for path in Path(str(folder)).iterdir()
+            if path.is_file() and _is_server_variable(path.name.upper())
+        )
+    else:
+        return {}
+    return {
+        name.upper(): value
+        for name, value in entries
+        if value and _is_server_variable(name.upper())
+    }
 
 
 class RuntimeSettings(BaseSettings):
@@ -249,15 +537,13 @@ class Settings(RuntimeSettings):
     OIDC_AUTO_LOGIN: bool = False
 
     # Required. Settings come from the environment, which type checkers cannot
-    # see, so the field has a default: an empty one, which validate_default
-    # passes to _media_server to report as missing.
-    #: ``None`` when MEDIA_SERVER=none: Overture runs on the catalog and TMDB.
-    MEDIA_SERVER: Annotated[ServerType | None, BeforeValidator(_media_server)] = cast(
-        "ServerType", ""
+    # see, so the field has a default: an empty one, which build_media_servers
+    # reports as missing.
+    #: The media servers in the order MEDIA_SERVERS lists them, the first
+    #: leading; none when it is ``none``: Overture runs on the catalog and TMDB.
+    MEDIA_SERVERS: Annotated[tuple[MediaServerConfig, ...], NoDecode] = cast(
+        "tuple[MediaServerConfig, ...]", ""
     )
-    MEDIA_SERVER_URL: Annotated[str, AfterValidator(_media_server_url)] = ""
-    MEDIA_SERVER_API_KEY: SecretStr = SecretStr("")
-    MEDIA_SERVER_VERIFY_TLS: bool = True
 
     TMDB_API_KEY: SecretStr = SecretStr("")
     MDBLIST_API_KEY: SecretStr = SecretStr("")
@@ -270,9 +556,6 @@ class Settings(RuntimeSettings):
     #: Where a failed run is announced: one webhook or Apprise API URL, which
     #: may hold its own credentials.
     NOTIFY_URL: SecretStr = SecretStr("")
-    # Jellyfin's collections metadata folder, mounted into Overture, where it
-    # writes each collection's theme.mp3.
-    JELLYFIN_COLLECTIONS_PATH: Path | None = None
 
     # Canonical browser origin. This controls secure cookies and WebSocket origin
     # checks; it does not grant trust to any reverse proxy.
@@ -292,7 +575,51 @@ class Settings(RuntimeSettings):
     ART_DOWNLOAD_WORKERS: Annotated[int, Field(ge=1, le=10)] = 1
     THEME_DOWNLOAD_WORKERS: Annotated[int, Field(ge=1, le=4)] = 1
 
-    _plex_secure_origin: str | None = PrivateAttr(default=None)
+    @classmethod
+    @override
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """Read the media servers' variables from every source as well."""
+        return (
+            init_settings,
+            _MediaServerVariables(
+                settings_cls, (env_settings, dotenv_settings, file_secret_settings)
+            ),
+            env_settings,
+            dotenv_settings,
+            file_secret_settings,
+        )
+
+    @model_validator(mode="before")
+    @classmethod
+    def build_media_servers(cls, data: object) -> object:
+        """Build MEDIA_SERVERS from the variables naming and configuring them."""
+        if not isinstance(data, dict):
+            return data
+        values = cast("dict[str, object]", data)
+        variables = {
+            name.upper(): str(value)
+            for name, value in values.items()
+            if _is_server_variable(name.upper())
+            and isinstance(value, str | bool | int | Path)
+            and value != ""
+        }
+        listed = values.get("MEDIA_SERVERS")
+        others = {
+            name: value
+            for name, value in values.items()
+            if not _is_server_variable(name.upper())
+        }
+        # Servers already built, as a dumped Settings holds them, stand as they are.
+        if listed is not None and not isinstance(listed, str):
+            return others | {"MEDIA_SERVERS": listed}
+        return others | {"MEDIA_SERVERS": parse_media_servers(variables)}
 
     @field_validator("NOTIFY_URL")
     @classmethod
@@ -311,9 +638,13 @@ class Settings(RuntimeSettings):
 
     def secret_values(self) -> list[str]:
         """Return every configured secret, which the log redacts by value."""
+        values = [
+            *self.model_dump(exclude={"MEDIA_SERVERS"}).values(),
+            *(server.api_key for server in self.MEDIA_SERVERS),
+        ]
         return [
             value.get_secret_value()
-            for value in self.model_dump().values()
+            for value in values
             if isinstance(value, SecretStr) and value.get_secret_value()
         ]
 
@@ -378,16 +709,6 @@ class Settings(RuntimeSettings):
     @model_validator(mode="after")
     def validate_service_pairs(self) -> Self:
         """Reject partially configured service credentials."""
-        missing = [
-            name
-            for name in ("MEDIA_SERVER_URL", "MEDIA_SERVER_API_KEY")
-            if self.MEDIA_SERVER is not None and not getattr(self, name)
-        ]
-        if missing:
-            raise ValueError(
-                "Media Server Configuration Error: missing required setting(s): "
-                + ", ".join(missing)
-            )
         if bool(self.RADARR_URL) != bool(self.RADARR_API_KEY.get_secret_value()):
             raise ValueError("RADARR_URL and RADARR_API_KEY are required together")
         if bool(self.SONARR_URL) != bool(self.SONARR_API_KEY.get_secret_value()):
@@ -403,58 +724,22 @@ class Settings(RuntimeSettings):
         """True when APP_URL uses https; auth cookies receive the Secure flag."""
         return self.APP_URL.startswith("https://")
 
-    @property
-    def is_plex(self) -> bool:
-        """Return whether Plex is the active media server."""
-        return self.MEDIA_SERVER == ServerType.PLEX
-
     def is_trusted_media_server_url(self, url: str) -> bool:
-        """Return whether a URL has a configured or verified server origin."""
-        origin = normalise_origin(url)
-        return bool(origin) and origin in {
-            normalise_origin(self.MEDIA_SERVER_URL),
-            self._plex_secure_origin,
-        }
+        """Return whether *url* is a configured or verified server origin."""
+        return any(server.is_trusted_url(url) for server in self.MEDIA_SERVERS)
 
-    def plex_direct_origin(self, url: str) -> str:
-        """Return *url* as a bare plex.direct HTTPS origin, or ``""``.
-
-        Only a credential-free, path-free HTTPS URL in Plex's connection
-        domain qualifies, and only while Plex is the active media server.
-        """
-        try:
-            parsed = urlsplit(url)
-            _ = parsed.port
-        except ValueError:
-            return ""
-        if (
-            not self.is_plex
-            or parsed.scheme.lower() != "https"
-            or not is_plex_direct_host(parsed.hostname or "")
-            or parsed.path not in {"", "/"}
-            or parsed.query
-            or parsed.fragment
-        ):
-            return ""
-        return normalise_origin(url)
-
-    def trust_plex_secure_url(self, url: str) -> str:
-        """Record the exact verified plex.direct origin used by this process."""
-        origin = self.plex_direct_origin(url)
-        if not origin:
-            raise ValueError("Plex returned an invalid secure connection URL")
-        self._plex_secure_origin = origin
-        return origin
-
-    def media_server_verify_tls(self, url: str | None = None) -> bool:
-        """Return the TLS policy for a trusted media-server request URL."""
-        target_url = url or self.MEDIA_SERVER_URL
-        origin = normalise_origin(target_url)
-        if origin and origin == self._plex_secure_origin:
+    def media_server_verify_tls(self, url: str | None) -> bool:
+        """Return the TLS policy for *url*: its server's, or verified elsewhere."""
+        if url is None:
             return True
-        if url is not None and not self.is_trusted_media_server_url(url):
-            return True
-        return self.MEDIA_SERVER_VERIFY_TLS
+        return next(
+            (
+                server.verify_tls_for(url)
+                for server in self.MEDIA_SERVERS
+                if server.is_trusted_url(url)
+            ),
+            True,
+        )
 
     @property
     def tmdb_configured(self) -> bool:

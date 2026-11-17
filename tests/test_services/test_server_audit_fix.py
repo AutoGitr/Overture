@@ -33,10 +33,12 @@ lazy from overture.services.server_audit.fix import (
     RowFix,
 )
 lazy from overture.services.server_audit.work import AuditTarget, CollectionAuditTarget
+lazy from overture.services.server_identity import ServerCopy
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.utils.time import utc_now
 lazy from overture.ws.events import validate_event_payload
 lazy from tests.collection_helpers import stored_collection
+lazy from tests.media_servers import TEST_SERVER_ID
 lazy from tests.runtime_helpers import (
     JobProbe,
     NoopProviderRegistry,
@@ -103,6 +105,7 @@ class ServerView:
             if difference is None
             else AuditStatus.PHASH_MISMATCH,
             reason=difference,
+            server_id=TEST_SERVER_ID,
         )
         return target, [result]
 
@@ -138,10 +141,14 @@ async def _add_items(database: Database, *titles: str) -> None:
 
 
 def _resolve_to(monkeypatch: pytest.MonkeyPatch, ids: Mapping[int, str | None]) -> None:
-    async def resolve(item_id: int, *_args: object, **_kwargs: object) -> str | None:
-        return ids[item_id]
+    async def resolve(
+        item_id: int, *_args: object, provider_registry: Any, **_kwargs: object
+    ) -> list[ServerCopy]:
+        found = ids[item_id]
+        provider = provider_registry.get(TEST_SERVER_ID)
+        return [] if found is None else [ServerCopy(provider, found)]
 
-    monkeypatch.setattr(module, "resolve_owner_server_id", resolve)
+    monkeypatch.setattr(module, "resolve_owners", resolve)
 
 
 async def _run(
@@ -186,14 +193,16 @@ async def test_art_rows_turn_verified_only_once_the_server_shows_the_local_file(
     monkeypatch.setattr(module, "audit_target", server.audit_target)
     provider = FakeProvider()
     probe = JobProbe(lifecycle=LIFECYCLE)
-    poster = ("art", 1, None, "poster")
-    background = ("art", 1, None, "background")
+    poster = ("art", 1, None, "poster", 1)
+    background = ("art", 1, None, "background", 1)
 
     marks = await _run(
         probe,
         art=[
-            ServerAuditRefreshTarget(item_id=1, art_type=ArtType.POSTER),
-            ServerAuditRefreshTarget(item_id=1, art_type=ArtType.BACKGROUND),
+            ServerAuditRefreshTarget(server_id=1, item_id=1, art_type=ArtType.POSTER),
+            ServerAuditRefreshTarget(
+                server_id=1, item_id=1, art_type=ArtType.BACKGROUND
+            ),
         ],
         provider=provider,
         context=_context(tmp_path, app_config=app_config, database=database),
@@ -229,13 +238,13 @@ async def test_rows_the_server_never_takes_end_unchanged_with_the_latest_differe
 
     marks = await _run(
         probe,
-        art=[ServerAuditRefreshTarget(item_id=1, art_type=ArtType.POSTER)],
+        art=[ServerAuditRefreshTarget(server_id=1, item_id=1, art_type=ArtType.POSTER)],
         provider=FakeProvider(),
         context=_context(tmp_path, app_config=app_config, database=database),
     )
 
     assert marks[-1] == {
-        ("art", 1, None, "poster"): RowFix(error="Still differs after refresh: d=12")
+        ("art", 1, None, "poster", 1): RowFix(error="Still differs after refresh: d=12")
     }
     _, payload = probe.terminal()
     assert (payload["done"], payload["unchanged"], payload["verified"]) == (1, 1, 0)
@@ -256,12 +265,12 @@ async def test_a_stopped_fix_leaves_unsettled_rows_without_an_outcome(
 
     marks = await _run(
         probe,
-        art=[ServerAuditRefreshTarget(item_id=1, art_type=ArtType.POSTER)],
+        art=[ServerAuditRefreshTarget(server_id=1, item_id=1, art_type=ArtType.POSTER)],
         provider=FakeProvider(),
         context=_context(tmp_path, app_config=app_config, database=database),
     )
 
-    assert marks == [{("art", 1, None, "poster"): PENDING}]
+    assert marks == [{("art", 1, None, "poster", 1): PENDING}]
     assert server.checks == []
     assert probe.terminal()[0] == "server.audit.fix.stopped"
 
@@ -279,17 +288,17 @@ async def test_themes_are_deleted_before_one_refresh_that_unlocks_the_theme(
     )
     provider = FakeProvider()
     probe = JobProbe(lifecycle=LIFECYCLE)
-    first = ("theme", 1, "jf-1", "theme-a")
-    second = ("theme", 1, "jf-1", "theme-b")
+    first = ("theme", 1, "jf-1", "theme-a", 1)
+    second = ("theme", 1, "jf-1", "theme-b", 1)
 
     marks = await _run(
         probe,
         themes=[
             ServerAuditThemeDeleteTarget(
-                item_id=1, server_item_id="jf-1", theme_id="theme-a"
+                server_id=1, item_id=1, server_item_id="jf-1", theme_id="theme-a"
             ),
             ServerAuditThemeDeleteTarget(
-                item_id=1, server_item_id="jf-1", theme_id="theme-b"
+                server_id=1, item_id=1, server_item_id="jf-1", theme_id="theme-b"
             ),
         ],
         provider=provider,
@@ -325,7 +334,7 @@ async def test_a_failed_theme_delete_skips_the_refresh_and_marks_its_rows(
         probe,
         themes=[
             ServerAuditThemeDeleteTarget(
-                item_id=1, server_item_id="plex-1", theme_id="plex-1"
+                server_id=1, item_id=1, server_item_id="plex-1", theme_id="plex-1"
             )
         ],
         provider=provider,
@@ -334,7 +343,9 @@ async def test_a_failed_theme_delete_skips_the_refresh_and_marks_its_rows(
 
     assert provider.calls == [("delete", "plex-1", "plex-1")]
     assert marks[-1] == {
-        ("theme", 1, "plex-1", "plex-1"): RowFix(error="Media server returned an error")
+        ("theme", 1, "plex-1", "plex-1", 1): RowFix(
+            error="Media server returned an error"
+        )
     }
     assert server.checks == []
     assert probe.terminal()[1]["errors"] == 1
@@ -357,18 +368,20 @@ async def test_fix_failures_settle_as_errors_without_a_check(
     marks = await _run(
         probe,
         art=[
-            ServerAuditRefreshTarget(item_id=1, art_type=ArtType.POSTER),
-            ServerAuditRefreshTarget(item_id=2, art_type=ArtType.POSTER),
-            ServerAuditRefreshTarget(item_id=3, art_type=ArtType.POSTER),
+            ServerAuditRefreshTarget(server_id=1, item_id=1, art_type=ArtType.POSTER),
+            ServerAuditRefreshTarget(server_id=1, item_id=2, art_type=ArtType.POSTER),
+            ServerAuditRefreshTarget(server_id=1, item_id=3, art_type=ArtType.POSTER),
         ],
         provider=provider,
         context=_context(tmp_path, app_config=app_config, database=database),
     )
 
     errors = {key: fix.error for key, fix in marks[-1].items()}
-    assert errors["art", 1, None, "poster"] == "Could not resolve media-server item ID"
-    assert errors["art", 2, None, "poster"]
-    assert errors["art", 3, None, "poster"] == "Item not found"
+    assert (
+        errors["art", 1, None, "poster", 1] == "Could not resolve media-server item ID"
+    )
+    assert errors["art", 2, None, "poster", 1]
+    assert errors["art", 3, None, "poster", 1] == "Item not found"
     assert server.checks == []
     _, payload = probe.terminal()
     assert (payload["done"], payload["errors"]) == (3, 3)
@@ -405,12 +418,14 @@ async def test_the_service_fixes_art_and_themes_in_one_run_and_marks_the_rows(
                     "kind": "art",
                     "item_id": 1,
                     "art_type": "poster",
+                    "server_id": 1,
                     "refresh_error": "Still differs after refresh: d=12",
                 },
                 {
                     "kind": "theme",
                     "item_id": 1,
                     "art_type": "theme",
+                    "server_id": 1,
                     "server_item_id": "plex-1",
                     "theme_id": "plex-1",
                 },
@@ -421,10 +436,14 @@ async def test_the_service_fixes_art_and_themes_in_one_run_and_marks_the_rows(
     response = await runtime.server_audit.fix(
         FixAuditRequest(
             snapshot_finished_at="finish",
-            targets=[ServerAuditRefreshTarget(item_id=1, art_type=ArtType.POSTER)],
+            targets=[
+                ServerAuditRefreshTarget(
+                    server_id=1, item_id=1, art_type=ArtType.POSTER
+                )
+            ],
             themes=[
                 ServerAuditThemeDeleteTarget(
-                    item_id=1, server_item_id="plex-1", theme_id="plex-1"
+                    server_id=1, item_id=1, server_item_id="plex-1", theme_id="plex-1"
                 )
             ],
         )
@@ -440,11 +459,18 @@ async def test_the_service_fixes_art_and_themes_in_one_run_and_marks_the_rows(
     assert audit.final_snapshot()[1] == {
         "finished_at": "finish",
         "results": [
-            {"kind": "art", "item_id": 1, "art_type": "poster", "refreshed": True},
+            {
+                "kind": "art",
+                "item_id": 1,
+                "art_type": "poster",
+                "server_id": 1,
+                "refreshed": True,
+            },
             {
                 "kind": "theme",
                 "item_id": 1,
                 "art_type": "theme",
+                "server_id": 1,
                 "server_item_id": "plex-1",
                 "theme_id": "plex-1",
                 "refreshed": True,
@@ -493,6 +519,7 @@ async def test_a_collection_image_is_uploaded_again_then_verified(
                 art_type=target.asset,
                 title="Saga",
                 status=AuditStatus.PHASH_MATCH,
+                server_id=TEST_SERVER_ID,
             )
         ]
 
@@ -502,7 +529,11 @@ async def test_a_collection_image_is_uploaded_again_then_verified(
 
     marks = await _run(
         JobProbe(lifecycle=LIFECYCLE),
-        art=[ServerAuditRefreshTarget(collection_id=4, art_type=ArtType.POSTER)],
+        art=[
+            ServerAuditRefreshTarget(
+                server_id=1, collection_id=4, art_type=ArtType.POSTER
+            )
+        ],
         provider=provider,
         context=replace(
             _context(tmp_path, app_config=app_config, database=database),
@@ -510,7 +541,7 @@ async def test_a_collection_image_is_uploaded_again_then_verified(
         ),
     )
 
-    row = ("collection", 4, None, "poster")
+    row = ("collection", 4, None, "poster", 1)
     assert reuploads.sent == [(4, ArtType.POSTER)]
     # Nothing of an item is refreshed for a collection.
     assert provider.calls == []

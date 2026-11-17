@@ -4,7 +4,7 @@ import SidebarTabs from "../../../lib/components/SidebarTabs.svelte";
 import { goToCollection, navigate, route } from "../../../lib/router/routes";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
 import { uiState } from "../../../lib/stores/uiState.svelte";
-import { appSettings } from "../../helpers/fixtures";
+import { appSettings, mediaServers } from "../../helpers/fixtures";
 import { renderWithQueryClient } from "../../helpers/render";
 
 describe("sidebar tabs", () => {
@@ -23,7 +23,9 @@ describe("sidebar tabs", () => {
   });
 
   it("opens the last view of the collections, then switches between groups and collections", async () => {
-    settingsState.load(appSettings({ media_server: "jellyfin", collections_supported: true }));
+    settingsState.load(
+      appSettings({ media_servers: mediaServers("jellyfin"), collections_supported: true }),
+    );
     renderWithQueryClient(SidebarTabs, { totalMovies: 1, totalShows: 1, totalCollections: 3 });
 
     await fireEvent.click(screen.getByRole("button", { name: "Groups (3)" }));

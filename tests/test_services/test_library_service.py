@@ -23,6 +23,7 @@ lazy from overture.db.models.media_collection import (
     MediaCollectionMember,
 )
 lazy from overture.db.models.media_item import MediaItem
+lazy from overture.db.models.media_item_copy import SeasonCopy
 lazy from overture.db.models.season import Season
 lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database
@@ -31,6 +32,7 @@ lazy from overture.domain import (
     AspectRatioTolerance,
     ImageSize,
     MediaType,
+    ServerType,
 )
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.media_servers.adapters import ProviderImageRequest, ServerSection
@@ -50,6 +52,7 @@ lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.file import compute_file_hash
 lazy from overture.utils.time import utc_now
 lazy from tests.factories import seed_art_slot
+lazy from tests.media_servers import TEST_SERVER_ID, served_item
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
@@ -274,7 +277,7 @@ async def test_list_items_reports_asset_state_and_filters_by_type(
     complete_folder = tmp_path / "Complete Movie"
     complete_folder.mkdir()
     (complete_folder / "theme.mp3").write_bytes(b"theme")
-    complete = MediaItem(
+    complete = served_item(
         id=1,
         media_type=MediaType.MOVIE,
         title="Complete Movie",
@@ -283,10 +286,10 @@ async def test_list_items_reports_asset_state_and_filters_by_type(
         imdb_id="tt1",
         folder_path=str(complete_folder),
         server_item_id="plex-1",
-        library_id="movies",
+        library_id="1:movies",
     )
     missing = MediaItem(id=2, media_type=MediaType.SHOW, title="Missing Show")
-    missing_hash = MediaItem(
+    missing_hash = served_item(
         id=4,
         media_type=MediaType.MOVIE,
         title="Missing Hash Movie",
@@ -925,9 +928,7 @@ async def test_local_season_poster_is_downscaled_and_cached_while_current(
     show_folder = tmp_path / "Show"
     season_folder = show_folder / "Season 1"
     season_folder.mkdir(parents=True)
-    poster = (
-        season_folder / season_poster_candidates(app_config.MEDIA_SERVER or "", 1)[0]
-    )
+    poster = season_folder / season_poster_candidates(ServerType.PLEX, 1)[0]
     _write_jpeg(poster, 1000, 1500)
     db_session.add(
         MediaItem(
@@ -1133,7 +1134,7 @@ async def _add_items(database: Database, *items: MediaItem) -> None:
 
 async def _record(database: Database, *sections: ServerSection) -> None:
     async with database.write_session() as session:
-        await LibraryRepository(session).record(sections, utc_now())
+        await LibraryRepository(session).record(TEST_SERVER_ID, sections, utc_now())
 
 
 async def test_libraries_are_the_ones_the_last_sync_recorded_with_their_counts(
@@ -1141,24 +1142,55 @@ async def test_libraries_are_the_ones_the_last_sync_recorded_with_their_counts(
 ) -> None:
     await _record(
         database,
-        ServerSection("2", "Kids Movies", MediaType.MOVIE),
-        ServerSection("1", "Classic Movies", MediaType.MOVIE),
-        ServerSection("3", "Empty", MediaType.MOVIE),
-        ServerSection("5", "Shows", MediaType.SHOW),
+        ServerSection("2", "Kids Movies", MediaType.MOVIE, library_id="1:2"),
+        ServerSection("1", "Classic Movies", MediaType.MOVIE, library_id="1:1"),
+        ServerSection("3", "Empty", MediaType.MOVIE, library_id="1:3"),
+        ServerSection("5", "Shows", MediaType.SHOW, library_id="1:5"),
     )
     await _add_items(
         database,
-        MediaItem(id=1, media_type=MediaType.MOVIE, title="A", library_id="1"),
-        MediaItem(id=2, media_type=MediaType.MOVIE, title="B", library_id="1"),
-        MediaItem(id=3, media_type=MediaType.MOVIE, title="C", library_id="2"),
+        served_item(
+            id=1,
+            media_type=MediaType.MOVIE,
+            title="A",
+            server_item_id="s1",
+            library_id="1:1",
+        ),
+        served_item(
+            id=2,
+            media_type=MediaType.MOVIE,
+            title="B",
+            server_item_id="s2",
+            library_id="1:1",
+        ),
+        served_item(
+            id=3,
+            media_type=MediaType.MOVIE,
+            title="C",
+            server_item_id="s3",
+            library_id="1:2",
+        ),
         # A library the server no longer lists is not offered.
-        MediaItem(id=4, media_type=MediaType.MOVIE, title="D", library_id="9"),
-        MediaItem(id=5, media_type=MediaType.SHOW, title="E", library_id="5"),
-        MediaItem(
+        served_item(
+            id=4,
+            media_type=MediaType.MOVIE,
+            title="D",
+            server_item_id="s4",
+            library_id="1:9",
+        ),
+        served_item(
+            id=5,
+            media_type=MediaType.SHOW,
+            title="E",
+            server_item_id="s5",
+            library_id="1:5",
+        ),
+        served_item(
             id=6,
             media_type=MediaType.MOVIE,
             title="Gone",
-            library_id="1",
+            server_item_id="s6",
+            library_id="1:1",
             server_removed_at=datetime(2026, 1, 1, tzinfo=UTC),
         ),
     )
@@ -1167,18 +1199,18 @@ async def test_libraries_are_the_ones_the_last_sync_recorded_with_their_counts(
     libraries = await _service(database, ArtServer()).get_libraries(MediaType.MOVIE)
 
     assert [(row.id, row.title, row.count) for row in libraries] == [
-        ("1", "Classic Movies", 2),
-        ("3", "Empty", 0),
-        ("2", "Kids Movies", 1),
+        ("1:1", "Classic Movies", 2),
+        ("1:3", "Empty", 0),
+        ("1:2", "Kids Movies", 1),
     ]
 
 
 async def test_libraries_list_movies_first_then_by_title(database: Database) -> None:
     await _record(
         database,
-        ServerSection("1", "Anime", MediaType.SHOW),
-        ServerSection("2", "Movies", MediaType.MOVIE),
-        ServerSection("3", "Kids Movies", MediaType.MOVIE),
+        ServerSection("1", "Anime", MediaType.SHOW, library_id="1:1"),
+        ServerSection("2", "Movies", MediaType.MOVIE, library_id="1:2"),
+        ServerSection("3", "Kids Movies", MediaType.MOVIE, library_id="1:3"),
     )
 
     libraries = await _service(database, ArtServer()).get_libraries(None)
@@ -1192,7 +1224,7 @@ async def test_item_provider_art_is_proxied_by_its_server_id(
     server = ArtServer()
     await _add_items(
         database,
-        MediaItem(id=1, media_type=MediaType.MOVIE, title="A", server_item_id="s1"),
+        served_item(id=1, media_type=MediaType.MOVIE, title="A", server_item_id="s1"),
         MediaItem(id=2, media_type=MediaType.MOVIE, title="B"),
     )
     library = _service(database, server)
@@ -1220,10 +1252,12 @@ async def test_season_provider_art_is_proxied_by_the_season_server_id(
     server = ArtServer()
     await _add_items(
         database,
-        MediaItem(id=1, media_type=MediaType.SHOW, title="A", server_item_id="s1"),
+        served_item(id=1, media_type=MediaType.SHOW, title="A", server_item_id="s1"),
     )
     async with database.write_session() as session:
-        session.add(Season(id=10, media_item_id=1, season_num=2, server_item_id="s1-2"))
+        session.add(Season(id=10, media_item_id=1, season_num=2))
+        await session.flush()
+        session.add(SeasonCopy(season_id=10, server_id=1, server_item_id="s1-2"))
     library = _service(database, server)
 
     await library.proxy_season_provider_art(10, None)

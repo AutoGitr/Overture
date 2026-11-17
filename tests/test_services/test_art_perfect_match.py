@@ -5,7 +5,7 @@ lazy from typing import Any, override
 lazy import httpx2
 lazy import pytest
 
-lazy from overture.config import Settings
+lazy from overture.config import MediaServerConfig, Settings
 lazy from overture.db.art_slots import ArtFileFacts
 lazy from overture.schemas.art import ArtCandidate
 lazy from overture.services.art import matcher_cache
@@ -13,6 +13,7 @@ lazy from overture.services.art import perfect_match as module
 lazy from overture.services.art.matcher_cache import ArtMatcherCache
 lazy from overture.utils.file import compute_bytes_hash
 lazy from overture.utils.image import FetchedImage
+lazy from tests.media_servers import configure, server_of
 lazy from tests.runtime_helpers import NoopProviderRegistry, StaticImageClients
 
 LOCAL_BYTES = b"identical-bytes"
@@ -102,6 +103,9 @@ async def test_fetch_failure_is_reported_not_annotated() -> None:
 
 
 class _HeaderProvider:
+    def __init__(self, server: MediaServerConfig) -> None:
+        self.server = server
+
     def get_download_headers(self, url: str) -> dict[str, str]:
         return {"X-Token": "server"} if url.startswith("http://media.test") else {}
 
@@ -121,7 +125,7 @@ async def test_only_the_media_server_is_fetched_as_trusted_with_its_headers(
     *,
     app_config: Settings,
 ) -> None:
-    app_config.MEDIA_SERVER_URL = "http://media.test:32400"
+    configure(app_config, url="http://media.test:32400")
     calls: list[dict[str, Any]] = []
 
     async def fetch_image(_url: str, _client: object, **kwargs: Any) -> FetchedImage:
@@ -132,7 +136,7 @@ async def test_only_the_media_server_is_fetched_as_trusted_with_its_headers(
 
     await matcher_cache.fetch_art(
         url,
-        provider_registry=NoopProviderRegistry(_HeaderProvider()),
+        provider_registry=NoopProviderRegistry(_HeaderProvider(server_of(app_config))),
         image_clients=StaticImageClients(),
         app_config=app_config,
     )

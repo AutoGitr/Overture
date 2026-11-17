@@ -7,6 +7,15 @@
 - **Interface:** **Custom filter** in the movie and show filters saves named filters with conditions on any metadata collection criteria test (actor, director, resolution, codecs, ratings, keywords and more), TMDB and MDBList sources, and each title's library status (art, theme and OvertureDB status, sources, widths, metadata issues), matched together or apart in nested groups.
 - **API:** library items and collections list their `metadata_issues`, and `/api/library/filters` lists what custom filters can test, matches their conditions and keeps saved ones.
 - **Interface:** the sidebar's TMDB search also finds the titles of a person, a company, a keyword or a public list, by name, TMDB ID or link.
+- **Media servers:** Overture works with several Plex, Jellyfin and Emby servers at once, named in `MEDIA_SERVERS` and configured with `MEDIA_SERVER_<NAME>_*` variables: titles are shared across servers, files are written under every name their servers read, collections span libraries on any server, and `PATH_MAP` maps folders a server sees elsewhere.
+
+### Changed
+
+- **API:** library IDs name their server (`1:2`); titles and collections list their `copies` on each server, the lead first, instead of one `server_item_id`; settings list `media_servers`, and collection capabilities, server links and server audit results are per server.
+
+### Removed
+
+- **Settings:** `MEDIA_SERVER`, `MEDIA_SERVER_URL`, `MEDIA_SERVER_API_KEY`, `MEDIA_SERVER_VERIFY_TLS` and `JELLYFIN_COLLECTIONS_PATH`. Name the server instead: `MEDIA_SERVERS=Plex` with `MEDIA_SERVER_PLEX_TYPE=plex`, `MEDIA_SERVER_PLEX_URL`, `MEDIA_SERVER_PLEX_API_KEY` and, for Jellyfin, `MEDIA_SERVER_<NAME>_COLLECTIONS_PATH`; with the same type and URL, your library, choices and collections carry over.
 
 ## 0.3.0 - 2026-11-15
 

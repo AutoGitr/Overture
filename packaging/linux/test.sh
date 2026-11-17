@@ -25,9 +25,10 @@ groupadd media-test
 install -d -o root -g media-test -m 2770 /srv/media-test
 install -d -m 0700 /etc/overture
 {
-    echo "MEDIA_SERVER=plex"
-    echo "MEDIA_SERVER_URL=http://127.0.0.1:32400"
-    echo "MEDIA_SERVER_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    echo "MEDIA_SERVERS=Plex"
+    echo "MEDIA_SERVER_PLEX_TYPE=plex"
+    echo "MEDIA_SERVER_PLEX_URL=http://127.0.0.1:32400"
+    echo "MEDIA_SERVER_PLEX_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
     echo smoke-password-long | "$bundle/bin/overture" password hash --password-stdin
 } > /etc/overture/overture.env
 bash "$bundle/install.sh" --media-group media-test

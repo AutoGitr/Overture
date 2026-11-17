@@ -6,8 +6,11 @@ description: Where Overture writes artwork and themes, and what it names them.
 
 # Files
 
-Overture names files the way your `MEDIA_SERVER` expects. Images are `.jpg`,
-`.jpeg` or `.png`; saving one format removes the others for that slot.
+Overture names files the way your media servers expect. Where the servers
+holding a title read different names, it writes the file under each, so a
+season of a show on Plex and Jellyfin gets both `Season01.jpg` and
+`poster.jpg`. Images are `.jpg`, `.jpeg` or `.png`; saving one format removes
+the others for that slot.
 
 | File                                    | Plex                         | Jellyfin                     | Emby                         |
 | --------------------------------------- | ---------------------------- | ---------------------------- | ---------------------------- |
@@ -17,9 +20,12 @@ Overture names files the way your `MEDIA_SERVER` expects. Images are `.jpg`,
 | Specials poster, in the specials folder | `season-specials-poster.jpg` | `season-specials-poster.jpg` | `season-specials-poster.jpg` |
 | Theme song                              | `theme.mp3`                  | `theme.mp3`                  | `theme.mp3`                  |
 
-Files for a collection go to the media server itself, since a collection has
-no folder; a Jellyfin BoxSet theme goes to the collections directory named by
-`JELLYFIN_COLLECTIONS_PATH`.
+Files are written to the folders the servers report, as each server's
+[path map](../install/media-servers.mdx#path-maps) translates them.
+
+Files for a collection go to each media server holding it, since a collection
+has no folder; a Jellyfin BoxSet theme goes to the collections directory named
+by that server's `COLLECTIONS_PATH`.
 
 ## Renamer
 

@@ -10,10 +10,11 @@ lazy from typing import Any, override
 
 lazy import pytest
 lazy from pydantic import SecretStr
-lazy from sqlmodel import col, select
+lazy from sqlmodel import select
 
 lazy from overture.config import Settings
 lazy from overture.db.models.media_item import MediaItem
+lazy from overture.db.models.media_item_copy import MediaItemCopy
 lazy from overture.db.models.saved_schedule import SavedSchedule
 lazy from overture.db.session import Database
 lazy from overture.domain import MediaServerState, MediaType, ServerType
@@ -35,6 +36,7 @@ lazy from overture.media_servers.adapters import (
     SyncStopCheck,
 )
 lazy from overture.media_servers.errors import MediaServerError
+lazy from overture.repositories.copies import CopyRepository
 lazy from overture.schemas.collections import CollectionGroupSyncResult
 lazy from overture.schemas.sync import (
     SyncRunRequest,
@@ -49,10 +51,15 @@ lazy from overture.services.sync import engine as module
 lazy from overture.services.sync import runner as sync_runner_module
 lazy from overture.services.sync.collection_sync import CollectionSync
 lazy from overture.services.sync.engine import SyncEngine
-lazy from overture.services.sync.reconciler import LibraryReconciler, SyncResult
+lazy from overture.services.sync.reconciler import (
+    LibraryReconciler,
+    ServerTurn,
+    SyncResult,
+)
 lazy from overture.services.sync.staging import StagedListing
 lazy from overture.services.sync.tmdb_enrichment import TmdbEnrichment
 lazy from overture.services.sync.tmdb_seasons import TmdbSeasonSync
+lazy from tests.media_servers import TEST_SERVER_ID, copy_ids, served_item
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     JobProbe,
@@ -79,7 +86,7 @@ def normalized_items() -> list[ServerItem]:
             media_type=MediaType.MOVIE,
             poster_url=None,
             background_url=None,
-            library_id="1",
+            library_id="1:1",
         )
     ]
 
@@ -182,7 +189,7 @@ async def test_staged_sync_assigns_shared_guid_items_to_distinct_rows(
 ) -> None:
     async with database.write_session() as session:
         session.add(
-            MediaItem(
+            served_item(
                 id=1,
                 media_type=MediaType.MOVIE,
                 title="Movie",
@@ -203,6 +210,7 @@ async def test_staged_sync_assigns_shared_guid_items_to_distinct_rows(
         await listing.append([first, second])
         result = await reconciler.sync_staged(
             listing,
+            ServerTurn(TEST_SERVER_ID),
             library_ids=None,
             tally=SyncTally(),
             progress_cb=None,
@@ -223,7 +231,7 @@ async def test_listed_sync_skips_rows_it_already_claimed(
 ) -> None:
     async with database.write_session() as session:
         session.add(
-            MediaItem(
+            served_item(
                 id=1,
                 media_type=MediaType.MOVIE,
                 title="Movie",
@@ -245,14 +253,14 @@ async def test_listed_sync_skips_rows_it_already_claimed(
     result = await (
         sync_full(reconciler, items)
         if method == "sync_full"
-        else reconciler.sync_recent(items)
+        else reconciler.sync_recent(items, ServerTurn(TEST_SERVER_ID))
     )
 
     assert result.tally.errors == 0
     assert result.tally.done == 2
     async with database.read_session() as session:
-        rows = (await session.exec(select(MediaItem).order_by(col(MediaItem.id)))).all()
-    assert [(row.id, row.server_item_id) for row in rows] == [
+        ids = await copy_ids(session)
+    assert sorted(ids.items()) == [
         (1, "server-42"),
         (2, "server-43"),
     ]
@@ -269,7 +277,7 @@ async def test_staged_sync_stamps_items_and_reports_changes_stamped(
     async with database.write_session() as session:
         session.add_all(
             [
-                MediaItem(
+                served_item(
                     id=1,
                     media_type=MediaType.MOVIE,
                     title=unchanged.title,
@@ -278,7 +286,7 @@ async def test_staged_sync_stamps_items_and_reports_changes_stamped(
                     server_item_id=unchanged.id,
                     library_id=unchanged.library_id,
                 ),
-                MediaItem(
+                served_item(
                     id=2,
                     media_type=MediaType.MOVIE,
                     title="Old title",
@@ -300,6 +308,7 @@ async def test_staged_sync_stamps_items_and_reports_changes_stamped(
         await listing.append([unchanged, changed])
         result = await reconciler.sync_staged(
             listing,
+            ServerTurn(TEST_SERVER_ID),
             library_ids=None,
             tally=SyncTally(),
             progress_cb=None,
@@ -309,7 +318,9 @@ async def test_staged_sync_stamps_items_and_reports_changes_stamped(
     assert (result.tally.unchanged, result.tally.updated) == (1, 1)
     async with database.read_session() as session:
         items = (await session.exec(select(MediaItem))).all()
-    assert all(item.server_verified_at and item.last_synced_at for item in items)
+        copies = (await session.exec(select(MediaItemCopy))).all()
+    assert all(item.last_synced_at for item in items)
+    assert all(copy.verified_at for copy in copies)
     # The changed item's event already carries the stamp its art URLs use.
     [upserted] = [
         payload
@@ -388,13 +399,16 @@ class FakeReconciler(LibraryReconciler):
         pass
 
     @override
-    async def record_libraries(self, sections: Sequence[ServerSection]) -> None:
+    async def record_libraries(
+        self, server_id: int, sections: Sequence[ServerSection]
+    ) -> None:
         """Record nothing; these tests reconcile no database."""
 
     @override
     async def sync_staged(
         self,
         listing: Any,
+        turn: ServerTurn,
         *,
         library_ids: list[str] | None,
         tally: SyncTally,
@@ -420,7 +434,7 @@ class FakeReconciler(LibraryReconciler):
         stop_check: SyncStopCheck | None = None,
     ) -> SyncResult:
         assert server_items == normalized_items()
-        assert library_ids == ["1"]
+        assert library_ids == ["1:1"]
         assert stop_check is not None
         assert stop_check() is False
         if progress_cb:
@@ -445,6 +459,7 @@ class FakeReconciler(LibraryReconciler):
     async def sync_recent(
         self,
         server_items: list[ServerItem],
+        turn: ServerTurn,
         *,
         tally: SyncTally | None = None,
         progress_cb: SyncProgressCallback | None = None,
@@ -545,7 +560,7 @@ async def test_run_sync_broadcasts_progress_and_saves_completed_snapshot(
 
     await sync_runner_module.run_sync(
         probe.context,
-        library_ids=["1"],
+        library_ids=["1:1"],
         provider_registry=NoopProviderRegistry(provider),
         reconciler=FakeReconciler(),
         config_dir=tmp_path,
@@ -555,7 +570,7 @@ async def test_run_sync_broadcasts_progress_and_saves_completed_snapshot(
         groups=NoGroups(),
     )
 
-    assert provider.calls == [{"library_ids": ["1"]}]
+    assert provider.calls == [{"library_ids": ["1:1"]}]
     assert probe.names() == [
         "sync.started",
         "sync.progress",
@@ -739,9 +754,8 @@ async def test_run_sync_reports_failed_when_the_run_itself_raises(
     """An error outside the reconciliation boundary ends the job 'failed'."""
 
     class ExplodingRegistry(NoopProviderRegistry):
-        @property
         @override
-        def provider(self) -> Any:
+        def providers(self) -> list[Any]:
             raise ValueError("registry unavailable")
 
     probe = JobProbe(lifecycle=LIFECYCLE)
@@ -780,9 +794,9 @@ async def test_start_background_sync_rejects_duplicate_running_task(
 
     # Patch the module-level _run_sync name that start_background_sync calls.
     monkeypatch.setattr(module, "_run_sync", slow_sync)
-    assert engine.start_background_sync(SyncRunRequest(library_ids=["1"])) is True
+    assert engine.start_background_sync(SyncRunRequest(library_ids=["1:1"])) is True
     assert engine.job.running is True
-    assert engine.start_background_sync(SyncRunRequest(library_ids=["1"])) is False
+    assert engine.start_background_sync(SyncRunRequest(library_ids=["1:1"])) is False
 
     release.set()
     task = engine.job.task
@@ -888,7 +902,7 @@ async def test_incremental_sync_forwards_items_and_preserves_failed_checkpoints(
             self, since: datetime, library_ids: list[str] | None = None
         ) -> AsyncIterator[list[ServerItem]]:
             assert since == checkpoint
-            assert library_ids == ["movies"]
+            assert library_ids == ["1:movies"]
             if failure == "cancel":
                 raise asyncio.CancelledError
             if failure == "fetch":
@@ -899,7 +913,9 @@ async def test_incremental_sync_forwards_items_and_preserves_failed_checkpoints(
         Provider(), app_config=app_config, database=database, config_dir=tmp_path
     )
 
-    async def recent(server_items: list[ServerItem], **kwargs: Any) -> SyncResult:
+    async def recent(
+        server_items: list[ServerItem], _turn: ServerTurn, **kwargs: Any
+    ) -> SyncResult:
         assert server_items is items
         reconciled.append(server_items)
         if failure == "reconcile":
@@ -931,14 +947,14 @@ async def test_incremental_sync_forwards_items_and_preserves_failed_checkpoints(
         name="New media",
         cron_expression="*/15 * * * *",
         config=SyncScheduleConfig(
-            mode="incremental", library_ids=["movies"], download_overturedb_art=True
+            mode="incremental", library_ids=["1:movies"], download_overturedb_art=True
         ),
     )
     schedule = await engine.schedules.create(body)
     async with database.write_session() as session:
         record = await session.get(SavedSchedule, schedule.id)
         assert record is not None
-        record.state = {"checkpoint": checkpoint.isoformat()}
+        record.state = {"checkpoints": {"1": checkpoint.isoformat()}}
         session.add(record)
 
     await engine.schedules.run_now(schedule.id)
@@ -950,7 +966,7 @@ async def test_incremental_sync_forwards_items_and_preserves_failed_checkpoints(
     # New titles get their TMDB facts in the poll that found them.
     assert read == ([[10, 12]] if failure in {None, "partial"} else [])
     [saved] = await engine.schedules.all()
-    assert saved.state.checkpoint == (now if failure is None else checkpoint)
+    assert saved.state.checkpoints.get(1) == (now if failure is None else checkpoint)
     if failure is None:
         assert saved.last_run is not None
         assert saved.last_run.duration_seconds is not None
@@ -990,7 +1006,7 @@ async def test_first_incremental_poll_only_sets_the_checkpoint(
     await asyncio.wait_for(engine.schedules.wait_for_pending_runs(), timeout=2)
 
     [saved] = await engine.schedules.all()
-    assert saved.state.checkpoint == now
+    assert saved.state.checkpoints.get(1) == now
     assert saved.last_run is not None
     assert saved.last_run.counts == {}
     assert saved.last_run_at is not None
@@ -1014,7 +1030,7 @@ async def test_a_poll_replaces_a_manual_result_and_retires_its_own(
     engine = make_engine(
         FakeProvider(), app_config=app_config, database=database, config_dir=tmp_path
     )
-    assert engine.start_background_sync(SyncRunRequest(library_ids=["1"]))
+    assert engine.start_background_sync(SyncRunRequest(library_ids=["1:1"]))
     await engine.job.wait_idle()
     # A run started by hand keeps its result.
     assert engine.job.final_snapshot()[1] is not None
@@ -1060,18 +1076,17 @@ async def test_full_sync_oserror_has_one_terminal_event(
             raise OSError("outer reconciliation failed")
 
     class Registry(NoopProviderRegistry):
-        @property
         @override
-        def provider(self) -> Any:
+        def providers(self) -> list[Any]:
             if boundary == "registry":
                 raise OSError("registry failed")
-            return Provider()
+            return super().providers()
 
     probe = JobProbe(lifecycle=LIFECYCLE)
     await sync_runner_module.run_sync(
         probe.context,
-        library_ids=["1"],
-        provider_registry=Registry(),
+        library_ids=["1:1"],
+        provider_registry=Registry(Provider()),
         reconciler=Reconciler(),
         config_dir=tmp_path,
         tmdb_seasons=NoTmdbShows(),
@@ -1104,18 +1119,18 @@ async def test_full_engine_reconciles_normalized_items_only_after_successful_fet
     async with database.write_session() as session:
         session.add_all(
             [
-                MediaItem(
+                served_item(
                     id=1,
                     media_type=MediaType.MOVIE,
                     title="Old",
-                    library_id="1",
+                    library_id="1:1",
                     server_item_id="old",
                 ),
-                MediaItem(
+                served_item(
                     id=2,
                     media_type=MediaType.MOVIE,
                     title="Outside",
-                    library_id="2",
+                    library_id="1:2",
                     server_item_id="outside",
                 ),
             ]
@@ -1126,7 +1141,7 @@ async def test_full_engine_reconciles_normalized_items_only_after_successful_fet
         async def iter_items(
             self, library_ids: list[str] | None = None
         ) -> AsyncIterator[list[ServerItem]]:
-            assert library_ids == ["1"]
+            assert library_ids == ["1:1"]
             if fetch_fails:
                 raise OSError("enumeration failed")
             yield self.items
@@ -1149,13 +1164,14 @@ async def test_full_engine_reconciles_normalized_items_only_after_successful_fet
         groups=NoGroups(),
     )
     try:
-        assert engine.start_background_sync(SyncRunRequest(library_ids=["1"]))
+        assert engine.start_background_sync(SyncRunRequest(library_ids=["1:1"]))
         task = engine.job.task
         assert task is not None
         await asyncio.wait_for(task, 3)
         async with database.read_session() as session:
+            ids = await copy_ids(session)
             rows = {
-                item.server_item_id: item
+                ids[item.id or 0]: item
                 for item in (await session.exec(select(MediaItem))).all()
             }
         assert rows["outside"].server_removed_at is None
@@ -1163,11 +1179,13 @@ async def test_full_engine_reconciles_normalized_items_only_after_successful_fet
         assert ("server-42" in rows) is (not fetch_fails)
         if not fetch_fails:
             item = rows["server-42"]
-            assert (item.title, item.year, item.tmdb_id, item.library_id) == (
+            async with database.read_session() as session:
+                [copy] = await CopyRepository(session).of_item(item.id or 0)
+            assert (item.title, item.year, item.tmdb_id, copy.library_id) == (
                 "Forwarded movie",
                 2026,
                 42,
-                "1",
+                "1:1",
             )
         terminal = [
             (name, payload)
@@ -1213,7 +1231,7 @@ async def test_full_sync_collection_phase_respects_target(
     probe = JobProbe(lifecycle=LIFECYCLE)
     await sync_runner_module.run_sync(
         probe.context,
-        library_ids=["1"],
+        library_ids=["1:1"],
         items=items,
         include_collections=include_collections,
         provider_registry=NoopProviderRegistry(provider),
@@ -1225,10 +1243,10 @@ async def test_full_sync_collection_phase_respects_target(
         groups=NoGroups(),
     )
     # Without items, only the collections are synced.
-    assert provider.calls == ([{"library_ids": ["1"]}] if items else [])
+    assert provider.calls == ([{"library_ids": ["1:1"]}] if items else [])
     assert collections.called is include_collections
     # Criteria test TMDB facts, so every target reads them for its libraries.
-    assert facts.library_ids == [["1"]]
+    assert facts.library_ids == [["1:1"]]
     assert probe.names()[-1] == "sync.completed"
 
 
@@ -1381,7 +1399,7 @@ async def test_full_sync_can_sync_chosen_groups_and_collections_instead(
     probe = JobProbe(lifecycle=LIFECYCLE)
     await sync_runner_module.run_sync(
         probe.context,
-        library_ids=["1"],
+        library_ids=["1:1"],
         include_collections=False,
         collection_groups=["Sagas", "Gone"],
         collection_ids=[7, 9],
@@ -1395,7 +1413,7 @@ async def test_full_sync_can_sync_chosen_groups_and_collections_instead(
     )
 
     # Chosen collections sync whole, whatever libraries the run covers.
-    assert (groups.synced, groups.collections) == ([("Sagas", ["1"])], [[7, 9]])
+    assert (groups.synced, groups.collections) == ([("Sagas", ["1:1"])], [[7, 9]])
     assert probe.names()[-1] == "sync.completed"
     _, payload = probe.terminal()
     assert payload["errors"] == 2
@@ -1465,8 +1483,11 @@ class DownProvider(FakeProvider):
 async def test_run_sync_fails_at_once_while_the_media_server_is_down(
     tmp_path: Path,
 ) -> None:
-    registry = NoopProviderRegistry(DownProvider())
-    registry.health.record(MediaServerState.UNREACHABLE, "Plex is not answering")
+    provider = DownProvider()
+    registry = NoopProviderRegistry(provider)
+    registry.get(TEST_SERVER_ID).health.record(
+        MediaServerState.UNREACHABLE, "Plex is not answering"
+    )
     probe = JobProbe(lifecycle=LIFECYCLE)
 
     await sync_runner_module.run_sync(

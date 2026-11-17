@@ -14,6 +14,7 @@ lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.jellyfin.client import JellyfinClient
 lazy from overture.media_servers.plex.client import PlexClient
 lazy from tests.http_mock import keep_configured_plex_url, mock_client_factory
+lazy from tests.media_servers import configure, server_of
 
 
 @pytest.mark.parametrize(
@@ -23,10 +24,9 @@ lazy from tests.http_mock import keep_configured_plex_url, mock_client_factory
 async def test_plex_offers_only_deduplicated_public_artwork(
     monkeypatch: pytest.MonkeyPatch, server_url: str, *, app_config: Settings
 ) -> None:
-    app_config.MEDIA_SERVER = ServerType.PLEX
-    app_config.MEDIA_SERVER_URL = server_url
-    app_config.MEDIA_SERVER_API_KEY = SecretStr("test-token")
-
+    configure(app_config, type=ServerType.PLEX)
+    configure(app_config, url=server_url)
+    configure(app_config, api_key=SecretStr("test-token"))
     local = "/library/metadata/1/thumb/2"
     external = "https://public.test/art.jpg"
     sniffed: dict[str, dict[str, Any]] = {}
@@ -54,7 +54,9 @@ async def test_plex_offers_only_deduplicated_public_artwork(
         )
 
     factory, transport = mock_client_factory(handler)
-    client = PlexClient(app_config=app_config, client_factory=factory)
+    client = PlexClient(
+        server=server_of(app_config), app_config=app_config, client_factory=factory
+    )
     monkeypatch.setattr(PlexClient, "resolve_secure_url", keep_configured_plex_url)
 
     async def resolve(host: str, *_args: Any, **_kwargs: Any) -> list[Any]:
@@ -85,8 +87,7 @@ async def test_plex_offers_only_deduplicated_public_artwork(
 async def test_plex_size_probes_share_a_client_and_bounded_concurrency(
     monkeypatch: pytest.MonkeyPatch, *, app_config: Settings
 ) -> None:
-    app_config.MEDIA_SERVER_URL = "https://plex.test"
-
+    configure(app_config, url="https://plex.test")
     factory, _transport = mock_client_factory(
         lambda _: httpx2.Response(
             200,
@@ -94,7 +95,9 @@ async def test_plex_size_probes_share_a_client_and_bounded_concurrency(
         )
     )
 
-    client = PlexClient(app_config=app_config, client_factory=factory)
+    client = PlexClient(
+        server=server_of(app_config), app_config=app_config, client_factory=factory
+    )
     monkeypatch.setattr(PlexClient, "resolve_secure_url", keep_configured_plex_url)
     dns: Counter[str] = Counter()
     clients: list[httpx2.AsyncClient] = []
@@ -139,7 +142,7 @@ async def test_plex_size_probes_share_a_client_and_bounded_concurrency(
 async def test_library_sections_require_unique_ids(
     monkeypatch: pytest.MonkeyPatch, *, app_config: Settings
 ) -> None:
-    client = JellyfinClient(app_config=app_config)
+    client = JellyfinClient(server=server_of(app_config, ServerType.JELLYFIN))
 
     async def response(*_args: Any, **_kwargs: Any) -> object:
         return [{"ItemId": "1"}, {"ItemId": "1"}]

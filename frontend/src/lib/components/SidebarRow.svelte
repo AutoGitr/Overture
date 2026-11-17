@@ -184,7 +184,8 @@
       title={row.title}
       artStatus={catalogTones?.art ?? artStatus}
       themeStatus={catalogTones?.theme ?? themeStatus}
-      hideTheme={hideTheme || (!!collection && settingsState.current.media_server === "emby")}
+      hideTheme={hideTheme ||
+        (!!collection && settingsState.current.collection_themes_unavailable !== null)}
       onart={onOpenArt}
       onthemes={onOpenThemes}
     />

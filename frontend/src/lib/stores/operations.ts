@@ -83,7 +83,7 @@ export const OPERATIONS: Readonly<Record<OperationsTab, Operation>> = {
 
 export const OPERATION_TABS = Object.keys(OPERATIONS) as OperationsTab[];
 
-/** Operations that read or change the media server, so MEDIA_SERVER=none has none. */
+/** Operations that read or change the media server, so MEDIA_SERVERS=none has none. */
 const SERVER_OPERATIONS: ReadonlySet<OperationsTab> = new Set(["sync", "audit"]);
 
 /** The operations offered with or without a media server. */

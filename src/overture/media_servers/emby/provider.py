@@ -2,7 +2,7 @@
 
 lazy from typing import ClassVar, override
 
-lazy from ...config import Settings
+lazy from ...config import MediaServerConfig, Settings
 lazy from ...domain import ServerType
 lazy from ..adapters import NoCollectionThemes, ServerWebLinks
 lazy from ..health import MediaServerHealthTracker
@@ -20,11 +20,14 @@ class EmbyProvider(MediaBrowserProvider[EmbyClient]):
         self,
         *,
         client: EmbyClient | None = None,
+        server: MediaServerConfig,
+        server_id: int,
         app_config: Settings,
         health: MediaServerHealthTracker | None = None,
     ) -> None:
         super().__init__(
-            client=client or EmbyClient(app_config=app_config, health=health),
+            client=client or EmbyClient(server=server, health=health),
+            server_id=server_id,
             app_config=app_config,
         )
 

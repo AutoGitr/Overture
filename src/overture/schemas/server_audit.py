@@ -32,6 +32,8 @@ class ServerAuditRefreshTarget(StrictBaseModel):
     collection_id: int | None = None
     season_id: int | None = None
     art_type: ArtType
+    #: The database's number of the server whose copy is fixed.
+    server_id: int
 
     @model_validator(mode="after")
     def require_one_owner(self) -> Self:
@@ -53,6 +55,8 @@ class ServerAuditThemeDeleteTarget(StrictBaseModel):
     """
 
     item_id: int
+    #: The database's number of the server whose theme it is.
+    server_id: int
     server_item_id: str = Field(min_length=1)
     theme_id: str | None = None
 
@@ -142,6 +146,9 @@ class ServerAuditResult(StrictBaseModel):
     reason: PublicText | None = None
     local_duration: float | None = None
     server_duration: float | None = None
+    #: The database's number of the server compared, and its name.
+    server_id: int | None = None
+    server: str | None = None
     server_item_id: str | None = None
     theme_id: str | None = None
     theme_title: str | None = None

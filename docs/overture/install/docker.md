@@ -110,10 +110,10 @@ required settings after loading the mounted secrets.
 ```yaml
 services:
   overture:
-    secrets: [media_server_api_key]
+    secrets: [media_server_plex_api_key]
 secrets:
-  media_server_api_key:
-    file: ./secrets/media_server_api_key
+  media_server_plex_api_key:
+    file: ./secrets/media_server_plex_api_key
 ```
 
 ## Verify the image

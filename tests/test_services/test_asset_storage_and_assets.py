@@ -23,6 +23,7 @@ lazy from overture.utils.assets import (
     season_poster_filename,
 )
 lazy from overture.utils.path import is_within_roots
+lazy from tests.media_servers import configure, server_of
 
 
 @pytest.fixture
@@ -33,12 +34,12 @@ def storage(app_config: Settings) -> AssetStorage:
 def test_resolves_item_art_paths(storage: AssetStorage) -> None:
     folder = "/media/Movie"
 
-    assert storage.resolve_art_path(folder, ArtType.POSTER, ".png") == str(
-        Path(folder) / "poster.png"
-    )
-    assert storage.resolve_art_path(folder, ArtType.BACKGROUND) == str(
-        Path(folder) / "background.jpg"
-    )
+    assert storage.resolve_art_paths(folder, ArtType.POSTER, ".png") == [
+        str(Path(folder) / "poster.png")
+    ]
+    assert storage.resolve_art_paths(folder, ArtType.BACKGROUND) == [
+        str(Path(folder) / "background.jpg")
+    ]
 
 
 def test_resolves_theme_path(storage: AssetStorage) -> None:
@@ -50,34 +51,59 @@ def test_resolves_theme_path(storage: AssetStorage) -> None:
 def test_resolves_server_specific_season_paths(
     storage: AssetStorage, *, app_config: Settings
 ) -> None:
-    app_config.MEDIA_SERVER = ServerType.PLEX
-    assert storage.resolve_art_path(
+    configure(app_config, type=ServerType.PLEX)
+    assert storage.resolve_art_paths(
         "/media/Show",
         ArtType.SEASON_POSTER,
         ".jpg",
         season_folder_path="/media/Show/Season 01",
         season_num=1,
-    ) == str(Path("/media/Show/Season 01") / "Season01.jpg")
+    ) == [str(Path("/media/Show/Season 01") / "Season01.jpg")]
 
-    app_config.MEDIA_SERVER = ServerType.JELLYFIN
-    assert storage.resolve_art_path(
+    configure(app_config, type=ServerType.JELLYFIN)
+    assert storage.resolve_art_paths(
         "/media/Show",
         ArtType.SEASON_POSTER,
         ".jpg",
         season_folder_path="/media/Show/Season 01",
         season_num=1,
-    ) == str(Path("/media/Show/Season 01") / "poster.jpg")
+    ) == [str(Path("/media/Show/Season 01") / "poster.jpg")]
+
+
+def test_servers_sharing_a_folder_get_every_season_poster_name_they_read(
+    storage: AssetStorage, *, app_config: Settings
+) -> None:
+    app_config.MEDIA_SERVERS = (
+        server_of(app_config, ServerType.PLEX),
+        server_of(app_config, ServerType.JELLYFIN),
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        show = Path(tmp)
+        (show / "Season 01").mkdir()
+        assert storage.resolve_art_paths(tmp, ArtType.SEASON_POSTER, season_num=1) == [
+            str(show / "Season 01" / "Season01.jpg"),
+            str(show / "Season 01" / "poster.jpg"),
+        ]
+        # Jellyfin reads no poster from the show's own folder; Plex does.
+        (show / "Season 01").rmdir()
+        assert storage.resolve_art_paths(tmp, ArtType.SEASON_POSTER, season_num=1) == [
+            str(show / "Season01.jpg")
+        ]
+        # Only the servers holding the title name its files.
+        assert storage.resolve_art_paths(
+            tmp, ArtType.POSTER, naming=[ServerType.JELLYFIN]
+        ) == [str(show / "poster.jpg")]
 
 
 @pytest.mark.parametrize("media_server", ["jellyfin", "emby"])
 def test_season_art_requires_a_separate_season_folder(
     storage: AssetStorage, media_server: str, *, app_config: Settings
 ) -> None:
-    app_config.MEDIA_SERVER = ServerType(media_server)
+    configure(app_config, type=ServerType(media_server))
     with tempfile.TemporaryDirectory() as tmp:
         for season_folder in (None, tmp):
             with pytest.raises(TargetDirectoryMissingError, match="Season folder"):
-                storage.resolve_art_path(
+                storage.resolve_art_paths(
                     tmp,
                     ArtType.SEASON_POSTER,
                     season_num=1,
@@ -88,7 +114,7 @@ def test_season_art_requires_a_separate_season_folder(
 def test_plex_season_art_round_trips_in_the_show_root(
     storage: AssetStorage, *, app_config: Settings
 ) -> None:
-    app_config.MEDIA_SERVER = ServerType.PLEX
+    configure(app_config, type=ServerType.PLEX)
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         (root / "poster.jpg").write_bytes(b"show poster")
@@ -100,7 +126,7 @@ def test_plex_season_art_round_trips_in_the_show_root(
             is None
         )
 
-        target = storage.resolve_art_path(tmp, ArtType.SEASON_POSTER, season_num=1)
+        [target] = storage.resolve_art_paths(tmp, ArtType.SEASON_POSTER, season_num=1)
         storage.write_file(target, b"season poster", tmp)
 
         assert (
@@ -267,18 +293,18 @@ class TestAssetManagerHelper:
         assert parse_season_num("Specials") == 0
         assert parse_season_num("Extras") is None
 
-        assert season_poster_filename("plex", 1, ".jpg") == "Season01.jpg"
-        assert season_poster_filename("jellyfin", 1, ".jpg") == "poster.jpg"
-        assert season_poster_filename("emby", 1, ".jpg") == "poster.jpg"
+        assert season_poster_filename(ServerType.PLEX, 1, ".jpg") == "Season01.jpg"
+        assert season_poster_filename(ServerType.JELLYFIN, 1, ".jpg") == "poster.jpg"
+        assert season_poster_filename(ServerType.EMBY, 1, ".jpg") == "poster.jpg"
         assert (
-            season_poster_filename("jellyfin", 0, ".png")
+            season_poster_filename(ServerType.JELLYFIN, 0, ".png")
             == "season-specials-poster.png"
         )
 
     def test_scan_media_folder_reports_expected_renames(
         self, monkeypatch: pytest.MonkeyPatch, *, app_config: Settings
     ) -> None:
-        app_config.MEDIA_SERVER = ServerType.PLEX
+        configure(app_config, type=ServerType.PLEX)
         with tempfile.TemporaryDirectory() as tmp:
             show = Path(tmp) / "Show"
             season = show / "Season 01"

@@ -460,7 +460,7 @@ async def test_collection_candidates_share_source_policy_and_catalog_toggle(
         await enable_catalog(session)
     policy = CandidatePolicy.of(AppSettings(skip_media_server_tmdb_urls=True))
     enabled = await candidates.gather_collection(row, ArtType.POSTER, policy)
-    assert list(enabled.by_source) == ["tmdb", "plex", "overturedb"]
+    assert list(enabled.by_source) == ["tmdb", "Plex", "overturedb"]
     # Each OvertureDB poster is offered with its style, the collection's first,
     # and a link OvertureDB holds is marked as that poster wherever it is offered.
     assert [
@@ -471,7 +471,7 @@ async def test_collection_candidates_share_source_policy_and_catalog_toggle(
         (TPDB, CollectionPosterStyle.MATTE),
     ]
     assert enabled.by_source["tmdb"][0].poster_style is CollectionPosterStyle.INDIVIDUAL
-    assert enabled.by_source["plex"] == []
+    assert enabled.by_source["Plex"] == []
     tmdb.fail = True
     partial = await candidates.gather_collection(row, ArtType.POSTER, policy)
     assert partial.by_source["tmdb"] == []

@@ -10,7 +10,7 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from overture.config import Settings
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.session import Database
-lazy from overture.domain import JobStatus, MediaType, ServerAsset
+lazy from overture.domain import JobStatus, MediaType, ServerAsset, ServerType
 lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.jellyfin import JellyfinProvider
 lazy from overture.media_servers.plex import PlexProvider
@@ -28,6 +28,7 @@ lazy from overture.services.themes.youtube_resolver import (
 )
 lazy from overture.utils.time import utc_now
 lazy from tests.collection_helpers import stored_collection
+lazy from tests.media_servers import TEST_SERVER_ID, configure, server_of
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import NoopProviderRegistry, unused
 
@@ -184,7 +185,11 @@ async def test_process_job_persists_complete_collection_theme_provenance(
     service = _download_service(
         publisher,
         youtube_resolver=cast("Any", Resolver()),
-        provider=Provider(app_config=app_config),
+        provider=Provider(
+            server=server_of(app_config, Provider.server_type),
+            server_id=TEST_SERVER_ID,
+            app_config=app_config,
+        ),
         database=database,
         app_config=app_config,
     )
@@ -239,12 +244,16 @@ async def test_jellyfin_collection_theme_is_written_to_the_boxset_folder(
 
     folder = tmp_path / "Star Wars [boxset]"
     folder.mkdir()
-    app_config.JELLYFIN_COLLECTIONS_PATH = tmp_path
+    configure(app_config, collections_path=tmp_path)
     # Jellyfin names its own path for the folder; only the name carries over.
     await _listed_collection(database, "/config/data/collections/Star Wars [boxset]")
     service = _download_service(
         youtube_resolver=cast("Any", Resolver()),
-        provider=Provider(app_config=app_config),
+        provider=Provider(
+            server=server_of(app_config, Provider.server_type),
+            server_id=TEST_SERVER_ID,
+            app_config=app_config,
+        ),
         database=database,
         app_config=app_config,
     )
@@ -273,7 +282,11 @@ async def test_jellyfin_collection_theme_needs_the_collections_path(
     await _listed_collection(database, "/data/Star Wars [boxset]")
     service = _download_service(
         youtube_resolver=cast("Any", Resolver()),
-        provider=JellyfinProvider(app_config=app_config),
+        provider=JellyfinProvider(
+            server=server_of(app_config, ServerType.JELLYFIN),
+            server_id=TEST_SERVER_ID,
+            app_config=app_config,
+        ),
         database=database,
         app_config=app_config,
     )
@@ -287,5 +300,5 @@ async def test_jellyfin_collection_theme_needs_the_collections_path(
     job = await db_session.get(DownloadJob, job_id)
     assert job is not None
     assert job.error_message == (
-        "Set JELLYFIN_COLLECTIONS_PATH to store collection themes"
+        "Set MEDIA_SERVER_JELLYFIN_COLLECTIONS_PATH to store collection themes"
     )

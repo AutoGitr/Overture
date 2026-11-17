@@ -23,16 +23,6 @@ lazy from .rules import TITLE_TAKEN, apply_libraries
 _NOTHING = FilterGroup()
 
 
-def _held_libraries(rows: Sequence[MediaCollection]) -> dict[str, MediaType]:
-    return {
-        part.library_id: part.media_type
-        for row in rows
-        if row.kind is not CollectionKind.SEPARATOR
-        for part in row.libraries
-        if part.criteria is not None
-    }
-
-
 class CollectionSeparators:
     """Keep a group's separator as its setting and collections say.
 
@@ -68,13 +58,8 @@ class CollectionSeparators:
             separator = next(
                 (row for row in rows if row.kind is CollectionKind.SEPARATOR), None
             )
-            libraries = _held_libraries(rows)
-            if (
-                group is None
-                or not group.separator
-                or not self._access.plex
-                or not libraries
-            ):
+            libraries = self._plex_libraries(rows)
+            if group is None or not group.separator or not libraries:
                 if separator is not None:
                     async with self._access.asset_locks.acquire(
                         f"collection:{separator.id}"
@@ -103,16 +88,28 @@ class CollectionSeparators:
                     )
         await self._rules.sync(collection_id)
 
+    def _plex_libraries(self, rows: Sequence[MediaCollection]) -> dict[str, MediaType]:
+        """The libraries a group's collections span on Plex, the one with separators."""
+        return {
+            part.library_id: part.media_type
+            for row in rows
+            if row.kind is not CollectionKind.SEPARATOR
+            for part in row.libraries
+            if part.criteria is not None
+            and self._access.configured(part.server_id)
+            and self._access.plex(part.library_id)
+        }
+
     async def refuse_taken(self, session: AsyncSession, group: CollectionGroup) -> None:
         """Refuse a separator whose title a collection in its libraries already has.
 
         Raises:
             PublicServiceError: 409 when the group's name is taken.
         """
-        if not group.separator or not self._access.plex:
+        if not group.separator:
             return
         repo = CollectionRepository(session)
-        libraries = _held_libraries(await repo.group_members(group))
+        libraries = self._plex_libraries(await repo.group_members(group))
         if any(
             row.kind is not CollectionKind.SEPARATOR
             and row.title.casefold() == group.name.casefold()

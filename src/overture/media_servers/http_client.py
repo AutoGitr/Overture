@@ -10,7 +10,7 @@ lazy from typing import Any, ClassVar
 
 lazy import httpx2
 
-lazy from ..config import Settings
+lazy from ..config import MediaServerConfig
 lazy from ..domain import ArtType, MediaServerState
 lazy from ..integrations.http import (
     LazyClient,
@@ -98,12 +98,12 @@ class MediaServerHttpClient(ABC):
     def __init__(
         self,
         *,
-        app_config: Settings,
+        server: MediaServerConfig,
         client_factory: Callable[..., httpx2.AsyncClient] = create_client,
         health: MediaServerHealthTracker | None = None,
     ) -> None:
         """Initialize the lazily created client and its response memoizer."""
-        self._app_config = app_config
+        self.server = server
         self._client_factory = client_factory
         self._client = LazyClient(self._create_client, name="Media-server")
         self._cache: AsyncMemoizer[tuple[Hashable, ...]] = AsyncMemoizer()
@@ -162,13 +162,13 @@ class MediaServerHttpClient(ABC):
 
     def _error(self, exc: httpx2.HTTPError) -> MediaServerError:
         """Return the safe failure a failed request becomes, noting the health."""
-        logger.warning("Media server request failed: %s", exc)
+        logger.warning("%s request failed: %s", self.server.title, exc)
         if isinstance(exc, httpx2.HTTPStatusError):
             status = exc.response.status_code
             if status in {401, 403}:
                 error = MediaServerError(
-                    "The media server rejected its credentials; "
-                    "check MEDIA_SERVER_API_KEY"
+                    f"{self.server.title} rejected its credentials; "
+                    f"check {self.server.variable('api_key')}"
                 )
                 self.health.record(MediaServerState.REJECTED, error.message)
                 return error
@@ -176,12 +176,13 @@ class MediaServerHttpClient(ABC):
                 # The server answered: one request failed, not the server.
                 self.health.record(MediaServerState.REACHABLE)
                 return MediaServerError(
-                    f"Media server returned an unsuccessful response (HTTP {status})",
+                    f"{self.server.title} returned an unsuccessful response "
+                    f"(HTTP {status})",
                     upstream_status_code=status,
                 )
         error = MediaServerError(
-            "The media server is unavailable; check MEDIA_SERVER_URL and that "
-            "the server is running",
+            f"{self.server.title} is unavailable; check "
+            f"{self.server.variable('url')} and that the server is running",
             status_code=503,
         )
         self.health.record(MediaServerState.UNREACHABLE, error.message)

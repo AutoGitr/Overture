@@ -27,6 +27,7 @@ import {
   collectionRule,
   mediaItem,
   dimension,
+  mediaServers,
 } from "../../helpers/fixtures";
 import { renderWithQueryClient } from "../../helpers/render";
 import { uiState } from "../../../lib/stores/uiState.svelte";
@@ -46,7 +47,9 @@ const rule = collectionRule();
 describe("collection criteria", () => {
   beforeEach(async () => {
     queryClient.clear();
-    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    settingsState.load(
+      appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    );
     await navigate("/collections/:collectionSlug", {
       params: { collectionSlug: "12-saga" },
     });
@@ -550,7 +553,9 @@ describe("collection criteria", () => {
       "/api/collections/defaults": {},
       "/api/collections/groups": [],
       "/api/collections/capabilities": capabilities,
-      "/api/library/libraries": [{ id: "movies", title: "Movies", media_type: "movie", count: 1 }],
+      "/api/library/libraries": [
+        { id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 1 },
+      ],
       "/api/library/items": { items: members, total: 1 },
       "/api/collections/12": ({ init }: { init: RequestInit }) => {
         if (init.method === "PUT") {
@@ -650,7 +655,7 @@ describe("collection criteria", () => {
     });
     renderWithQueryClient(GroupSettingsHarness, {
       group: "Genres",
-      libraries: [{ id: "movies", title: "Movies", media_type: "movie", count: 10 }],
+      libraries: [{ id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 10 }],
     });
 
     await fireEvent.click(await screen.findByRole("button", { name: "Collection set" }));
@@ -691,7 +696,7 @@ describe("collection criteria", () => {
     renderWithQueryClient(CollectionSetEditor, {
       generator,
       libraryIds: ["movies"],
-      libraries: [{ id: "movies", title: "Movies", media_type: "movie", count: 1 }],
+      libraries: [{ id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 1 }],
       capabilities: collectionCapabilities({
         dimensions: [
           ...capabilities.dimensions,
@@ -740,7 +745,7 @@ describe("collection criteria", () => {
   it("edits the global defaults under their own names and where requests go", async () => {
     settingsState.load(
       appSettings({
-        media_server: "plex",
+        media_servers: mediaServers("plex"),
         collections_supported: true,
         radarr_configured: true,
         tmdb_configured: true,

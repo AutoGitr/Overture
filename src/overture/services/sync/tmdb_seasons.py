@@ -3,6 +3,8 @@
 lazy import asyncio
 lazy import logging
 
+lazy from sqlmodel.ext.asyncio.session import AsyncSession
+
 lazy from ... import protocols
 lazy from ...config import Settings
 lazy from ...db.models.media_item import MediaItem
@@ -13,6 +15,7 @@ lazy from ...integrations.tmdb import TMDBClient
 lazy from ...jobs.progress_log import JobOutcome
 lazy from ...jobs.runner import ManagedJob
 lazy from ...jobs.tally import SyncTally
+lazy from ...repositories.copies import CopyRepository
 lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...utils.time import utc_now
@@ -75,7 +78,7 @@ class TmdbSeasonSync:
             raise ValueError("TMDB season sync requires a saved show with a TMDB ID")
         async with self._database.read_session() as session:
             current = await session.get(MediaItem, expected.id)
-            if not self._matches(current, expected):
+            if not await self._unconnected(session, current, expected):
                 return JobOutcome.SKIPPED, "show is no longer an unconnected TMDB item"
         details = await self._tmdb.get_details(MediaType.SHOW, expected.tmdb_id)
         if details is None:
@@ -83,7 +86,9 @@ class TmdbSeasonSync:
         changed = False
         async with self._database.write_session() as session:
             current = await session.get(MediaItem, expected.id)
-            if current is None or not self._matches(current, expected):
+            if current is None or not await self._unconnected(
+                session, current, expected
+            ):
                 return JobOutcome.SKIPPED, "show changed while reading TMDB"
             seasons = await SeasonRepository(session).map_by_number_for_item(
                 expected.id
@@ -113,11 +118,14 @@ class TmdbSeasonSync:
         return JobOutcome.UNCHANGED, "seasons match TMDB"
 
     @staticmethod
-    def _matches(current: MediaItem | None, expected: MediaItem) -> bool:
+    async def _unconnected(
+        session: AsyncSession, current: MediaItem | None, expected: MediaItem
+    ) -> bool:
+        """Whether *current* is still the planned show and no server holds it."""
         return (
             current is not None
             and current.media_type == MediaType.SHOW
             and current.tmdb_id == expected.tmdb_id
-            and current.server_item_id is None
             and current.server_removed_at is None
+            and not await CopyRepository(session).of_item(expected.id or 0)
         )

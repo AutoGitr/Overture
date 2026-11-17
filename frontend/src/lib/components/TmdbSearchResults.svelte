@@ -310,7 +310,8 @@
     {index}
     active={isActive(result)}
     tmdbResult={result}
-    hideTheme={result.kind === "collection" && settingsState.current.media_server === "emby"}
+    hideTheme={result.kind === "collection" &&
+      settingsState.current.collection_themes_unavailable !== null}
     artStatus={statusTone(stored?.art_status ?? "missing", false)}
     themeStatus={statusTone(
       stored?.theme_status ?? "missing",

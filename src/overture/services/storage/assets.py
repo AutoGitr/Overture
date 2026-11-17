@@ -4,14 +4,14 @@ lazy import logging
 lazy import os
 lazy import stat
 lazy import tempfile
-lazy from collections.abc import Sequence
+lazy from collections.abc import Collection, Sequence
 lazy from dataclasses import dataclass
 lazy from pathlib import Path
 
 lazy from ...config import Settings
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
-lazy from ...domain import ITEM_ART_TYPES, ArtType
+lazy from ...domain import ITEM_ART_TYPES, ArtType, ServerType
 lazy from ...utils.assets import (
     IMAGE_EXTENSIONS,
     ITEM_ASSET_CANDIDATES,
@@ -149,40 +149,59 @@ class AssetStorage:
         self._app_config = app_config
         self.asset_locks = KeyedLock[int | str]()
 
+    @property
+    def _server_types(self) -> list[ServerType]:
+        """The configured servers' kinds, the lead's first, whose names are read."""
+        return list(
+            dict.fromkeys(server.type for server in self._app_config.MEDIA_SERVERS)
+        )
+
     def resolve_theme_path(self, folder_path: str) -> str:
         """Resolve the target path for a local theme audio file."""
         return str(Path(folder_path) / THEME_FILENAME)
 
-    def resolve_art_path(
+    def resolve_art_paths(
         self,
         folder_path: str,
         art_type: ArtType,
         ext: str = ".jpg",
         season_folder_path: str | None = None,
         season_num: int | None = None,
-    ) -> str:
-        """Resolve target file path based on art type and media-server naming rules."""
+        naming: Collection[ServerType] = (),
+    ) -> list[str]:
+        """Resolve where an image goes, under every name the *naming* servers read.
+
+        Servers that share a folder can name an asset differently; a season
+        poster then goes under each name, in the folder each server reads it
+        from. Without *naming*, every configured server's names are used.
+
+        Raises:
+            TargetDirectoryMissingError: When no server's season folder is known.
+        """
         if not art_type.owned_by_season:
-            return str(Path(folder_path) / f"{art_type}{ext}")
+            return [str(Path(folder_path) / f"{art_type}{ext}")]
         if season_num is None or season_num < 0:
             raise ValueError("A season poster requires a valid season number")
-        dest_folder = self._resolve_season_folder(
-            show_root=folder_path,
-            season_num=season_num,
-            season_folder_path=season_folder_path,
-            listing=FolderListing(),
-        )
-        if dest_folder is None:
+        listing = FolderListing()
+        paths: list[str] = []
+        for server in naming or self._server_types:
+            dest_folder = self._resolve_season_folder(
+                show_root=folder_path,
+                season_num=season_num,
+                season_folder_path=season_folder_path,
+                listing=listing,
+                plex=server is ServerType.PLEX,
+            )
+            if dest_folder is not None:
+                paths.append(
+                    str(dest_folder / season_poster_filename(server, season_num, ext))
+                )
+        if not paths:
             raise TargetDirectoryMissingError(
                 f"Season folder is not known for season {season_num}; "
                 "sync the item after its season directory has been created."
             )
-        return str(
-            dest_folder
-            / season_poster_filename(
-                self._app_config.MEDIA_SERVER or "", season_num, ext
-            )
-        )
+        return list(dict.fromkeys(paths))
 
     def _resolve_season_folder(
         self,
@@ -191,22 +210,23 @@ class AssetStorage:
         season_folder_path: str | None,
         *,
         listing: FolderListing,
+        plex: bool,
     ) -> Path | None:
-        """Resolve the same safe season location for reads and writes."""
+        """Resolve the same safe season location for reads and writes.
+
+        Plex reads a season's poster from the show's folder too; Jellyfin and
+        Emby read only a season folder of its own.
+        """
         if season_folder_path:
             folder = Path(season_folder_path)
         else:
             if not show_root or season_num is None:
                 return None
             probed = self.probe_season_folder(show_root, season_num, listing=listing)
-            if not probed and not self._app_config.is_plex:
+            if not probed and not plex:
                 return None
             folder = Path(probed or show_root)
-        if (
-            show_root
-            and not self._app_config.is_plex
-            and listing.same_folder(folder, Path(show_root))
-        ):
+        if show_root and not plex and listing.same_folder(folder, Path(show_root)):
             return None
         return folder
 
@@ -270,18 +290,34 @@ class AssetStorage:
     def _find_season_poster_path(
         self, item: MediaItem, season: Season, listing: FolderListing
     ) -> Path | None:
-        folder = self._resolve_season_folder(
-            item.folder_path, season.season_num, season.folder_path, listing=listing
-        )
-        if folder is None:
-            return None
-        candidates = season_poster_candidates(
-            self._app_config.MEDIA_SERVER or "", season.season_num
-        )
-        if item.folder_path and listing.same_folder(folder, Path(item.folder_path)):
-            # A root-level poster belongs to the show, never the season.
-            candidates = [name for name in candidates if Path(name).stem != "poster"]
-        return _first_existing(folder, candidates, listing)
+        return next(iter(self.season_poster_paths(item, season, listing=listing)), None)
+
+    def season_poster_paths(
+        self, item: MediaItem, season: Season, *, listing: FolderListing | None = None
+    ) -> list[Path]:
+        """Return every season poster any configured server would read, in use order."""
+        listing = listing or FolderListing()
+        found: list[Path] = []
+        for server in self._server_types:
+            folder = self._resolve_season_folder(
+                item.folder_path,
+                season.season_num,
+                season.folder_path,
+                listing=listing,
+                plex=server is ServerType.PLEX,
+            )
+            if folder is None:
+                continue
+            candidates = season_poster_candidates(server, season.season_num)
+            if item.folder_path and listing.same_folder(folder, Path(item.folder_path)):
+                # A root-level poster belongs to the show, never the season.
+                candidates = [
+                    name for name in candidates if Path(name).stem != "poster"
+                ]
+            found += [
+                folder / name for name in candidates if listing.is_file(folder / name)
+            ]
+        return list(dict.fromkeys(found))
 
     @staticmethod
     def _is_file(path: Path) -> bool:

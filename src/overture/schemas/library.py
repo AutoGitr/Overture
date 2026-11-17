@@ -28,13 +28,23 @@ lazy from .common import SaveSelectionResponse
 lazy from .removal import AssetRemoval
 
 
+class ItemCopyRead(StrictBaseModel):
+    """One media server's copy of a title, which that server lists."""
+
+    #: The database's number of the server.
+    server_id: int
+    #: The server's own ID of the title, which its web app opens.
+    server_item_id: str
+    library_id: str
+
+
 class MediaItemRead(StrictBaseModel):
     """Public media item response."""
 
     id: int
     media_type: MediaType
     title: str
-    #: The media server's sort title, which leaves out leading articles in
+    #: The lead server's sort title, which leaves out leading articles in
     #: the library's language, or the one someone set there.
     sort_title: str | None = None
     year: int | None = None
@@ -45,9 +55,8 @@ class MediaItemRead(StrictBaseModel):
     tmdb_collection_id: int | None = None
     library_collection_id: int | None = None
     folder_path: str | None = None
-    server_item_id: str | None = None
-    server_verified_at: datetime | None = None
-    library_id: str | None = None
+    #: The copies the configured servers list, in no particular order.
+    copies: list[ItemCopyRead] = Field(default_factory=list[ItemCopyRead])
     monitored: bool = True
     directors: list[str] = Field(default_factory=list[str])
     studio: str | None = None
@@ -132,7 +141,6 @@ class SeasonRead(StrictBaseModel):
     title: str | None = None
     file_count: int = 0
     folder_path: str | None = None
-    server_item_id: str | None = None
 
     poster_status: AssetStatus = AssetStatus.MISSING
     poster_url: str | None = None
@@ -149,9 +157,12 @@ class SeasonRead(StrictBaseModel):
 class LibrarySectionRead(StrictBaseModel):
     """Library selector response."""
 
+    #: Overture's ID of the library, which names its server as well.
     id: str
     title: str
     media_type: MediaType
+    #: The database's number of its server.
+    server_id: int
     count: int
 
 
@@ -168,7 +179,9 @@ def _preview_url(slot: ArtSlot, art_type: ArtType) -> str | None:
 
 
 def item_metadata_issues(
-    item: MediaItem, catalog_ids: Literal["matching", "mismatching"] | None
+    item: MediaItem,
+    catalog_ids: Literal["matching", "mismatching"] | None,
+    copies: Sequence[ItemCopyRead],
 ) -> list[MetadataIssue]:
     """The gaps and conflicts in a title's metadata, in the enum's order."""
     found = {
@@ -178,7 +191,7 @@ def item_metadata_issues(
         MetadataIssue.NO_IMDB_ID: not item.imdb_id,
         MetadataIssue.NO_LOCAL_PATH: not item.folder_path,
         MetadataIssue.NO_YEAR: not item.year,
-        MetadataIssue.NO_SERVER_ID: not item.server_item_id,
+        MetadataIssue.NO_SERVER_ID: not copies,
         MetadataIssue.ID_MISMATCH: catalog_ids == "mismatching",
     }
     return [issue for issue in MetadataIssue if found[issue]]
@@ -197,6 +210,7 @@ def media_item_read_from_model(
     catalog_ids: Literal["matching", "mismatching"] | None = None,
     catalog_selections: CatalogSelections | None = None,
     library_collection_id: int | None = None,
+    copies: Sequence[ItemCopyRead] = (),
 ) -> MediaItemRead:
     """Map a persisted media item to the public library item response.
 
@@ -226,7 +240,8 @@ def media_item_read_from_model(
             "library_collection_id": library_collection_id,
             "catalog_ids": catalog_ids,
             "catalog_selections": catalog_selections,
-            "metadata_issues": item_metadata_issues(item, catalog_ids),
+            "copies": list(copies),
+            "metadata_issues": item_metadata_issues(item, catalog_ids, copies),
             "has_incorrect_aspect_ratio": has_incorrect_aspect_ratio,
         }
     )

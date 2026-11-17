@@ -253,12 +253,12 @@ def write_existing_asset(
         (folder / "theme.mp3").write_bytes(b"existing theme")
         return
     path = Path(
-        storage.resolve_art_path(
+        storage.resolve_art_paths(
             str(folder),
             ArtType(asset),
             season_folder_path=season.folder_path if season else None,
             season_num=1 if season else None,
-        )
+        )[0]
     )
     path.parent.mkdir(exist_ok=True)
     path.write_bytes(CATALOG_BYTES if identical else b"existing artwork")

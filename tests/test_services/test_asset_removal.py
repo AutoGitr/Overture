@@ -16,6 +16,7 @@ lazy from overture.schemas.removal import AssetRemoval, RemovalTarget
 lazy from overture.services.storage.assets import AssetStorage, PathTraversalError
 lazy from overture.utils.errors import PublicServiceError
 lazy from tests.factories import seed_art_slot
+lazy from tests.media_servers import served_item
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     database_for,
@@ -121,7 +122,7 @@ def _media_folder(folder: Path) -> None:
 
 async def _item(db_session: AsyncSession, folder: Path, **fields: Any) -> MediaItem:
     _media_folder(folder)
-    item = MediaItem(
+    item = served_item(
         id=1,
         media_type=MediaType.MOVIE,
         title="Movie",

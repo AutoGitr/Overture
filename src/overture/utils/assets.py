@@ -3,7 +3,7 @@
 lazy import re
 lazy from pathlib import Path
 
-lazy from ..domain import ArtType
+lazy from ..domain import ArtType, ServerType
 
 SAVED_EXTENSIONS = (".jpg", ".png")
 IMAGE_EXTENSIONS = {*SAVED_EXTENSIONS, ".jpeg"}
@@ -38,23 +38,23 @@ _CANONICAL_ASSET_NAMES.update({"poster.jpeg", "background.jpeg"})
 
 
 def season_poster_filename(
-    provider_type: str,
+    server: ServerType,
     season_num: int | None,
     ext: str,
 ) -> str:
-    """Return the canonical season-poster filename for a media server."""
+    """Return the canonical season-poster filename for a kind of media server."""
     if season_num == 0:
         return f"season-specials-poster{ext}"
-    if provider_type == "plex":
+    if server is ServerType.PLEX:
         return f"Season{season_num:02d}{ext}"
     return f"poster{ext}"
 
 
-def season_poster_candidate_bases(provider_type: str, season_num: int) -> list[str]:
+def _season_poster_candidate_bases(server: ServerType, season_num: int) -> list[str]:
     """Return accepted season-poster stems, preferred first."""
     if season_num == 0:
         return ["season-specials-poster"]
-    if provider_type in {"jellyfin", "emby"}:
+    if server is not ServerType.PLEX:
         return [
             "poster",
             f"Season{season_num:02d}",
@@ -67,11 +67,11 @@ def season_poster_candidate_bases(provider_type: str, season_num: int) -> list[s
     ]
 
 
-def season_poster_candidates(provider_type: str, season_num: int) -> list[str]:
+def season_poster_candidates(server: ServerType, season_num: int) -> list[str]:
     """Return accepted season-poster filenames, preferred first."""
     return [
         f"{base}{ext}"
-        for base in season_poster_candidate_bases(provider_type, season_num)
+        for base in _season_poster_candidate_bases(server, season_num)
         for ext in SAVED_EXTENSIONS
     ]
 

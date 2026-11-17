@@ -75,8 +75,6 @@ class MediaCollection(ThemeColumns, table=True):
     # cache version.
     thumb_url: str | None = None
     art_url: str | None = None
-    # The server's folder for the collection (Jellyfin BoxSets).
-    server_path: str | None = None
     server_added_at: datetime | None = None
 
     # TMDB collection ID the server itself names, such as a BoxSet's.
@@ -145,18 +143,22 @@ class MediaCollection(ThemeColumns, table=True):
         return self.group.name if self.group else None
 
     @property
-    def server_ids(self) -> list[str]:
-        """The server collections holding it, the lead copy first."""
-        return list(
-            dict.fromkeys(
-                part.server_item_id for part in self.libraries if part.server_item_id
-            )
-        )
+    def copies(self) -> list["CollectionLibrary"]:
+        """One part for each server collection holding it.
 
-    @property
-    def server_item_id(self) -> str | None:
-        """The lead server copy, whose images and link stand for the collection."""
-        return next(iter(self.server_ids), None)
+        Jellyfin and Emby hold every library's members in one collection, so
+        several parts can name the same copy; the first stands for it.
+        """
+        seen: set[tuple[int, str]] = set()
+        copies: list[CollectionLibrary] = []
+        for part in self.libraries:
+            if (
+                part.server_item_id
+                and (key := (part.server_id, part.server_item_id)) not in seen
+            ):
+                seen.add(key)
+                copies.append(part)
+        return copies
 
     @property
     def media_types(self) -> list[MediaType]:
@@ -174,11 +176,12 @@ class MediaCollection(ThemeColumns, table=True):
 
 
 class CollectionLibrary(SQLModel, table=True):
-    """One library a collection spans, and where the server keeps its members.
+    """One library a collection spans, and where its server keeps its members.
 
     Jellyfin and Emby keep collections outside their libraries, so every
-    library of a collection names the same server collection; Plex keeps one
-    in each library.
+    library of a collection on one of them names the same server collection;
+    Plex keeps one in each library. Libraries of several servers make a
+    collection on each.
     """
 
     __tablename__: ClassVar[Any] = "collection_libraries"
@@ -198,8 +201,13 @@ class CollectionLibrary(SQLModel, table=True):
     )
     library_id: str
     media_type: MediaType = Field(sa_type=enum_type(MediaType), index=True)
+    #: The library's server; the library ID names it as well.
+    server_id: int = Field(foreign_key="media_servers.id", ondelete="RESTRICT")
     # Null while the collection is withheld from the server.
     server_item_id: str | None = Field(default=None, index=True)
+    #: The server's folder for its collection (Jellyfin BoxSets), where its
+    #: theme goes.
+    server_path: str | None = None
     #: A ``FilterGroup`` of field and source conditions. Null on a collection
     #: Overture does not manage, and on a library leaving a managed collection
     #: until the next sync removes it from the server.

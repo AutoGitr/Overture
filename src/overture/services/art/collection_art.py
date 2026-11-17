@@ -56,6 +56,7 @@ lazy from ...utils.locks import KeyedLock
 lazy from ...utils.threads import owned_thread
 lazy from ...utils.time import utc_now
 lazy from ..collections import COLLECTIONS_LOCK
+lazy from ..collections.copies import lead_part
 lazy from ..removal import NO_COLLECTION_ART_FILE, AssetRemover
 lazy from ..storage.image_cache import CachedOriginal, ImageCache
 lazy from ..storage.responses import cached_image_response
@@ -387,14 +388,20 @@ class CollectionArtService:
         ):
             async with self._database.read_session() as db:
                 row = await self._require(db, collection_id, art_type)
-            provider = self._provider_registry.provider
-            for server_id in row.server_ids:
-                await provider.upload_collection_art(
-                    server_id, art_type, data, media_type
-                )
+            for part in row.copies:
+                if self._provider_registry.configured_server_id(part.server_id):
+                    await self._provider_registry.get(
+                        part.server_id
+                    ).upload_collection_art(
+                        part.server_item_id or "", art_type, data, media_type
+                    )
+            # The lead copy's image stands for the collection, as sync reads it.
+            lead = lead_part(row, self._provider_registry.server_ids())
             server_url = (
-                await provider.get_collection_image_url(row.server_item_id, art_type)
-                if row.server_item_id is not None
+                await self._provider_registry.get(
+                    lead.server_id
+                ).get_collection_image_url(lead.server_item_id or "", art_type)
+                if lead is not None
                 else None
             )
             async with self._database.write_session() as db:
@@ -423,7 +430,7 @@ class CollectionArtService:
             url,
             await self._image_clients.get_client(url),
             allow_private=trusted,
-            headers=self._provider_registry.provider.get_download_headers(url),
+            headers=self._provider_registry.download_headers(url),
             rate_limit_retries=rate_limit_retries,
         )
         _, width, height = await owned_thread(inspect_saved_image, fetched.data)
@@ -600,13 +607,16 @@ class CollectionArtService:
         Raises:
             PublicServiceError: 422 when the server shows none.
         """
-        if (
-            row.server_item_id is None
-            or (current_url := row.server_image_url(art_type)) is None
-        ):
+        lead = lead_part(row, self._provider_registry.server_ids())
+        if lead is None or (current_url := row.server_image_url(art_type)) is None:
             raise PublicServiceError(422, "The collection has no image to match")
-        request = await self._provider_registry.provider.build_collection_image_request(
-            row.server_item_id, art_type, ImageSize.DISPLAY, current_url=current_url
+        request = await self._provider_registry.get(
+            lead.server_id
+        ).build_collection_image_request(
+            lead.server_item_id or "",
+            art_type,
+            ImageSize.DISPLAY,
+            current_url=current_url,
         )
         fetched = await fetch_image(
             request.url,

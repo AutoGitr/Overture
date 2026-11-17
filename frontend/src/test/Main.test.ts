@@ -7,7 +7,7 @@ import { mediaServerState } from "../lib/stores/mediaServerState.svelte";
 import { realtimeConnectionState } from "../lib/stores/realtimeConnectionState.svelte";
 import { uiState } from "../lib/stores/uiState.svelte";
 import { type FetchCall, mockFetchRoutes } from "./helpers/fetch";
-import { mediaItem, catalogStatus } from "./helpers/fixtures";
+import { appSettings, mediaItem, catalogStatus } from "./helpers/fixtures";
 import { renderWithQueryClient } from "./helpers/render";
 
 const { realtimeTransport } = vi.hoisted(() => ({
@@ -25,7 +25,7 @@ function libraryItems(call: FetchCall) {
 function backend(overrides: Record<string, unknown> = {}) {
   return mockFetchRoutes({
     "/api/library/items": libraryItems,
-    "/api/settings": { workflow: "art" },
+    "/api/settings": appSettings({ workflow: "art" }),
     "/api/catalog/status": catalogStatus(),
     ...overrides,
   });
@@ -39,7 +39,7 @@ describe("Main", () => {
   beforeEach(async () => {
     queryClient.clear();
     realtimeConnectionState.reset();
-    mediaServerState.store({ state: "reachable", message: "" });
+    mediaServerState.store({ server_id: 1, title: "Plex", state: "reachable", message: "" });
     uiState.closePopup();
     await navigate("/movies", { replace: true });
   });
@@ -65,18 +65,23 @@ describe("Main", () => {
     const { calls } = backend({
       "/api/settings/connectivity": { media_server: true, tmdb: true },
     });
-    mediaServerState.store({ state: "rejected", message: "check MEDIA_SERVER_API_KEY" });
+    mediaServerState.store({
+      server_id: 1,
+      title: "Plex",
+      state: "rejected",
+      message: "check MEDIA_SERVER_PLEX_API_KEY",
+    });
     renderWithQueryClient(Main, { onLogout: vi.fn() });
 
-    const pinned = notice("The media server refused Overture");
-    expect(pinned).toHaveTextContent("check MEDIA_SERVER_API_KEY");
+    const pinned = notice("Plex refused Overture");
+    expect(pinned).toHaveTextContent("check MEDIA_SERVER_PLEX_API_KEY");
     await fireEvent.click(within(pinned).getByRole("button", { name: "Check again" }));
     await waitFor(() =>
       expect(calls.some((call) => call.url.endsWith("/api/settings/connectivity"))).toBe(true),
     );
 
-    mediaServerState.store({ state: "reachable", message: "" });
-    await waitFor(() => expect(screen.queryByText("The media server refused Overture")).toBeNull());
+    mediaServerState.store({ server_id: 1, title: "Plex", state: "reachable", message: "" });
+    await waitFor(() => expect(screen.queryByText("Plex refused Overture")).toBeNull());
   });
 
   it("reveals the app even when a first load fails, and offers that load a retry", async () => {
@@ -84,7 +89,7 @@ describe("Main", () => {
     backend({
       "/api/settings": () =>
         available
-          ? Response.json({ workflow: "art" })
+          ? Response.json(appSettings({ workflow: "art" }))
           : Response.json({ detail: "Settings unavailable" }, { status: 404 }),
     });
     renderWithQueryClient(Main, { onLogout: vi.fn() });

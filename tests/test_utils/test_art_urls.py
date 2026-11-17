@@ -19,6 +19,7 @@ lazy from overture.utils.art_urls import (
     public_art_url,
     selected_art_source,
 )
+lazy from tests.media_servers import configure
 
 TMDB = "https://image.tmdb.org/t/p/original/zgZRJZvZn5cpsWAB0zMUdad3iZd.jpg"
 
@@ -43,8 +44,8 @@ def public_dns(monkeypatch: pytest.MonkeyPatch) -> None:
 async def test_plex_server_domains_are_not_public_artwork(
     monkeypatch: pytest.MonkeyPatch, provider: str, url: str, *, app_config: Settings
 ) -> None:
-    app_config.MEDIA_SERVER = ServerType(provider)
-    app_config.MEDIA_SERVER_URL = "https://server.test"
+    configure(app_config, type=ServerType(provider))
+    configure(app_config, url="https://server.test")
 
     async def check_public(*_args: object, **_kwargs: object) -> bool:
         raise AssertionError("Plex server domains should not require a DNS lookup")
@@ -100,9 +101,8 @@ async def test_public_art_url_stores_the_canonical_full_size_link(
 async def test_media_server_urls_are_never_public_artwork(
     *, app_config: Settings
 ) -> None:
-    app_config.MEDIA_SERVER = ServerType.JELLYFIN
-    app_config.MEDIA_SERVER_URL = "https://jellyfin.test"
-
+    configure(app_config, type=ServerType.JELLYFIN)
+    configure(app_config, url="https://jellyfin.test")
     assert (
         await public_art_url(
             "https://jellyfin.test/Items/1/Images/Primary",

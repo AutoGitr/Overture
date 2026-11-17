@@ -22,6 +22,7 @@ lazy from overture.services.notifications import (
 )
 lazy from overture.utils.errors import PublicServiceError
 lazy from tests.http_mock import mock_client_factory
+lazy from tests.media_servers import configure
 lazy from tests.publishers import NullEventPublisher
 
 _FAILED_SYNC = {
@@ -66,7 +67,7 @@ async def test_by_default_only_a_failed_run_is_sent_with_its_redacted_error(
     sent: list[httpx2.Request], *, app_config: Settings, database: Database
 ) -> None:
     app_config.NOTIFY_URL = SecretStr("http://apprise.test/notify/overture")
-    app_config.MEDIA_SERVER_API_KEY = SecretStr("secret-key")
+    configure(app_config, api_key=SecretStr("secret-key"))
     notifier = RunNotifier(app_config=app_config, database=database)
     publisher = NotifyingPublisher(NullEventPublisher(), notifier)
 

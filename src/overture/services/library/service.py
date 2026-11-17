@@ -48,7 +48,7 @@ lazy from ..art.service import ArtService
 lazy from ..downloads.service import DownloadService
 lazy from ..provider_images import proxy_provider_image
 lazy from ..removal import AssetRemover
-lazy from ..server_identity import resolve_server_item_id
+lazy from ..server_identity import resolve_lead_owner
 lazy from ..storage.assets import (
     AssetStorage,
     MissingLocalPathError,
@@ -107,64 +107,79 @@ class LibraryService:
         self._provider_registry = provider_registry
         self._proxy_clients = proxy_clients
 
-    async def proxy_provider_art(
-        self, server_id: str, art_type: ArtType, size: ImageSize | None
-    ) -> Response:
-        """Proxy provider art for a media-server item, sized by the server."""
-        request = await self._provider_registry.provider.build_provider_art_request(
-            server_id, art_type, size
-        )
-        return await proxy_provider_image(request, proxy_clients=self._proxy_clients)
-
     async def proxy_item_provider_art(
         self, item_id: int, art_type: ArtType, size: ImageSize | None
     ) -> Response:
-        """Proxy the current poster or background for an item."""
+        """Proxy the lead server's current poster or background for an item."""
         if art_type.owned_by_season:
             raise PublicServiceError(400, "An item has no season artwork")
-        async with self._database.read_session() as db:
-            item = await db.get(MediaItem, item_id)
-        if not item or not item.server_item_id:
-            raise PublicServiceError(404, "Item or server ID not found")
-        return await self.proxy_provider_art(item.server_item_id, art_type, size)
+        # Shown for every title in view, so a title no sync found is not looked up.
+        return await self._proxy_lead_art(item_id, art_type, None, size, discover=False)
 
     async def proxy_season_provider_art(
         self, season_id: int, size: ImageSize | None
     ) -> Response:
-        """Proxy the current poster from the media server for a season."""
+        """Proxy the lead server's current poster for a season."""
         async with self._database.read_session() as db:
             season = await db.get(Season, season_id)
             if not season:
                 raise PublicServiceError(404, "Season or server ID not found")
             item_id = season.media_item_id
-        server_id = await resolve_server_item_id(
+        return await self._proxy_lead_art(
+            item_id, ArtType.SEASON_POSTER, season_id, size
+        )
+
+    async def _proxy_lead_art(
+        self,
+        item_id: int,
+        art_type: ArtType,
+        season_id: int | None,
+        size: ImageSize | None,
+        *,
+        discover: bool = True,
+    ) -> Response:
+        owner = await resolve_lead_owner(
             item_id,
-            ArtType.SEASON_POSTER,
+            art_type,
             season_id,
             database=self._database,
             provider_registry=self._provider_registry,
+            discover=discover,
         )
-        if not server_id:
-            raise PublicServiceError(404, "Season or server ID not found")
-        return await self.proxy_provider_art(server_id, ArtType.SEASON_POSTER, size)
+        if owner is None:
+            raise PublicServiceError(404, "No media server holds it")
+        request = await owner.provider.build_provider_art_request(
+            owner.server_item_id, art_type, size
+        )
+        return await proxy_provider_image(request, proxy_clients=self._proxy_clients)
 
     async def get_libraries(
         self, media_type: MediaType | None
     ) -> list[LibrarySectionRead]:
-        """Return the libraries of a media type, movies first, then by title."""
+        """Return the libraries of a media type: movies first, by server, then title.
+
+        Servers come in MEDIA_SERVERS order, the lead first.
+        """
         async with self._database.read_session() as db:
             counts = await LibraryRepository(db).counts(media_type)
+        order = {
+            server_id: index
+            for index, server_id in enumerate(self._provider_registry.server_ids())
+        }
         return [
             LibrarySectionRead(
                 id=library.id,
                 title=library.title,
                 media_type=library.media_type,
+                server_id=library.server_id,
                 count=count,
             )
             for library, count in sorted(
                 counts,
-                key=lambda entry: media_sort_key(
-                    entry[0].media_type, entry[0].title, entry[0].id
+                key=lambda entry: (
+                    media_sort_key(entry[0].media_type, "", "")[0],
+                    order.get(entry[0].server_id, len(order)),
+                    media_sort_key(entry[0].media_type, entry[0].title, entry[0].id),
                 ),
             )
         ]

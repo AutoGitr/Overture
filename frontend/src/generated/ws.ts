@@ -3,9 +3,9 @@
 // Models that also appear in openapi.json are imported from the REST bundle
 // rather than redeclared, so both generators describe one type universe.
 
-import type { Agreement, ArtSource, ArtType, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CatalogSelections, CatalogStatus, CatalogSyncOutcome, CatalogSyncStats, CollectionThemeDownloadTarget, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemDownloadTarget, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaServerState, MediaServerStatus, MediaType, MetadataIssue, PublicError, PublicText, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource } from "./rest/types.gen";
+import type { Agreement, ArtSource, ArtType, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CatalogSelections, CatalogStatus, CatalogSyncOutcome, CatalogSyncStats, CollectionThemeDownloadTarget, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemCopyRead, ItemDownloadTarget, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaServerState, MediaServerStatus, MediaType, MetadataIssue, PublicError, PublicText, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource } from "./rest/types.gen";
 
-export type { Agreement, ArtSource, ArtType, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CatalogSelections, CatalogStatus, CatalogSyncOutcome, CatalogSyncStats, CollectionThemeDownloadTarget, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemDownloadTarget, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaServerState, MediaServerStatus, MediaType, MetadataIssue, PublicError, PublicText, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource } from "./rest/types.gen";
+export type { Agreement, ArtSource, ArtType, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CatalogSelections, CatalogStatus, CatalogSyncOutcome, CatalogSyncStats, CollectionThemeDownloadTarget, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemCopyRead, ItemDownloadTarget, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaServerState, MediaServerStatus, MediaType, MetadataIssue, PublicError, PublicText, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource } from "./rest/types.gen";
 
 export type LifecycleStatus = "started" | "progress" | "completed" | "stopped" | "failed";
 
@@ -137,6 +137,8 @@ export interface ServerAuditResult {
   reason?: PublicText | null;
   local_duration?: number | null;
   server_duration?: number | null;
+  server_id?: number | null;
+  server?: string | null;
   server_item_id?: string | null;
   theme_id?: string | null;
   theme_title?: string | null;

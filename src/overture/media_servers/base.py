@@ -2,10 +2,11 @@
 
 lazy from abc import ABC, abstractmethod
 lazy from collections.abc import AsyncIterator, Collection, Mapping, Sequence
+lazy from dataclasses import replace
 lazy from datetime import datetime
 lazy from typing import ClassVar
 
-lazy from ..config import Settings
+lazy from ..config import MediaServerConfig, Settings
 lazy from ..domain import (
     ArtType,
     CollectionFiltering,
@@ -15,6 +16,8 @@ lazy from ..domain import (
     MediaType,
     ServerAsset,
     ServerType,
+    library_id,
+    library_parts,
     media_sort_key,
 )
 lazy from ..schemas.art import ArtCandidate
@@ -28,6 +31,8 @@ lazy from .adapters import (
     ServerTheme,
     ServerWebLinks,
 )
+lazy from .errors import MediaServerError
+lazy from .health import MediaServerHealthTracker
 lazy from .http_client import MediaServerHttpClient
 
 
@@ -35,7 +40,10 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
     """Adapt one media server's API to the operations Overture relies on.
 
     The provider owns its HTTP client; everything the client already answers
-    the same way on every server is implemented once here.
+    the same way on every server is implemented once here. It is the boundary
+    between the server's terms and Overture's: libraries leave it with IDs that
+    name the server (:func:`~overture.domain.library_id`), and folders with the
+    paths Overture sees them at (the server's ``PATH_MAP``).
     """
 
     server_type: ClassVar[ServerType]
@@ -52,14 +60,14 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
         return []
 
     async def create_collection(
-        self, section_key: str, title: str, media_type: MediaType, member_ids: list[str]
+        self, library_id: str, title: str, media_type: MediaType, member_ids: list[str]
     ) -> ServerCollection:
         """Create a collection with initial membership."""
         raise NotImplementedError
 
     async def create_smart_collection(
         self,
-        section_key: str,
+        library_id: str,
         title: str,
         media_type: MediaType,
         filter_query: str,
@@ -70,7 +78,7 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
     async def update_smart_collection_filter(
         self,
         server_collection_id: str,
-        section_key: str,
+        library_id: str,
         media_type: MediaType,
         filter_query: str,
     ) -> None:
@@ -78,7 +86,7 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
         raise NotImplementedError
 
     async def filter_choices(
-        self, section_key: str, media_type: MediaType, field: str
+        self, library_id: str, media_type: MediaType, field: str
     ) -> list[tuple[str, str]]:
         """List the keys and names a smart filter field accepts in a section."""
         raise NotImplementedError
@@ -88,20 +96,20 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
         raise NotImplementedError
 
     async def find_matching(
-        self, section_key: str, media_type: MediaType, filter_query: str, size: int
+        self, library_id: str, media_type: MediaType, filter_query: str, size: int
     ) -> tuple[int, list[str]]:
         """How many items a smart filter matches, and the first *size* IDs."""
         raise NotImplementedError
 
     async def order_collection_hubs(
-        self, section_key: str, server_collection_ids: Sequence[str]
+        self, library_id: str, server_collection_ids: Sequence[str]
     ) -> None:
         """Order promoted collections' Home rows, first to last."""
         raise NotImplementedError
 
     async def sync_item_labels(
         self,
-        section_key: str,
+        library_id: str,
         media_type: MediaType,
         label: str,
         *,
@@ -173,14 +181,46 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
         """Delete a theme on a provider declaring UploadThemes."""
         raise NotImplementedError("Collection theme uploads are unsupported")
 
-    def __init__(self, *, client: C, app_config: Settings) -> None:
+    def __init__(self, *, client: C, server_id: int, app_config: Settings) -> None:
         self.client = client
+        #: The database's ID of the server, which its library IDs carry.
+        self.server_id = server_id
         self._app_config = app_config
+
+    @property
+    def server(self) -> MediaServerConfig:
+        """The configuration of the server this provider talks to."""
+        return self.client.server
+
+    @property
+    def health(self) -> MediaServerHealthTracker:
+        """Whether this server answered its last request."""
+        return self.client.health
+
+    def library_id(self, key: str) -> str:
+        """Return Overture's ID of the server's library *key*."""
+        return library_id(self.server_id, key)
+
+    def section_key(self, library: str) -> str:
+        """Return the server's own key of one of its libraries.
+
+        Raises:
+            MediaServerError: When *library* is not one of this server's.
+        """
+        parts = library_parts(library)
+        if parts is None or parts[0] != self.server_id:
+            raise MediaServerError(
+                f"Library {library} is not one of {self.server.title}'s"
+            )
+        return parts[1]
 
     async def get_sections(self) -> list[ServerSection]:
         """Return the movie and show libraries, movies first, then by title."""
         return sorted(
-            await self._list_sections(),
+            (
+                replace(section, library_id=self.library_id(section.key))
+                for section in await self._list_sections()
+            ),
             key=lambda section: media_sort_key(
                 section.media_type, section.title, section.key
             ),
@@ -194,7 +234,7 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
         if not library_ids:
             return sections
         wanted = set(library_ids)
-        return [section for section in sections if section.key in wanted]
+        return [section for section in sections if section.library_id in wanted]
 
     @abstractmethod
     async def _list_sections(self) -> list[ServerSection]:
@@ -204,13 +244,23 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
         self, library_ids: list[str] | None = None
     ) -> AsyncIterator[list[ServerItem]]:
         """Yield bounded provider pages for a complete listing."""
-        return self._iter_items(library_ids, None)
+        return self._local_pages(self._iter_items(library_ids, None))
 
     def iter_items_since(
         self, since: datetime, library_ids: list[str] | None = None
     ) -> AsyncIterator[list[ServerItem]]:
         """Yield bounded pages of the items added or updated after *since*."""
-        return self._iter_items(library_ids, since)
+        return self._local_pages(self._iter_items(library_ids, since))
+
+    async def _local_pages(
+        self, pages: AsyncIterator[list[ServerItem]]
+    ) -> AsyncIterator[list[ServerItem]]:
+        """Give listed items the folders Overture sees them at."""
+        async for page in pages:
+            for item in page:
+                if item.folder_path:
+                    item.folder_path = self.server.local_path(item.folder_path)
+            yield page
 
     @abstractmethod
     def _iter_items(
@@ -296,7 +346,7 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
 
     def get_download_headers(self, url: str) -> dict[str, str]:
         """Return the server's credentials, for its own trusted URLs only."""
-        if self._app_config.is_trusted_media_server_url(url):
+        if self.server.is_trusted_url(url):
             return self.client.auth_headers
         return {}
 
@@ -317,8 +367,13 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
         return await self.client.get_art_candidates(server_id, art_type)
 
     async def get_theme_songs(self, server_item_id: str) -> list[ServerTheme]:
-        """Return provider theme song metadata."""
-        return await self.client.get_theme_songs(server_item_id)
+        """Return the item's theme songs, with the paths Overture sees them at."""
+        return [
+            replace(theme, path=self.server.local_path(theme.path))
+            if theme.path
+            else theme
+            for theme in await self.client.get_theme_songs(server_item_id)
+        ]
 
     @abstractmethod
     async def delete_theme(self, server_item_id: str, theme_id: str | None) -> None:

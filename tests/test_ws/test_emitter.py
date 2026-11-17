@@ -110,10 +110,17 @@ async def test_field_names_of_a_typed_event_are_data_not_secrets(
 
     await emitter.broadcast(
         "media-server.status",
-        {"state": "unreachable", "message": "GET /?X-Plex-Token=hunter2 failed"},
+        {
+            "server_id": 1,
+            "title": "Plex",
+            "state": "unreachable",
+            "message": "GET /?X-Plex-Token=hunter2 failed",
+        },
     )
 
     assert recorded["broadcast"][0]["data"] == {
+        "server_id": 1,
+        "title": "Plex",
         "state": "unreachable",
         "message": "GET /?X-Plex-Token=[REDACTED] failed",
     }

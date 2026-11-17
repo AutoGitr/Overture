@@ -9,6 +9,7 @@ lazy from dataclasses import dataclass
 lazy from typing import Literal
 
 lazy from ..domain import (
+    DEFAULT_COLLECTION_ORDER,
     ArtSource,
     AssetStatus,
     CollectionOrder,
@@ -797,6 +798,21 @@ def available_orders(
             )
         )
     ]
+
+
+def kept_order(
+    order: CollectionOrder, server: ServerType, media_type: MediaType, *, smart: bool
+) -> CollectionOrder:
+    """The order *server* keeps for a collection in *order*.
+
+    A collection spanning servers may be in an order one of them cannot keep;
+    that server keeps it in the default order instead.
+    """
+    return (
+        order
+        if order in available_orders(server, media_type, smart=smart)
+        else DEFAULT_COLLECTION_ORDER
+    )
 
 
 def _plex_sorts_by(field: FilterField, media_type: MediaType) -> bool:

@@ -29,7 +29,7 @@ lazy from ...domain import (
     TmdbLanguageFilter,
 )
 lazy from ...integrations.tmdb import TMDBClient
-lazy from ...media_servers.registry import ProviderRegistry
+lazy from ...media_servers.registry import Provider, ProviderRegistry
 lazy from ...repositories.catalog import CatalogRepository
 lazy from ...schemas.art import ArtCandidate
 lazy from ...schemas.collections import FilterGroup, TmdbPersonSource
@@ -42,7 +42,7 @@ lazy from ..catalog.entries import (
 lazy from ..catalog.lookup import build_candidate, get_art_candidates
 lazy from ..collections.policy import resolve_policy
 lazy from ..schedule_store import CATALOG_SCHEDULE, load_schedule
-lazy from ..server_identity import resolve_server_item_id
+lazy from ..server_identity import resolve_art_owners
 
 logger = logging.getLogger(__name__)
 
@@ -148,9 +148,16 @@ class ArtCandidates:
                 item, art_type, season_num
             )
         if item.id is not None and not policy.disable_media_server_art:
-            lookups[self._providers.provider.server_type] = self._server_candidates(
-                item.id, art_type, season_id, policy
-            )
+            for owner in await resolve_art_owners(
+                item.id,
+                art_type,
+                season_id,
+                database=self._database,
+                provider_registry=self._providers,
+            ):
+                lookups[owner.provider.server.title] = self._server_art(
+                    owner.provider, owner.server_item_id, art_type, policy
+                )
         return await self._resolve(item.title, lookups)
 
     async def _resolve(
@@ -188,30 +195,14 @@ class ArtCandidates:
         )
         return [c for c in candidates if policy.accepts(c, art_type)]
 
-    async def _server_candidates(
-        self,
-        item_id: int,
+    @staticmethod
+    async def _server_art(
+        provider: Provider,
+        server_item_id: str,
         art_type: ArtType,
-        season_id: int | None,
         policy: CandidatePolicy,
     ) -> list[ArtCandidate]:
-        server_id = await resolve_server_item_id(
-            item_id,
-            art_type,
-            season_id,
-            database=self._database,
-            provider_registry=self._providers,
-        )
-        if not server_id:
-            return []
-        return await self._server_art(server_id, art_type, policy)
-
-    async def _server_art(
-        self, server_id: str, art_type: ArtType, policy: CandidatePolicy
-    ) -> list[ArtCandidate]:
-        candidates = await self._providers.provider.get_art_candidates(
-            server_id, art_type
-        )
+        candidates = await provider.get_art_candidates(server_item_id, art_type)
         accepted = [
             candidate
             for candidate in candidates
@@ -260,10 +251,16 @@ class ArtCandidates:
             )
         elif self._app_config.tmdb_configured and person is not None:
             lookups[ArtSource.TMDB] = self._person_tmdb(person, policy)
-        if not policy.disable_media_server_art and collection.server_item_id:
-            lookups[self._providers.provider.server_type] = self._server_art(
-                collection.server_item_id, art_type, policy
-            )
+        if not policy.disable_media_server_art:
+            # A server's first copy stands for its copies in other libraries.
+            for part in collection.copies:
+                if not self._providers.configured_server_id(part.server_id):
+                    continue
+                provider = self._providers.get(part.server_id)
+                if provider.server.title not in lookups:
+                    lookups[provider.server.title] = self._server_art(
+                        provider, part.server_item_id or "", art_type, policy
+                    )
         found = await self._resolve(collection.title, lookups)
         if art_type is ArtType.POSTER:
             found = CandidateSources(

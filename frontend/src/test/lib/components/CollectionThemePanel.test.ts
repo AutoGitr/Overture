@@ -274,9 +274,9 @@ describe("Jellyfin collection themes", () => {
     expect(screen.getByText("ThemerrDB", { selector: ".badge" })).toBeInTheDocument();
   });
   it("shows the reason themes cannot be written", () => {
-    show(collection({ theme_unavailable: "Set JELLYFIN_COLLECTIONS_PATH" }));
+    show(collection({ theme_unavailable: "Set MEDIA_SERVER_JELLYFIN_COLLECTIONS_PATH" }));
     renderPanel();
-    expect(screen.getByText("Set JELLYFIN_COLLECTIONS_PATH")).toBeInTheDocument();
+    expect(screen.getByText("Set MEDIA_SERVER_JELLYFIN_COLLECTIONS_PATH")).toBeInTheDocument();
     expect(screen.queryByLabelText("Search collection themes")).toBeNull();
   });
 });

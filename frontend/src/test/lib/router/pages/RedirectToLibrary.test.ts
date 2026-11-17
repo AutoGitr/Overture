@@ -4,7 +4,7 @@ import RedirectToLibrary from "../../../../lib/router/pages/RedirectToLibrary.sv
 import { navigate, route } from "../../../../lib/router/routes";
 import { queryClient } from "../../../../lib/rest/queryClient";
 import { mockFetch, mockFetchRoutes, type FetchCall } from "../../../helpers/fetch";
-import { appSettings, catalogStatus } from "../../../helpers/fixtures";
+import { appSettings, catalogStatus, mediaServers } from "../../../helpers/fixtures";
 import { renderWithQueryClient } from "../../../helpers/render";
 
 describe("RedirectToLibrary", () => {
@@ -22,12 +22,12 @@ describe("RedirectToLibrary", () => {
     "selects $expected with movies=$movies and shows=$shows",
     async ({ movies, shows, expected }) => {
       mockFetchRoutes({
-        "/api/settings": appSettings({ media_server: "plex" }),
+        "/api/settings": appSettings({ media_servers: mediaServers("plex") }),
         "/api/catalog/status": catalogStatus(),
         "/api/library/libraries": ({ url }: FetchCall) =>
           Response.json(
             (url.includes("media_type=movie") ? movies : shows)
-              ? [{ id: "1", title: "Library", media_type: "movie", count: 1 }]
+              ? [{ id: "1", title: "Library", media_type: "movie", server_id: 1, count: 1 }]
               : [],
           ),
       });
@@ -48,7 +48,7 @@ describe("RedirectToLibrary", () => {
     "opens $expected without a media server when OvertureDB is enabled=$enabled and browsable=$browse",
     async ({ enabled, browse, expected }) => {
       mockFetchRoutes({
-        "/api/settings": appSettings({ media_server: null, overturedb_browse: browse }),
+        "/api/settings": appSettings({ media_servers: [], overturedb_browse: browse }),
         "/api/catalog/status": catalogStatus({ enabled }),
         "/api/library/libraries": [],
       });
@@ -64,7 +64,10 @@ describe("RedirectToLibrary", () => {
     const view = renderWithQueryClient(RedirectToLibrary);
     await view.findByRole("alert");
     expect(route.pathname).toBe("/collections");
-    mockFetch([]);
+    mockFetchRoutes({
+      "/api/settings": appSettings(),
+      "/api/library/libraries": [],
+    });
     await fireEvent.click(view.getByRole("button", { name: "Retry libraries" }));
     await vi.waitFor(() => expect(route.pathname).toBe("/movies"));
   });

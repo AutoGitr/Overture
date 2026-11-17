@@ -1,9 +1,13 @@
 """Per-item matching, creation, and update reconciliation."""
 
+lazy from dataclasses import dataclass
+
+lazy from sqlmodel import col, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ...db.art_slots import read_art_slot, record_art_file
 lazy from ...db.models.media_item import MediaItem
+lazy from ...db.models.media_item_copy import MediaItemCopy
 lazy from ...db.theme_file import record_theme_file
 lazy from ...domain import (
     ITEM_ART_TYPES,
@@ -24,8 +28,20 @@ lazy from .season_sync import SeasonSynchronizer
 lazy from .tmdb_enrichment import record_tmdb_facts
 
 
+@dataclass(slots=True, frozen=True)
+class CopyPlace:
+    """Where one server holds an item: its database number and whether it leads.
+
+    The lead server is the first in MEDIA_SERVERS that lists the title; only
+    its copy describes the title.
+    """
+
+    server_id: int
+    lead: bool
+
+
 class ItemReconciler:
-    """Match provider items to local records and create/update them."""
+    """Match a server's items to titles, and record each as that server's copy."""
 
     def __init__(
         self,
@@ -44,8 +60,6 @@ class ItemReconciler:
             item.tvdb_id,
             item.imdb_id,
             item.folder_path,
-            item.server_item_id,
-            item.library_id,
             item.monitored,
             item.studio,
             item.last_matched_at,
@@ -64,28 +78,10 @@ class ItemReconciler:
             (item.youtube_id, item.theme_file_hash),
         )
 
-    async def find_item_by_guids(
-        self,
-        session: AsyncSession,
-        guids: dict[str, str],
-        media_type: str,
-        *,
-        server_item_id: str | None = None,
-        exclude_item_ids: set[int] | None = None,
-        for_update: bool = True,
-    ) -> MediaItem | None:
-        """Look up a MediaItem by external GUID dict."""
-        return await MediaItemRepository(session).find_by_external_guids(
-            guids,
-            media_type,
-            server_item_id=server_item_id,
-            exclude_item_ids=exclude_item_ids,
-            for_update=for_update,
-        )
-
     async def sync_item(
         self,
         session: AsyncSession,
+        place: CopyPlace,
         server_item: ServerItem,
         resolved: ResolvedArtUrls,
         item: MediaItem | None,
@@ -95,21 +91,20 @@ class ItemReconciler:
         """Reconcile one normalized provider item."""
         if not item:
             return await self.create_item(
-                session, server_item, resolved, auto_unmonitor=auto_unmonitor
+                session, place, server_item, resolved, auto_unmonitor=auto_unmonitor
             )
 
         before_snapshot = self.visible_item_snapshot(item)
         before_fields = self.visible_item_fields(item)
-        art_pulled, directors_changed = await self.update_item(
-            session, item, server_item, resolved, auto_unmonitor=auto_unmonitor
+        art_pulled, metadata_changed, left = await self.update_item(
+            session, place, item, server_item, resolved, auto_unmonitor=auto_unmonitor
         )
         changes = tuple(
             change
             for change, happened in (
                 (
                     "metadata",
-                    directors_changed
-                    or before_fields != self.visible_item_fields(item),
+                    metadata_changed or before_fields != self.visible_item_fields(item),
                 ),
                 ("artwork selection from the server", art_pulled),
             )
@@ -121,62 +116,67 @@ class ItemReconciler:
             visible_changed=bool(changes)
             or before_snapshot != self.visible_item_snapshot(item),
             changes=changes,
+            left_libraries=left,
         )
 
     async def find_existing_item(
         self,
         session: AsyncSession,
+        server_id: int,
         server_item: ServerItem,
         *,
         exclude_item_ids: set[int] | None = None,
         for_update: bool = True,
     ) -> MediaItem | None:
-        """Find the existing row a provider item would update.
+        """Find the title a server's item is a copy of.
 
-        A lookup that only identifies the row passes ``for_update=False``.
+        The title the server already keeps it as comes first, unless the server
+        now names it another title; then the title in its folder; then one
+        with its IDs. A lookup that only identifies the row passes
+        ``for_update=False``.
         """
         media_items = MediaItemRepository(session)
-        item: MediaItem | None = None
+        item = await media_items.find_by_copy(
+            server_id,
+            server_item.id,
+            server_item.media_type,
+            exclude_item_ids=exclude_item_ids,
+            for_update=for_update,
+        )
+        if item is not None and not _has_metadata_conflict(item, server_item):
+            return item
 
-        if server_item.guids:
-            item = await self.find_item_by_guids(
-                session,
-                server_item.guids,
-                server_item.media_type,
-                server_item_id=server_item.id,
-                exclude_item_ids=exclude_item_ids,
-                for_update=for_update,
-            )
-
-        if not item and server_item.folder_path:
+        if server_item.folder_path:
             item = await media_items.find_by_folder_path(
                 server_item.folder_path,
                 server_item.media_type,
                 exclude_item_ids=exclude_item_ids,
                 for_update=for_update,
             )
+            if item is not None:
+                return item
 
-        if not item:
-            candidate = await media_items.find_by_server_id(
-                server_item.id,
+        if server_item.guids:
+            return await media_items.find_by_external_guids(
+                server_item.guids,
                 server_item.media_type,
+                server_id=server_id,
+                folder_path=server_item.folder_path,
                 exclude_item_ids=exclude_item_ids,
                 for_update=for_update,
             )
-            if candidate and not _has_metadata_conflict(candidate, server_item):
-                item = candidate
-
-        return item
+        return None
 
     async def create_item(
         self,
         session: AsyncSession,
+        place: CopyPlace,
         server_item: ServerItem,
         resolved: ResolvedArtUrls,
         *,
         auto_unmonitor: AutoUnmonitor,
     ) -> SyncItemResult:
-        """Create a local item from a provider item."""
+        """Create a title from the first server item found of it."""
         item = MediaItem(
             media_type=MediaType(server_item.media_type),
             title=server_item.title,
@@ -185,22 +185,15 @@ class ItemReconciler:
             tvdb_id=guid_int(server_item.guids, "tvdb"),
             imdb_id=guid_text(server_item.guids, "imdb"),
             folder_path=server_item.folder_path,
-            server_item_id=server_item.id,
-            library_id=server_item.library_id or None,
-            director_etag=(
-                server_item.director_etag
-                if server_item.media_type == MediaType.MOVIE
-                else None
-            ),
             monitored=True,
             created_at=utc_now(),
         )
         session.add(item)
         await session.flush()
+        await record_copy(session, item, place.server_id, server_item)
         await apply_server_metadata(session, item, server_item)
         await apply_provider_collection(session, item, server_item)
 
-        item.server_verified_at = utc_now()
         item.last_synced_at = utc_now()
         apply_provider_art_urls(item, server_item, resolved, only_missing=False)
         if server_item.media_type == MediaType.SHOW:
@@ -209,6 +202,8 @@ class ItemReconciler:
                 item,
                 server_item.seasons,
                 resolved,
+                server_id=place.server_id,
+                lead=True,
                 only_missing_art=False,
             )
         await auto_unmonitor_completed(session, item, policy=auto_unmonitor)
@@ -224,13 +219,14 @@ class ItemReconciler:
     async def update_item(
         self,
         session: AsyncSession,
+        place: CopyPlace,
         item: MediaItem,
         server_item: ServerItem,
         resolved: ResolvedArtUrls,
         *,
         auto_unmonitor: AutoUnmonitor,
-    ) -> tuple[bool, bool]:
-        """Update an existing local item from a provider item.
+    ) -> tuple[bool, bool, tuple[str, ...]]:
+        """Record a server's copy of a title, and let the lead copy describe it.
 
         Only values that differ are written, so an unchanged item commits an
         empty transaction; the caller stamps the item as synced.
@@ -241,11 +237,26 @@ class ItemReconciler:
         selection it holds then is one to download.
 
         Returns:
-            Whether the server's artwork selection was saved, and whether the
-            title's directors changed.
+            Whether the server's artwork selection was saved, whether the
+            title's metadata changed, and the libraries it was held in before.
         """
+        copy = await record_copy(session, item, place.server_id, server_item)
+        item.server_removed_at = None
         if item.folder_path is None and server_item.folder_path is not None:
             resolved = {}
+        if not place.lead and item.folder_path is not None:
+            if server_item.media_type == MediaType.SHOW:
+                await self._season_sync.upsert_seasons(
+                    session,
+                    item,
+                    server_item.seasons,
+                    resolved,
+                    server_id=place.server_id,
+                    lead=False,
+                    only_missing_art=True,
+                )
+            session.add(item)
+            return False, False, copy.left
         if item.folder_path != server_item.folder_path:
             # Changing folder path invalidates local asset records until refreshed.
             item.folder_path = server_item.folder_path
@@ -253,23 +264,10 @@ class ItemReconciler:
             for art_type in ITEM_ART_TYPES:
                 record_art_file(item, art_type, None)
 
-        server_changed = (
-            item.server_item_id is not None and item.server_item_id != server_item.id
-        )
-
         if server_item.title:
             item.title = server_item.title
-
-        item.server_item_id = server_item.id
-        item.server_removed_at = None
-        item.library_id = server_item.library_id or None
-        if server_item.year is not None and (item.year is None or server_changed):
+        if server_item.year is not None and (item.year is None or copy.replaced):
             item.year = server_item.year
-        item.director_etag = (
-            server_item.director_etag
-            if server_item.media_type == MediaType.MOVIE
-            else None
-        )
         changed = await apply_server_metadata(session, item, server_item)
 
         item.tmdb_id = item.tmdb_id or guid_int(server_item.guids, "tmdb")
@@ -278,7 +276,7 @@ class ItemReconciler:
         await apply_provider_collection(session, item, server_item)
 
         art_pulled = apply_provider_art_urls(
-            item, server_item, resolved, only_missing=not server_changed
+            item, server_item, resolved, only_missing=not copy.replaced
         )
 
         if server_item.media_type == MediaType.SHOW:
@@ -287,18 +285,76 @@ class ItemReconciler:
                 item,
                 server_item.seasons,
                 resolved,
-                only_missing_art=not server_changed,
+                server_id=place.server_id,
+                lead=place.lead,
+                only_missing_art=not copy.replaced,
             )
 
         await auto_unmonitor_completed(session, item, policy=auto_unmonitor)
         session.add(item)
-        return art_pulled, TermKind.DIRECTOR in changed
+        return art_pulled, TermKind.DIRECTOR in changed, copy.left
+
+
+@dataclass(slots=True, frozen=True)
+class RecordedCopy:
+    """A server's copy as a sync recorded it."""
+
+    copy: MediaItemCopy
+    #: The server held the title under another item: what it shows for it
+    #: replaces what it showed.
+    replaced: bool
+    #: Libraries the title was held in before, which this one may succeed:
+    #: the server's own earlier library, or other servers' when it is new here.
+    left: tuple[str, ...]
+
+
+async def record_copy(
+    session: AsyncSession, item: MediaItem, server_id: int, server_item: ServerItem
+) -> RecordedCopy:
+    """Record what a server keeps for its copy of *item*."""
+    copies = (
+        await session.exec(
+            select(MediaItemCopy).where(col(MediaItemCopy.media_item_id) == item.id)
+        )
+    ).all()
+    copy = next((each for each in copies if each.server_id == server_id), None)
+    replaced = copy is not None and copy.server_item_id != server_item.id
+    left = tuple(
+        each.library_id
+        for each in (copies if copy is None else [copy])
+        if each.library_id != server_item.library_id
+    )
+    if copy is None:
+        copy = MediaItemCopy(
+            media_item_id=item.id or 0,
+            server_id=server_id,
+            media_type=item.media_type,
+            server_item_id=server_item.id,
+            library_id=server_item.library_id,
+        )
+    copy.server_item_id = server_item.id
+    copy.library_id = server_item.library_id
+    copy.removed_at = None
+    copy.verified_at = utc_now()
+    copy.added_at = server_item.server_added_at
+    copy.plays = server_item.plays
+    copy.last_played_at = server_item.last_played_at
+    copy.unplayed = server_item.unplayed
+    copy.in_progress = server_item.in_progress
+    copy.user_rating = server_item.user_rating
+    copy.labels = list(server_item.labels)
+    copy.director_etag = (
+        server_item.director_etag if server_item.media_type == MediaType.MOVIE else None
+    )
+    session.add(copy)
+    await session.flush()
+    return RecordedCopy(copy, replaced, left)
 
 
 async def apply_server_metadata(
     session: AsyncSession, item: MediaItem, server_item: ServerItem
 ) -> frozenset[TermKind]:
-    """Copy the metadata the server owns, which collection criteria evaluate.
+    """Copy the lead server's description of a title, which criteria evaluate.
 
     Only movies have directors. Returns the kinds of values that changed.
     """

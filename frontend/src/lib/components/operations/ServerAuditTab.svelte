@@ -158,8 +158,9 @@
       const { status } = await fixRequest.mutateAsync({
         body: {
           snapshot_finished_at: snapshot,
+          // A row naming no server, such as a missing local file, has nothing there to fix.
           targets: art.flatMap((result) =>
-            result.art_type === "theme"
+            result.art_type === "theme" || result.server_id == null
               ? []
               : [
                   {
@@ -167,14 +168,16 @@
                     item_id: result.item_id,
                     collection_id: result.collection_id,
                     season_id: result.season_id,
+                    server_id: result.server_id,
                   },
                 ],
           ),
           themes: themes.flatMap((result) =>
-            result.item_id
+            result.item_id && result.server_id != null
               ? [
                   {
                     item_id: result.item_id,
+                    server_id: result.server_id,
                     server_item_id: result.server_item_id || "",
                     theme_id: result.theme_id,
                   },

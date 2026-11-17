@@ -28,7 +28,7 @@ _GENRE = {
 
 def _capabilities(server: str) -> dict[str, Any]:
     capabilities = {
-        "server_type": server,
+        "server_types": [server],
         "spans_libraries": server != "plex",
         "smart": server == "plex",
         "visibility": server == "plex",
@@ -65,9 +65,11 @@ def _collection(identity: int, title: str, *, managed: bool) -> dict[str, Any]:
         "unsynced": False,
         "below_minimum": False,
         "child_count": 3,
-        "library_ids": ["1"],
+        "library_ids": ["1:1"],
         "media_types": ["movie"],
-        "server_item_id": f"c{identity}",
+        "copies": [
+            {"server_id": 1, "server_item_id": f"c{identity}", "library_ids": ["1:1"]}
+        ],
         "thumb_url": f"/api/collections/{identity}/image/poster?t=1",
         "art_url": None,
     }
@@ -78,8 +80,9 @@ def _item(identity: int, title: str) -> dict[str, Any]:
         "id": identity,
         "title": title,
         "media_type": "movie",
-        "library_id": "1",
-        "server_item_id": f"m{identity}",
+        "copies": [
+            {"server_id": 1, "server_item_id": f"m{identity}", "library_id": "1:1"}
+        ],
         "server_removed_at": None,
     }
 
@@ -88,7 +91,7 @@ type Requests = list[tuple[str, str, str, dict[str, Any]]]
 
 #: What each instance answers for its movies, where the answer never varies.
 _MOVIES: dict[str, Any] = {
-    "/api/library/libraries": [{"id": "1", "title": "Movies"}],
+    "/api/library/libraries": [{"id": "1:1", "title": "Movies", "server_id": 1}],
     "/api/collections/field-values": [{"value": "Horror", "count": 1}],
     "/api/collections/sets/preview": [{"title": "Horror", "member_count": 1}],
     "/api/collections": [
@@ -107,7 +110,7 @@ _MOVIES: dict[str, Any] = {
         "rule": {
             "libraries": [
                 {
-                    "library_id": "1",
+                    "library_id": "1:1",
                     "criteria": {
                         "conditions": [
                             {"field": "genre", "operator": "is", "value": "horror"}
@@ -155,6 +158,15 @@ _FIXED: dict[str, Any] = {
 }
 
 
+#: The servers each instance names in MEDIA_SERVERS; the second Plex holds no
+#: libraries.
+_SERVERS = {
+    "plex": [("Plex", "plex")],
+    "jellyfin": [("Jellyfin", "jellyfin")],
+    "twin": [("Plex", "plex"), ("Plex 4K", "plex")],
+}
+
+
 def _overture(
     host: str, request: httpx2.Request, body: dict[str, Any]
 ) -> httpx2.Response:
@@ -162,9 +174,20 @@ def _overture(
     if request.headers.get(API_KEY_HEADER) != f"{host}-key":
         return httpx2.Response(401, json={"detail": "Invalid API key"})
     movies = request.url.params.get("media_type", "movie") == "movie"
+    servers = _SERVERS[host]
     match path:
+        case "/api/settings":
+            return httpx2.Response(
+                200,
+                json={
+                    "media_servers": [
+                        {"id": index, "title": title, "type": kind, "collections": True}
+                        for index, (title, kind) in enumerate(servers, start=1)
+                    ]
+                },
+            )
         case "/api/collections/capabilities":
-            return httpx2.Response(200, json=_capabilities(host))
+            return httpx2.Response(200, json=_capabilities(servers[0][1]))
         case "/api/collections/preview":
             return _preview(body)
         case "/api/collections/5/image/poster":
@@ -389,6 +412,22 @@ async def test_jellyfin_filters_are_compared_with_the_values_and_counts_offered(
     }
 
 
+async def test_servers_of_one_kind_in_one_instance_are_checked_through_overture(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, requests: Requests
+) -> None:
+    monkeypatch.setenv("OVERTURE_API_KEY", "twin-key")
+    monkeypatch.setenv("PLEX_TOKEN", "token")
+    report = tmp_path / "report.md"
+
+    await module.run(_args(report, "http://twin.test", plex="http://plex-server.test"))
+
+    text = report.read_text()
+    # Which Plex was given cannot be told, so neither is read directly.
+    assert not [host for host, _, _, _ in requests if host == "plex-server"]
+    assert "| Movies (movie) | field | Genre is 'Horror' | 1 | 2 |" in text
+    assert "## Plex 4K" not in text
+
+
 async def test_overture_is_never_sent_a_request_that_could_change_it() -> None:
     overture = module.Overture("http://plex.test", "key")
     try:
@@ -480,7 +519,7 @@ class _Collections:
         return list(self.held.values())
 
     async def get_sections(self) -> list[Any]:
-        return [ServerSection("1", "Movies", MediaType.MOVIE)]
+        return [ServerSection("1", "Movies", MediaType.MOVIE, library_id="1:1")]
 
     async def create_collection(
         self, _library: str, title: str, _media: Any, members: list[str]

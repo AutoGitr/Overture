@@ -1,4 +1,4 @@
-import { appSettings, collection } from "../../../helpers/fixtures";
+import { appSettings, collection, mediaServers } from "../../../helpers/fixtures";
 import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import OperationsPopup from "../../../../lib/popups/OperationsPopup.svelte";
@@ -70,7 +70,7 @@ const SAVED_POLL = {
     download_overturedb_art: true,
     download_themes: "themerrdb_overturedb" as const,
   },
-  state: { checkpoint: "2026-09-19T10:00:00Z" },
+  state: { checkpoints: { "1": "2026-09-19T10:00:00Z" } },
 };
 
 async function renderSync() {
@@ -85,7 +85,9 @@ describe("Sync tab", () => {
     uiState.openOperations("sync");
     syncState.reset();
     matchState.reset();
-    settingsState.load(appSettings({ media_server: "plex", tmdb_configured: false }));
+    settingsState.load(
+      appSettings({ media_servers: mediaServers("plex"), tmdb_configured: false }),
+    );
     libraries.mockReset().mockResolvedValue([
       { key: "1", title: "Movies", media_type: "movie" },
       { key: "2", title: "Shows", media_type: "show" },
@@ -120,7 +122,9 @@ describe("Sync tab", () => {
   });
 
   it("syncs chosen collection groups instead of every collection", async () => {
-    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    settingsState.load(
+      appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    );
     await renderSync();
     expect(screen.getByRole("checkbox", { name: "Deselect all collections" })).toBeChecked();
     // Every collection includes every group, so unticking one keeps the rest.
@@ -163,7 +167,9 @@ describe("Sync tab", () => {
   });
 
   it("opens from a shortcut with only its collection chosen", async () => {
-    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    settingsState.load(
+      appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    );
     collections.mockResolvedValue([
       collection({ id: 7, title: "Alien", collection_group: "Sagas", managed: true }),
       collection({ id: 8, title: "Pixar", collection_group: null, managed: true }),
@@ -189,7 +195,9 @@ describe("Sync tab", () => {
   });
 
   it("can exclude collections independently of the selected libraries", async () => {
-    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    settingsState.load(
+      appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    );
     await renderSync();
     await fireEvent.click(screen.getByRole("checkbox", { name: "Deselect all collections" }));
     await fireEvent.click(screen.getByRole("button", { name: "Run now" }));
@@ -202,7 +210,9 @@ describe("Sync tab", () => {
   });
 
   it("syncs only the collections when no library is chosen", async () => {
-    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    settingsState.load(
+      appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    );
     await renderSync();
     await fireEvent.click(screen.getByRole("checkbox", { name: "Movies" }));
     await fireEvent.click(screen.getByRole("checkbox", { name: "Shows" }));
@@ -225,7 +235,7 @@ describe("Sync tab", () => {
 
   it("runs a full TMDB season refresh without server libraries", async () => {
     libraries.mockResolvedValue([]);
-    settingsState.load(appSettings({ media_server: "plex", tmdb_configured: true }));
+    settingsState.load(appSettings({ media_servers: mediaServers("plex"), tmdb_configured: true }));
     renderWithQueryClient(OperationsPopup);
     await screen.findByText("No libraries found on media server.");
 
@@ -240,7 +250,7 @@ describe("Sync tab", () => {
   });
 
   it("still requires a library selection when server libraries exist", async () => {
-    settingsState.load(appSettings({ media_server: "plex", tmdb_configured: true }));
+    settingsState.load(appSettings({ media_servers: mediaServers("plex"), tmdb_configured: true }));
     await renderSync();
     await fireEvent.click(screen.getByRole("checkbox", { name: "Deselect all libraries" }));
 
@@ -249,7 +259,7 @@ describe("Sync tab", () => {
   });
 
   it("does not run a TMDB refresh when server libraries failed to load", async () => {
-    settingsState.load(appSettings({ media_server: "plex", tmdb_configured: true }));
+    settingsState.load(appSettings({ media_servers: mediaServers("plex"), tmdb_configured: true }));
     libraries.mockRejectedValue(new Error("Media server is unavailable"));
     renderWithQueryClient(OperationsPopup);
     await screen.findByText("Media server is unavailable");

@@ -9,6 +9,7 @@ lazy from ...domain import (
     CollectionKind,
     CollectionOrder,
     MediaType,
+    ServerType,
 )
 lazy from ...media_servers.errors import MediaServerError
 lazy from ...repositories.collections import CollectionItem, CollectionRepository
@@ -30,7 +31,7 @@ lazy from ...schemas.common import (
     Status,
     StatusResponse,
 )
-lazy from ...utils.collection_fields import available_orders
+lazy from ...utils.collection_fields import available_orders, kept_order
 lazy from ...utils.collection_formats import literal_template
 lazy from ...utils.collection_groups import collection_group
 lazy from ...utils.errors import PublicServiceError
@@ -38,6 +39,7 @@ lazy from ...utils.time import utc_now
 lazy from ..downloads.service import DownloadService
 lazy from . import COLLECTIONS_LOCK
 lazy from .access import CollectionAccess
+lazy from .copies import CopyKey, ServerCopy, copy_keys
 lazy from .criteria import order_items
 lazy from .display import DISPLAY_OVERRIDES, CollectionDisplay
 lazy from .membership import Membership, resolve_members
@@ -63,6 +65,10 @@ lazy from .rules import (
 )
 lazy from .validation import CollectionValidator
 
+#: What a server copy holds: a title, or ``(server, item)`` for an item no
+#: sync has stored yet.
+type Held = int | tuple[int, str]
+
 
 def _require_movies(
     tmdb_collection_id: int | None, media_types: Iterable[MediaType]
@@ -85,10 +91,15 @@ def _server_ids(
 
 
 def save_placement(saved: MediaCollection, row: MediaCollection) -> None:
-    """Store which server collection holds each library."""
-    placed = {part.library_id: part.server_item_id for part in row.libraries}
+    """Store which server collection holds each library, and where it keeps it."""
+    placed = {
+        part.library_id: (part.server_item_id, part.server_path)
+        for part in row.libraries
+    }
     for part in saved.libraries:
-        part.server_item_id = placed.get(part.library_id)
+        part.server_item_id, part.server_path = placed.get(
+            part.library_id, (None, None)
+        )
 
 
 class CollectionEditor:
@@ -130,7 +141,12 @@ class CollectionEditor:
         smart = rule.smart
         scopes = await self._access.scopes(rule.libraries, smart=smart)
         types = {scope.library_id: scope.media_type for scope in scopes}
-        self._validator.display(body, set(types.values()), smart=smart)
+        self._validator.display(
+            body,
+            set(types.values()),
+            smart=smart,
+            servers=self._access.server_types(types),
+        )
         group = collection_group(body.collection_group)
         body = body.model_copy(update={"collection_group": group})
         _require_movies(body.tmdb_collection_id, types.values())
@@ -215,7 +231,10 @@ class CollectionEditor:
             overrides["summary_format"] = literal_template(body.summary)
         body = body.model_copy(update=overrides)
         self._validator.display(
-            body, row.media_types, smart=row.kind is CollectionKind.SMART
+            body,
+            row.media_types,
+            smart=row.kind is CollectionKind.SMART,
+            servers=self._access.server_types(row.library_ids),
         )
         if body.summary is not None:
             row.summary_source = body.summary
@@ -251,18 +270,23 @@ class CollectionEditor:
 
     # Removing
 
-    async def delete_server_ids(self, server_ids: Sequence[str]) -> None:
-        """A server-side deletion is complete when the collection is already absent."""
-        for server_id in server_ids:
+    async def delete_copies(self, copies: Iterable[CopyKey]) -> None:
+        """Delete server collections, by server and ID; an absent one is deleted.
+
+        A copy on a server no longer configured is left for its return.
+        """
+        for server_id, server_item_id in dict.fromkeys(copies):
+            if not self._access.configured(server_id):
+                continue
             try:
-                await self._access.provider().delete_collection(server_id)
+                await self._access.provider(server_id).delete_collection(server_item_id)
             except MediaServerError as exc:
                 if exc.upstream_status_code != 404:
                     raise
 
     async def delete_locked(self, row: MediaCollection) -> None:
         collection_id = row.id or 0
-        await self.delete_server_ids(row.server_ids)
+        await self.delete_copies(copy_keys(row.copies))
         async with self._access.database.write_session() as session:
             await self._downloads.cancel_assets(
                 session, AssetScope(collection_id=collection_id)
@@ -277,7 +301,7 @@ class CollectionEditor:
     async def withhold_locked(self, row: MediaCollection) -> None:
         """Remove a collection from the server while keeping its Overture rule."""
         collection_id = row.id or 0
-        await self.delete_server_ids(row.server_ids)
+        await self.delete_copies(copy_keys(row.copies))
         async with self._access.database.write_session() as session:
             await CollectionRepository(session).clear_server_copies(
                 collection_id, utc_now()
@@ -291,15 +315,9 @@ class CollectionEditor:
         leaving = [part for part in row.libraries if part.criteria is None]
         if not leaving:
             return
-        staying = {part.server_item_id for part in row.libraries} - {
-            part.server_item_id for part in leaving
-        }
-        await self.delete_server_ids(
-            [
-                identity
-                for identity in dict.fromkeys(p.server_item_id for p in leaving)
-                if identity and identity not in staying
-            ]
+        staying = set(copy_keys(row.libraries)) - set(copy_keys(leaving))
+        await self.delete_copies(
+            key for key in copy_keys(leaving) if key not in staying
         )
         ids = {part.library_id for part in leaving}
         async with self._access.database.write_session() as session:
@@ -347,16 +365,34 @@ class CollectionEditor:
         *,
         append: bool = False,
     ) -> None:
-        """Make the ordered items, by library, the collection's members on the server.
+        """Make the ordered items, by library, the regular collection's members."""
+        held = await self.place_members(
+            row, self._access.copies(row), wanted, order, append=append
+        )
+        await self.store_members(row, held, order, kind=CollectionKind.REGULAR)
+
+    async def place_members(
+        self,
+        row: MediaCollection,
+        copies: Sequence[ServerCopy],
+        wanted: Mapping[str, list[CollectionItem]],
+        order: CollectionOrder,
+        *,
+        append: bool = False,
+    ) -> list[Held]:
+        """Make the ordered items, by library, the members of *copies* on their servers.
 
         Libraries saved apart on a server that spans them fold into one copy,
-        and a library left with nothing to hold loses its own.
+        and a library left with nothing to hold loses its own. Returns what
+        the copies hold, each once, in order (see :meth:`held`).
         """
-        provider = self._access.provider()
-        server_ids: list[str] = []
-        for copy in self._access.copies(row):
+        members: dict[Held, None] = {}
+        for copy in copies:
+            provider = self._access.provider(copy.server_id)
             ids = _server_ids(wanted, copy.library_ids)
-            await self.delete_server_ids(copy.surplus_ids)
+            await self.delete_copies(
+                (copy.server_id, identity) for identity in copy.surplus_ids
+            )
             target = copy.server_item_id
             if target is None:
                 if not ids:
@@ -365,35 +401,63 @@ class CollectionEditor:
                     copy.lead.library_id, row.title, copy.lead.media_type, ids
                 )
                 target = server.id
-                row.server_path = row.server_path or server.path
+                copy.place(target, server.path)
             elif not ids and not append:
-                await self.delete_server_ids([target])
+                await self.delete_copies([(copy.server_id, target)])
                 copy.place(None)
                 continue
             copy.place(target)
-            server_ids += await provider.set_collection_members(
-                target, ids, order=order, append=append
+            held = await provider.set_collection_members(
+                target,
+                ids,
+                order=kept_order(
+                    order, provider.server_type, copy.lead.media_type, smart=False
+                ),
+                append=append,
             )
+            members.update(dict.fromkeys(await self.held(copy.server_id, held)))
+        return list(members)
+
+    async def held(self, server_id: int, server_item_ids: Sequence[str]) -> list[Held]:
+        """What a server's items are, in their order: titles, or items unknown yet.
+
+        An item no sync has stored yet still counts, as that server's own.
+        """
         async with self._access.database.read_session() as session:
             by_server_id = await CollectionRepository(session).item_ids_by_server_id(
-                server_ids
+                server_id, server_item_ids
             )
-        members = [
-            by_server_id[identity]
-            for identity in server_ids
-            if identity in by_server_id
-        ]
+        return [by_server_id.get(i, (server_id, i)) for i in server_item_ids]
+
+    async def store_members(
+        self,
+        row: MediaCollection,
+        members: Sequence[Held],
+        order: CollectionOrder,
+        *,
+        kind: CollectionKind,
+    ) -> None:
+        """Store what the server copies hold now, and where they are.
+
+        Its titles become its members; items no sync stored yet count too.
+        """
         async with self._access.database.write_session() as session:
             current = await self._access.require(session, row.id or 0)
-            await CollectionRepository(session).replace_members(row.id or 0, members)
+            await CollectionRepository(session).replace_members(
+                row.id or 0,
+                [
+                    member
+                    for member in dict.fromkeys(members)
+                    if isinstance(member, int)
+                ],
+            )
             save_placement(current, row)
-            current.server_path = row.server_path
-            current.kind = CollectionKind.REGULAR
-            current.child_count = len(server_ids)
+            current.kind = kind
+            current.child_count = len(set(members))
             current.order_type = order
             current.updated_at = utc_now()
             session.add(current)
-        row.kind = CollectionKind.REGULAR
+        row.kind = kind
         await self._access.updated(row.id)
 
     async def _chosen_members(
@@ -413,7 +477,7 @@ class CollectionEditor:
         for item in order_items(
             resolve_members(body.member_ids, items), body.order_type
         ):
-            wanted[item.library_id or ""].append(item)
+            wanted[item.library_id].append(item)
         return wanted
 
     async def set_members(
@@ -423,7 +487,12 @@ class CollectionEditor:
         async with self._access.locked(collection_id):
             async with self._access.database.read_session() as session:
                 row = await self._access.require_managed(session, collection_id)
-            self._validator.display(body, row.media_types, smart=False)
+            self._validator.display(
+                body,
+                row.media_types,
+                smart=False,
+                servers=self._access.server_types(row.library_ids),
+            )
             if row.kind is CollectionKind.SMART:
                 raise PublicServiceError(
                     422, "Smart collection members are controlled by their criteria"
@@ -480,12 +549,17 @@ class CollectionEditor:
         keep_source_order = (
             row.rule is None
             and body.order_type is None
-            and all(
-                CollectionOrder.CUSTOM
-                in available_orders(
-                    self._access.server_type, media_type, smart=body.smart
+            and any(
+                all(
+                    CollectionOrder.CUSTOM
+                    in available_orders(
+                        server,
+                        media_type,
+                        smart=body.smart and server is ServerType.PLEX,
+                    )
+                    for media_type in types.values()
                 )
-                for media_type in types.values()
+                for server in self._access.server_types(types)
             )
             and any(
                 condition.source.type in ORDERED_SOURCES
@@ -523,11 +597,17 @@ class CollectionEditor:
         return result
 
     async def replace_kind(self, row: MediaCollection, *, smart: bool) -> None:
-        """Plex cannot convert a collection's kind, so its copies are replaced."""
-        if (row.kind is CollectionKind.SMART) != smart:
-            await self.delete_server_ids(row.server_ids)
-            for part in row.libraries:
-                part.server_item_id = None
+        """Plex cannot convert a collection's kind, so its Plex copies are replaced.
+
+        On another server a collection is regular either way.
+        """
+        if (row.kind is CollectionKind.SMART) == smart:
+            return
+        plex = [part for part in row.libraries if self._access.plex(part.library_id)]
+        await self.delete_copies(copy_keys(plex))
+        for part in plex:
+            part.server_item_id = None
+            part.server_path = None
 
     async def adoption_plan(self, collection_id: int) -> CollectionAdoptionPlan:
         """What adopting a collection made outside Overture would keep.
@@ -588,9 +668,10 @@ class CollectionEditor:
 
         The reverse of adoption: the rule and group go, and the collection is
         listed under Unmanaged until it is adopted again. Plex holds a
-        cross-library collection as one collection per library, which are
-        unrelated once Overture stops managing them, so this row keeps the first
-        and the next library sync lists the rest on their own.
+        cross-library collection as one collection per library, and each server
+        its own, which are unrelated once Overture stops managing them, so this
+        row keeps the lead copy and the next library sync lists the rest on
+        their own.
 
         Raises:
             PublicServiceError: 409 when it has no server copy to keep, its
@@ -614,7 +695,7 @@ class CollectionEditor:
             rule = row.rule
             if rule is None:
                 raise PublicServiceError(409, "Overture does not manage it")
-            lead = row.server_item_id
+            lead = self._access.lead(row)
             if lead is None:
                 raise PublicServiceError(
                     409, "It is not on the media server; delete it instead"
@@ -624,7 +705,9 @@ class CollectionEditor:
                     409, "Its group's set made it; remove its value from the set"
                 )
             if rule.smart and any(
-                self._membership.labels(part.media_type, criteria_of(part))
+                self._membership.labels(
+                    part.library_id, part.media_type, criteria_of(part)
+                )
                 for part in row.libraries
                 if part.criteria is not None
             ):
@@ -634,7 +717,12 @@ class CollectionEditor:
                     "make it a regular collection first",
                 )
             row.rule = None
-            row.libraries = [p for p in row.libraries if p.server_item_id == lead]
+            row.libraries = [
+                p
+                for p in row.libraries
+                if (p.server_id, p.server_item_id)
+                == (lead.server_id, lead.server_item_id)
+            ]
             for part in row.libraries:
                 part.criteria = None
                 session.add(part)
@@ -649,12 +737,12 @@ class CollectionEditor:
             session.add(row)
 
     async def _smart_adoption_rule(self, row: MediaCollection) -> CollectionRuleWrite:
-        provider = self._access.provider()
-        if row.server_item_id is None:
+        part = self._access.lead(row)
+        if part is None or part.server_item_id is None:
             raise PublicServiceError(409, "The collection has no server copy")
-        part = row.libraries[0]
+        provider = self._access.provider(part.server_id)
         media_type = part.media_type
-        query = await provider.smart_collection_filter(row.server_item_id)
+        query = await provider.smart_collection_filter(part.server_item_id)
         fields = plex_field_keys(media_type)
         names: dict[str, dict[str, str]] = {}
         for name, _ in urllib.parse.parse_qsl(query):
@@ -700,7 +788,7 @@ class CollectionEditor:
         self, collection_ids: list[int], monitored: bool
     ) -> BulkMonitorResponse:
         """Set the monitored flag for multiple collections at once."""
-        self._access.provider()
+        self._access.require_collections()
         async with self._access.database.write_session() as db:
             updated = await CollectionRepository(db).bulk_set_monitored(
                 collection_ids, monitored, timestamp=utc_now()

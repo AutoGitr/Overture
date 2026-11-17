@@ -53,7 +53,7 @@ def create_browser_app() -> FastAPI:
             "OIDC_CLIENT_SECRET": SecretStr("test-client-secret"),
             # Sign-in needs no media server, and a configured one is looked up
             # on plex.tv; with none, nothing is reached beyond this process.
-            "MEDIA_SERVER": "none",
+            "MEDIA_SERVERS": "none",
         }
     )
     # Browser requests overlap. An in-memory StaticPool shares one transaction

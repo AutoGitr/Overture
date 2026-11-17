@@ -139,5 +139,7 @@ class PreparedDownload:
 class DownloadTarget:
     """Where a download is written, inside the folder it may write in."""
 
-    path: str
+    #: Each name the servers holding the item read it under; the first is the
+    #: one recorded.
+    paths: tuple[str, ...]
     trusted_root: str

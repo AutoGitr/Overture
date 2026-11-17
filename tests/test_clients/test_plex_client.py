@@ -20,6 +20,7 @@ lazy from tests.http_mock import (
     keep_configured_plex_url,
     mock_client_factory,
 )
+lazy from tests.media_servers import TEST_SERVER_ID, configure, server_of
 
 THEME = b"theme audio"
 
@@ -81,16 +82,17 @@ def routes() -> dict[str, Route]:
 async def plex(
     app_config: Settings, monkeypatch: pytest.MonkeyPatch, routes: dict[str, Route]
 ) -> AsyncIterator[tuple[PlexClient, RecordingMockTransport]]:
-    app_config.MEDIA_SERVER = ServerType.PLEX
-    app_config.MEDIA_SERVER_URL = "http://plex.test:32400"
-
+    configure(app_config, type=ServerType.PLEX)
+    configure(app_config, url="http://plex.test:32400")
     monkeypatch.setattr(PlexClient, "resolve_secure_url", keep_configured_plex_url)
     factory, transport = mock_client_factory(
         lambda request: routes.get(request.url.path, lambda _r: httpx2.Response(404))(
             request
         )
     )
-    client = PlexClient(app_config=app_config, client_factory=factory)
+    client = PlexClient(
+        server=server_of(app_config), app_config=app_config, client_factory=factory
+    )
     yield client, transport
     await client.close()
 
@@ -152,7 +154,12 @@ async def test_a_smart_collection_filter_is_read_from_its_content_uri(
             "content": "/library/sections/1/all?type=1&genre=5&sort=titleSort",
         }
     )
-    provider = PlexProvider(app_config=app_config, client=client)
+    provider = PlexProvider(
+        server=server_of(app_config),
+        server_id=TEST_SERVER_ID,
+        app_config=app_config,
+        client=client,
+    )
 
     assert await provider.smart_collection_filter("40") == "genre=5&sort=titleSort"
 
@@ -219,7 +226,9 @@ async def test_pagination_headers_must_agree_with_the_listing(
             json={"MediaContainer": {"Directory": rows, "size": 1, "totalSize": 1}},
         )
     )
-    client = PlexClient(app_config=app_config, client_factory=factory)
+    client = PlexClient(
+        server=server_of(app_config), app_config=app_config, client_factory=factory
+    )
 
     with pytest.raises(MediaServerError, match=message):
         await client.get_sections()

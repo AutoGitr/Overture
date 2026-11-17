@@ -10,7 +10,7 @@ lazy import time
 lazy from collections import defaultdict
 lazy from collections.abc import Awaitable, Callable, Mapping, Sequence
 lazy from contextlib import aclosing, suppress
-lazy from dataclasses import dataclass, field
+lazy from dataclasses import dataclass, field, replace
 lazy from typing import Any
 
 lazy from sqlmodel import col, select
@@ -31,7 +31,7 @@ lazy from ...schemas.server_audit import (
 lazy from ...utils.concurrency import in_order
 lazy from ...utils.errors import PublicServiceError
 lazy from ..art.targets import target_label
-lazy from ..server_identity import resolve_owner_server_id
+lazy from ..server_identity import resolve_owners
 lazy from .compare import (
     AUDIT_CONCURRENCY,
     AUDIT_ERRORS,
@@ -49,10 +49,10 @@ CHECK_INTERVAL_SECONDS = 10.0
 #: makes progress.
 IDLE_TIMEOUT_SECONDS = 180.0
 
-#: One audit result row: ``("art", item, season, type)``,
-#: ``("collection", collection, None, type)`` or
-#: ``("theme", item, server item, theme)``.
-type AuditRowKey = tuple[str, object, object, object]
+#: One audit result row: ``("art", item, season, type, server)``,
+#: ``("collection", collection, None, type, server)`` or
+#: ``("theme", item, server item, theme, server)``.
+type AuditRowKey = tuple[str, object, object, object, object]
 
 
 def audit_row_key(
@@ -61,21 +61,32 @@ def audit_row_key(
     """Return the stable key shared by audit result rows and fix targets."""
     match row:
         case ServerAuditRefreshTarget() if row.collection_id is not None:
-            return ("collection", row.collection_id, None, row.art_type)
+            return ("collection", row.collection_id, None, row.art_type, row.server_id)
         case ServerAuditRefreshTarget():
-            return ("art", row.item_id, row.season_id, row.art_type)
+            return ("art", row.item_id, row.season_id, row.art_type, row.server_id)
         case ServerAuditThemeDeleteTarget():
-            return ("theme", row.item_id, row.server_item_id, row.theme_id)
+            return (
+                "theme",
+                row.item_id,
+                row.server_item_id,
+                row.theme_id,
+                row.server_id,
+            )
         case _ if row.get("collection_id") is not None:
-            return ("collection", row.get("collection_id"), None, row.get("art_type"))
-        case _ if (
-            row.get("theme_id") is not None or row.get("server_item_id") is not None
-        ):
+            return (
+                "collection",
+                row.get("collection_id"),
+                None,
+                row.get("art_type"),
+                row.get("server_id"),
+            )
+        case _ if row.get("kind") == "theme":
             return (
                 "theme",
                 row.get("item_id"),
                 row.get("server_item_id"),
                 row.get("theme_id"),
+                row.get("server_id"),
             )
         case _:
             return (
@@ -83,6 +94,7 @@ def audit_row_key(
                 row.get("item_id"),
                 row.get("season_id"),
                 row.get("art_type"),
+                row.get("server_id"),
             )
 
 
@@ -121,16 +133,18 @@ def patch_audit_snapshot(
 
 @dataclass(slots=True, eq=False)
 class _Fix:
-    """One audited file being fixed, and the result rows it settles.
+    """One audited file being fixed on one server, and the result rows it settles.
 
     It belongs to an item, or with ``collection_id`` to a collection.
     """
 
     item_id: int | None
     asset: ServerAsset
+    #: The database's number of the server whose copy is fixed.
+    server: int
     season_id: int | None = None
     collection_id: int | None = None
-    server_id: str | None = None
+    server_item_id: str | None = None
     theme_ids: list[str] = field(default_factory=list[str])
     rows: list[AuditRowKey] = field(default_factory=list[AuditRowKey])
     label: str = ""
@@ -158,21 +172,27 @@ def _plan(
     art: Sequence[ServerAuditRefreshTarget],
     themes: Sequence[ServerAuditThemeDeleteTarget],
 ) -> list[_Fix]:
-    """Return one fix per file; every server theme of an item is one fix."""
+    """Return one fix per file and server; a server's themes of an item are one."""
     fixes: dict[object, _Fix] = {}
     for target in art:
         key = audit_row_key(target)
         fixes[key] = _Fix(
             target.item_id,
             target.art_type.server_asset,
+            target.server_id,
             target.season_id,
             collection_id=target.collection_id,
             rows=[key],
         )
     for target in themes:
         fix = fixes.setdefault(
-            ("theme", target.item_id),
-            _Fix(target.item_id, ServerAsset.THEME, server_id=target.server_item_id),
+            ("theme", target.item_id, target.server_id),
+            _Fix(
+                target.item_id,
+                ServerAsset.THEME,
+                target.server_id,
+                server_item_id=target.server_item_id,
+            ),
         )
         fix.rows.append(audit_row_key(target))
         if target.theme_id:
@@ -254,41 +274,59 @@ async def _reupload(
 
 
 async def _refresh(fixes: Sequence[tuple[_Fix, int]], context: AuditContext) -> None:
-    """Delete the selected server themes, then unlock and refresh each item once."""
-    provider = context.provider_registry.provider
-    refreshes: defaultdict[str, list[_Fix]] = defaultdict(list)
+    """Delete the selected server themes, then unlock and refresh each copy once."""
+    refreshes: defaultdict[tuple[int, str], list[_Fix]] = defaultdict(list)
     for fix, item_id in fixes:
+        if not context.provider_registry.configured_server_id(fix.server):
+            fix.error = "That media server is no longer configured"
+            continue
+        provider = context.provider_registry.get(fix.server)
         try:
-            fix.server_id = fix.server_id or await resolve_owner_server_id(
-                item_id,
-                fix.season_id if fix.asset is ServerAsset.SEASON_POSTER else None,
-                database=context.database,
-                provider_registry=context.provider_registry,
-            )
-            if fix.server_id is None:
+            if fix.server_item_id is None:
+                fix.server_item_id = next(
+                    (
+                        owner.server_item_id
+                        for owner in await resolve_owners(
+                            item_id,
+                            fix.season_id
+                            if fix.asset is ServerAsset.SEASON_POSTER
+                            else None,
+                            database=context.database,
+                            provider_registry=context.provider_registry,
+                        )
+                        if owner.provider.server_id == fix.server
+                    ),
+                    None,
+                )
+            if fix.server_item_id is None:
                 fix.error = "Could not resolve media-server item ID"
                 continue
             for theme_id in fix.theme_ids:
-                await provider.delete_theme(fix.server_id, theme_id)
+                await provider.delete_theme(fix.server_item_id, theme_id)
         except MediaServerError as exc:
             fix.error = str(exc)
-        if fix.error is None and fix.server_id is not None:
-            refreshes[fix.server_id].append(fix)
+        if fix.error is None and fix.server_item_id is not None:
+            refreshes[fix.server, fix.server_item_id].append(fix)
 
-    for server_id, group in refreshes.items():
+    for (server, server_item_id), group in refreshes.items():
         try:
-            await provider.refresh_item(server_id, unlock={fix.asset for fix in group})
+            await context.provider_registry.get(server).refresh_item(
+                server_item_id, unlock={fix.asset for fix in group}
+            )
         except MediaServerError as exc:
             for fix in group:
                 fix.error = str(exc)
 
 
 async def _difference(fix: _Fix, context: AuditContext) -> tuple[_Fix, str | None]:
-    """Audit the fixed file again; return how the server differs, or ``None``."""
+    """Audit the fixed file again; return how its server differs, or ``None``."""
     try:
         _, results = await audit_target(fix.target, context=context)
     except AUDIT_ERRORS as exc:
         return fix, str(exc)
+    results = [result for result in results if result.server_id == fix.server]
+    if not results:
+        return fix, "The media server no longer holds it"
     if not (differing := differences(results)):
         return fix, None
     return fix, differing[0].reason or differing[0].status
@@ -354,6 +392,14 @@ async def _verify(
     )
 
 
+def _servers(
+    art: Sequence[ServerAuditRefreshTarget],
+    themes: Sequence[ServerAuditThemeDeleteTarget],
+) -> set[int]:
+    """The servers whose copies the selected findings fix."""
+    return {target.server_id for target in (*art, *themes)}
+
+
 async def run_audit_fix(
     art: Sequence[ServerAuditRefreshTarget],
     themes: Sequence[ServerAuditThemeDeleteTarget],
@@ -370,6 +416,10 @@ async def run_audit_fix(
     tally = ServerAuditFixTally()
     async with run_managed_job(job_context, tally, catch=AUDIT_ERRORS) as job:
         await job.started()
+        audit_context = replace(
+            audit_context,
+            servers=frozenset(_servers(art, themes)),
+        )
         fixes = _plan(art, themes)
         await _label(fixes, audit_context.database)
         await job.planned(len(fixes))

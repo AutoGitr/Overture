@@ -11,8 +11,8 @@ lazy from overture.domain import ScheduleKind
 
 
 def test_task_schedule_payload_is_native_dict() -> None:
-    schedule = TaskSchedule(task_name="sync", payload={"library_ids": ["1"]})
-    assert schedule.payload == {"library_ids": ["1"]}
+    schedule = TaskSchedule(task_name="sync", payload={"library_ids": ["1:1"]})
+    assert schedule.payload == {"library_ids": ["1:1"]}
 
     schedule.payload = {}
     assert schedule.payload == {}
@@ -25,9 +25,9 @@ def test_bulk_schedule_payload_is_native_dict() -> None:
         cron_expression="0 3 * * *",
         created_at=datetime(2026, 1, 1, tzinfo=UTC),
         updated_at=datetime(2026, 1, 1, tzinfo=UTC),
-        payload={"library_ids": ["1"]},
+        payload={"library_ids": ["1:1"]},
     )
-    assert schedule.payload == {"library_ids": ["1"]}
+    assert schedule.payload == {"library_ids": ["1:1"]}
 
     schedule.payload = {}
     assert schedule.payload == {}

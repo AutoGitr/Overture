@@ -10,7 +10,7 @@ lazy from typing import Any, ClassVar, Literal, override
 
 lazy import httpx2
 
-lazy from ...config import Settings
+lazy from ...config import MediaServerConfig, Settings
 lazy from ...domain import (
     ArtType,
     CollectionFiltering,
@@ -109,13 +109,13 @@ def plex_web_link(
     kind: Literal["metadata", "collections"],
     machine_id: str | None,
     *,
-    app_config: Settings,
+    server: MediaServerConfig,
 ) -> str:
     """Return the Plex web link of an item or collection, ``{id}`` for its key."""
     key = urllib.parse.quote(f"/library/{kind}/", safe="") + "{id}"
     if machine_id:
         return f"https://app.plex.tv/desktop/#!/server/{machine_id}/details?key={key}"
-    return f"{app_config.MEDIA_SERVER_URL}/web/index.html#!/server/details?key={key}"
+    return f"{server.url}/web/index.html#!/server/details?key={key}"
 
 
 def _owned_servers(resources: list[PlexResource]) -> list[PlexResource]:
@@ -153,9 +153,7 @@ def _server_at(servers: list[PlexResource], url: str) -> str | None:
     return None
 
 
-def _secure_candidates(
-    server: PlexResource, url: str, *, app_config: Settings
-) -> list[str]:
+def _secure_candidates(resource: PlexResource, server: MediaServerConfig) -> list[str]:
     """Return the server's plex.direct origins in the order to prefer them.
 
     The configured IPv4 address comes first under the server's certificate
@@ -164,18 +162,20 @@ def _secure_candidates(
     remote ones, so LAN traffic stays off the WAN.
     """
     connections = sorted(
-        server.get("connections") or [],
+        resource.get("connections") or [],
         key=lambda connection: not connection.get("local", False),
     )
     origins = [
         origin
         for connection in connections
-        if (origin := app_config.plex_direct_origin(connection.get("uri", "")))
+        if (origin := server.plex_direct_origin(connection.get("uri", "")))
     ]
     if origins:
         # plex.direct names are <address>.<server hash>.plex.direct.
         domain = (urllib.parse.urlsplit(origins[0]).hostname or "").split(".", 1)[1]
-        origins.insert(0, app_config.plex_direct_origin(_address_origin(url, domain)))
+        origins.insert(
+            0, server.plex_direct_origin(_address_origin(server.url, domain))
+        )
     return list(dict.fromkeys(origin for origin in origins if origin))
 
 
@@ -230,14 +230,14 @@ class PlexClient(MediaServerHttpClient):
     def __init__(
         self,
         *,
+        server: MediaServerConfig,
         app_config: Settings,
         client_factory: Callable[..., httpx2.AsyncClient] = create_client,
         health: MediaServerHealthTracker | None = None,
     ) -> None:
         """Initialize instance state."""
-        super().__init__(
-            app_config=app_config, client_factory=client_factory, health=health
-        )
+        super().__init__(server=server, client_factory=client_factory, health=health)
+        self._app_config = app_config
         self._machine_identifier: str | None = None
 
         async def build_public() -> httpx2.AsyncClient:
@@ -250,9 +250,7 @@ class PlexClient(MediaServerHttpClient):
     @override
     def auth_headers(self) -> dict[str, str]:
         """Authenticate with the configured Plex token."""
-        return {
-            "X-Plex-Token": self._app_config.MEDIA_SERVER_API_KEY.get_secret_value()
-        }
+        return {"X-Plex-Token": self.server.api_key.get_secret_value()}
 
     @override
     async def close(self) -> None:
@@ -281,9 +279,9 @@ class PlexClient(MediaServerHttpClient):
         verified HTTPS is upgraded to an address plex.tv lists for the server.
         Raises when the server answers at neither.
         """
-        configured = self._app_config.MEDIA_SERVER_URL
+        configured = self.server.url
         parsed = urllib.parse.urlsplit(configured)
-        verify = self._app_config.media_server_verify_tls()
+        verify = self.server.verify_tls_for()
         identity = await self._identify(configured, verify=verify)
         if identity and (
             (parsed.scheme == "https" and verify) or parsed.hostname in LOOPBACK_HOSTS
@@ -298,9 +296,7 @@ class PlexClient(MediaServerHttpClient):
         )
         if machine_id and server:
             self._machine_identifier = machine_id
-            candidates = _secure_candidates(
-                server, configured, app_config=self._app_config
-            )
+            candidates = _secure_candidates(server, self.server)
             # Probe every address at once but take the most preferred one that
             # proves the server's identity under a verified certificate.
             probes = [
@@ -310,8 +306,11 @@ class PlexClient(MediaServerHttpClient):
             try:
                 for candidate, probe in zip(candidates, probes, strict=True):
                     if await probe == machine_id:
-                        logger.info("Connected to Plex securely through plex.direct")
-                        return self._app_config.trust_plex_secure_url(candidate)
+                        logger.info(
+                            "Connected to %s securely through plex.direct",
+                            self.server.title,
+                        )
+                        return self.server.trust_plex_secure_url(candidate)
             finally:
                 for probe in probes:
                     probe.cancel()
@@ -362,10 +361,10 @@ class PlexClient(MediaServerHttpClient):
     @override
     async def _create_client(self) -> httpx2.AsyncClient:
         """Build an authenticated Plex client, preferring a secure origin."""
-        base_url = await self.resolve_secure_url() or self._app_config.MEDIA_SERVER_URL
+        base_url = await self.resolve_secure_url() or self.server.url
         return self._client_factory(
             base_url=base_url,
-            verify=self._app_config.media_server_verify_tls(base_url),
+            verify=self.server.verify_tls_for(base_url),
             headers={**_CLIENT_HEADERS, **self.auth_headers},
         )
 

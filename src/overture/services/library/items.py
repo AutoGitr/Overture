@@ -18,9 +18,11 @@ lazy from ...db.session import Database
 lazy from ...domain import ArtType, AspectRatioTolerance, MediaType, TermKind
 lazy from ...repositories.catalog import CatalogRepository
 lazy from ...repositories.collections import CollectionRepository
+lazy from ...repositories.copies import CopyRepository
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...repositories.terms import TermRepository
 lazy from ...schemas.library import (
+    ItemCopyRead,
     MediaItemRead,
     SeasonRead,
     media_item_read_from_model,
@@ -135,6 +137,7 @@ async def media_item_reads_with_catalog_status(
     )
 
     item_ids = [item.id for item in items if item.id is not None]
+    copies = await CopyRepository(db).listed_copies(item_ids)
     collections = await CollectionRepository(db).collection_ids_by_item(item_ids)
     directors = await TermRepository(db).values_by_item(item_ids, TermKind.DIRECTOR)
     reads: list[MediaItemRead] = []
@@ -157,6 +160,14 @@ async def media_item_reads_with_catalog_status(
                 catalog_complete=item.id in complete_item_ids,
                 catalog_themerrdb=item.id in themerrdb_item_ids,
                 library_collection_id=next(iter(collections.get(item.id, [])), None),
+                copies=[
+                    ItemCopyRead(
+                        server_id=copy.server_id,
+                        server_item_id=copy.server_item_id,
+                        library_id=copy.library_id,
+                    )
+                    for copy in copies.get(item.id, ())
+                ],
                 seasons=seasons,
                 directors=directors.get(item.id, ()),
                 has_incorrect_aspect_ratio=_has_incorrect_aspect_ratio(

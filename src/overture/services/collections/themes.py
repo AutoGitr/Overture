@@ -2,10 +2,11 @@
 
 lazy from pathlib import Path
 
-lazy from ...config import Settings
 lazy from ...db.completion import collection_theme_status
+lazy from ...db.models.media_collection import CollectionLibrary, MediaCollection
 lazy from ...db.theme_file import record_theme_file
 lazy from ...domain import AssetScope
+lazy from ...media_servers.registry import CollectionProvider
 lazy from ...schemas.collections import (
     CollectionThemeStatusResponse,
     DeleteCollectionThemeResponse,
@@ -21,7 +22,7 @@ lazy from ..downloads.collection_theme import (
     collection_theme_source,
     collection_theme_unavailable,
     collection_themes_unavailable,
-    theme_folder,
+    theme_folders,
 )
 lazy from ..downloads.queue import JobTarget
 lazy from ..downloads.service import DownloadService
@@ -38,17 +39,17 @@ class CollectionThemes:
         *,
         access: CollectionAccess,
         downloads: DownloadService,
-        app_config: Settings,
         remover: AssetRemover,
     ) -> None:
         self._remover = remover
         self._access = access
         self._downloads = downloads
-        self._app_config = app_config
 
     def unavailable(self) -> str | None:
-        """Why this server cannot take collection themes, if it cannot."""
-        return collection_themes_unavailable(self._access.provider(), self._app_config)
+        """Why no configured server can take collection themes, if none can."""
+        return collection_themes_unavailable(
+            self._access.provider_registry.collection_providers()
+        )
 
     async def status(self, collection_id: int) -> CollectionThemeStatusResponse:
         """Return the current theme status for a collection."""
@@ -69,12 +70,12 @@ class CollectionThemes:
             raise PublicServiceError(400, reason)
         async with self._access.database.read_session() as session:
             row = await self._access.require_managed(session, collection_id)
-        if row.server_item_id is None:
+        if not row.copies:
             return await self._keep(collection_id, body.youtube_id)
         target = JobTarget.collection_theme(collection_id, row.title, body.youtube_id)
         async with self._access.asset_locks.acquire(target.slot.lock_key):
             reason = await collection_theme_unavailable(
-                row, provider=self._access.provider(), app_config=self._app_config
+                row, provider_registry=self._access.provider_registry
             )
             if reason:
                 raise PublicServiceError(400, reason)
@@ -147,7 +148,7 @@ class CollectionThemes:
         async with self._access.asset_locks.acquire(scope.lock_key):
             if removal.delete_from_server:
                 await self._remover.delete_collection_theme(row)
-            deleted = removal.delete_file and await self._delete_file(collection_id)
+            deleted = await self._delete_files(row) if removal.delete_file else []
             async with self._access.database.write_session() as db:
                 row = await self._access.require_managed(db, collection_id)
                 if removal.forget:
@@ -168,10 +169,8 @@ class CollectionThemes:
                 db.add(row)
                 response = collection_theme_status_response(row)
             await self._downloads.committed(db)
-            if deleted and row.server_item_id is not None:
-                await self._access.provider().refresh_item(
-                    row.server_item_id, unlock=()
-                )
+            for provider, part, _ in deleted:
+                await provider.refresh_item(part.server_item_id or "", unlock=())
         status = collection_theme_status(
             server_has_theme=response.has_theme, youtube_id=response.youtube_id
         )
@@ -190,21 +189,25 @@ class CollectionThemes:
             status=Status.OK, has_theme=response.has_theme, theme_status=status
         )
 
-    async def _delete_file(self, collection_id: int) -> bool:
-        """Delete the theme file in the collection's folder; return whether it had one.
+    async def _delete_files(
+        self, row: MediaCollection
+    ) -> list[tuple[CollectionProvider, CollectionLibrary, Path]]:
+        """Delete the theme file in each Jellyfin server's folder for the collection.
+
+        Returns the folders that had one.
 
         Raises:
-            PublicServiceError: 400 when the collection has no folder.
+            PublicServiceError: 400 when a server's folder cannot be used.
         """
         try:
-            folder = await theme_folder(
-                collection_id,
-                app_config=self._app_config,
-                database=self._access.database,
-            )
+            folders = await theme_folders(row, self._access.provider_registry)
         except DownloadError as exc:
             raise PublicServiceError(400, str(exc)) from exc
-        root = self._app_config.JELLYFIN_COLLECTIONS_PATH
-        if root is None:
-            raise PublicServiceError(400, "Set JELLYFIN_COLLECTIONS_PATH")
-        return await self._remover.delete_collection_theme_file(folder, Path(root))
+        return [
+            (provider, part, folder)
+            for provider, part, folder in folders
+            if provider.server.collections_path is not None
+            and await self._remover.delete_collection_theme_file(
+                folder, provider.server.collections_path
+            )
+        ]

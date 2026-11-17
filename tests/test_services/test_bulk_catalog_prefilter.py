@@ -70,7 +70,7 @@ def _movie(factory: MediaItemFactory, name: str, **overrides: Any) -> MediaItem:
         id=None,
         title=name,
         server_item_id=name,
-        library_id="lib-1",
+        library_id="1:lib-1",
         folder_path=f"/media/{name}",
         **overrides,
     )

@@ -13,8 +13,9 @@ lazy from pathlib import Path
 lazy from sqlmodel import text
 
 lazy from . import protocols
-lazy from .config import Settings, load_configuration
+lazy from .config import MediaServerConfig, Settings, load_configuration
 lazy from .db.session import Database
+lazy from .domain import MediaServerState
 lazy from .integrations.mdblist import MDBListClient
 lazy from .integrations.proxy import ProxyClientManager
 lazy from .integrations.tmdb import TMDBClient
@@ -46,6 +47,7 @@ lazy from .services.downloads.theme import DownloadThemeHandler
 lazy from .services.health import get_service_status
 lazy from .services.library.service import LibraryService
 lazy from .services.local_assets.service import LocalAssets
+lazy from .services.media_server_roster import MediaServerRoster
 lazy from .services.notifications import (
     NotificationSettings,
     NotifyingPublisher,
@@ -55,7 +57,6 @@ lazy from .services.realtime import RealtimeSnapshotBuilder
 lazy from .services.removal import AssetRemover
 lazy from .services.scheduler import SchedulerService
 lazy from .services.server_audit.service import ServerAuditService
-lazy from .services.server_switch import MediaServerSwitch
 lazy from .services.stats.service import StatsService
 lazy from .services.storage.assets import AssetStorage
 lazy from .services.storage.image_cache import ImageCache
@@ -190,13 +191,14 @@ class RuntimeServices:
             process_owner(),
             config.TZ,
         )
-        if config.MEDIA_SERVER is None:
+        if not config.MEDIA_SERVERS:
             logger.info("Media server: none; running on OvertureDB and TMDB")
-        else:
+        for server in config.MEDIA_SERVERS:
             logger.info(
-                "Media server: %s at %s",
-                config.MEDIA_SERVER.display_name,
-                config.MEDIA_SERVER_URL,
+                "Media server %s: %s at %s",
+                server.title,
+                server.type.display_name,
+                server.url,
             )
         logger.info(
             "App URL: %s",
@@ -213,7 +215,9 @@ class RuntimeServices:
         await owned_thread(clean_abandoned_operations, self.config_dir)
         faulthandler.enable()
         await self.database.initialize(self.backups.backup_before_upgrade)
-        await MediaServerSwitch(database=self.database, app_config=config).reconcile()
+        await MediaServerRoster(
+            database=self.database, provider_registry=self.provider_registry
+        ).reconcile()
         await interrupt_unfinished(self.database)
         runs = await latest_runs(self.database)
         for kind, job in self.job_slots.items():
@@ -225,7 +229,7 @@ class RuntimeServices:
             result = service.start()
             if inspect.isawaitable(result):
                 await result
-        self.provider_registry.health.listen(self._announce_media_server)
+        self.provider_registry.listen(self._announce_media_server)
         self._ping_task = asyncio.create_task(self.websockets.start_ping_loop())
         self._connectivity_task = asyncio.create_task(self._log_connectivity())
         self._ping_task.add_done_callback(self._observe_task)
@@ -247,12 +251,21 @@ class RuntimeServices:
             raise TimeoutError("Application teardown incomplete")
         self._shutdown_task.result()
 
-    def _announce_media_server(self, health: MediaServerHealth) -> None:
-        """Tell clients the media server went down or came back."""
+    def _announce_media_server(
+        self, server: MediaServerConfig, health: MediaServerHealth
+    ) -> None:
+        """Tell clients a media server went down or came back."""
+        server_id = next(
+            provider.server_id
+            for provider in self.provider_registry.providers()
+            if provider.server.key == server.key
+        )
         task = asyncio.create_task(
             self.events.broadcast(
                 "media-server.status",
-                media_server_status(health).model_dump(mode="json"),
+                media_server_status(server_id, server.title, health).model_dump(
+                    mode="json"
+                ),
             )
         )
         self._announcements.add(task)
@@ -379,16 +392,16 @@ class RuntimeServices:
             logger.warning("Connectivity check failed: %s", exc)
             return
         # Without a media server, its health stays unknown and no notice shows.
-        services = (
-            {
-                config.MEDIA_SERVER.display_name: (
-                    status.media_server,
-                    "MEDIA_SERVER_URL and MEDIA_SERVER_API_KEY",
+        services = {
+            provider.server.title: (
+                provider.health.current.state is MediaServerState.REACHABLE,
+                (
+                    f"{provider.server.variable('url')} and "
+                    f"{provider.server.variable('api_key')}"
                 ),
-            }
-            if config.MEDIA_SERVER is not None
-            else {}
-        )
+            )
+            for provider in self.provider_registry.providers()
+        }
         if config.tmdb_configured:
             services["TMDB"] = (status.tmdb, "TMDB_API_KEY")
         for name, (reachable, settings) in services.items():

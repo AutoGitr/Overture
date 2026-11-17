@@ -13,7 +13,13 @@ lazy from ...db.models.collection_group import CollectionGroup
 lazy from ...db.models.media_collection import CollectionLibrary, MediaCollection
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
-lazy from ...domain import UNMANAGED_REFUSAL, MediaType, ServerType, TermKind
+lazy from ...domain import (
+    UNMANAGED_REFUSAL,
+    MediaType,
+    ServerType,
+    TermKind,
+    library_server,
+)
 lazy from ...media_servers.registry import CollectionProvider, ProviderRegistry
 lazy from ...repositories.collections import (
     CollectionItem,
@@ -26,7 +32,7 @@ lazy from ...utils.collection_formats import is_within_active_window
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.locks import KeyedLock
 lazy from . import COLLECTIONS_LOCK
-lazy from .copies import ServerCopy, server_copies
+lazy from .copies import ServerCopy, held_copies, lead_part, server_copies
 lazy from .criteria import criteria_terms
 lazy from .policy import CollectionPolicy, RuleOrPolicy, resolve_policy
 
@@ -59,50 +65,109 @@ class CollectionAccess:
         self.database = database
         self.app_config = app_config
         self.asset_locks = asset_locks
-        self._provider_registry = provider_registry
+        #: The configured servers' providers.
+        self.provider_registry = provider_registry
         self._publisher = publisher
 
     @property
     def supported(self) -> bool:
-        """Whether the media server has collections at all."""
-        return self._provider_registry.collections is not None
+        """Whether any configured server has collections at all."""
+        return self.provider_registry.collections_supported
 
-    def provider(self) -> CollectionProvider:
-        """Return the media server's provider when it supports collections.
+    def require_collections(self) -> None:
+        """Refuse to serve collections where no server has any.
 
         Raises:
-            PublicServiceError: When the media server has no collections.
+            PublicServiceError: When no configured server has collections.
         """
-        provider = self._provider_registry.collections
-        if provider is None:
+        if not self.supported:
             raise PublicServiceError(
-                400, "The media server does not support collections."
+                400, "No configured media server supports collections."
+            )
+
+    def provider(self, server_id: int) -> CollectionProvider:
+        """Return a configured server's provider when it supports collections.
+
+        Raises:
+            PublicServiceError: When that server is not configured or has no
+                collections.
+        """
+        provider = self.provider_registry.get(server_id)
+        if provider.collections is None:
+            raise PublicServiceError(
+                400, f"{provider.server.title} does not support collections."
             )
         return provider
 
-    def require_collections(self) -> None:
-        """Refuse to serve collections where the media server has none.
+    def library_provider(self, library_id: str) -> CollectionProvider:
+        """Return the provider of the server holding a library.
 
         Raises:
-            PublicServiceError: When the media server has no collections.
+            PublicServiceError: When its server is not configured or has no
+                collections.
         """
-        self.provider()
+        return self.provider(self._server_of(library_id))
 
-    @property
-    def server_type(self) -> ServerType:
-        return self.provider().server_type
+    def server_type(self, library_id: str) -> ServerType:
+        """Return the kind of server holding a library."""
+        return self.provider_registry.type_of(self._server_of(library_id))
 
-    @property
-    def plex(self) -> bool:
-        return self.server_type is ServerType.PLEX
+    def plex(self, library_id: str) -> bool:
+        """Whether a library is on a Plex server."""
+        return self.server_type(library_id) is ServerType.PLEX
 
-    @property
-    def spans_libraries(self) -> bool:
-        return self.provider().collections_span_libraries
+    def server_types(self, library_ids: Iterable[str]) -> set[ServerType]:
+        """The kinds of server holding these libraries."""
+        return {self.server_type(library_id) for library_id in library_ids}
+
+    def configured_types(self) -> set[ServerType]:
+        """The kinds of every configured server."""
+        return {server.type for server in self.provider_registry.servers}
+
+    def server_order(self) -> list[int]:
+        """The configured servers' database numbers, the lead first."""
+        return self.provider_registry.server_ids()
+
+    def spans_libraries(self, server_type: ServerType) -> bool:
+        """Whether a kind of server keeps one collection for several libraries."""
+        return self.provider_registry.spans_libraries(server_type)
+
+    def configured(self, server_id: int) -> bool:
+        """Whether the database's server *server_id* is configured."""
+        return self.provider_registry.configured_server_id(server_id)
+
+    def lead(self, row: MediaCollection) -> CollectionLibrary | None:
+        """The part whose copy, on the earliest configured server, stands for it."""
+        return lead_part(row, self.server_order())
+
+    def held_copies(self, row: MediaCollection) -> list[CollectionLibrary]:
+        """A part for each copy on the configured servers, the lead first."""
+        return held_copies(row, self.server_order())
 
     def copies(self, row: MediaCollection) -> list[ServerCopy]:
-        """The server collections this collection needs on this server."""
-        return server_copies(row, spans_libraries=self.spans_libraries)
+        """The server collections this collection needs on the configured servers.
+
+        A part on a server no longer configured waits for its return, or for
+        a sync to move it to the server that holds its titles now.
+        """
+        return [
+            copy
+            for copy in server_copies(
+                row,
+                spans_libraries=lambda server_id: (
+                    self.configured(server_id)
+                    and self.provider(server_id).collections_span_libraries
+                ),
+            )
+            if self.configured(copy.server_id)
+        ]
+
+    @staticmethod
+    def _server_of(library_id: str) -> int:
+        try:
+            return library_server(library_id)
+        except ValueError as exc:
+            raise PublicServiceError(422, str(exc)) from exc
 
     @asynccontextmanager
     async def locked(self, collection_id: int) -> AsyncGenerator[None]:
@@ -155,10 +220,10 @@ class CollectionAccess:
         return resolve_policy(await get_app_settings(session), group, rule)
 
     async def library_types(self, library_ids: Iterable[str]) -> dict[str, MediaType]:
-        """What each of the server's libraries holds.
+        """What each of the servers' libraries holds.
 
         Raises:
-            PublicServiceError: 422 when the server has no such library.
+            PublicServiceError: 422 when no configured server lists such a library.
         """
         requested = list(library_ids)
         wanted = set(requested)
@@ -168,7 +233,7 @@ class CollectionAccess:
                 for library in await LibraryRepository(session).listed(wanted)
             }
         if wanted - types.keys():
-            raise PublicServiceError(422, "Select one of the server's libraries")
+            raise PublicServiceError(422, "Select one of the servers' libraries")
         return {library_id: types[library_id] for library_id in requested}
 
     async def _require_type(self, library_id: str, media_type: MediaType) -> None:
@@ -223,7 +288,7 @@ class CollectionAccess:
 
         Syncing a smart collection compares every label on Plex too.
         """
-        labels = (TermKind.LABEL,) if smart and self.plex else ()
+        labels = (TermKind.LABEL,) if smart and self.plex(library_id) else ()
         return LibraryScope(
             library_id=library_id,
             media_type=media_type,

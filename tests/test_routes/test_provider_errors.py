@@ -8,9 +8,11 @@ lazy from fastapi.testclient import TestClient
 
 lazy from overture.config import Settings
 lazy from overture.db.session import Database
+lazy from overture.domain import ServerType
 lazy from overture.media_servers.adapters import ServerSection
 lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.jellyfin.provider import JellyfinProvider
+lazy from tests.media_servers import TEST_SERVER_ID, server_of
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     make_runtime,
@@ -28,7 +30,11 @@ def test_library_http_error_contract(
     app_config: Settings,
     database: Database,
 ) -> None:
-    provider = JellyfinProvider(app_config=app_config)
+    provider = JellyfinProvider(
+        server=server_of(app_config, ServerType.JELLYFIN),
+        server_id=TEST_SERVER_ID,
+        app_config=app_config,
+    )
 
     async def sections() -> list[ServerSection]:
         if status != 200:

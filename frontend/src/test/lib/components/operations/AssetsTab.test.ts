@@ -10,7 +10,7 @@ import { downloadState } from "../../../../lib/stores/downloadState.svelte";
 import { settingsState } from "../../../../lib/stores/settingsState.svelte";
 import { uiState } from "../../../../lib/stores/uiState.svelte";
 import { renderWithQueryClient } from "../../../helpers/render";
-import { appSettings, bulkAssetsSchedule } from "../../../helpers/fixtures";
+import { appSettings, bulkAssetsSchedule, mediaServers } from "../../../helpers/fixtures";
 
 const startBulkAssets = vi.hoisted(() => vi.fn());
 const stopBulkAssets = vi.hoisted(() => vi.fn());
@@ -29,7 +29,7 @@ const reads = vi.hoisted(() => ({
     Promise.resolve({
       data:
         options.query?.media_type === "movie"
-          ? [{ id: "1", title: "Movies", media_type: "movie", count: 1 }]
+          ? [{ id: "1", title: "Movies", media_type: "movie", server_id: 1, count: 1 }]
           : [],
     }),
   ),
@@ -98,7 +98,9 @@ describe("AssetsPopup", () => {
   });
 
   it("runs art and themes over chosen collection groups", async () => {
-    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    settingsState.load(
+      appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    );
     renderWithQueryClient(OperationsPopup);
     await fireEvent.click(await assetsPanel().findByRole("checkbox", { name: "Sagas" }));
     await fireEvent.click(screen.getByRole("checkbox", { name: "Poster" }));
@@ -116,7 +118,9 @@ describe("AssetsPopup", () => {
   });
 
   it("describes a collections-only schedule without claiming every library", async () => {
-    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    settingsState.load(
+      appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    );
     schedules.value = [
       bulkAssetsSchedule({
         config: { ...SAVED_SCHEDULE.config, library_ids: [], all_collections: true },

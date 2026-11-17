@@ -1,12 +1,11 @@
 """MediaItem model - movies and shows."""
 
 lazy from datetime import datetime
-lazy from typing import Any, ClassVar, Optional
+lazy from typing import Any, ClassVar
 
 lazy from sqlmodel import (
     CheckConstraint,
     Field,
-    ForeignKeyConstraint,
     Index,
     Relationship,
 )
@@ -15,41 +14,37 @@ lazy from ...domain import MediaType, ThemeIdSource
 lazy from ..columns import enum_type, typed_columns
 lazy from .art import ArtSlot
 lazy from .download_job import DownloadJob
-lazy from .library import Library
 lazy from .media_collection import MediaCollectionMember
+lazy from .media_item_copy import MediaItemCopy
 lazy from .season import Season
 lazy from .shared import ThemeColumns
 
 
 class MediaItem(ThemeColumns, table=True):
-    """A movie or TV show of the media server's libraries."""
+    """A movie or TV show, held by any number of media servers.
+
+    Its metadata describes it as its lead copy does: the copy on the first
+    server in MEDIA_SERVERS that lists it. What each server keeps for its own
+    copy is in :class:`MediaItemCopy`.
+    """
 
     __tablename__: ClassVar[Any] = "media_items"
     __table_args__ = (
         # Movies and shows share the table; each keeps the other's fields empty.
         CheckConstraint(
             "media_type = 'movie' OR (tmdb_collection_id IS NULL AND edition IS NULL"
-            " AND versions IS NULL AND director_etag IS NULL)",
+            " AND versions IS NULL)",
             name="ck_media_items_movie_fields",
         ),
         CheckConstraint(
             "media_type = 'show' OR (show_status IS NULL AND last_aired IS NULL)",
             name="ck_media_items_show_fields",
         ),
-        ForeignKeyConstraint(
-            ["library_id", "media_type"],
-            ["libraries.id", "libraries.media_type"],
-            ondelete="RESTRICT",
-            name="fk_media_items_library",
-        ),
-        Index("ix_media_items_server_identity", "media_type", "server_item_id"),
         Index("ix_media_items_tmdb_identity", "media_type", "tmdb_id"),
         Index("ix_media_items_tvdb_identity", "media_type", "tvdb_id"),
         Index("ix_media_items_imdb_identity", "media_type", "imdb_id"),
         Index("ix_media_items_title_year", "media_type", "title", "year"),
         Index("ix_media_items_visible_title", "server_removed_at", "title"),
-        Index("ix_media_items_visible_library", "server_removed_at", "library_id"),
-        Index("ix_media_items_monitored_library", "monitored", "library_id"),
     )
 
     id: int | None = Field(default=None, primary_key=True)
@@ -66,11 +61,6 @@ class MediaItem(ThemeColumns, table=True):
 
     folder_path: str | None = Field(default=None, index=True)
 
-    server_item_id: str | None = Field(default=None, index=True)
-    server_verified_at: datetime | None = None
-    #: The library holding it; none for a title chosen from TMDB alone.
-    library_id: str | None = Field(default=None, index=True)
-
     monitored: bool = Field(default=True, nullable=False)
 
     #: How the selected video was established.
@@ -86,7 +76,7 @@ class MediaItem(ThemeColumns, table=True):
     audience_rating: float | None = None
     user_rating: float | None = None
     duration_seconds: int | None = None
-    #: Play state of the account Overture uses on the media server.
+    #: Play state of the account Overture uses on the lead server.
     plays: int | None = None
     last_played_at: datetime | None = None
     unplayed: bool | None = None
@@ -106,11 +96,10 @@ class MediaItem(ThemeColumns, table=True):
     last_matched_at: datetime | None = None
     created_at: datetime | None = None
     server_added_at: datetime | None = None
+    #: When the last of its copies left its server; a title chosen from TMDB
+    #: alone has no copies and is never removed.
     server_removed_at: datetime | None = None
 
-    # Media-server metadata version the stored directors were read at, for
-    # servers whose listings omit directors (Jellyfin and Emby).
-    director_etag: str | None = None
     theme_provenance_cleared: bool = Field(default=False, nullable=False)
     #: The hash of the theme file Overture wrote or verified for the
     #: selection; a recorded file with another hash was replaced outside it.
@@ -120,9 +109,10 @@ class MediaItem(ThemeColumns, table=True):
     tmdb_checked_id: int | None = None
     tmdb_checked_at: datetime | None = None
 
-    # Read only: an item's media type is its own, which the key shares.
-    library: Optional["Library"] = Relationship(
-        sa_relationship_kwargs={"lazy": "raise", "viewonly": True}
+    copies: list["MediaItemCopy"] = Relationship(
+        back_populates="media_item",
+        cascade_delete=True,
+        sa_relationship_kwargs={"lazy": "raise"},
     )
     # Relationships. Foreign keys cascade in the database, so a deleted
     # item cannot leave seasons, artwork, values or jobs behind whether the

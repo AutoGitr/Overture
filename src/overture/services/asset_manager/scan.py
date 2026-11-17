@@ -236,9 +236,20 @@ def _scan_season_posters(
 def _scan_one_season_folder(
     sub: Path, season_num: int, *, app_config: Settings
 ) -> Iterator[AssetIssue]:
-    """Find a misnamed poster inside one season folder."""
+    """Find a misnamed poster inside one season folder.
+
+    A name any configured server reads is accepted; the lead server's is
+    suggested.
+    """
     entries = _list(sub)
-    accepted = season_poster_candidates(app_config.MEDIA_SERVER or "", season_num)
+    servers = list(dict.fromkeys(server.type for server in app_config.MEDIA_SERVERS))
+    accepted = list(
+        dict.fromkeys(
+            name
+            for server in servers
+            for name in season_poster_candidates(server, season_num)
+        )
+    )
     candidates: list[_Candidate] = []
     for entry in entries:
         candidate = _Candidate(entry)
@@ -260,7 +271,7 @@ def _scan_one_season_folder(
         slot=ServerAsset.SEASON_POSTER,
         accepted=accepted,
         suggest=lambda candidate: season_poster_filename(
-            app_config.MEDIA_SERVER or "",
+            servers[0],
             season_num,
             _image_extension(candidate.entry.name),
         ),

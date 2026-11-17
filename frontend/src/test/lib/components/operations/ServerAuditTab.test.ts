@@ -6,7 +6,7 @@ import { serverAuditFixState } from "../../../../lib/stores/serverAuditFixState.
 import { serverAuditState } from "../../../../lib/stores/serverAuditState.svelte";
 import { settingsState } from "../../../../lib/stores/settingsState.svelte";
 import { uiState } from "../../../../lib/stores/uiState.svelte";
-import { appSettings } from "../../../helpers/fixtures";
+import { appSettings, mediaServers } from "../../../helpers/fixtures";
 import { answerConfirmation } from "../../../helpers/notifications";
 import { renderWithQueryClient } from "../../../helpers/render";
 
@@ -31,7 +31,9 @@ describe("ServerAuditTab results", () => {
   });
 
   it("chooses collections in the scope, beside the folders", async () => {
-    settingsState.load(appSettings({ media_server: "plex", collections_supported: true }));
+    settingsState.load(
+      appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    );
     startServerAudit.mockResolvedValue({ data: { status: "started" } });
     renderWithQueryClient(OperationsPopup);
     await screen.findByRole("checkbox", { name: "/movies" });
@@ -56,6 +58,7 @@ describe("ServerAuditTab results", () => {
           hamming: 5,
           item_id: 1,
           kind: "art",
+          server_id: 1,
           refresh_error: "Still differs after refresh: d=5",
           status: "phash_mismatch",
           title: "Movie",
@@ -64,6 +67,7 @@ describe("ServerAuditTab results", () => {
           art_type: "theme",
           item_id: 1,
           kind: "theme",
+          server_id: 1,
           server_item_id: "server-1",
           status: "theme_mismatch",
           theme_id: "theme-1",
@@ -83,8 +87,8 @@ describe("ServerAuditTab results", () => {
       expect.objectContaining({
         body: {
           snapshot_finished_at: "2026-09-05T12:00:00Z",
-          targets: [{ art_type: "poster", item_id: 1, season_id: undefined }],
-          themes: [{ item_id: 1, server_item_id: "server-1", theme_id: "theme-1" }],
+          targets: [{ art_type: "poster", item_id: 1, season_id: undefined, server_id: 1 }],
+          themes: [{ item_id: 1, server_id: 1, server_item_id: "server-1", theme_id: "theme-1" }],
         },
       }),
     );
@@ -92,7 +96,7 @@ describe("ServerAuditTab results", () => {
     expect(serverAuditState.items.some((result) => result.refreshed)).toBe(false);
     expect(serverAuditState.items[0]?.refresh_error).toBeNull();
     expect(serverAuditFixState.pending).toEqual(
-      new Set(["art:1::poster", "theme:1:server-1:theme-1"]),
+      new Set(["art:1::poster:1", "theme:1:server-1:theme-1:1"]),
     );
 
     serverAuditFixState.handleStarted({ total: 1 });

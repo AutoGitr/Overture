@@ -37,7 +37,7 @@ class DownloadThemeHandler:
         """
         folder_path = require_folder_path(item)
         return DownloadTarget(
-            path=self.asset_storage.resolve_theme_path(folder_path),
+            paths=(self.asset_storage.resolve_theme_path(folder_path),),
             trusted_root=folder_path,
         )
 

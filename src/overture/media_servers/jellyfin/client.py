@@ -75,7 +75,7 @@ class JellyfinClient(MediaServerHttpClient):
 
     @property
     def web_base_url(self) -> str:
-        return self._app_config.MEDIA_SERVER_URL.rstrip("/")
+        return self.server.url.rstrip("/")
 
     @property
     def api_base_url(self) -> str:
@@ -84,7 +84,7 @@ class JellyfinClient(MediaServerHttpClient):
     @property
     @override
     def auth_headers(self) -> dict[str, str]:
-        token = self._app_config.MEDIA_SERVER_API_KEY.get_secret_value()
+        token = self.server.api_key.get_secret_value()
         return {"Authorization": f'MediaBrowser Token="{token}"'}
 
     def query_params(self, **params: str) -> dict[str, str]:
@@ -99,7 +99,7 @@ class JellyfinClient(MediaServerHttpClient):
     async def _create_client(self) -> httpx2.AsyncClient:
         return self._client_factory(
             base_url=self.api_base_url,
-            verify=self._app_config.media_server_verify_tls(),
+            verify=self.server.verify_tls_for(),
             headers={**self.auth_headers, "Accept": "application/json"},
         )
 

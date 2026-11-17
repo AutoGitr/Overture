@@ -1,4 +1,4 @@
-"""Media Server router - library sections."""
+"""Media Server router - the configured servers' libraries and web links."""
 
 lazy from fastapi import APIRouter, Depends
 
@@ -27,10 +27,10 @@ router = APIRouter(
 async def list_server_libraries(
     providers: ProviderRegistryDep,
 ) -> list[ServerLibraryRead]:
-    """List the media server's movie and show libraries, movies first."""
+    """List the servers' movie and show libraries, the lead server's first."""
     return [
-        ServerLibraryRead.from_section(section)
-        for section in await providers.provider.get_sections()
+        ServerLibraryRead.from_section(section, provider.server_id)
+        for provider, section in await providers.libraries()
     ]
 
 
@@ -41,7 +41,13 @@ async def list_server_libraries(
         503: {"model": MediaServerErrorResponse},
     },
 )
-async def get_server_web_links(providers: ProviderRegistryDep) -> ServerWebLinksRead:
-    """Return where the server's web app opens items and collections."""
-    links = await providers.provider.web_links()
-    return ServerWebLinksRead(item=links.item, collection=links.collection)
+async def get_server_web_links(
+    providers: ProviderRegistryDep,
+) -> list[ServerWebLinksRead]:
+    """Return where each server's web app opens items and collections."""
+    return [
+        ServerWebLinksRead(
+            server_id=provider.server_id, item=links.item, collection=links.collection
+        )
+        for provider, links in await providers.web_links()
+    ]

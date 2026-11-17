@@ -9,6 +9,7 @@
   import Notice from "./Notice.svelte";
   import SetDimensionField from "./SetDimensionField.svelte";
   import type { LibrarySectionRead } from "../../generated/rest/types.gen";
+  import { settingsState } from "../stores/settingsState.svelte";
 
   let {
     editor,
@@ -80,7 +81,7 @@
               checked={editor.libraryIds.includes(library.id)}
               onchange={(event) => editor.setLibrary(library.id, event.currentTarget.checked)}
             />
-            {library.title}
+            {settingsState.libraryLabel(library)}
           </label>
         {/each}
       </div>

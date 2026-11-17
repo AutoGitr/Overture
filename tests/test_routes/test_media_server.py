@@ -11,15 +11,21 @@ async def test_libraries_route_lists_the_sections_in_their_public_form() -> None
     class Provider:
         async def get_sections(self) -> list[ServerSection]:
             return [
-                ServerSection("a", "A Movies", MediaType.MOVIE),
-                ServerSection("z", "Z Movies", MediaType.MOVIE),
-                ServerSection("shows", "A Shows", MediaType.SHOW),
+                ServerSection("a", "A Movies", MediaType.MOVIE, library_id="1:a"),
+                ServerSection("z", "Z Movies", MediaType.MOVIE, library_id="1:z"),
+                ServerSection("shows", "A Shows", MediaType.SHOW, library_id="1:shows"),
             ]
 
     assert await media_server.list_server_libraries(
         NoopProviderRegistry(Provider())
     ) == [
-        ServerLibraryRead(key="a", title="A Movies", media_type=MediaType.MOVIE),
-        ServerLibraryRead(key="z", title="Z Movies", media_type=MediaType.MOVIE),
-        ServerLibraryRead(key="shows", title="A Shows", media_type=MediaType.SHOW),
+        ServerLibraryRead(
+            key="1:a", title="A Movies", media_type=MediaType.MOVIE, server_id=1
+        ),
+        ServerLibraryRead(
+            key="1:z", title="Z Movies", media_type=MediaType.MOVIE, server_id=1
+        ),
+        ServerLibraryRead(
+            key="1:shows", title="A Shows", media_type=MediaType.SHOW, server_id=1
+        ),
     ]

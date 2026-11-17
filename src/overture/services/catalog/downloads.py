@@ -177,7 +177,7 @@ async def queue_catalog_themes_for_collections(
     if not collection_ids or theme_order is IncrementalThemeOrder.OFF:
         return queued
     if collection_themes_unavailable(
-        downloads.provider_registry.collections, app_config
+        downloads.provider_registry.collection_providers()
     ):
         return queued
     for batch in batched(collection_ids, CHUNK_SIZE, strict=False):
@@ -192,9 +192,7 @@ async def queue_catalog_themes_for_collections(
             if row.id is None:
                 continue
             if await collection_theme_unavailable(
-                row,
-                provider=downloads.provider_registry.collections,
-                app_config=app_config,
+                row, provider_registry=downloads.provider_registry
             ):
                 continue
             pick = index.theme(row, theme_order.sources)

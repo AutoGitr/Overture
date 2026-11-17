@@ -35,7 +35,7 @@ async def fetch_art(
         url,
         await image_clients.get_client(url),
         allow_private=app_config.is_trusted_media_server_url(url),
-        headers=provider_registry.provider.get_download_headers(url),
+        headers=provider_registry.download_headers(url),
     )
 
 

@@ -38,7 +38,6 @@ class Season(SQLModel, table=True):
     )
     season_num: int = Field(nullable=False)  # 0 = specials
     title: str | None = None
-    server_item_id: str | None = None
 
     file_count: int = Field(default=0, nullable=False)
 

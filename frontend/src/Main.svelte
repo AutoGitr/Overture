@@ -139,13 +139,13 @@
         }}
       />
     {/each}
-    {#if mediaServerState.down}
+    {#each mediaServerState.down as server (server.server_id)}
       <Notice
         tone="error"
-        title={mediaServerState.current.state === "rejected"
-          ? "The media server refused Overture"
-          : "The media server is unreachable"}
-        message={`${mediaServerState.current.message}. Syncs, downloads and refreshes fail until it answers.`}
+        title={server.state === "rejected"
+          ? `${server.title} refused Overture`
+          : `${server.title} is unreachable`}
+        message={`${server.message}. Syncs, downloads and refreshes on ${server.title} fail until it answers.`}
         action={{
           label: "Check again",
           pendingLabel: "Checking...",
@@ -153,7 +153,7 @@
           run: () => mediaServerState.check(),
         }}
       />
-    {/if}
+    {/each}
     {#if liveNotice && showLiveNotice.current}
       <Notice
         {...liveNotice}

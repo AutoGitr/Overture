@@ -27,6 +27,7 @@ lazy from overture.schemas.backup import BackupRetention
 lazy from overture.services.backup.files import BackupStore
 lazy from overture.utils.types import JsonValue
 lazy from overture.ws.connection_manager import ConnectionManager
+lazy from tests.media_servers import seed_test_server, served_item
 lazy from tests.runtime_helpers import RecordingPublisher, database_for
 
 
@@ -47,6 +48,7 @@ async def test_concurrent_writes_reads_and_live_backups_remain_consistent(
     engine = configure_sqlite(create_async_engine(f"sqlite+aiosqlite:///{db_path}"))
     async with engine.begin() as connection:
         await connection.run_sync(metadata.create_all)
+        await seed_test_server(connection, ["1"])
     writers = async_sessionmaker(
         as_writer(engine), class_=AsyncSession, expire_on_commit=False
     )
@@ -61,7 +63,7 @@ async def test_concurrent_writes_reads_and_live_backups_remain_consistent(
         for iteration in range(rounds):
             async with database.write_session() as session:
                 session.add(
-                    MediaItem(
+                    served_item(
                         media_type=MediaType.MOVIE,
                         title=f"Movie {worker}-{iteration}",
                         server_item_id=f"{worker}-{iteration}",

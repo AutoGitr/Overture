@@ -17,7 +17,7 @@ lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...media_servers.registry import ProviderRegistry
 lazy from ...schemas.art import ArtCandidate, ArtMatchResponse, MatchReference
 lazy from ..local_assets.service import LocalAssets
-lazy from ..server_identity import resolve_server_item_id
+lazy from ..server_identity import resolve_lead_owner
 lazy from .candidates import ArtCandidates, CandidatePolicy
 lazy from .matcher_cache import ArtMatcherCache
 lazy from .perfect_match import annotate_perfect_matches, remote_matches_file
@@ -162,7 +162,7 @@ class ArtMatcher:
     async def _server_active_art_url(
         self, item: MediaItem, art_type: ArtType, season_id: int | None
     ) -> str | None:
-        """Return the art URL currently selected on the media server, if any.
+        """Return the art URL currently selected on the lead server, if any.
 
         Raises:
             ValueError: When the server cannot be asked.
@@ -170,17 +170,17 @@ class ArtMatcher:
         if item.id is None:
             return None
         try:
-            server_id = await resolve_server_item_id(
+            owner = await resolve_lead_owner(
                 item.id,
                 art_type,
                 season_id,
                 database=self._database,
                 provider_registry=self.provider_registry,
             )
-            if not server_id:
+            if owner is None:
                 return None
             return await self.provider_registry.fetch_server_active_art_url(
-                server_id, art_type
+                owner.provider.server_id, owner.server_item_id, art_type
             )
         except (httpx2.HTTPError, ValueError) as exc:
             logger.debug(

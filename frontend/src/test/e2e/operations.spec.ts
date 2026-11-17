@@ -1,5 +1,5 @@
 import { type Page } from "@playwright/test";
-import { appSettings, collection } from "../helpers/fixtures";
+import { appSettings, collection, mediaServers } from "../helpers/fixtures";
 import { epoch, expect, logIn, realtimeSnapshot, test } from "./fixtures";
 
 test("assets keeps every part of its results in place while downloads come and go", async ({
@@ -193,6 +193,7 @@ test("assets runs only the current sidebar search results", async ({ page }) => 
                 media_type: "movie",
                 directors: ["Ridley Scott"],
                 monitored: false,
+                copies: [],
               },
               {
                 id: 3,
@@ -200,6 +201,7 @@ test("assets runs only the current sidebar search results", async ({ page }) => 
                 media_type: "movie",
                 directors: ["James Cameron"],
                 monitored: true,
+                copies: [],
               },
             ]
           : [],
@@ -294,7 +296,7 @@ test("Assets uses filtered collection rows as numeric theme targets on Jellyfin"
 }) => {
   await page.route("**/api/settings", (route) =>
     route.fulfill({
-      json: appSettings({ media_server: "jellyfin", collections_supported: true }),
+      json: appSettings({ media_servers: mediaServers("jellyfin"), collections_supported: true }),
     }),
   );
   await page.route("**/api/collections{,?*}", (route) =>

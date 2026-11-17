@@ -65,7 +65,7 @@
     ...getCollectionArrOptionsOptions({ query: { media_type: "show" } }),
     enabled: settingsState.current.sonarr_configured,
   }));
-  let plex = $derived(settingsState.current.media_server === "plex");
+  let plex = $derived(settingsState.hasServerType("plex"));
 
   let arrName = $derived(
     settingsState.current.radarr_configured && settingsState.current.sonarr_configured

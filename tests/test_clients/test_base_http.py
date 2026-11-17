@@ -11,6 +11,7 @@ lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.media_servers.plex.client import PlexClient
 lazy from overture.utils.cache import TimedRegistry
 lazy from tests.http_mock import RecordingMockTransport
+lazy from tests.media_servers import server_of
 
 
 async def test_create_client_applies_standard_timeout() -> None:
@@ -29,7 +30,7 @@ async def test_http_client_owners_reject_reuse_after_close(
 ) -> None:
     tmdb = TMDBClient(app_config=app_config)
     proxy = ProxyClientManager(app_config=app_config)
-    plex = PlexClient(app_config=app_config)
+    plex = PlexClient(server=server_of(app_config), app_config=app_config)
     await tmdb.close()
     await proxy.close()
     await plex.close()

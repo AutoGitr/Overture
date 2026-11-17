@@ -115,9 +115,7 @@ class ArtSelector:
                 target_url,
                 await self._image_clients.get_client(target_url),
                 allow_private=trusted_media_server,
-                headers=self._provider_registry.provider.get_download_headers(
-                    target_url
-                ),
+                headers=self._provider_registry.download_headers(target_url),
             )
         except RateLimitedError as exc:
             raise PublicServiceError(503, str(exc)) from exc

@@ -61,13 +61,13 @@ lazy from tests.collection_helpers import library_rule
 async def test_collection_routes_delegate_to_service() -> None:
     read_item = CollectionRead(
         id=1,
-        library_ids=["lib1"],
+        library_ids=["1:lib1"],
         media_types=[MediaType.MOVIE],
         title="Star Wars",
     )
     detail_item = CollectionDetail(
         id=1,
-        library_ids=["lib1"],
+        library_ids=["1:lib1"],
         media_types=[MediaType.MOVIE],
         title="Star Wars",
         member_ids=[],
@@ -80,7 +80,7 @@ async def test_collection_routes_delegate_to_service() -> None:
     service.groups.policy = AsyncMock(return_value=CollectionGroupPolicy())
     service.groups.save_policy = AsyncMock(return_value=CollectionGroupPolicy())
     capabilities = CollectionCapabilities(
-        server_type=ServerType.PLEX,
+        server_types=[ServerType.PLEX],
         spans_libraries=False,
         smart=True,
         visibility=True,
@@ -129,7 +129,7 @@ async def test_collection_routes_delegate_to_service() -> None:
         return_value=CollectionRuleRead(
             libraries=[
                 CollectionLibraryCriteria(
-                    library_id="lib1",
+                    library_id="1:lib1",
                     criteria=FilterGroup(
                         conditions=[
                             SourceCondition(
@@ -174,7 +174,7 @@ async def test_collection_routes_delegate_to_service() -> None:
     service.sets.preview = AsyncMock(return_value=[])
     preview = CollectionSetPreview(
         generator=CollectionGenerator(
-            dimension=SetDimension.DECADE, library_ids=["movies"]
+            dimension=SetDimension.DECADE, library_ids=["1:movies"]
         ),
     )
     assert await collections_router.preview_collection_set(preview, service.sets) == []

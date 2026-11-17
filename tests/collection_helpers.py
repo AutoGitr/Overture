@@ -19,6 +19,11 @@ _CRITERIA = FilterGroup(
 )
 
 
+def copy_id(row: MediaCollection) -> str | None:
+    """The server's ID of a collection held on one server."""
+    return next((part.server_item_id for part in row.copies), None)
+
+
 def managing_rule(collection_id: int) -> CollectionRule:
     """A rule for *collection_id*; without one, a collection only accepts adoption."""
     return CollectionRule(collection_id=collection_id)
@@ -33,15 +38,18 @@ def stored_collection(
     **fields: Any,
 ) -> MediaCollection:
     """A collection held by one library, as a sync or a save stores it."""
+    server_path = fields.pop("server_path", None)
     row = MediaCollection(**fields)
     if group is not None:
         row.group = CollectionGroup(name=group)
     row.libraries = [
         CollectionLibrary(
+            server_id=1,
             collection_id=0,
-            library_id=library_id or "library",
+            library_id=library_id or "1:library",
             media_type=media_type,
             server_item_id=server_item_id,
+            server_path=server_path,
             criteria=_CRITERIA.model_dump(mode="json"),
         )
     ]
@@ -49,7 +57,7 @@ def stored_collection(
 
 
 def library_rule(
-    *, criteria: FilterGroup, library_id: str = "movies", **fields: object
+    *, criteria: FilterGroup, library_id: str = "1:movies", **fields: object
 ) -> CollectionRuleWrite:
     """A rule selecting *criteria* from one library."""
     return CollectionRuleWrite.model_validate(

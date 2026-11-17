@@ -14,12 +14,12 @@ lazy from sqlmodel import text
 
 lazy from overture.db.models.art import ArtSlot
 lazy from overture.db.models.media_collection import CollectionLibrary, MediaCollection
-lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
 lazy from overture.domain import ArtType, MediaType, TermKind
 lazy from overture.repositories.terms import TermRepository
 lazy from overture.utils.time import utc_now
+lazy from tests.media_servers import served_item
 lazy from tests.workload import Workload, recording
 
 _TITLES = 100
@@ -31,7 +31,8 @@ _PAGED = {"/api/catalog/export"}
 #: Reads that return every title or collection, with the entities each may build.
 _LISTINGS = {
     "/api/collections": 3,
-    "/api/library/items": 3,
+    # The title, its poster, its copy on the one server, and a show's season.
+    "/api/library/items": 4,
     "/api/catalog/export": 3,
     "/api/stats": 3,
 }
@@ -42,7 +43,7 @@ _VALUES = {
     "collection_id": "10",
     "field": "actor",
     "item_id": "10",
-    "library_id": "movies",
+    "library_id": "1:movies",
     "media_type": "movie",
     "query": "title",
     "season_id": "1",
@@ -54,14 +55,14 @@ async def _stock(database: Database, first: int, count: int) -> None:
     span = range(first, first + count)
     async with database.write_session() as session:
         session.add_all(
-            MediaItem(
+            served_item(
                 id=item_id,
                 media_type=MediaType.SHOW if item_id % 4 == 0 else MediaType.MOVIE,
                 title=f"Title {item_id}",
                 tmdb_id=item_id,
                 folder_path=f"/media/{item_id}",
                 server_item_id=f"server-{item_id}",
-                library_id="shows" if item_id % 4 == 0 else "movies",
+                library_id="1:shows" if item_id % 4 == 0 else "1:movies",
             )
             for item_id in span
         )
@@ -92,8 +93,9 @@ async def _stock(database: Database, first: int, count: int) -> None:
                 )
                 collection.libraries = [
                     CollectionLibrary(
+                        server_id=1,
                         collection_id=item_id,
-                        library_id="movies",
+                        library_id="1:movies",
                         media_type=MediaType.MOVIE,
                         server_item_id=f"collection-{item_id}",
                     )
@@ -149,8 +151,8 @@ async def test_every_read_costs_the_same_at_twice_the_titles(
         await connection.execute(
             text(
                 "UPDATE libraries SET removed_at = NULL WHERE "
-                "(id = 'movies' AND media_type = 'movie') "
-                "OR (id = 'shows' AND media_type = 'show')"
+                "(id = '1:movies' AND media_type = 'movie') "
+                "OR (id = '1:shows' AND media_type = 'show')"
             )
         )
     await _stock(database, 1, _TITLES)

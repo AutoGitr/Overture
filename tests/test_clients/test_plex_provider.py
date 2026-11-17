@@ -5,19 +5,22 @@ lazy from typing import Any, cast
 
 lazy import pytest
 
-lazy from overture.config import Settings
+lazy from overture.config import MediaServerConfig, Settings
 lazy from overture.domain import ArtType, ImageSize, MediaType, ServerType
 lazy from overture.media_servers.adapters import ServerItem, ServerSeason
 lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.plex import provider as provider_module
 lazy from overture.media_servers.plex.client import PlexClient
 lazy from overture.media_servers.plex.provider import PlexProvider
+lazy from tests.media_servers import TEST_SERVER, TEST_SERVER_ID, configure, server_of
 
 BASE = "http://plex.test:32400"
 
 
 class FakePlexClient:
     """The Plex calls the provider makes, answered from fixed rows."""
+
+    server: MediaServerConfig = TEST_SERVER
 
     def __init__(
         self,
@@ -87,9 +90,14 @@ class FakePlexClient:
 
 
 def _provider(app_config: Settings, client: FakePlexClient) -> PlexProvider:
-    app_config.MEDIA_SERVER = ServerType.PLEX
-    app_config.MEDIA_SERVER_URL = BASE
-    return PlexProvider(app_config=app_config, client=cast("PlexClient", client))
+    configure(app_config, type=ServerType.PLEX)
+    client.server = configure(app_config, url=BASE)
+    return PlexProvider(
+        server=server_of(app_config),
+        server_id=TEST_SERVER_ID,
+        app_config=app_config,
+        client=cast("PlexClient", client),
+    )
 
 
 async def _items(provider: PlexProvider) -> list[ServerItem]:
@@ -298,7 +306,7 @@ async def test_collections_are_listed_with_their_library_members_and_theme(
     assert (movies.id, movies.media_type, movies.library_id) == (
         "collection-1",
         MediaType.MOVIE,
-        "1",
+        "1:1",
     )
     assert movies.member_ids == ("collection-1-member",)
     assert movies.theme_id == "/library/metadata/collection-1/theme/2"

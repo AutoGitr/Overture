@@ -20,19 +20,25 @@ export function createSeasonsQuery(item: () => MediaItemRead | null) {
   });
 }
 
+/** A media server's copy of a title or collection. */
+type ServerCopy = { server_id: number; server_item_id: string };
+
 /**
- * Observe where the media server's web app opens a title or collection.
+ * Observe where each media server's web app opens a title or collection.
  *
- * Each link is the server's template filled in with the server ID; there is
- * none without a server copy, or until the server answers.
+ * A link is the copy's server's template filled in with its ID; there is
+ * none without a copy, or until that server answers.
  */
 export function createServerLinks() {
   const links = createQuery(() => getServerWebLinksOptions());
-  const fill = (template: string | undefined, serverId: string | null | undefined) =>
-    template && serverId ? template.replaceAll("{id}", encodeURIComponent(serverId)) : null;
+  const fill = (kind: "item" | "collection", copy: ServerCopy | undefined) => {
+    if (!copy?.server_item_id) return null;
+    const template = links.data?.find((server) => server.server_id === copy.server_id)?.[kind];
+    return template ? template.replaceAll("{id}", encodeURIComponent(copy.server_item_id)) : null;
+  };
   return {
-    item: (serverId: string | null | undefined) => fill(links.data?.item, serverId),
-    collection: (serverId: string | null | undefined) => fill(links.data?.collection, serverId),
+    item: (copy: ServerCopy | undefined) => fill("item", copy),
+    collection: (copy: ServerCopy | undefined) => fill("collection", copy),
   };
 }
 

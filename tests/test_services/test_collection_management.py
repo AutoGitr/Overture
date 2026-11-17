@@ -66,6 +66,7 @@ lazy from overture.integrations.tmdb import (
 lazy from overture.media_servers.adapters import ServerCollection, ServerSection
 lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.plex.provider import PlexProvider
+lazy from overture.media_servers.registry import ProviderRegistry
 lazy from overture.repositories.collections import CollectionRepository, TermSelection
 lazy from overture.repositories.libraries import LibraryRepository
 lazy from overture.schemas.art import (
@@ -120,14 +121,15 @@ lazy from overture.services.collections.rules import member_criteria
 lazy from overture.services.collections.service import CollectionsService
 lazy from overture.services.collections.sources import condition_label, source_label
 lazy from overture.services.downloads.service import DownloadService
-lazy from overture.services.server_switch import MediaServerSwitch
+lazy from overture.services.media_server_roster import MediaServerRoster
 lazy from overture.services.sync.reconciler import LibraryReconciler
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.collection_fields import FIELDS
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_catalog
-lazy from tests.collection_helpers import library_rule, stored_collection
+lazy from tests.collection_helpers import copy_id, library_rule, stored_collection
+lazy from tests.media_servers import TEST_SERVER_ID, configure, served_item, server_of
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     make_local_assets,
@@ -143,7 +145,11 @@ lazy from tests.test_services.test_collections_service import (
 
 class Provider(PlexProvider):
     def __init__(self, app_config: Settings) -> None:
-        super().__init__(app_config=app_config)
+        super().__init__(
+            server=server_of(app_config, self.server_type),
+            server_id=TEST_SERVER_ID,
+            app_config=app_config,
+        )
         self.created: list[str] = []
         self.deleted: list[str] = []
         self.members: dict[str, list[str]] = {}
@@ -161,14 +167,16 @@ class Provider(PlexProvider):
     @override
     async def _list_sections(self) -> list[ServerSection]:
         return [
-            ServerSection("movies", "Movies", MediaType.MOVIE),
-            ServerSection("extra", "Extra movies", MediaType.MOVIE),
-            ServerSection("shows", "Shows", MediaType.SHOW),
+            ServerSection("movies", "Movies", MediaType.MOVIE, library_id="1:movies"),
+            ServerSection(
+                "extra", "Extra movies", MediaType.MOVIE, library_id="1:extra"
+            ),
+            ServerSection("shows", "Shows", MediaType.SHOW, library_id="1:shows"),
         ]
 
     @override
     async def create_collection(
-        self, section_key: str, title: str, media_type: MediaType, member_ids: list[str]
+        self, library_id: str, title: str, media_type: MediaType, member_ids: list[str]
     ) -> ServerCollection:
         if self.fail:
             raise MediaServerError("Create failed")
@@ -180,12 +188,12 @@ class Provider(PlexProvider):
             title,
             tuple(member_ids),
             media_type=media_type,
-            library_id=section_key,
+            library_id=library_id,
         )
 
     @override
     async def create_smart_collection(
-        self, section_key: str, title: str, media_type: MediaType, filter_query: str
+        self, library_id: str, title: str, media_type: MediaType, filter_query: str
     ) -> ServerCollection:
         if self.fail:
             raise MediaServerError("Smart create failed")
@@ -198,7 +206,7 @@ class Provider(PlexProvider):
             title,
             (),
             media_type=media_type,
-            library_id=section_key,
+            library_id=library_id,
             smart=True,
         )
 
@@ -206,7 +214,7 @@ class Provider(PlexProvider):
     async def update_smart_collection_filter(
         self,
         server_collection_id: str,
-        section_key: str,
+        library_id: str,
         media_type: MediaType,
         filter_query: str,
     ) -> None:
@@ -214,27 +222,27 @@ class Provider(PlexProvider):
 
     @override
     async def filter_choices(
-        self, section_key: str, media_type: MediaType, field: str
+        self, library_id: str, media_type: MediaType, field: str
     ) -> list[tuple[str, str]]:
         return self.choices.get(field, [])
 
     @override
     async def find_matching(
-        self, section_key: str, media_type: MediaType, filter_query: str, size: int
+        self, library_id: str, media_type: MediaType, filter_query: str, size: int
     ) -> tuple[int, list[str]]:
         self.queries.append(filter_query)
         return (3 if "eng" in filter_query else 1), ["m0", "m1"][:size]
 
     @override
     async def order_collection_hubs(
-        self, section_key: str, server_collection_ids: Sequence[str]
+        self, library_id: str, server_collection_ids: Sequence[str]
     ) -> None:
         self.hub_orders.append(list(server_collection_ids))
 
     @override
     async def sync_item_labels(
         self,
-        section_key: str,
+        library_id: str,
         media_type: MediaType,
         label: str,
         *,
@@ -582,19 +590,19 @@ async def manager(database: Database, app_config: Settings) -> Manager:
     async with database.write_session() as session:
         # A sync records the server's libraries before anything else.
         await LibraryRepository(session).record(
-            await provider.get_sections(), utc_now()
+            TEST_SERVER_ID, await provider.get_sections(), utc_now()
         )
         # Groups are optional here; the tests about requiring one turn it on.
         await session.merge(settings_row())
         items = [
-            MediaItem(
+            served_item(
                 media_type=MediaType.MOVIE,
                 title=title,
                 year=year,
                 release_date=f"{year}-06-01",
                 tmdb_id=11 + index,
                 server_item_id=f"m{index}",
-                library_id="movies",
+                library_id="1:movies",
                 studio="Studio",
                 tmdb_collection_id=10,
             )
@@ -602,13 +610,13 @@ async def manager(database: Database, app_config: Settings) -> Manager:
                 (("First", 1995), ("Second", 2005), ("Manual", 2006))
             )
         ]
-        show = MediaItem(
+        show = served_item(
             media_type=MediaType.SHOW,
             title="Anime Series",
             year=2020,
             tmdb_id=11,
             server_item_id="s1",
-            library_id="shows",
+            library_id="1:shows",
             studio="Studio",
         )
         session.add_all([*items, show])
@@ -701,7 +709,7 @@ async def test_delete_handles_only_an_already_absent_server_collection(
         assert (
             len(
                 await CollectionRepository(session).library_items(
-                    MediaType.MOVIE, "movies"
+                    MediaType.MOVIE, "1:movies"
                 )
             )
             == 3
@@ -718,15 +726,15 @@ async def test_delete_from_server_preserves_configuration(
         repo = CollectionRepository(session)
         row = await repo.get(identity)
         assert row is not None
-        assert row.server_item_id is None
+        assert copy_id(row) is None
         assert row.child_count == 0
         assert await repo.rule(identity) is not None
-        assert len(await repo.library_items(MediaType.MOVIE, "movies")) == 3
+        assert len(await repo.library_items(MediaType.MOVIE, "1:movies")) == 3
     await manager.service.rules.sync(identity)
     async with database.read_session() as session:
         row = await CollectionRepository(session).get(identity)
         assert row is not None
-        assert row.server_item_id is not None
+        assert copy_id(row) is not None
 
 
 @pytest.mark.parametrize("target", ["keep", "move", "orphan", "both"])
@@ -843,7 +851,7 @@ async def test_a_new_set_never_replaces_another_and_names_taken_titles(
     manager: Manager,
 ) -> None:
     decades = CollectionGenerator(
-        dimension=SetDimension.DECADE, library_ids=["movies"], title_format="{value}s"
+        dimension=SetDimension.DECADE, library_ids=["1:movies"], title_format="{value}s"
     )
     taken = await created(
         manager.service, CollectionCreate(title="1990s", rule=chosen(manager, None))
@@ -863,7 +871,7 @@ async def test_a_new_set_never_replaces_another_and_names_taken_titles(
     assert [
         (found.group, found.dimension, found.library_ids)
         for found in await manager.service.groups.sets()
-    ] == [("Decades", SetDimension.DECADE, ["movies"])]
+    ] == [("Decades", SetDimension.DECADE, ["1:movies"])]
     with pytest.raises(PublicServiceError, match="already splits by Decades"):
         await manager.service.groups.save_policy(
             "Decades", CollectionGroupPolicy(generator=decades), new_set=True
@@ -878,7 +886,7 @@ async def test_a_new_set_never_replaces_another_and_names_taken_titles(
 
 async def test_set_collections_leave_only_with_their_set(manager: Manager) -> None:
     decades = CollectionGenerator(
-        dimension=SetDimension.DECADE, library_ids=["movies"], title_format="{value}s"
+        dimension=SetDimension.DECADE, library_ids=["1:movies"], title_format="{value}s"
     )
     await manager.service.groups.save_policy(
         "Decades", CollectionGroupPolicy(minimum_items=1, generator=decades)
@@ -908,7 +916,7 @@ async def test_sets_create_update_and_withhold_their_collections(
     manager: Manager,
 ) -> None:
     decades = CollectionGenerator(
-        dimension=SetDimension.DECADE, library_ids=["movies"], title_format="{value}s"
+        dimension=SetDimension.DECADE, library_ids=["1:movies"], title_format="{value}s"
     )
     preview = await manager.service.sets.preview(
         CollectionSetPreview(generator=decades, group="Decades")
@@ -981,7 +989,7 @@ async def test_sets_create_update_and_withhold_their_collections(
     genres = await manager.service.sets.preview(
         CollectionSetPreview(
             generator=CollectionGenerator(
-                dimension=SetDimension.GENRE, library_ids=["shows"]
+                dimension=SetDimension.GENRE, library_ids=["1:shows"]
             ),
             minimum_items=2,
         )
@@ -1003,7 +1011,7 @@ async def test_sets_skip_titles_other_collections_hold(manager: Manager) -> None
         "Genres",
         CollectionGroupPolicy(
             generator=CollectionGenerator(
-                dimension=SetDimension.GENRE, library_ids=["movies"]
+                dimension=SetDimension.GENRE, library_ids=["1:movies"]
             )
         ),
     )
@@ -1108,7 +1116,7 @@ async def test_create_edit_order_and_delete_preserve_media(
         assert (
             len(
                 await CollectionRepository(session).library_items(
-                    MediaType.MOVIE, "movies"
+                    MediaType.MOVIE, "1:movies"
                 )
             )
             == 3
@@ -1131,13 +1139,14 @@ async def test_invalid_members_never_reach_the_server(
 
 
 async def test_create_validates_library_and_duplicate_titles(manager: Manager) -> None:
-    with pytest.raises(PublicServiceError, match="server's libraries"):
+    with pytest.raises(PublicServiceError, match="servers' libraries"):
         await created(
             manager.service,
             CollectionCreate(
                 title="Saga",
                 rule=library_rule(
-                    criteria=sources(TmdbItemSource(tmdb_ids=[11])), library_id="other"
+                    criteria=sources(TmdbItemSource(tmdb_ids=[11])),
+                    library_id="1:other",
                 ),
             ),
         )
@@ -1632,7 +1641,7 @@ async def test_smart_collections_label_sources_and_filter_by_plex_keys(
     )
     async with database.read_session() as session:
         labelled = await CollectionRepository(session).library_items(
-            MediaType.MOVIE, "movies", TermSelection(frozenset({TermKind.LABEL}))
+            MediaType.MOVIE, "1:movies", TermSelection(frozenset({TermKind.LABEL}))
         )
     assert [label in item.values(TermKind.LABEL) for item in labelled] == [
         True,
@@ -1658,7 +1667,7 @@ async def test_a_franchise_set_gives_each_collection_its_tmdb_summary(
         "Franchises",
         CollectionGroupPolicy(
             generator=CollectionGenerator(
-                dimension=SetDimension.FRANCHISE, library_ids=["movies"]
+                dimension=SetDimension.FRANCHISE, library_ids=["1:movies"]
             )
         ),
     )
@@ -1794,7 +1803,7 @@ async def test_franchise_sets_name_collections_after_tmdb(manager: Manager) -> N
             sort_title_format="+1_{title}",
             generator=CollectionGenerator(
                 dimension=SetDimension.FRANCHISE,
-                library_ids=["movies"],
+                library_ids=["1:movies"],
                 strip_suffix=" Collection",
             ),
         ),
@@ -1822,13 +1831,13 @@ async def test_non_plex_option_validation(
         )
     ).id
 
-    with pytest.raises(PublicServiceError, match="cannot order collections"):
+    with pytest.raises(PublicServiceError, match="can order collections"):
         await jellyfin_service.editor.set_members(
             identity,
             CollectionMembersUpdate(member_ids=[1], order_type=CollectionOrder.CUSTOM),
         )
 
-    with pytest.raises(PublicServiceError, match="cannot order collections"):
+    with pytest.raises(PublicServiceError, match="can order collections"):
         await jellyfin_service.editor.update(
             identity,
             CollectionOptions(title="Rated", order_type=CollectionOrder.PLAYS_DESC),
@@ -1877,15 +1886,16 @@ async def test_rules_accept_only_what_the_server_and_library_offer(
             CollectionCreate(
                 title="Anime",
                 rule=library_rule(
-                    criteria=sources(TmdbItemSource(tmdb_ids=[11])), library_id="shows"
+                    criteria=sources(TmdbItemSource(tmdb_ids=[11])),
+                    library_id="1:shows",
                 ),
             ),
         )
     ).id
     for collection, library_id, source, message in (
-        (shows, "shows", RadarrTagSource(tags=["4k"]), "movies only"),
-        (shows, "shows", TmdbCollectionSource(collection_id=10), "movies only"),
-        (movies, "movies", SonarrTagSource(tags=["anime"]), "shows only"),
+        (shows, "1:shows", RadarrTagSource(tags=["4k"]), "movies only"),
+        (shows, "1:shows", TmdbCollectionSource(collection_id=10), "movies only"),
+        (movies, "1:movies", SonarrTagSource(tags=["anime"]), "shows only"),
     ):
         with pytest.raises(PublicServiceError, match=message):
             await manager.service.editor.save_rule(
@@ -1902,7 +1912,7 @@ async def test_rules_accept_only_what_the_server_and_library_offer(
             shows,
             library_rule(
                 criteria=where(FilterField.DIRECTOR, FilterOperator.IS, "Someone"),
-                library_id="shows",
+                library_id="1:shows",
             ),
         )
 
@@ -1917,7 +1927,7 @@ async def test_rules_accept_only_what_the_server_and_library_offer(
         )
     ).id
     genre = where(FilterField.GENRE, FilterOperator.IS, "Action")
-    with pytest.raises(PublicServiceError, match="only supported by Plex"):
+    with pytest.raises(PublicServiceError, match="need a library on a Plex server"):
         await jellyfin.editor.save_rule(
             box_set,
             library_rule(
@@ -1976,17 +1986,17 @@ async def test_field_values_count_library_metadata_or_ask_plex(
     manager: Manager,
 ) -> None:
     genres = await manager.service.discovery.field_values(
-        MediaType.MOVIE, "movies", FilterField.GENRE
+        MediaType.MOVIE, "1:movies", FilterField.GENRE
     )
     assert [(entry.value, entry.count) for entry in genres] == [("Action", 3)]
     manager.provider.choices = {"audioLanguage": [("eng", "English")]}
     languages = await manager.service.discovery.field_values(
-        MediaType.MOVIE, "movies", FilterField.AUDIO_LANGUAGE
+        MediaType.MOVIE, "1:movies", FilterField.AUDIO_LANGUAGE
     )
     assert [entry.value for entry in languages] == ["English"]
     await create(manager)
     collections = await manager.service.discovery.field_values(
-        MediaType.MOVIE, "movies", FilterField.COLLECTION
+        MediaType.MOVIE, "1:movies", FilterField.COLLECTION
     )
     assert [(entry.value, entry.count) for entry in collections] == [("Saga", 3)]
 
@@ -2005,10 +2015,10 @@ async def test_keyword_values_list_the_common_first_and_add_tmdb_matches(
             )
 
     every = await manager.service.discovery.field_values(
-        MediaType.MOVIE, "movies", FilterField.TMDB_KEYWORD
+        MediaType.MOVIE, "1:movies", FilterField.TMDB_KEYWORD
     )
     typed = await manager.service.discovery.field_values(
-        MediaType.MOVIE, "movies", FilterField.TMDB_KEYWORD, " Christ "
+        MediaType.MOVIE, "1:movies", FilterField.TMDB_KEYWORD, " Christ "
     )
 
     assert [(entry.value, entry.count) for entry in every] == [
@@ -2103,7 +2113,7 @@ async def test_radarr_and_sonarr_tag_builder_sync(manager: Manager) -> None:
             title="Anime Shows",
             rule=library_rule(
                 criteria=sources(SonarrTagSource(tags=["anime"])),
-                library_id="shows",
+                library_id="1:shows",
                 minimum_items=1,
             ),
         ),
@@ -2137,7 +2147,10 @@ async def test_a_sync_that_fails_midway_keeps_its_copy_for_the_next(
     manager.provider.rejected_updates.clear()
     detail = await synced(manager.service, saved.id)
     assert (manager.provider.created, manager.provider.deleted) == (["Half made"], [])
-    assert (detail.server_item_id, detail.unsynced) == ("1", False)
+    assert ([copy.server_item_id for copy in detail.copies], detail.unsynced) == (
+        ["1"],
+        False,
+    )
 
 
 def test_source_labels_name_stable_identifiers() -> None:
@@ -2230,7 +2243,7 @@ async def test_group_policy_validation_errors(
             "ShowFranchises",
             CollectionGroupPolicy(
                 generator=CollectionGenerator(
-                    dimension=SetDimension.FRANCHISE, library_ids=["shows"]
+                    dimension=SetDimension.FRANCHISE, library_ids=["1:shows"]
                 )
             ),
         )
@@ -2240,7 +2253,7 @@ async def test_group_policy_validation_errors(
             CollectionGroupPolicy(
                 order_type=CollectionOrder.CUSTOM,
                 generator=CollectionGenerator(
-                    dimension=SetDimension.GENRE, library_ids=["movies"], smart=True
+                    dimension=SetDimension.GENRE, library_ids=["1:movies"], smart=True
                 ),
             ),
         )
@@ -2250,12 +2263,12 @@ async def test_group_policy_validation_errors(
             "NonPlexGroup",
             CollectionGroupPolicy(visible_home=True),
         )
-    with pytest.raises(PublicServiceError, match="only supported by Plex"):
+    with pytest.raises(PublicServiceError, match="need a library on a Plex server"):
         await jellyfin_service.groups.save_policy(
             "SmartJellyfin",
             CollectionGroupPolicy(
                 generator=CollectionGenerator(
-                    dimension=SetDimension.GENRE, library_ids=["movies"], smart=True
+                    dimension=SetDimension.GENRE, library_ids=["1:movies"], smart=True
                 )
             ),
         )
@@ -2275,7 +2288,7 @@ async def test_franchise_sets_skip_franchises_other_collections_hold(
         ),
     )
     generator = CollectionGenerator(
-        dimension=SetDimension.FRANCHISE, library_ids=["movies"]
+        dimension=SetDimension.FRANCHISE, library_ids=["1:movies"]
     )
     await manager.service.groups.save_policy(
         "Franchises",
@@ -2792,18 +2805,18 @@ async def test_custom_sets_list_their_collections_across_libraries(
 ) -> None:
     async with database.write_session() as session:
         session.add(
-            MediaItem(
+            served_item(
                 media_type=MediaType.MOVIE,
                 title="Spare",
                 tmdb_id=40,
                 server_item_id="x0",
-                library_id="extra",
+                library_id="1:extra",
             )
         )
     starts = FilterOperator.STARTS_WITH
     generator = CollectionGenerator(
         dimension=SetDimension.CUSTOM,
-        library_ids=["movies", "extra"],
+        library_ids=["1:movies", "1:extra"],
         custom_values=[
             CustomSetValue(name="S", criteria=where(FilterField.TITLE, starts, "S")),
             CustomSetValue(name="F", criteria=where(FilterField.TITLE, starts, "F")),
@@ -2815,10 +2828,10 @@ async def test_custom_sets_list_their_collections_across_libraries(
     assert [
         (entry.library_id, entry.title, entry.member_count) for entry in preview
     ] == [
-        ("movies", "S", 1),
-        ("movies", "F", 1),
-        ("extra", "S", 1),
-        ("extra", "F", 0),
+        ("1:movies", "S", 1),
+        ("1:movies", "F", 1),
+        ("1:extra", "S", 1),
+        ("1:extra", "F", 0),
     ]
     await manager.service.groups.save_policy(
         "Letters",
@@ -2828,13 +2841,13 @@ async def test_custom_sets_list_their_collections_across_libraries(
     # A value is one collection across the libraries holding it.
     assert len(result.created) == 2
     spanning = await manager.service.reader.get(result.created[0])
-    assert spanning.library_ids == ["movies", "extra"]
+    assert spanning.library_ids == ["1:movies", "1:extra"]
 
 
 async def test_aliases_rename_and_merge_values(manager: Manager) -> None:
     generator = CollectionGenerator(
         dimension=SetDimension.DECADE,
-        library_ids=["movies"],
+        library_ids=["1:movies"],
         title_format="{value}s",
         aliases=[SetValueAlias(values=["1990", "2000"], name="Turn of the century")],
     )
@@ -2851,7 +2864,7 @@ async def test_plex_counts_a_dimension_only_it_knows(manager: Manager) -> None:
         "audioLanguage": [("eng", "English"), ("fra", "French")]
     }
     generator = CollectionGenerator(
-        dimension=SetDimension.AUDIO_LANGUAGE, library_ids=["movies"], smart=True
+        dimension=SetDimension.AUDIO_LANGUAGE, library_ids=["1:movies"], smart=True
     )
     preview = await manager.service.sets.preview(
         CollectionSetPreview(generator=generator, minimum_items=2)
@@ -3093,7 +3106,7 @@ async def test_bulk_delete_removes_only_the_server_copy_when_asked(
 
 async def test_ungrouped_cannot_be_a_set(manager: Manager) -> None:
     decades = CollectionGenerator(
-        dimension=SetDimension.DECADE, library_ids=["movies"], title_format="{value}s"
+        dimension=SetDimension.DECADE, library_ids=["1:movies"], title_format="{value}s"
     )
     with pytest.raises(PublicServiceError, match="cannot be a set"):
         await manager.service.groups.save_policy(
@@ -3381,7 +3394,7 @@ async def test_every_dimension_previews_with_its_defaults(manager: Manager) -> N
         for smart in {entry.smart_only, True}:
             generator = CollectionGenerator(
                 dimension=entry.dimension,
-                library_ids=["movies"],
+                library_ids=["1:movies"],
                 title_format=entry.title_format,
                 strip_prefix=entry.strip_prefix,
                 strip_suffix=entry.strip_suffix,
@@ -3396,7 +3409,7 @@ async def test_plex_lists_resolutions_as_the_keys_sync_stores(manager: Manager) 
     manager.provider.choices = {"episode.resolution": [("4k", "4K"), ("1080", "1080p")]}
 
     values = await manager.service.discovery.field_values(
-        MediaType.SHOW, "shows", FilterField.RESOLUTION
+        MediaType.SHOW, "1:shows", FilterField.RESOLUTION
     )
 
     assert [value.value for value in values] == ["1080", "4k"]
@@ -3410,11 +3423,11 @@ def spanning(
         {
             "libraries": [
                 CollectionLibraryCriteria(
-                    library_id="movies",
+                    library_id="1:movies",
                     criteria=movies or sources(TmdbItemSource(tmdb_ids=[11])),
                 ),
                 CollectionLibraryCriteria(
-                    library_id="shows",
+                    library_id="1:shows",
                     criteria=where(
                         FilterField.TITLE, FilterOperator.IS, "Anime Series"
                     ),
@@ -3436,7 +3449,7 @@ async def test_a_collection_spans_a_plex_library_of_each_type_as_one_collection_
     assert manager.provider.created == ["Everything", "Everything"]
     assert manager.provider.members == {"1": ["m0"], "2": ["s1"]}
     assert detail.media_types == [MediaType.MOVIE, MediaType.SHOW]
-    assert detail.library_ids == ["movies", "shows"]
+    assert detail.library_ids == ["1:movies", "1:shows"]
     assert {member.title for member in await members(manager, detail)} == {
         "First",
         "Anime Series",
@@ -3469,7 +3482,7 @@ async def test_one_boxset_holds_every_library_on_jellyfin(
         row = await CollectionRepository(session).get(detail.id)
     assert row is not None
     assert [part.server_item_id for part in row.libraries] == ["1", "1"]
-    assert row.server_ids == ["1"]
+    assert [part.server_item_id for part in row.copies] == ["1"]
 
     await service.editor.delete(detail.id)
     assert provider.deleted == ["1"]
@@ -3498,7 +3511,7 @@ async def test_libraries_saved_apart_fold_into_one_boxset(
     async with database.read_session() as session:
         row = await CollectionRepository(session).get(detail.id)
     assert row is not None
-    assert row.server_ids == ["1"]
+    assert [part.server_item_id for part in row.copies] == ["1"]
 
 
 async def test_adding_a_library_reaches_the_server_only_when_synced(
@@ -3515,7 +3528,10 @@ async def test_adding_a_library_reaches_the_server_only_when_synced(
     detail = await manager.service.reader.get(identity)
     assert detail.media_types == [MediaType.MOVIE, MediaType.SHOW]
     assert detail.rule is not None
-    assert [entry.library_id for entry in detail.rule.libraries] == ["movies", "shows"]
+    assert [entry.library_id for entry in detail.rule.libraries] == [
+        "1:movies",
+        "1:shows",
+    ]
 
 
 async def test_removing_a_library_takes_its_copy_off_at_the_next_sync(
@@ -3533,13 +3549,13 @@ async def test_removing_a_library_takes_its_copy_off_at_the_next_sync(
     assert manager.provider.deleted == []
     saved = await manager.service.reader.get(detail.id)
     assert saved.rule is not None
-    assert [entry.library_id for entry in saved.rule.libraries] == ["movies"]
+    assert [entry.library_id for entry in saved.rule.libraries] == ["1:movies"]
 
     await manager.service.rules.sync(detail.id)
 
     assert manager.provider.deleted == ["2"]
     synced = await manager.service.reader.get(detail.id)
-    assert synced.library_ids == ["movies"]
+    assert synced.library_ids == ["1:movies"]
     assert [member.title for member in await members(manager, synced)] == ["First"]
 
 
@@ -3549,10 +3565,10 @@ async def test_a_library_with_nothing_to_hold_gets_no_copy_until_it_has(
     rule = CollectionRuleWrite(
         libraries=[
             CollectionLibraryCriteria(
-                library_id="movies", criteria=sources(TmdbItemSource(tmdb_ids=[11]))
+                library_id="1:movies", criteria=sources(TmdbItemSource(tmdb_ids=[11]))
             ),
             CollectionLibraryCriteria(
-                library_id="shows",
+                library_id="1:shows",
                 criteria=where(FilterField.TITLE, FilterOperator.IS, "Not yet"),
             ),
         ]
@@ -3578,11 +3594,11 @@ async def test_each_library_is_validated_against_what_it_holds(
                 rule=CollectionRuleWrite(
                     libraries=[
                         CollectionLibraryCriteria(
-                            library_id="movies",
+                            library_id="1:movies",
                             criteria=sources(TmdbItemSource(tmdb_ids=[11])),
                         ),
                         CollectionLibraryCriteria(
-                            library_id="shows",
+                            library_id="1:shows",
                             criteria=sources(RadarrTagSource(tags=["4k"])),
                         ),
                     ]
@@ -3593,10 +3609,12 @@ async def test_each_library_is_validated_against_what_it_holds(
         CollectionRuleWrite(
             libraries=[
                 CollectionLibraryCriteria(
-                    library_id="movies", criteria=sources(TmdbItemSource(tmdb_ids=[11]))
+                    library_id="1:movies",
+                    criteria=sources(TmdbItemSource(tmdb_ids=[11])),
                 ),
                 CollectionLibraryCriteria(
-                    library_id="movies", criteria=sources(TmdbItemSource(tmdb_ids=[12]))
+                    library_id="1:movies",
+                    criteria=sources(TmdbItemSource(tmdb_ids=[12])),
                 ),
             ]
         )
@@ -3607,10 +3625,10 @@ async def test_movie_and_show_collections_share_one_group(manager: Manager) -> N
         "Shared", CollectionGroupPolicy(sort_title_format="1_{title}")
     )
     for title, library_id, criteria in (
-        ("Films", "movies", sources(TmdbItemSource(tmdb_ids=[11]))),
+        ("Films", "1:movies", sources(TmdbItemSource(tmdb_ids=[11]))),
         (
             "Series",
-            "shows",
+            "1:shows",
             where(FilterField.TITLE, FilterOperator.IS, "Anime Series"),
         ),
     ):
@@ -3644,7 +3662,7 @@ async def test_orphaning_leaves_plex_copies_for_the_next_sync_to_list(
     orphaned = await manager.service.editor.orphan(detail.id)
 
     assert orphaned.managed is False
-    assert orphaned.library_ids == ["movies"]
+    assert orphaned.library_ids == ["1:movies"]
     assert manager.provider.deleted == []
 
 
@@ -3688,7 +3706,7 @@ async def test_a_group_takes_a_sort_every_collection_it_holds_can_use(
     )
 
     # A group that could come to hold either offers what both can use.
-    with pytest.raises(PublicServiceError, match="cannot order"):
+    with pytest.raises(PublicServiceError, match="can order"):
         await manager.service.groups.save_policy(
             "Empty", CollectionGroupPolicy(order_type=only_movies)
         )
@@ -3765,9 +3783,9 @@ async def test_a_plex_group_separator_heads_its_collections_while_it_is_on(
     assert (separator.title, separator.group_name) == ("Sagas", "Sagas")
     assert separator.child_count == 0
     assert separator.id is not None
-    assert separator.server_item_id is not None
+    assert copy_id(separator) is not None
     # Its sort title is the group's with no title, so it sorts first.
-    assert manager.provider.sort_titles[separator.server_item_id] == "Sagas"
+    assert manager.provider.sort_titles[copy_id(separator) or ""] == "Sagas"
     assert ArtType.POSTER in manager.art.selections
     with pytest.raises(PublicServiceError, match="group keeps the separator"):
         await manager.service.editor.update(
@@ -3885,8 +3903,8 @@ async def test_a_separated_group_without_a_sort_title_still_sorts_behind_its_sep
     [separator] = [row for row in rows if row.kind is CollectionKind.SEPARATOR]
     [member] = [row for row in rows if row.kind is not CollectionKind.SEPARATOR]
     sort_titles = manager.provider.sort_titles
-    assert sort_titles[separator.server_item_id or ""] == "Sagas"
-    assert sort_titles[member.server_item_id or ""] == "Sagas Saga"
+    assert sort_titles[copy_id(separator) or ""] == "Sagas"
+    assert sort_titles[copy_id(member) or ""] == "Sagas Saga"
     assert min(title or "" for title in sort_titles.values()) == "Sagas"
     # A separator belongs to its group, which alone shows it.
     assert separator.group_name == "The Sagas"
@@ -3996,7 +4014,7 @@ async def test_generator_validation_rejects_sources_when_plex_counts(
 ) -> None:
     generator = CollectionGenerator(
         dimension=SetDimension.AUDIO_LANGUAGE,
-        library_ids=["movies"],
+        library_ids=["1:movies"],
         smart=True,
         criteria=sources(TmdbCollectionSource(collection_id=10)),
     )
@@ -4045,12 +4063,12 @@ async def test_chosen_collections_sync_alone(manager: Manager) -> None:
     assert manager.provider.created == ["Chosen"]
 
 
-async def test_collections_follow_a_change_of_media_server(
+async def test_a_server_leaving_keeps_managed_collections_and_forgets_its_own(
     manager: Manager, app_config: Settings, database: Database
 ) -> None:
-    switch = MediaServerSwitch(database=database, app_config=app_config)
-    # The first start only records the server; nothing moves.
-    await switch.reconcile()
+    await MediaServerRoster(
+        database=database, provider_registry=ProviderRegistry(app_config=app_config)
+    ).reconcile()
     saga = await created(
         manager.service,
         CollectionCreate(
@@ -4067,29 +4085,29 @@ async def test_collections_follow_a_change_of_media_server(
     async with database.write_session() as session:
         rule = await CollectionRepository(session).rule(unmanaged.id)
         await session.delete(rule)
-    assert manager.provider.created == ["Saga", "Theirs"]
 
-    app_config.MEDIA_SERVER = ServerType.JELLYFIN
-    app_config.MEDIA_SERVER_URL = "http://jellyfin.test:8096"
-    await switch.reconcile()
+    configure(app_config, type=ServerType.JELLYFIN)
+    configure(app_config, url="http://jellyfin.test:8096")
+    await MediaServerRoster(
+        database=database, provider_registry=ProviderRegistry(app_config=app_config)
+    ).reconcile()
 
     async with database.read_session() as session:
         repo = CollectionRepository(session)
         assert await repo.get(unmanaged.id) is None
         row = await repo.get(saga.id)
+        libraries = await LibraryRepository(session).listed()
     assert row is not None
-    assert (row.server_ids, row.unsynced) == ([], True)
-    # Jellyfin has neither Plex's visibility nor its custom order.
-    assert (row.collection_mode, row.visible_home) == (None, False)
-    assert row.order_type is CollectionOrder.RELEASE_ASC
-    assert row.rule is not None
-    assert row.rule.order_type is None
-
-    provider = JellyfinProvider(app_config)
-    jellyfin = make_jellyfin_service(manager, app_config, database, provider)
-    detail = await synced(jellyfin, saga.id)
-    assert provider.created == ["Saga"]
-    assert (detail.server_item_id, detail.unsynced) == ("1", False)
+    # Its Plex copy waits for Plex's return, or for a sync to move the
+    # collection to the library its titles turn up in; its choices stay, and
+    # each server keeps those it can.
+    assert [(part.server_id, part.server_item_id) for part in row.copies] == [(1, "1")]
+    assert (row.collection_mode, row.visible_home, row.order_type) == (
+        CollectionMode.HIDE_ITEMS,
+        True,
+        CollectionOrder.CUSTOM,
+    )
+    assert all(library.server_id != 1 for library in libraries)
 
 
 async def test_a_collection_takes_over_the_server_one_of_its_title(
@@ -4102,7 +4120,7 @@ async def test_a_collection_takes_over_the_server_one_of_its_title(
         session.add(
             stored_collection(
                 server_item_id="9",
-                library_id="movies",
+                library_id="1:movies",
                 title="Saga",
                 last_synced_at=utc_now(),
             )
@@ -4111,7 +4129,7 @@ async def test_a_collection_takes_over_the_server_one_of_its_title(
     detail = await synced(manager.service, saved.id)
 
     assert manager.provider.created == []
-    assert detail.server_item_id == "9"
+    assert [copy.server_item_id for copy in detail.copies] == ["9"]
     assert [row.title for row in await manager.service.reader.listed()] == ["Saga"]
 
 
@@ -4125,7 +4143,7 @@ async def test_collections_sets_and_schedules_follow_a_moved_library(
         "Decades",
         CollectionGroupPolicy(
             generator=CollectionGenerator(
-                dimension=SetDimension.DECADE, library_ids=["movies"]
+                dimension=SetDimension.DECADE, library_ids=["1:movies"]
             )
         ),
     )
@@ -4135,16 +4153,19 @@ async def test_collections_sets_and_schedules_follow_a_moved_library(
                 kind=ScheduleKind.ASSETS,
                 name="Nightly",
                 cron_expression="0 3 * * *",
-                payload={"library_ids": ["movies", "shows"]},
+                payload={"library_ids": ["1:movies", "1:shows"]},
                 created_at=utc_now(),
                 updated_at=utc_now(),
             )
         )
         # The server now lists the movies under another library.
         await LibraryRepository(session).record(
+            TEST_SERVER_ID,
             [
-                ServerSection("new-movies", "Films", MediaType.MOVIE),
-                ServerSection("shows", "Shows", MediaType.SHOW),
+                ServerSection(
+                    "new-movies", "Films", MediaType.MOVIE, library_id="1:new-movies"
+                ),
+                ServerSection("shows", "Shows", MediaType.SHOW, library_id="1:shows"),
             ],
             utc_now(),
         )
@@ -4159,20 +4180,20 @@ async def test_collections_sets_and_schedules_follow_a_moved_library(
     followed = await reconciler.follow_moved_libraries(
         Counter(
             {
-                ("movies", MediaType.MOVIE, "new-movies"): 3,
-                ("movies", MediaType.MOVIE, "shows"): 1,
+                ("1:movies", MediaType.MOVIE, "1:new-movies"): 3,
+                ("1:movies", MediaType.MOVIE, "1:shows"): 1,
             }
         )
     )
 
-    assert followed == [("movies", "new-movies")]
-    assert (await manager.service.reader.get(saga.id)).library_ids == ["new-movies"]
+    assert followed == [("1:movies", "1:new-movies")]
+    assert (await manager.service.reader.get(saga.id)).library_ids == ["1:new-movies"]
     policy = await manager.service.groups.policy("Decades")
     assert policy.generator is not None
-    assert policy.generator.library_ids == ["new-movies"]
+    assert policy.generator.library_ids == ["1:new-movies"]
     async with database.read_session() as session:
         (schedule,) = (await session.exec(select(SavedSchedule))).all()
-    assert schedule.payload["library_ids"] == ["new-movies", "shows"]
+    assert schedule.payload["library_ids"] == ["1:new-movies", "1:shows"]
 
 
 async def test_a_library_filter_matches_each_condition_on_its_own(

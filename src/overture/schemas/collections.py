@@ -1,6 +1,7 @@
 """Collection REST and WebSocket schemas."""
 
 lazy import hashlib
+lazy from collections.abc import Sequence
 lazy from datetime import date, datetime
 lazy from typing import Annotated, Literal, Self
 
@@ -10,7 +11,7 @@ lazy from ..db.art_slots import flattened_art, read_art_slot
 lazy from ..db.completion import collection_art_completion, collection_theme_status
 lazy from ..db.models.catalog import CatalogCollection
 lazy from ..db.models.collection_rule import CollectionRule
-lazy from ..db.models.media_collection import MediaCollection
+lazy from ..db.models.media_collection import CollectionLibrary, MediaCollection
 lazy from ..domain import (
     SMART_CUSTOM_ORDER,
     ArtSource,
@@ -323,6 +324,17 @@ def collection_artwork(row: MediaCollection, *, backgrounds: bool) -> Collection
     )
 
 
+class CollectionCopyRead(StrictBaseModel):
+    """One media server's collection holding the collection's members."""
+
+    #: The database's number of the server.
+    server_id: int
+    #: The server's own ID of the collection, which its web app opens.
+    server_item_id: str
+    #: The collection's libraries whose members this server collection holds.
+    library_ids: list[str]
+
+
 class CollectionRead(CollectionArtwork):
     """Media-server collection response."""
 
@@ -365,9 +377,9 @@ class CollectionRead(CollectionArtwork):
     media_types: list[MediaType]
     library_ids: list[str]
     server_added_at: str | None = None
-    #: The server copy that stands for the collection, which its link opens;
-    #: none while the server holds no copy.
-    server_item_id: str | None = None
+    #: Its collections on the configured servers, the lead first: the one
+    #: whose images and link stand for it. None while it is withheld.
+    copies: list[CollectionCopyRead] = Field(default_factory=list[CollectionCopyRead])
     #: The media server holds a theme for the collection.
     has_theme: bool = False
     youtube_id: str | None = None
@@ -461,7 +473,7 @@ def collection_metadata_issues(row: MediaCollection) -> list[MetadataIssue]:
     """The gaps in a collection's metadata: a TMDB collection and a server copy."""
     found = {
         MetadataIssue.NO_TMDB_ID: row.tmdb_collection_id is None,
-        MetadataIssue.NO_SERVER_ID: row.server_item_id is None,
+        MetadataIssue.NO_SERVER_ID: not row.copies,
     }
     return [issue for issue in MetadataIssue if found.get(issue)]
 
@@ -471,13 +483,15 @@ def collection_read(
     catalog: CatalogCollection | None,
     rule: CollectionRule | None,
     *,
+    copies: Sequence[CollectionLibrary],
     trust_no_theme: bool,
     backgrounds: bool,
 ) -> CollectionRead:
     """Map a stored collection, its catalog entry and its rule to public output.
 
-    *trust_no_theme* lets the catalog's No theme flag count as a theme, and
-    *backgrounds* says whether its policy wants a background.
+    *copies* holds a part for each server copy on the configured servers, the
+    lead first; *trust_no_theme* lets the catalog's No theme flag count as a
+    theme, and *backgrounds* says whether its policy wants a background.
     """
     has_theme = _has_theme(row)
     no_theme = trust_no_theme and catalog is not None and catalog.no_theme
@@ -500,7 +514,7 @@ def collection_read(
         active_start_mmdd=row.active_start_mmdd,
         active_end_mmdd=row.active_end_mmdd,
         delete_when_inactive=row.delete_when_inactive,
-        withheld=row.server_item_id is None,
+        withheld=not copies,
         metadata_issues=collection_metadata_issues(row),
         unsynced=row.unsynced,
         managed=rule is not None,
@@ -515,7 +529,19 @@ def collection_read(
         server_added_at=row.server_added_at.isoformat()
         if row.server_added_at
         else None,
-        server_item_id=row.server_item_id,
+        copies=[
+            CollectionCopyRead(
+                server_id=copy.server_id,
+                server_item_id=copy.server_item_id or "",
+                library_ids=[
+                    part.library_id
+                    for part in row.libraries
+                    if (part.server_id, part.server_item_id)
+                    == (copy.server_id, copy.server_item_id)
+                ],
+            )
+            for copy in copies
+        ],
         has_theme=has_theme,
         youtube_id=row.youtube_id,
         youtube_title=row.youtube_title,
@@ -1038,10 +1064,16 @@ class CollectionDimensionRead(StrictBaseModel):
 
 
 class CollectionCapabilities(StrictBaseModel):
-    """What the active media server lets collections do, for one media type."""
+    """What collections of one media type can do on some media servers.
 
-    server_type: ServerType
-    #: One server collection can hold several libraries, of either media type.
+    A collection spanning several servers is offered what any of them
+    supports; each of the others falls back to its nearest.
+    """
+
+    #: The kinds of the servers described.
+    server_types: list[ServerType]
+    #: One server collection can hold several libraries, of either media type,
+    #: on every server described.
     spans_libraries: bool
     smart: bool
     #: Plex's visibility, Home promotion and Home order.

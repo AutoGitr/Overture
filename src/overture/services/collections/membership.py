@@ -12,6 +12,7 @@ lazy from ...domain import (
     FilterField,
     FilterOperator,
     MediaType,
+    ServerType,
     TermKind,
 )
 lazy from ...repositories.collections import (
@@ -19,6 +20,7 @@ lazy from ...repositories.collections import (
     CollectionRepository,
     TermSelection,
 )
+lazy from ...repositories.copies import CopyRepository
 lazy from ...repositories.terms import TermRepository
 lazy from ...schemas.collections import FilterGroup
 lazy from ...utils.collection_fields import labelled_field
@@ -55,16 +57,6 @@ def display_order(
     if order in {CollectionOrder.CUSTOM, CollectionOrder.RANDOM}:
         return items
     return order_items(items, order)
-
-
-def stored_ids(server_ids: list[str], items: Sequence[CollectionItem]) -> list[int]:
-    """Overture's IDs of the server's items, in the server's order."""
-    by_server_id = {item.server_item_id: item for item in items if item.server_item_id}
-    return [
-        by_server_id[identity].id or 0
-        for identity in server_ids
-        if identity in by_server_id
-    ]
 
 
 #: The fields that test which other collections hold a title.
@@ -179,7 +171,11 @@ class Membership:
         wanted_ids: set[int],
         items: list[CollectionItem],
     ) -> None:
-        """Put the label on exactly the wanted items, on Plex and locally."""
+        """Put the label on exactly the wanted items, on Plex and locally.
+
+        The label is the library's server's; the title keeps it too where that
+        server leads, as a sync would.
+        """
         folded = label.casefold()
         labeled = {
             item.id
@@ -202,7 +198,8 @@ class Membership:
         )
         if not add and not remove:
             return
-        await self._access.provider().sync_item_labels(
+        provider = self._access.library_provider(library_id)
+        await provider.sync_item_labels(
             library_id, media_type, label, add=add, remove_ids=remove
         )
         changed = sorted(
@@ -210,10 +207,19 @@ class Membership:
         )
         for batch in batched(changed, CHUNK_SIZE, strict=False):
             async with self._access.database.write_session() as session:
+                copies = CopyRepository(session)
+                await copies.relabel(library_id, batch, label, wanted_ids)
+                leads = await copies.leads(batch)
+                led = [
+                    item_id
+                    for item_id in batch
+                    if (lead := leads.get(item_id)) is not None
+                    and lead.server_id == provider.server_id
+                ]
                 terms = TermRepository(session)
-                held = await terms.values_by_item(batch, TermKind.LABEL)
+                held = await terms.values_by_item(led, TermKind.LABEL)
                 stored = await session.exec(
-                    select(col(MediaItem.id)).where(col(MediaItem.id).in_(batch))
+                    select(col(MediaItem.id)).where(col(MediaItem.id).in_(led))
                 )
                 await terms.assign_many(
                     {
@@ -232,13 +238,18 @@ class Membership:
                     }
                 )
 
-    def labels(self, media_type: MediaType, criteria: FilterGroup) -> dict[str, str]:
+    def labels(
+        self, library_id: str, media_type: MediaType, criteria: FilterGroup
+    ) -> dict[str, str]:
         """The label a smart collection tests for each condition Plex cannot.
 
         Sources and the fields Plex lacks are both kept as labels on the
-        items Overture finds them to match.
+        items Overture finds them to match. Only Plex libraries have smart
+        collections, so a library on another server needs none.
         """
-        server = self._access.server_type
+        server = self._access.server_type(library_id)
+        if server is not ServerType.PLEX:
+            return {}
         labels = {
             condition.key: source_label(condition)
             for condition in criteria.source_conditions()
@@ -254,6 +265,8 @@ class Membership:
 
     async def prune_labels(self, library_id: str, media_type: MediaType) -> None:
         """Remove Overture's labels no smart collection in the library filters on."""
+        if not self._access.plex(library_id):
+            return
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
             used = {
@@ -262,7 +275,9 @@ class Membership:
                 if row.rule is not None and row.rule.smart
                 for part in row.libraries
                 if part.library_id == library_id and part.criteria is not None
-                for label in self.labels(media_type, criteria_of(part)).values()
+                for label in self.labels(
+                    library_id, media_type, criteria_of(part)
+                ).values()
             }
             items = await repo.library_items(
                 media_type, library_id, TermSelection(frozenset({TermKind.LABEL}))
@@ -282,7 +297,7 @@ class Membership:
         """Label what Plex cannot test, then compile the query Plex evaluates."""
         library_id, media_type = scope.library_id, scope.media_type
         criteria, items = scope.criteria, scope.items
-        labels = self.labels(media_type, criteria)
+        labels = self.labels(library_id, media_type, criteria)
         if labels:
             context, resolved = await self.context(
                 media_type,
@@ -329,7 +344,7 @@ class Membership:
         limit: int | None,
         labels: dict[str, str],
     ) -> str:
-        provider = self._access.provider()
+        provider = self._access.library_provider(library_id)
         choices = {
             key: choice_keys(await provider.filter_choices(library_id, media_type, key))
             for key in tag_keys(criteria, media_type, labels)

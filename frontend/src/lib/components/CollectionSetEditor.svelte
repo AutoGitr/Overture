@@ -15,6 +15,7 @@
   import PendingButton from "./PendingButton.svelte";
   import SegmentedControl from "./SegmentedControl.svelte";
   import SetDimensionField from "./SetDimensionField.svelte";
+  import { settingsState } from "../stores/settingsState.svelte";
 
   let {
     generator = $bindable(),
@@ -78,7 +79,8 @@
   }
 
   function libraryName(id: string) {
-    return libraries.find((library) => library.id === id)?.title ?? id;
+    const library = libraries.find((each) => each.id === id);
+    return library ? settingsState.libraryLabel(library) : id;
   }
 </script>
 

@@ -897,7 +897,7 @@ export const FILTERS = {
     order: 10,
     library: (filters) =>
       filters.libraryIds.length
-        ? (item) => !!item.library_id && filters.libraryIds.includes(item.library_id)
+        ? (item) => item.copies.some((copy) => filters.libraryIds.includes(copy.library_id))
         : null,
     collections: (filters) =>
       filters.libraryIds.length
@@ -1085,7 +1085,7 @@ export const FILTERS = {
     group: "status",
     order: 80,
     // Items the server removed are not listed, so only unlinked ones are missing.
-    library: (filters) => triState(filters.mediaServer, "missing", (item) => !item.server_item_id),
+    library: (filters) => triState(filters.mediaServer, "missing", (item) => !item.copies.length),
     collections: (filters) => triState(filters.mediaServer, "missing", (row) => row.withheld),
   },
 } as const satisfies Record<string, FilterDef>;

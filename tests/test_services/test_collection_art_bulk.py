@@ -55,7 +55,7 @@ async def _seed(database: Database) -> None:
                 id=collection_id,
                 server_item_id=f"server-{collection_id}",
                 media_type=MediaType.MOVIE,
-                library_id="movies",
+                library_id="1:movies",
                 title=f"Collection {collection_id}",
                 group=group,
                 last_synced_at=utc_now(),

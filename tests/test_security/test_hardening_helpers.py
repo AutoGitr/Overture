@@ -97,7 +97,8 @@ class TestMediaRoot:
 
 class TestRedaction:
     def test_redacts_configured_secret_values(self, *, app_config: Settings) -> None:
-        secret = app_config.MEDIA_SERVER_API_KEY.get_secret_value()
+        secret = app_config.MEDIA_SERVERS[0].api_key.get_secret_value()
+        assert secret in app_config.secret_values()
         redactor = Redactor([secret])
         assert secret not in redactor.text(f"failed with token {secret}")
 

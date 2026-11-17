@@ -8,7 +8,6 @@ lazy import pytest
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
 lazy from overture.domain import MediaType, ServerAsset
 lazy from overture.jobs.registry import BackgroundJobRegistry
@@ -18,6 +17,7 @@ lazy from overture.services.asset_manager.service import AssetManagerService
 lazy from overture.services.local_assets.service import LocalAssets
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.utils.errors import PublicServiceError
+lazy from tests.media_servers import served_item
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import NoopProviderRegistry, make_local_assets
 
@@ -437,7 +437,7 @@ async def test_renames_refresh_the_owning_item_and_its_server_copy(
     (season / "folder.jpg").write_bytes(b"season poster")
     async with database.write_session() as session:
         session.add(
-            MediaItem(
+            served_item(
                 id=7,
                 media_type=MediaType.SHOW,
                 title="Show",

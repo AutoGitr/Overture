@@ -16,10 +16,10 @@ lazy from overture.domain import (
     TmdbLanguageFilter,
     Workflow,
 )
-lazy from overture.media_servers.registry import ProviderRegistry
 lazy from overture.schemas.settings import AppSettingsUpdate
 lazy from overture.services import settings as module
 lazy from overture.utils.errors import PublicServiceError
+lazy from tests.media_servers import attached_registry, configure
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     database_for,
@@ -84,7 +84,7 @@ async def test_get_settings_creates_default_row(
     result = await module.get_settings(
         database=database_for(one_session(db_session)),
         app_config=app_config,
-        provider_registry=ProviderRegistry(app_config=app_config),
+        provider_registry=attached_registry(app_config),
     )
 
     assert result.auto_match_art is False
@@ -115,7 +115,7 @@ async def test_get_settings_defaults_skip_tmdb_urls_disabled_even_when_tmdb_conf
     result = await module.get_settings(
         database=database_for(one_session(db_session)),
         app_config=app_config,
-        provider_registry=ProviderRegistry(app_config=app_config),
+        provider_registry=attached_registry(app_config),
     )
 
     assert result.skip_media_server_tmdb_urls is False
@@ -128,12 +128,12 @@ async def test_get_settings_returns_existing_row_without_recreating(
     first = await module.get_settings(
         database=database,
         app_config=app_config,
-        provider_registry=ProviderRegistry(app_config=app_config),
+        provider_registry=attached_registry(app_config),
     )
     second = await module.get_settings(
         database=database,
         app_config=app_config,
-        provider_registry=ProviderRegistry(app_config=app_config),
+        provider_registry=attached_registry(app_config),
     )
 
     assert first.workflow == second.workflow == "art_and_themes"
@@ -162,7 +162,7 @@ async def test_update_settings_creates_row_when_absent_and_applies_all_fields(
         body,
         app_config=app_config,
         database=database,
-        provider_registry=ProviderRegistry(app_config=app_config),
+        provider_registry=attached_registry(app_config),
     )
 
     assert result.auto_match_art is True
@@ -187,14 +187,14 @@ async def test_update_settings_with_no_fields_preserves_existing_row(
     await module.get_settings(
         database=database,
         app_config=app_config,
-        provider_registry=ProviderRegistry(app_config=app_config),
+        provider_registry=attached_registry(app_config),
     )
 
     result = await module.update_settings(
         AppSettingsUpdate(),
         app_config=app_config,
         database=database,
-        provider_registry=ProviderRegistry(app_config=app_config),
+        provider_registry=attached_registry(app_config),
     )
 
     assert result.workflow == "art_and_themes"
@@ -227,7 +227,7 @@ async def test_update_settings_rejects_min_greater_than_max_duration(
         AppSettingsUpdate(min_duration_seconds=30, max_duration_seconds=60),
         app_config=app_config,
         database=database,
-        provider_registry=ProviderRegistry(app_config=app_config),
+        provider_registry=attached_registry(app_config),
     )
 
     with pytest.raises(PublicServiceError) as exc_info:
@@ -235,7 +235,7 @@ async def test_update_settings_rejects_min_greater_than_max_duration(
             update,
             app_config=app_config,
             database=database,
-            provider_registry=ProviderRegistry(app_config=app_config),
+            provider_registry=attached_registry(app_config),
         )
 
     assert exc_info.value.status_code == 400
@@ -261,7 +261,7 @@ async def test_connectivity_reports_whether_each_service_answers(
 async def test_settings_mapping_includes_environment_fields(
     db_session: AsyncSession, app_config: Settings, saved: bool
 ) -> None:
-    app_config.MEDIA_SERVER = ServerType.JELLYFIN
+    configure(app_config, type=ServerType.JELLYFIN)
     app_config.TMDB_API_KEY = SecretStr("test-key")
     app_config.ART_DOWNLOAD_WORKERS = 3
     app_config.THEME_DOWNLOAD_WORKERS = 2
@@ -271,13 +271,15 @@ async def test_settings_mapping_includes_environment_fields(
     result = await module.get_settings(
         database=database_for(one_session(db_session)),
         app_config=app_config,
-        provider_registry=ProviderRegistry(app_config=app_config),
+        provider_registry=attached_registry(app_config),
     )
-    assert result.media_server == "jellyfin"
+    assert [(server.id, server.type) for server in result.media_servers] == [
+        (1, "jellyfin")
+    ]
     assert result.tmdb_configured is True
     assert result.collections_supported is True
     assert result.collection_themes_unavailable == (
-        "Set JELLYFIN_COLLECTIONS_PATH to store collection themes"
+        "Set MEDIA_SERVER_JELLYFIN_COLLECTIONS_PATH to store collection themes"
     )
     assert (result.art_download_workers, result.theme_download_workers) == (3, 2)
 

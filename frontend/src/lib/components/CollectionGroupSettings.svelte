@@ -175,7 +175,7 @@
                   ? [...generator.library_ids, library.id]
                   : generator.library_ids.filter((id) => id !== library.id))}
             />
-            {library.title}
+            {settingsState.libraryLabel(library)}
           </label>
         {/each}
       </fieldset>
@@ -206,7 +206,7 @@
       memberLabels={capabilities?.member_labels ?? false}
     />
     <!-- Only Plex keeps empty collections, which a separator is. -->
-    {#if group !== UNGROUPED_GROUP && settingsState.current.media_server === "plex"}
+    {#if group !== UNGROUPED_GROUP && settingsState.hasServerType("plex")}
       <FieldRow
         label="Separator"
         hint="An empty collection titled after the group, with generated art, sorted right before the group's collections. Without a sort title set anywhere, they sort as {'{group} {title}'}; one that puts the group first keeps it there."

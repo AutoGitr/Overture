@@ -53,6 +53,7 @@ lazy from tests.bulk_helpers import (
     write_existing_asset,
 )
 lazy from tests.factories import seed_art_slot
+lazy from tests.media_servers import configure, served_item
 lazy from tests.runtime_helpers import make_local_assets, unused
 
 #: The words each per-target action's log line starts with and contains.
@@ -92,7 +93,7 @@ async def test_catalog_only_state_matrix(
     populated, and media-server identity. Repeat for every asset and server
     adapter. Downloads are never executed and no network is used.
     """
-    app_config.MEDIA_SERVER = ServerType(server)
+    configure(app_config, type=ServerType(server))
     storage = AssetStorage(app_config=app_config)
     await enable_catalog(db_session)
     expected: dict[str, str] = {}
@@ -234,7 +235,7 @@ def seed_case(
     folder.mkdir()
     is_season = asset == "season_poster"
     media_type = MediaType.SHOW if is_season else MediaType.MOVIE
-    item = MediaItem(
+    item = served_item(
         id=number,
         title=folder.name,
         media_type=media_type,

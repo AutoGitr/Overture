@@ -76,6 +76,7 @@ class CollectionReader:
                 row,
                 catalog.get(row.tmdb_collection_id or 0),
                 row.rule,
+                copies=self._access.held_copies(row),
                 trust_no_theme=defaults.overturedb_no_theme,
                 backgrounds=policy.backgrounds,
             ).model_copy(
@@ -124,7 +125,15 @@ class CollectionReader:
                 raise PublicServiceError(404, "Collection not found")
             saved = row.rule
             members = display_order(
-                await CollectionRepository(session).members(row.id or 0), row.order_type
+                list(
+                    {
+                        member.id: member
+                        for member in await CollectionRepository(session).members(
+                            row.id or 0
+                        )
+                    }.values()
+                ),
+                row.order_type,
             )
             policy = await self._access.policy(session, row.group, saved)
             catalog = await catalog_collections(
@@ -135,13 +144,14 @@ class CollectionReader:
             trust_no_theme = (await get_app_settings(session)).overturedb_no_theme
         entry = catalog.get(row.tmdb_collection_id or 0)
         reason = await collection_theme_unavailable(
-            row, provider=self._access.provider(), app_config=self._access.app_config
+            row, provider_registry=self._access.provider_registry
         )
         return CollectionDetail(
             **collection_read(
                 row,
                 entry,
                 saved,
+                copies=self._access.held_copies(row),
                 trust_no_theme=trust_no_theme,
                 backgrounds=policy.backgrounds,
             )
@@ -180,17 +190,20 @@ class CollectionReader:
     async def image(
         self, collection_id: int, art_type: ArtType, size: ImageSize | None
     ) -> Response:
-        """Proxy a collection's poster or background with bounded response size."""
-        provider = self._access.provider()
+        """Proxy the lead copy's poster or background with bounded response size."""
+        self._access.require_collections()
         if art_type.owned_by_season:
             raise PublicServiceError(404, "Collection image not found")
         async with self._access.database.read_session() as session:
             row = await CollectionRepository(session).get(collection_id)
-        if row is None or row.last_synced_at is None or row.server_item_id is None:
+        lead = self._access.lead(row) if row is not None else None
+        if row is None or row.last_synced_at is None or lead is None:
             raise PublicServiceError(404, "Collection not found")
         if (current_url := row.server_image_url(art_type)) is None:
             raise PublicServiceError(404, "Collection image not found")
-        request = await provider.build_collection_image_request(
-            row.server_item_id, art_type, size, current_url=current_url
+        request = await self._access.provider(
+            lead.server_id
+        ).build_collection_image_request(
+            lead.server_item_id or "", art_type, size, current_url=current_url
         )
         return await proxy_provider_image(request, proxy_clients=self._proxy_clients)

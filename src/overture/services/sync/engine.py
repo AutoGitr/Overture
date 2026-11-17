@@ -20,6 +20,7 @@ lazy from ...jobs.lifecycle import ManagedJobLifecycle
 lazy from ...jobs.runner import JobContext
 lazy from ...jobs.slot import ManagedBackgroundJob
 lazy from ...jobs.tally import SyncTally
+lazy from ...media_servers.errors import MediaServerError
 lazy from ...media_servers.registry import ProviderRegistry
 lazy from ...schemas.common import StatusResponse
 lazy from ...schemas.schedules import ScheduleRunSummary
@@ -45,7 +46,7 @@ lazy from ..named_schedules import (
 )
 lazy from ..scheduler import SchedulerService
 lazy from .collection_sync import CollectionSync
-lazy from .reconciler import LibraryReconciler
+lazy from .reconciler import LibraryReconciler, ServerTurn
 lazy from .runner import run_sync as _run_sync
 lazy from .tmdb_enrichment import TmdbEnrichment
 lazy from .tmdb_seasons import TmdbSeasonSync
@@ -100,7 +101,6 @@ class SyncEngine:
             app_config=app_config, database=database, tmdb_client=tmdb_client
         )
         self._collections = CollectionSync(
-            provider_registry=provider_registry,
             publisher=publisher,
             app_config=app_config,
             database=database,
@@ -192,54 +192,78 @@ class SyncEngine:
     async def _poll_new_media(
         self, config: SyncScheduleConfig, state: IncrementalSyncState
     ) -> tuple[IncrementalSyncState | None, ScheduleRunSummary]:
-        """Poll for newly added media without running a full reconciliation.
+        """Poll each server for newly added media without a full reconciliation.
 
-        Returns the advanced state, or ``None`` when the checkpoint must stay
-        where it is so the next poll covers this window again, and what the
-        poll did.
+        Each server is polled from its own checkpoint, which advances only
+        when its poll went through without errors, so the next poll covers
+        a failed window again. Returns the advanced state, or ``None`` when
+        no checkpoint moved, and what the poll did.
         """
-        now = utc_now()
-        since = state.checkpoint
-        if since is None:
-            logger.info(
-                "Incremental sync will look for media added from %s",
-                now.isoformat(timespec="seconds"),
-            )
-            return IncrementalSyncState(checkpoint=now), ScheduleRunSummary()
-
-        provider = self.provider_registry.provider
         library_ids = config.library_ids or None
-        logger.debug(
-            "Incremental sync: checking for media added since %s",
-            since.isoformat(timespec="seconds"),
-        )
+        server_order = self.provider_registry.server_ids()
         start_time = time.monotonic()
         tally = SyncTally()
         created: list[int] = []
         queued = QueuedDownloads()
-        try:
-            await self.reconciler.record_libraries(await provider.get_sections())
-            async for recent_items in provider.iter_items_since(
-                since=since, library_ids=library_ids
-            ):
-                await self.reconciler.fill_deferred_directors(provider, recent_items)
-                stats = await self.reconciler.sync_recent(recent_items, tally=tally)
-                created.extend(stats.created_item_ids)
-                queued += await queue_overturedb_downloads_for_items(
-                    stats.created_item_ids,
-                    include_art=config.download_overturedb_art,
-                    theme_order=config.download_themes,
-                    downloads=self.downloads,
-                    app_config=self._app_config,
-                    database=self._database,
+        unreachable = 0
+        checkpoints = dict(state.checkpoints)
+        for position, provider in enumerate(self.provider_registry.providers()):
+            now = utc_now()
+            since = state.checkpoints.get(provider.server_id)
+            if since is None:
+                logger.info(
+                    "Incremental sync will look for media added to %s from %s",
+                    provider.server.title,
+                    now.isoformat(timespec="seconds"),
                 )
-        except (httpx2.HTTPError, SQLAlchemyError, OSError, ValueError) as exc:
-            raise RuntimeError("Incremental sync failed") from exc
+                checkpoints[provider.server_id] = now
+                continue
+            logger.debug(
+                "Incremental sync: checking %s for media added since %s",
+                provider.server.title,
+                since.isoformat(timespec="seconds"),
+            )
+            errors_before = tally.errors + queued.errors
+            turn = ServerTurn(provider.server_id, frozenset(server_order[:position]))
+            try:
+                await self.reconciler.record_libraries(
+                    provider.server_id, await provider.get_sections()
+                )
+                async for recent_items in provider.iter_items_since(
+                    since=since, library_ids=library_ids
+                ):
+                    await self.reconciler.fill_deferred_directors(
+                        provider, recent_items
+                    )
+                    stats = await self.reconciler.sync_recent(
+                        recent_items, turn, tally=tally
+                    )
+                    created.extend(stats.created_item_ids)
+                    queued += await queue_overturedb_downloads_for_items(
+                        stats.created_item_ids,
+                        include_art=config.download_overturedb_art,
+                        theme_order=config.download_themes,
+                        downloads=self.downloads,
+                        app_config=self._app_config,
+                        database=self._database,
+                    )
+            except MediaServerError as exc:
+                logger.warning(
+                    "Incremental sync skipped %s: %s", provider.server.title, exc
+                )
+                unreachable += 1
+                continue
+            except (httpx2.HTTPError, SQLAlchemyError, OSError, ValueError) as exc:
+                raise RuntimeError(
+                    f"Incremental sync of {provider.server.title} failed"
+                ) from exc
+            if tally.errors + queued.errors == errors_before:
+                checkpoints[provider.server_id] = now
         # New titles get their TMDB facts immediately, so criteria match them before
         # the next full sync.
         await self._enrichment.read_new(created)
         duration = max(0.0, time.monotonic() - start_time)
-        errors = tally.errors + queued.errors
+        errors = tally.errors + queued.errors + unreachable
         downloads_count = queued.total
         # A poll that found nothing new is routine; one that changed the
         # library, queued downloads or hit errors is worth reading.
@@ -264,7 +288,8 @@ class SyncEngine:
             counts={name: count for name, count in counts.items() if count},
             failed=bool(errors),
         )
-        return (None if errors else IncrementalSyncState(checkpoint=now)), summary
+        advanced = IncrementalSyncState(checkpoints=checkpoints)
+        return (None if advanced == state else advanced), summary
 
     def start_background_sync(self, body: SyncRunRequest | None = None) -> bool:
         """Start a full sync now, of every library unless *body* says otherwise.

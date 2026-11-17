@@ -8,7 +8,7 @@ import { queryClient } from "../../../lib/rest/queryClient";
 import { navigate, route } from "../../../lib/router/routes";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
 import { uiState } from "../../../lib/stores/uiState.svelte";
-import { appSettings, realtimeSnapshot } from "../../helpers/fixtures";
+import { appSettings, realtimeSnapshot, mediaServers } from "../../helpers/fixtures";
 import { renderWithQueryClient } from "../../helpers/render";
 
 function browseCatalog(enabled: boolean) {
@@ -184,7 +184,7 @@ describe("Header", () => {
     settingsState.load(
       appSettings({
         overturedb_browse: true,
-        media_server: "jellyfin",
+        media_servers: mediaServers("jellyfin"),
         collections_supported: true,
       }),
     );

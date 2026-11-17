@@ -7,6 +7,7 @@ import type {
 import {
   appSettings,
   collectionCapabilities,
+  mediaItem,
   realtimeSnapshot as snapshotFixture,
 } from "../helpers/fixtures";
 
@@ -115,8 +116,8 @@ export const test = base.extend<{ backend: void; realtime: Realtime }>({
           json: {
             items: [
               movies
-                ? { id: 1, title: "Alien", media_type: "movie", year: 1979, monitored: true }
-                : { id: 2, title: "Twin Peaks", media_type: "show", year: 1990, monitored: true },
+                ? mediaItem({ id: 1, title: "Alien", media_type: "movie", year: 1979 })
+                : mediaItem({ id: 2, title: "Twin Peaks", media_type: "show", year: 1990 }),
             ],
             total: 1,
           },
@@ -125,7 +126,7 @@ export const test = base.extend<{ backend: void; realtime: Realtime }>({
       // A reload empties the query cache, so the open item is fetched on its own.
       await page.route("**/api/library/items/1", (route) =>
         route.fulfill({
-          json: { id: 1, title: "Alien", media_type: "movie", year: 1979, monitored: true },
+          json: mediaItem({ id: 1, title: "Alien", media_type: "movie", year: 1979 }),
         }),
       );
       await page.route("**/api/settings", (route) =>
@@ -140,6 +141,8 @@ export const test = base.extend<{ backend: void; realtime: Realtime }>({
       await page.route("**/api/library/libraries{,?*}", (route) => route.fulfill({ json: [] }));
       await page.route("**/api/bulk/assets/schedules", (route) => route.fulfill({ json: [] }));
       await page.route("**/api/media-server/libraries", (route) => route.fulfill({ json: [] }));
+      await page.route("**/api/media-server/links", (route) => route.fulfill({ json: [] }));
+      await page.route("**/api/collections/field-values?*", (route) => route.fulfill({ json: [] }));
       await page.route("**/api/sync/schedules", (route) => route.fulfill({ json: [] }));
       await page.route("**/api/library/items/*/art/*/sources**", (route) =>
         route.fulfill({ json: { current_url: null, sources: {} } }),

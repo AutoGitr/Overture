@@ -90,9 +90,11 @@ class SyncScheduleWrite(ScheduleWrite[SyncScheduleConfig]):
 
 
 class IncrementalSyncState(StrictBaseModel):
-    """The checkpoint an incremental schedule polls from."""
+    """Where an incremental schedule polls each server from."""
 
-    checkpoint: datetime | None = None
+    #: The time each server was last polled up to, by the database's number of
+    #: the server; a server without one starts from its first poll.
+    checkpoints: dict[int, datetime] = Field(default_factory=dict[int, datetime])
 
 
 class SyncScheduleResponse(ScheduleResponseBase):

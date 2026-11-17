@@ -9,8 +9,13 @@ lazy from overture.media_servers.adapters import (
     SyncProgressCallback,
     SyncStopCheck,
 )
-lazy from overture.services.sync.reconciler import LibraryReconciler, SyncResult
+lazy from overture.services.sync.reconciler import (
+    LibraryReconciler,
+    ServerTurn,
+    SyncResult,
+)
 lazy from overture.services.sync.staging import StagedListing
+lazy from tests.media_servers import TEST_SERVER_ID
 lazy from tests.runtime_helpers import server_sections
 
 
@@ -29,7 +34,7 @@ async def sync_full(
     from the listing are marked removed, within *library_ids* when given,
     exactly as after a full sync.
     """
-    await reconciler.record_libraries(server_sections(server_items))
+    await reconciler.record_libraries(TEST_SERVER_ID, server_sections(server_items))
     tally = tally if tally is not None else SyncTally()
     tally.total = len(server_items)
     with tempfile.TemporaryDirectory() as directory:
@@ -37,6 +42,7 @@ async def sync_full(
             await listing.append(server_items)
             return await reconciler.sync_staged(
                 listing,
+                ServerTurn(TEST_SERVER_ID),
                 library_ids=library_ids,
                 tally=tally,
                 progress_cb=progress_cb,

@@ -33,7 +33,7 @@ async def test_bulk_assets_start_reports_per_asset_status(
 
     response = await bulk_assets.start_bulk_assets(
         BulkAssetsRequest(
-            library_ids=["movies"],
+            library_ids=["1:movies"],
             art=BulkAssetsArtConfig(),
             themes=BulkAssetsThemeConfig(),
         ),
@@ -90,7 +90,7 @@ def _assets_body() -> BulkAssetsScheduleWrite:
         enabled=True,
         cron_expression="0 3 * * *",
         config=BulkAssetsRequest(
-            library_ids=["1"],
+            library_ids=["1:1"],
             skip_recent_val=1,
             skip_recent_unit=RecentUnit.DAYS,
             art=BulkAssetsArtConfig(

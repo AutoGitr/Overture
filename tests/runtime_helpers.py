@@ -1,6 +1,7 @@
 """Helpers for direct route tests that need a runtime dependency."""
 
 lazy import asyncio
+lazy import contextlib
 lazy from collections.abc import (
     AsyncGenerator,
     Awaitable,
@@ -18,12 +19,13 @@ lazy import httpx2
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture import protocols
-lazy from overture.config import Settings
+lazy from overture.config import MediaServerConfig, Settings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     ArtType,
     CatalogMediaType,
     MediaType,
+    ServerType,
     TmdbLanguageFilter,
 )
 lazy from overture.integrations.mdblist import MDBListClient
@@ -35,7 +37,10 @@ lazy from overture.jobs.registry import BackgroundJobRegistry
 lazy from overture.jobs.runner import JobContext
 lazy from overture.jobs.slot import ManagedBackgroundJob
 lazy from overture.media_servers.adapters import ServerItem, ServerSection
-lazy from overture.media_servers.health import MediaServerHealthTracker
+lazy from overture.media_servers.health import (
+    MediaServerHealth,
+    MediaServerHealthTracker,
+)
 lazy from overture.media_servers.registry import ProviderRegistry
 lazy from overture.runtime import RuntimeServices
 lazy from overture.runtime_paths import database_path, image_cache_path
@@ -88,6 +93,7 @@ lazy from overture.services.tmdb_items import TmdbItemsService
 lazy from overture.utils.locks import KeyedLock
 lazy from overture.utils.security import Redactor
 lazy from overture.ws.connection_manager import ConnectionManager
+lazy from tests.media_servers import TEST_SERVER, TEST_SERVER_ID, attached_registry
 lazy from tests.publishers import NullEventPublisher
 
 
@@ -174,39 +180,76 @@ def unused[T](protocol: type[T], label: str | None = None) -> T:
 
 
 class NoopProviderRegistry(ProviderRegistry):
-    """A registry serving one caller-supplied provider, or none at all.
+    """A registry serving one caller-supplied provider as the test server, or none.
 
     *collections* says whether the provider stands for a server that has
-    collections (Plex), as :attr:`ProviderRegistry.collections` decides.
+    collections. The provider is given the test server's number and
+    configuration when it has none of its own.
     """
 
     def __init__(
         self, provider: Any | None = None, *, collections: bool = True
     ) -> None:
+        server = getattr(provider, "server", None)
+        self._test_server = (
+            server if isinstance(server, MediaServerConfig) else TEST_SERVER
+        )
         self._provider = provider
         self._collections = collections
-        self.health = MediaServerHealthTracker()
+        self._health_tracker = MediaServerHealthTracker()
+        if provider is not None:
+            for name, value in (
+                ("server_id", TEST_SERVER_ID),
+                ("server", self._test_server),
+                ("health", self._health_tracker),
+            ):
+                if not isinstance(getattr(provider, name, None), type(value)):
+                    with contextlib.suppress(AttributeError):
+                        setattr(provider, name, value)
 
     @property
     @override
-    def configured(self) -> bool:
-        return True
+    def servers(self) -> tuple[MediaServerConfig, ...]:
+        return (self._test_server,)
 
-    @property
     @override
-    def provider(self) -> Any:
+    def server_ids(self) -> list[int]:
+        return [TEST_SERVER_ID]
+
+    @override
+    def get(self, server_id: int) -> Any:
         if self._provider is None:
             raise AssertionError("This test configured no media server provider")
         return self._provider
 
+    @override
+    def configured_server_id(self, server_id: int) -> bool:
+        return server_id == TEST_SERVER_ID
+
+    @override
+    def type_of(self, server_id: int) -> ServerType:
+        return self._test_server.type
+
+    @override
+    def title_of(self, server_id: int) -> str:
+        return self._test_server.title
+
+    @override
+    def collection_providers(self) -> list[Any]:
+        return [self._provider] if self._collections and self._provider else []
+
     @property
     @override
-    def collections(self) -> Any:
-        return self._provider if self._collections else None
+    def collections_supported(self) -> bool:
+        return self._collections and self._provider is not None
+
+    @override
+    def health(self, server_key: str) -> MediaServerHealth:
+        return self._health_tracker.current
 
     @override
     async def fetch_server_active_art_url(
-        self, server_id: str, art_type: ArtType
+        self, server_id: int, server_item_id: str, art_type: ArtType
     ) -> str | None:
         return None
 
@@ -492,11 +535,8 @@ def make_runtime(
     background_jobs = (
         BackgroundJobRegistry(events) if background_jobs is None else background_jobs
     )
-    provider_registry = (
-        ProviderRegistry(app_config=app_config)
-        if provider_registry is None
-        else provider_registry
-    )
+    if provider_registry is None:
+        provider_registry = attached_registry(app_config)
     downloads = NoopDownloads() if downloads is None else downloads
     sync = NoopSync(app_config=app_config) if sync is None else sync
     image_cache = ImageCache(image_cache_path(config_dir))
@@ -920,8 +960,10 @@ class NoTmdbFacts(TmdbEnrichment):
 def server_sections(items: Iterable[ServerItem]) -> list[ServerSection]:
     """The libraries a fake server lists: those its items are filed under."""
     return [
-        ServerSection(key, key, media_type)
-        for key, media_type in dict.fromkeys(
+        ServerSection(
+            library_id.partition(":")[2], library_id, media_type, library_id=library_id
+        )
+        for library_id, media_type in dict.fromkeys(
             (item.library_id, item.media_type) for item in items if item.library_id
         )
     ]

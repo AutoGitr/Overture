@@ -49,6 +49,7 @@ lazy from overture.services.sync.reconciler import LibraryReconciler
 lazy from overture.utils.time import utc_now
 lazy from overture.utils.types import JsonValue
 lazy from overture.ws.connection_manager import ConnectionManager
+lazy from tests.media_servers import seed_test_server, served_item
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import NoopDownloads, database_for, make_local_assets
 lazy from tests.sync_helpers import sync_full
@@ -70,6 +71,7 @@ async def _database(path: Path):
     engine = configure_sqlite(create_async_engine(f"sqlite+aiosqlite:///{path}"))
     async with engine.begin() as connection:
         await connection.run_sync(metadata.create_all)
+        await seed_test_server(connection, [])
     return engine
 
 
@@ -96,7 +98,7 @@ async def test_first_sync_stays_within_time_and_memory_budgets(
             media_type=MediaType.MOVIE,
             poster_url=None,
             background_url=None,
-            library_id="movies",
+            library_id="1:movies",
         )
         for index in range(item_count)
     ]
@@ -298,16 +300,20 @@ async def _rule_library(sessions: async_sessionmaker[AsyncSession], count: int) 
         TermKind.PRODUCER: 4,
     }
     async with sessions() as session:
-        session.add(Library(id="rules", media_type=MediaType.MOVIE, title="Rules"))
+        session.add(
+            Library(
+                id="1:rules", media_type=MediaType.MOVIE, server_id=1, title="Rules"
+            )
+        )
         await session.flush()
         session.add_all(
-            MediaItem(
+            served_item(
                 id=item_id,
                 media_type=MediaType.MOVIE,
                 title=f"Title {item_id}",
                 year=2000 + item_id % 25,
                 server_item_id=f"server-{item_id}",
-                library_id="rules",
+                library_id="1:rules",
             )
             for item_id in range(1, count + 1)
         )
@@ -355,7 +361,7 @@ async def test_resolving_a_rule_stays_within_time_memory_and_stall_budgets(
     async def resolve() -> list[CollectionItem]:
         async with database.read_session() as session:
             items = await CollectionRepository(session).library_items(
-                MediaType.MOVIE, "rules", criteria_terms([criteria])
+                MediaType.MOVIE, "1:rules", criteria_terms([criteria])
             )
         return order_items(
             evaluate(items, criteria, context), CollectionOrder.TITLE_ASC

@@ -72,10 +72,9 @@
   let artType = $derived(viewArtType(view));
   const seasonsQuery = createSeasonsQuery(() => item);
   const serverLinks = createServerLinks();
-  // A title the server dropped has no copy there to open.
-  let serverLink = $derived(
-    item && !item.server_removed_at ? serverLinks.item(item.server_item_id) : null,
-  );
+  // Copies come lead first; one no server lists has none to open.
+  let leadCopy = $derived(item?.copies[0]);
+  let serverLink = $derived(serverLinks.item(leadCopy));
   let seasons = $derived(seasonsQuery.data ?? []);
   let drillSeason = $derived(
     view.drillSeasonNum === null ? null : { season_num: view.drillSeasonNum },
@@ -196,7 +195,9 @@
   recordActions={item || catalog ? recordActions : undefined}
   {backgroundUrl}
   posterHref={serverLink}
-  posterLinkTitle={serverLink ? `Open in ${settingsState.media_server_name}` : null}
+  posterLinkTitle={serverLink && leadCopy
+    ? `Open in ${settingsState.server(leadCopy.server_id)?.title ?? "the media server"}`
+    : null}
   emptyMessage={emptyMessage ??
     `Select a ${
       uiState.sidebarMode === "collections"

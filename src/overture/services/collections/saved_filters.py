@@ -45,7 +45,9 @@ class SavedFilters:
             PublicServiceError: 409 when the media type has a filter of the
                 name; 422 for a condition the library cannot test.
         """
-        self._validator.library_criteria(body.media_type, body.criteria)
+        self._validator.library_criteria(
+            body.media_type, body.criteria, self._access.configured_types()
+        )
         now = utc_now()
         async with self._access.database.write_session() as session:
             repo = SavedFilterRepository(session)
@@ -68,7 +70,9 @@ class SavedFilters:
             PublicServiceError: 404 when there is no such filter; 409 and 422
                 as :meth:`create` raises them.
         """
-        self._validator.library_criteria(body.media_type, body.criteria)
+        self._validator.library_criteria(
+            body.media_type, body.criteria, self._access.configured_types()
+        )
         async with self._access.database.write_session() as session:
             repo = SavedFilterRepository(session)
             row = await repo.get(filter_id)

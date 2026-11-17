@@ -23,6 +23,7 @@ lazy from overture.services.art.phash import PhashService
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.themes.youtube_resolver import YouTubeResolver
 lazy from overture.utils.errors import PublicServiceError
+lazy from tests.media_servers import served_item
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     NoopYoutube,
@@ -240,7 +241,7 @@ async def test_theme_clear_forgets_the_selection_keeps_the_file_and_broadcasts(
     media_folder.mkdir()
     theme_path = media_folder / "theme.mp3"
     theme_path.write_bytes(b"theme")
-    item = MediaItem(
+    item = served_item(
         id=1,
         media_type=MediaType.MOVIE,
         title="Movie",

@@ -257,9 +257,10 @@ jobs:
           DIGEST: ${{ steps.build.outputs.digest }}
           DOCKERHUB_IMAGE: ${{ steps.release.outputs.dockerhub_image }}
           IMAGE: ${{ steps.release.outputs.image }}
-          MEDIA_SERVER: plex
-          MEDIA_SERVER_API_KEY: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-          MEDIA_SERVER_URL: http://127.0.0.1:32400
+          MEDIA_SERVERS: Plex
+          MEDIA_SERVER_PLEX_API_KEY: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+          MEDIA_SERVER_PLEX_TYPE: plex
+          MEDIA_SERVER_PLEX_URL: http://127.0.0.1:32400
           VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
@@ -290,8 +291,9 @@ jobs:
               --cap-drop ALL --security-opt no-new-privileges:true \
               --network "$network" \
               --volume "$volume:/config" \
-              --env APP_PASSWORD_HASH --env MEDIA_SERVER \
-              --env MEDIA_SERVER_URL --env MEDIA_SERVER_API_KEY \
+              --env APP_PASSWORD_HASH --env MEDIA_SERVERS \
+              --env MEDIA_SERVER_PLEX_TYPE --env MEDIA_SERVER_PLEX_URL \
+              --env MEDIA_SERVER_PLEX_API_KEY \
               "$IMAGE@$DIGEST" >/dev/null
 
             for _ in $(seq 1 90); do

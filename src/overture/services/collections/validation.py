@@ -1,6 +1,6 @@
 """The checks every collection write passes before anything is saved."""
 
-lazy from collections.abc import Collection, Mapping
+lazy from collections.abc import Collection, Iterable, Mapping
 
 lazy from ...domain import (
     SMART_CUSTOM_ORDER,
@@ -37,11 +37,17 @@ lazy from .access import CollectionAccess
 lazy from .policy import CollectionPolicy
 lazy from .sources import SourceResolver
 
-_PLEX_ONLY_SMART = "Smart collections are only supported by Plex"
+_PLEX_ONLY_SMART = "Smart collections need a library on a Plex server"
 
 
 class CollectionValidator:
-    """Refuse what the media server or the configured sources cannot do."""
+    """Refuse what the media servers or the configured sources cannot do.
+
+    A collection may span servers that differ in what they keep: a choice is
+    accepted when one of its servers can keep it, and the others fall back to
+    their nearest (:mod:`overture.utils.collection_fields`). Criteria belong
+    to one library, so they are checked against its server.
+    """
 
     def __init__(self, *, access: CollectionAccess, sources: SourceResolver) -> None:
         self._access = access
@@ -53,11 +59,13 @@ class CollectionValidator:
         media_types: Collection[MediaType],
         *,
         smart: bool,
+        servers: Collection[ServerType],
     ) -> None:
-        server = self._access.server_type
+        """Require each display choice to be one some of *servers* can keep."""
+        plex = ServerType.PLEX in servers
         if (
             not isinstance(options, CollectionMembersUpdate)
-            and server is not ServerType.PLEX
+            and not plex
             and (
                 options.collection_mode not in {None, CollectionMode.DEFAULT}
                 or options.visible_home
@@ -67,23 +75,37 @@ class CollectionValidator:
             )
         ):
             raise PublicServiceError(422, "Visibility and home promotion require Plex")
-        if options.order_type is not None and any(
-            options.order_type not in available_orders(server, media_type, smart=smart)
-            for media_type in media_types
+        if smart and options.order_type is CollectionOrder.CUSTOM and plex:
+            raise PublicServiceError(422, SMART_CUSTOM_ORDER)
+        if options.order_type is not None and not any(
+            all(
+                options.order_type
+                in available_orders(
+                    server, media_type, smart=smart and server is ServerType.PLEX
+                )
+                for media_type in media_types
+            )
+            for server in servers
         ):
             raise PublicServiceError(
-                422,
-                SMART_CUSTOM_ORDER
-                if smart and options.order_type is CollectionOrder.CUSTOM
-                else "The media server cannot order collections this way",
+                422, "None of the media servers can order collections this way"
             )
 
     def criteria(
-        self, media_type: MediaType, criteria: FilterGroup, *, smart: bool
+        self,
+        library_id: str,
+        media_type: MediaType,
+        criteria: FilterGroup,
+        *,
+        smart: bool,
     ) -> None:
-        server = self._access.server_type
-        if smart and server is not ServerType.PLEX:
-            raise PublicServiceError(422, _PLEX_ONLY_SMART)
+        """Require one library's criteria to be ones its server, or Overture, tests.
+
+        A smart collection is smart only on Plex; on another server Overture
+        evaluates the same criteria.
+        """
+        server = self._access.server_type(library_id)
+        smart = smart and server is ServerType.PLEX
         for condition in criteria.field_conditions():
             if not field_available(condition.field, server, media_type, smart=smart):
                 label = field_label(condition.field, server)
@@ -102,17 +124,26 @@ class CollectionValidator:
                 )
         self._sources_available(media_type, criteria)
 
-    def library_criteria(self, media_type: MediaType, criteria: FilterGroup) -> None:
-        """Require a library filter to test only what the library can.
+    def library_criteria(
+        self,
+        media_type: MediaType,
+        criteria: FilterGroup,
+        servers: Collection[ServerType],
+    ) -> None:
+        """Require a library filter to test only what some of *servers*' titles can.
 
         Raises:
-            PublicServiceError: 422 for a field or operator the library's titles
-                cannot be tested with, or a source that is unavailable.
+            PublicServiceError: 422 for a field or operator the libraries'
+                titles cannot be tested with, or a source that is unavailable.
         """
-        server = self._access.server_type
         for condition in criteria.field_conditions():
-            label = field_label(condition.field, server)
-            if not library_field_available(condition.field, server, media_type):
+            available = [
+                server
+                for server in servers
+                if library_field_available(condition.field, server, media_type)
+            ]
+            label = field_label(condition.field, next(iter(available or servers)))
+            if not available:
                 raise PublicServiceError(
                     422, f"{label} is not available for this library"
                 )
@@ -134,6 +165,11 @@ class CollectionValidator:
                     422, "TMDB has no such chart for this library's titles"
                 )
 
+    def smart_set(self, library_ids: Iterable[str], *, smart: bool) -> None:
+        """Require a smart set to span a Plex library, which alone keeps it smart."""
+        if smart and ServerType.PLEX not in self._access.server_types(library_ids):
+            raise PublicServiceError(422, _PLEX_ONLY_SMART)
+
     def rule(
         self,
         types: Mapping[str, MediaType],
@@ -141,23 +177,35 @@ class CollectionValidator:
         policy: CollectionPolicy,
     ) -> None:
         """Check each library's criteria against what that library holds."""
+        servers = self._access.server_types(types)
+        if rule.smart and ServerType.PLEX not in servers:
+            raise PublicServiceError(422, _PLEX_ONLY_SMART)
         for library in rule.libraries:
-            self.criteria(types[library.library_id], library.criteria, smart=rule.smart)
+            self.criteria(
+                library.library_id,
+                types[library.library_id],
+                library.criteria,
+                smart=rule.smart,
+            )
         self.display(
             rule.model_copy(update={"order_type": policy.order_type}),
             set(types.values()),
             smart=rule.smart,
+            servers=servers,
         )
 
     def generator(
-        self, media_type: MediaType, generator: CollectionGeneratorBase
+        self, library_id: str, media_type: MediaType, generator: CollectionGeneratorBase
     ) -> None:
-        server = self._access.server_type
-        if generator.smart and server is not ServerType.PLEX:
-            raise PublicServiceError(422, _PLEX_ONLY_SMART)
+        """Require a set's dimension and criteria to suit one of its libraries.
+
+        A smart set is smart on Plex libraries; see :meth:`smart_set`.
+        """
+        server = self._access.server_type(library_id)
+        smart = generator.smart and server is ServerType.PLEX
         dimension = DIMENSIONS[generator.dimension]
         if not dimension_available(
-            generator.dimension, server, media_type, smart=generator.smart
+            generator.dimension, server, media_type, smart=smart
         ):
             raise PublicServiceError(
                 422,
@@ -178,9 +226,9 @@ class CollectionValidator:
             *(value.criteria for value in generator.custom_values),
         ):
             if not plex_counts:
-                self.criteria(media_type, criteria, smart=False)
-            if generator.smart:
-                self.criteria(media_type, criteria, smart=True)
+                self.criteria(library_id, media_type, criteria, smart=False)
+            if smart:
+                self.criteria(library_id, media_type, criteria, smart=True)
         if plex_counts and (
             generator.criteria.source_conditions()
             or any(

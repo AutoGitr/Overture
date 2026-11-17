@@ -14,15 +14,17 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
 lazy from overture.db.models.media_item import MediaItem
+lazy from overture.db.models.media_item_copy import MediaItemCopy
 lazy from overture.db.session import Database
-lazy from overture.domain import MediaType, ServerAsset, TermKind
+lazy from overture.domain import MediaType, ServerAsset, ServerType, TermKind
 lazy from overture.jobs.progress_log import JobLogEntry
 lazy from overture.jobs.tally import SyncTally
 lazy from overture.media_servers.adapters import ServerItem, SyncItemResult
 lazy from overture.media_servers.jellyfin import JellyfinProvider
 lazy from overture.repositories.terms import TermRepository
-lazy from overture.services.sync.reconciler import LibraryReconciler
+lazy from overture.services.sync.reconciler import LibraryReconciler, ServerTurn
 lazy from overture.utils.audio import ThemeAudioMetadata
+lazy from tests.media_servers import TEST_SERVER_ID, copy_ids, served_item, server_of
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import NoopDownloads, make_local_assets
 lazy from tests.sync_helpers import sync_full
@@ -33,7 +35,11 @@ class Provider(JellyfinProvider):
     """A media server listing fixed items; it must never be refreshed."""
 
     def __init__(self, items: list[ServerItem], *, app_config: Settings) -> None:
-        super().__init__(app_config=app_config)
+        super().__init__(
+            server=server_of(app_config, ServerType.JELLYFIN),
+            server_id=TEST_SERVER_ID,
+            app_config=app_config,
+        )
         self.items = items
         self.refresh_calls: list[str] = []
 
@@ -75,7 +81,7 @@ class DirectorProvider(Provider):
 def _server_item(
     item_id: str,
     title: str,
-    library_id: str = "lib1",
+    library_id: str = "1:lib1",
     directors: tuple[str, ...] = (),
     folder_path: str | None = None,
     media_type: MediaType = MediaType.MOVIE,
@@ -107,7 +113,7 @@ async def test_deferred_directors_are_fetched_only_when_the_etag_changes(
             ("Brazil", "same", "Terry Gilliam"),
             ("Alien", "changed", "Someone Else"),
         ):
-            movie = MediaItem(
+            movie = served_item(
                 media_type=MediaType.MOVIE,
                 title=title,
                 server_item_id=server_id,
@@ -137,7 +143,9 @@ async def test_deferred_directors_are_fetched_only_when_the_etag_changes(
         _server_item("new", "The Thing", director_etag="v1"),
         _server_item("gone", "Gone", director_etag="v1"),
         _server_item("inline", "Inline", directors=("Plex Director",)),
-        _server_item("show", "Show", library_id="lib-shows", media_type=MediaType.SHOW),
+        _server_item(
+            "show", "Show", library_id="1:lib-shows", media_type=MediaType.SHOW
+        ),
     ]
 
     await reconciler.fill_deferred_directors(provider, items)
@@ -158,9 +166,13 @@ async def test_deferred_directors_are_fetched_only_when_the_etag_changes(
         directors = await TermRepository(session).values_by_item(
             [item.id or 0 for item in items], TermKind.DIRECTOR
         )
+        copies = (await session.exec(select(MediaItemCopy))).all()
         stored = {
-            item.server_item_id: (directors.get(item.id or 0, []), item.director_etag)
-            for item in items
+            copy.server_item_id: (
+                directors.get(copy.media_item_id, []),
+                copy.director_etag,
+            )
+            for copy in copies
         }
     assert stored["changed"] == (["Ridley Scott"], "v2")
     assert stored["new"] == (["John Carpenter", "Tommy Lee Wallace"], "v1")
@@ -188,7 +200,7 @@ async def test_failed_stamp_never_replaces_the_sync_error(
     stamped: list[set[int]] = []
 
     async def reconcile(
-        _item: ServerItem, _seen: set[int], **_kwargs: object
+        _item: ServerItem, _turn: ServerTurn, _seen: set[int], **_kwargs: object
     ) -> SyncItemResult:
         return SyncItemResult(item_id=42, media_type=MediaType.MOVIE)
 
@@ -226,7 +238,7 @@ async def test_sync_progress_and_result_share_partial_counters(
     progress: list[dict[str, int | None]] = []
 
     async def reconcile(
-        item: ServerItem, _seen: set[int], **_kwargs: object
+        item: ServerItem, _turn: ServerTurn, _seen: set[int], **_kwargs: object
     ) -> SyncItemResult | str:
         if item.id == "b":
             return "disk unavailable"
@@ -286,6 +298,7 @@ async def test_recent_sync_processes_movies_then_shows_in_title_order(
             _server_item("show-a", "Alpha Show", media_type=MediaType.SHOW),
             _server_item("movie-a", "Alpha Movie"),
         ],
+        ServerTurn(TEST_SERVER_ID),
         progress_cb=record,
     )
 
@@ -334,7 +347,9 @@ async def test_sync_keeps_distinct_server_items_with_identical_titles(
 
     assert stats.tally.added == 2
     assert stats.tally.unchanged == 0
-    assert {item.server_item_id for item in items} == {"original", "remake"}
+    async with database.read_session() as session:
+        ids = await copy_ids(session)
+    assert {ids[item.id or 0] for item in items} == {"original", "remake"}
 
 
 async def test_sync_emits_targeted_upserts_and_removals(
@@ -365,50 +380,50 @@ async def test_sync_emits_targeted_upserts_and_removals(
     async with isolated_session_factory() as session:
         session.add_all(
             [
-                MediaItem(
+                served_item(
                     id=1,
                     media_type=MediaType.MOVIE,
                     title="Removed",
                     server_item_id="removed",
-                    library_id="lib1",
+                    library_id="1:lib1",
                 ),
-                MediaItem(
+                served_item(
                     id=2,
                     media_type=MediaType.MOVIE,
                     title="Revived",
                     server_item_id="revived",
-                    library_id="lib1",
+                    library_id="1:lib1",
                     server_removed_at=datetime(2026, 1, 1, tzinfo=UTC),
                 ),
-                MediaItem(
+                served_item(
                     id=3,
                     media_type=MediaType.MOVIE,
                     title="Changed",
                     server_item_id="changed",
-                    library_id="lib1",
+                    library_id="1:lib1",
                 ),
-                MediaItem(
+                served_item(
                     id=4,
                     media_type=MediaType.MOVIE,
                     title="Skipped",
                     year=1979,
                     server_item_id="skipped",
-                    library_id="lib1",
+                    library_id="1:lib1",
                 ),
-                MediaItem(
+                served_item(
                     id=5,
                     media_type=MediaType.MOVIE,
                     title="Out of Scope",
                     server_item_id="out-of-scope",
-                    library_id="lib2",
+                    library_id="1:lib2",
                 ),
-                preserved := MediaItem(
+                preserved := served_item(
                     id=6,
                     media_type=MediaType.MOVIE,
                     title="Preserved Year",
                     year=1980,
                     server_item_id="preserved-year",
-                    library_id="lib1",
+                    library_id="1:lib1",
                 ),
             ]
         )
@@ -435,7 +450,7 @@ async def test_sync_emits_targeted_upserts_and_removals(
         app_config=app_config,
         database=database,
     )
-    pages = provider.iter_items(["lib1"])
+    pages = provider.iter_items(["1:lib1"])
     server_items = [item async for page in pages for item in page]
     lines: list[str] = []
 
@@ -443,7 +458,7 @@ async def test_sync_emits_targeted_upserts_and_removals(
         lines.append(entry.format())
 
     stats = await sync_full(
-        reconciler, server_items, library_ids=["lib1"], progress_cb=record
+        reconciler, server_items, library_ids=["1:lib1"], progress_cb=record
     )
 
     async with isolated_session_factory() as session:
@@ -551,7 +566,7 @@ async def test_sync_emits_upsert_when_only_asset_state_changes(
 
     async with isolated_session_factory() as session:
         session.add(
-            MediaItem(
+            served_item(
                 id=10,
                 media_type=MediaType.MOVIE,
                 title="Movie",
@@ -559,7 +574,7 @@ async def test_sync_emits_upsert_when_only_asset_state_changes(
                 tmdb_id=123,
                 folder_path=str(movie_dir),
                 server_item_id="movie",
-                library_id="lib1",
+                library_id="1:lib1",
             )
         )
         await session.commit()
@@ -576,9 +591,9 @@ async def test_sync_emits_upsert_when_only_asset_state_changes(
         app_config=app_config,
         database=database,
     )
-    pages = provider.iter_items(["lib1"])
+    pages = provider.iter_items(["1:lib1"])
     server_items = [item async for page in pages for item in page]
-    stats = await sync_full(reconciler, server_items, library_ids=["lib1"])
+    stats = await sync_full(reconciler, server_items, library_ids=["1:lib1"])
 
     assert stats.tally.errors == 0
     upserts: list[dict[str, Any]] = [
@@ -601,7 +616,7 @@ async def test_sync_emits_upsert_when_only_asset_state_changes(
     # and saved provenance have not changed.
     events.clear()
     (movie_dir / "theme.mp3").write_bytes(b"replacement theme audio")
-    stats = await sync_full(reconciler, server_items, library_ids=["lib1"])
+    stats = await sync_full(reconciler, server_items, library_ids=["1:lib1"])
     assert stats.tally.errors == 0
     replacements = [
         payload for event, payload in events if event == "library.item.upserted"
@@ -611,7 +626,7 @@ async def test_sync_emits_upsert_when_only_asset_state_changes(
     assert replacement["item"]["theme_file_hash"] != original_hash
 
     events.clear()
-    await sync_full(reconciler, server_items, library_ids=["lib1"])
+    await sync_full(reconciler, server_items, library_ids=["1:lib1"])
     assert not [event for event, _ in events if event == "library.item.upserted"]
 
     # A different folder can contain a different file with identical stat data.
@@ -626,7 +641,7 @@ async def test_sync_emits_upsert_when_only_asset_state_changes(
     await sync_full(
         reconciler,
         [moved_server_item],
-        library_ids=["lib1"],
+        library_ids=["1:lib1"],
     )
     async with database.read_session() as session:
         moved_item = await session.get(MediaItem, 10)

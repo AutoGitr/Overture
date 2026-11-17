@@ -13,7 +13,6 @@ lazy from overture.schemas.catalog import CatalogSyncStats
 lazy from overture.services.schedule_store import (
     BACKUP_SCHEDULE,
     CATALOG_SCHEDULE,
-    SYNC_SERVER_SCHEDULE,
     BackupPayload,
     CatalogPayload,
     load_schedule,
@@ -38,12 +37,9 @@ async def test_loading_an_unsaved_schedule_returns_defaults_and_writes_no_row(
     answer without needing a row to exist yet; only ``save_schedule`` is
     allowed to create one.
     """
-    server = await load_schedule(db_session, SYNC_SERVER_SCHEDULE)
     backup = await load_schedule(db_session, BACKUP_SCHEDULE)
     public = await load_schedule(db_session, CATALOG_SCHEDULE)
 
-    assert server.payload.last_media_server is None
-    assert server.enabled is False
     assert backup.payload.retention == BackupRetention()
     assert backup.enabled is True
     assert public.payload.last_status == "never_synced"

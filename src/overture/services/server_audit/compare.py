@@ -2,7 +2,7 @@
 
 lazy import logging
 lazy from contextlib import aclosing
-lazy from dataclasses import dataclass
+lazy from dataclasses import dataclass, replace
 lazy from pathlib import Path
 
 lazy import httpx2
@@ -19,7 +19,7 @@ lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...jobs.runner import JobContext, run_managed_job
 lazy from ...jobs.tally import ServerAuditTally
 lazy from ...media_servers.adapters import ServerTheme
-lazy from ...media_servers.registry import ProviderRegistry
+lazy from ...media_servers.registry import Provider, ProviderRegistry
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...schemas.server_audit import (
@@ -35,7 +35,7 @@ lazy from ..art.collection_art import CollectionArtService
 lazy from ..art.phash import PhashService
 lazy from ..art.targets import target_label
 lazy from ..local_assets.service import LocalAssets
-lazy from ..server_identity import resolve_owner_server_id, resolve_server_item_id
+lazy from ..server_identity import ServerCopy, resolve_art_owners, resolve_owners
 lazy from ..storage.assets import AssetStorage, require_folder_path
 lazy from .work import (
     AuditTarget,
@@ -69,6 +69,19 @@ class AuditContext:
     database: Database
     config_dir: Path
     collection_art: CollectionArtService
+    #: The database's numbers of the servers a run compares with, those that
+    #: answered when it started; every configured server when ``None``.
+    servers: frozenset[int] | None = None
+
+    def compared(self, provider: Provider) -> bool:
+        return self.servers is None or provider.server_id in self.servers
+
+
+def _on(result: ServerAuditResult, provider: Provider) -> ServerAuditResult:
+    """*result*, about the copy on *provider*'s server."""
+    return result.model_copy(
+        update={"server_id": provider.server_id, "server": provider.server.title}
+    )
 
 
 def _finding(
@@ -80,8 +93,8 @@ def _finding(
 
 async def _audit_art_one(
     target: AuditTarget, art_type: ArtType, *, context: AuditContext
-) -> ServerAuditResult:
-    """Audit one local artwork file against the media server."""
+) -> list[ServerAuditResult]:
+    """Audit one local artwork file against each media server holding it."""
     result = ServerAuditResult(
         kind="art",
         item_id=target.item_id,
@@ -95,7 +108,7 @@ async def _audit_art_one(
     async with context.database.read_session() as session:
         item = await session.get(MediaItem, target.item_id)
         if not item:
-            return result.model_copy(update={"reason": "Item not found"})
+            return [result.model_copy(update={"reason": "Item not found"})]
         owner = await SeasonRepository(session).art_owner(
             item, art_type, target.season_id
         )
@@ -108,27 +121,64 @@ async def _audit_art_one(
         season=season,
     )
     if local_path is None:
-        return _finding(result, AuditStatus.LOCAL_MISSING, "Local art file is missing")
+        return [
+            _finding(result, AuditStatus.LOCAL_MISSING, "Local art file is missing")
+        ]
     result.local_path = str(local_path)
     slot = find_art_slot(season or item, art_type)
 
-    server_id = await resolve_server_item_id(
-        target.item_id,
-        art_type,
-        target.season_id,
-        database=context.database,
-        provider_registry=context.provider_registry,
-    )
-    if not server_id:
-        return _finding(
-            result,
-            AuditStatus.UNRESOLVED_SERVER_ID,
-            "Could not resolve media-server item ID",
+    owners = [
+        server_copy
+        for server_copy in await resolve_art_owners(
+            target.item_id,
+            art_type,
+            target.season_id,
+            database=context.database,
+            provider_registry=context.provider_registry,
         )
+        if context.compared(server_copy.provider)
+    ]
+    if not owners:
+        return [
+            _finding(
+                result,
+                AuditStatus.UNRESOLVED_SERVER_ID,
+                "Could not resolve media-server item ID",
+            )
+        ]
+    try:
+        local_phash = await local_fingerprint(
+            local_path,
+            Path(require_folder_path(item)),
+            art_file_facts(slot) if slot is not None else None,
+            context,
+        )
+    except (OSError, ValueError) as exc:
+        return [result.model_copy(update={"reason": str(exc)})]
+    return [
+        await _compare_server_art(
+            _on(result, server_copy.provider),
+            server_copy,
+            art_type,
+            local_phash,
+            context=context,
+        )
+        for server_copy in owners
+    ]
 
+
+async def _compare_server_art(
+    result: ServerAuditResult,
+    server_copy: ServerCopy,
+    art_type: ArtType,
+    local_phash: str,
+    *,
+    context: AuditContext,
+) -> ServerAuditResult:
+    """Compare the image one server shows for a slot with the local file."""
+    result.server_item_id = server_copy.server_item_id
     server_url = await context.provider_registry.fetch_server_active_art_url(
-        server_id,
-        art_type,
+        server_copy.provider.server_id, server_copy.server_item_id, art_type
     )
     if not server_url:
         return _finding(
@@ -137,20 +187,13 @@ async def _audit_art_one(
             "Media server has no active image for this art type",
         )
     result.server_image_present = True
-
     try:
-        local_phash = await local_fingerprint(
-            local_path,
-            Path(require_folder_path(item)),
-            art_file_facts(slot) if slot is not None else None,
-            context,
-        )
         image = await fetch_image(
             server_url,
             await context.image_clients.get_client(server_url),
             allow_generic_image=True,
             allow_private=True,
-            headers=context.provider_registry.provider.get_download_headers(server_url),
+            headers=server_copy.provider.get_download_headers(server_url),
         )
         server_phash = await context.phash.compute_from_bytes(image.data)
         distance = context.phash.hamming_distance(local_phash, server_phash)
@@ -165,8 +208,8 @@ async def _audit_art_one(
 
 async def _audit_collection_art(
     target: CollectionAuditTarget, *, context: AuditContext
-) -> ServerAuditResult:
-    """Audit the image Overture uploaded to a collection against the server's."""
+) -> list[ServerAuditResult]:
+    """Audit the image Overture uploaded to a collection against each server copy."""
     art_type = target.art_type
     result = ServerAuditResult(
         kind="art",
@@ -179,25 +222,57 @@ async def _audit_collection_art(
     async with context.database.read_session() as session:
         row = await CollectionRepository(session).get_listed(target.collection_id)
     if row is None:
-        return result.model_copy(update={"reason": "Collection not found"})
+        return [result.model_copy(update={"reason": "Collection not found"})]
     result.title = row.title
     slot = find_art_slot(row, art_type)
     if slot is None or slot.file_hash is None:
-        return _finding(
-            result, AuditStatus.LOCAL_MISSING, "Overture has uploaded no image"
-        )
+        return [
+            _finding(
+                result, AuditStatus.LOCAL_MISSING, "Overture has uploaded no image"
+            )
+        ]
     if slot.phash is None:
-        return result.model_copy(
-            update={"reason": "The uploaded image has no fingerprint"}
+        return [
+            result.model_copy(
+                update={"reason": "The uploaded image has no fingerprint"}
+            )
+        ]
+    copies = [
+        (context.provider_registry.get(part.server_id), part.server_item_id or "")
+        for part in row.copies
+        if context.provider_registry.configured_server_id(part.server_id)
+    ]
+    copies = [
+        (provider, copy) for provider, copy in copies if context.compared(provider)
+    ]
+    if not copies:
+        return [
+            _finding(
+                result,
+                AuditStatus.UNRESOLVED_SERVER_ID,
+                "The collection has no server copy",
+            )
+        ]
+    return [
+        await _compare_collection_copy(
+            _on(result, provider), provider, server_item_id, slot.phash, context=context
         )
-    if row.server_item_id is None:
-        return _finding(
-            result,
-            AuditStatus.UNRESOLVED_SERVER_ID,
-            "The collection has no server copy",
-        )
-    provider = context.provider_registry.provider
-    server_url = await provider.get_collection_image_url(row.server_item_id, art_type)
+        for provider, server_item_id in copies
+    ]
+
+
+async def _compare_collection_copy(
+    result: ServerAuditResult,
+    provider: Provider,
+    server_item_id: str,
+    phash: str,
+    *,
+    context: AuditContext,
+) -> ServerAuditResult:
+    """Compare one server copy's image with the one Overture uploaded."""
+    art_type = ArtType(result.art_type)
+    result.server_item_id = server_item_id
+    server_url = await provider.get_collection_image_url(server_item_id, art_type)
     if not server_url:
         return _finding(
             result,
@@ -207,7 +282,7 @@ async def _audit_collection_art(
     result.server_image_present = True
     try:
         request = await provider.build_collection_image_request(
-            row.server_item_id, art_type, None, current_url=server_url
+            server_item_id, art_type, None, current_url=server_url
         )
         image = await fetch_image(
             request.url,
@@ -218,7 +293,7 @@ async def _audit_collection_art(
             params=request.params,
         )
         server_phash = await context.phash.compute_from_bytes(image.data)
-        distance = context.phash.hamming_distance(slot.phash, server_phash)
+        distance = context.phash.hamming_distance(phash, server_phash)
     except (httpx2.HTTPError, OSError, ValueError) as exc:
         return result.model_copy(update={"reason": str(exc)})
     if distance == 0:
@@ -272,13 +347,17 @@ async def _audit_theme_one(
     result.local_path = str(local_path)
     local = _LocalTheme(local_path, theme_file_facts(item))
 
-    server_item_id = await resolve_owner_server_id(
-        target.item_id,
-        None,
-        database=context.database,
-        provider_registry=context.provider_registry,
-    )
-    if not server_item_id:
+    owners = [
+        server_copy
+        for server_copy in await resolve_owners(
+            target.item_id,
+            None,
+            database=context.database,
+            provider_registry=context.provider_registry,
+        )
+        if context.compared(server_copy.provider)
+    ]
+    if not owners:
         return [
             _finding(
                 result,
@@ -287,24 +366,30 @@ async def _audit_theme_one(
                 local_duration=await local.duration(),
             )
         ]
-    result.server_item_id = server_item_id
-
-    server_themes = await context.provider_registry.provider.get_theme_songs(
-        server_item_id
-    )
-    if not server_themes:
-        return [
-            _finding(
-                result,
-                AuditStatus.THEME_SERVER_MISSING,
-                "Media server has no theme; refresh can pick up local theme.mp3",
-                local_duration=await local.duration(),
+    results: list[ServerAuditResult] = []
+    for server_copy in owners:
+        on_server = _on(result, server_copy.provider)
+        on_server.server_item_id = server_copy.server_item_id
+        server_themes = await server_copy.provider.get_theme_songs(
+            server_copy.server_item_id
+        )
+        if not server_themes:
+            results.append(
+                _finding(
+                    on_server,
+                    AuditStatus.THEME_SERVER_MISSING,
+                    "Media server has no theme; refresh can pick up local theme.mp3",
+                    local_duration=await local.duration(),
+                )
             )
+            continue
+        results += [
+            await _compare_theme(
+                on_server, theme, local, server_copy.provider, context=context
+            )
+            for theme in server_themes
         ]
-    return [
-        await _compare_theme(result, theme, local, context=context)
-        for theme in server_themes
-    ]
+    return results
 
 
 @dataclass(slots=True)
@@ -350,6 +435,7 @@ async def _compare_theme(
     base: ServerAuditResult,
     theme: ServerTheme,
     local: _LocalTheme,
+    provider: Provider,
     *,
     context: AuditContext,
 ) -> ServerAuditResult:
@@ -358,8 +444,8 @@ async def _compare_theme(
     Plex keeps its own copy of a theme, so the audio it serves is compared
     with the local file's, leaving out tags and other container metadata that
     need not survive the copy. Jellyfin and Emby play the file at the path
-    they report, and Overture sees media at the server's paths, so that path
-    is compared with the local one. Durations only describe a difference.
+    they report, which the server's PATH_MAP gives as Overture sees it, so that
+    path is compared with the local one. Durations only describe a difference.
     """
     result = base.model_copy(
         update={
@@ -369,7 +455,9 @@ async def _compare_theme(
         }
     )
     if theme.url is not None:
-        return await _compare_served_theme(result, theme.url, local, context=context)
+        return await _compare_served_theme(
+            result, theme.url, local, provider, context=context
+        )
     if theme.path is None:
         return _finding(
             result,
@@ -386,6 +474,7 @@ async def _compare_served_theme(
     result: ServerAuditResult,
     url: str,
     local: _LocalTheme,
+    provider: Provider,
     *,
     context: AuditContext,
 ) -> ServerAuditResult:
@@ -399,7 +488,7 @@ async def _compare_served_theme(
         async with downloaded_audio(
             await context.image_clients.get_client(url),
             url,
-            context.provider_registry.provider.get_download_headers(url),
+            provider.get_download_headers(url),
             config_dir=context.config_dir,
         ) as path:
             server_hash = await audio_hash(path)
@@ -472,7 +561,14 @@ async def run_server_audit(
         catch=AUDIT_ERRORS,
     ) as job:
         await job.started()
-        await audit_context.provider_registry.require_reachable()
+        # Servers down now are left out rather than reported for every target.
+        audit_context = replace(
+            audit_context,
+            servers=frozenset(
+                provider.server_id
+                for provider in await audit_context.provider_registry.reachable()
+            ),
+        )
         targets: list[AuditWork] = [
             *await plan_audit(
                 params, audit_context.local_assets, database=audit_context.database
@@ -518,10 +614,10 @@ async def audit_target[T: AuditWork](
     A target whose results all match is one the server shows exactly.
     """
     if isinstance(target, CollectionAuditTarget):
-        return target, [await _audit_collection_art(target, context=context)]
+        return target, await _audit_collection_art(target, context=context)
     if target.art_type is None:
         return target, await _audit_theme_one(target, context=context)
-    return target, [await _audit_art_one(target, target.art_type, context=context)]
+    return target, await _audit_art_one(target, target.art_type, context=context)
 
 
 def differences(results: list[ServerAuditResult]) -> list[ServerAuditResult]:

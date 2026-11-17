@@ -96,16 +96,19 @@ describe("realtime stream reconciliation", () => {
 
   it("follows the media server's state from snapshots and events", () => {
     realtimeStream.applySnapshot(snapshot(1));
-    expect(mediaServerState.down).toBe(false);
+    expect(mediaServerState.down).toEqual([]);
 
     realtimeStream.applyEvent(
-      wsMessage("media-server.status", { state: "rejected", message: "check the key" }, 2),
+      wsMessage(
+        "media-server.status",
+        { server_id: 1, title: "Plex", state: "rejected", message: "check the key" },
+        2,
+      ),
     );
-    expect(mediaServerState.down).toBe(true);
-    expect(mediaServerState.current.message).toBe("check the key");
+    expect(mediaServerState.down.map((server) => server.message)).toEqual(["check the key"]);
 
     realtimeStream.applySnapshot(snapshot(3));
-    expect(mediaServerState.down).toBe(false);
+    expect(mediaServerState.down).toEqual([]);
   });
 
   it("rejects a snapshot that is strictly behind the applied sequence", () => {

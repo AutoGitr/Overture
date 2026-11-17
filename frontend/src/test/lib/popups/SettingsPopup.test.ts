@@ -1,4 +1,4 @@
-import { appSettings, catalogStatus } from "../../helpers/fixtures";
+import { appSettings, catalogStatus, mediaServers } from "../../helpers/fixtures";
 import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -25,7 +25,7 @@ vi.mock("../../../generated/rest/sdk.gen", () => ({
 function storedSettings() {
   return {
     ...settingsState.toUpdatePayload(),
-    media_server: "plex" as const,
+    media_servers: mediaServers("plex"),
     collection_themes_unavailable: null,
     collections_supported: true,
     tmdb_configured: false,
@@ -55,11 +55,11 @@ describe("SettingsPopup", () => {
       }),
     );
     queryClient.setQueryData(getSettingsOptions().queryKey, storedSettings());
-    getSettings.mockResolvedValue({ data: settingsState.toUpdatePayload() });
+    getSettings.mockResolvedValue({ data: storedSettings() });
   });
 
   it("closes without saving when cancel is clicked", async () => {
-    updateSettings.mockResolvedValue({ data: {} });
+    updateSettings.mockResolvedValue({ data: storedSettings() });
     renderWithQueryClient(SettingsPopup);
 
     await fireEvent.change(screen.getByRole("combobox", { name: "Workflow" }), {
@@ -103,6 +103,7 @@ describe("SettingsPopup", () => {
   it("saves the workflow and completion policy independently of navigation", async () => {
     updateSettings.mockResolvedValue({
       data: {
+        ...storedSettings(),
         workflow: "art_and_themes",
         auto_unmonitor: "art_and_theme",
         auto_advance: "off",
@@ -133,7 +134,7 @@ describe("SettingsPopup", () => {
   });
 
   it("chooses an auto-advance mode, enabling Skip completed once it moves on", async () => {
-    updateSettings.mockResolvedValue({ data: { auto_advance: "slots" } });
+    updateSettings.mockResolvedValue({ data: { ...storedSettings(), auto_advance: "slots" } });
     renderWithQueryClient(SettingsPopup);
     expect(screen.getByLabelText("Skip completed slots and items")).toBeDisabled();
     await fireEvent.click(screen.getByRole("radio", { name: "Slots" }));
@@ -150,6 +151,7 @@ describe("SettingsPopup", () => {
   it("saves editable settings and applies the returned server settings", async () => {
     updateSettings.mockResolvedValue({
       data: {
+        ...storedSettings(),
         workflow: "themes",
         auto_match_art: false,
       },
@@ -176,7 +178,9 @@ describe("SettingsPopup", () => {
   });
 
   it("saves theme loudness normalization, on by default", async () => {
-    updateSettings.mockResolvedValue({ data: { normalize_theme_loudness: false } });
+    updateSettings.mockResolvedValue({
+      data: { ...storedSettings(), normalize_theme_loudness: false },
+    });
     renderWithQueryClient(SettingsPopup);
 
     const normalize = screen.getByLabelText("Normalize theme loudness");
@@ -203,7 +207,9 @@ describe("SettingsPopup", () => {
       const collectionsKey = listCollectionsOptions().queryKey;
       queryClient.setQueryData(collectionsKey, []);
       queryClient.setQueryData(itemsKey, { items: [], total: 0 });
-      updateSettings.mockResolvedValue({ data: { aspect_ratio_tolerance: tolerance } });
+      updateSettings.mockResolvedValue({
+        data: { ...storedSettings(), aspect_ratio_tolerance: tolerance },
+      });
       renderWithQueryClient(SettingsPopup);
 
       await fireEvent.change(screen.getByLabelText("Aspect ratio control"), {
@@ -227,7 +233,7 @@ describe("SettingsPopup", () => {
   });
 
   it("persists and applies appearance only when settings are saved", async () => {
-    updateSettings.mockResolvedValue({ data: { workflow: "art" } });
+    updateSettings.mockResolvedValue({ data: { ...storedSettings(), workflow: "art" } });
     renderWithQueryClient(SettingsPopup);
     const theme = within(screen.getByRole("radiogroup", { name: "Theme" }));
     expect(theme.getByLabelText("System")).toBeChecked();
@@ -245,7 +251,7 @@ describe("SettingsPopup", () => {
   });
 
   it("persists and applies a custom accent when edited and saved", async () => {
-    updateSettings.mockResolvedValue({ data: { workflow: "art" } });
+    updateSettings.mockResolvedValue({ data: { ...storedSettings(), workflow: "art" } });
     renderWithQueryClient(SettingsPopup);
 
     const accentInput = screen.getByLabelText("Accent color hex value");
@@ -271,7 +277,7 @@ describe("SettingsPopup", () => {
     );
     expect(screen.getByRole("combobox", { name: "Workflow" })).toBeDisabled();
     getSettings.mockResolvedValue({
-      data: { ...settingsState.toUpdatePayload(), workflow: "themes" },
+      data: appSettings({ workflow: "themes" }),
     });
     await fireEvent.click(screen.getByRole("button", { name: "Retry settings" }));
     await waitFor(() =>
