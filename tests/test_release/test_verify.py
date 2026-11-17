@@ -185,6 +185,19 @@ _FIXED: dict[str, Any] = {
     "/api/collections/tags/radarr": [{"id": 1, "label": "requests"}],
     "/api/collections/arr-options": {"root_folders": [], "quality_profiles": []},
     "/api/collections/groups": ["Charts"],
+    "/api/library/items/1/record": {
+        "stored": [
+            {"table": "media_items", "values": {"id": 1}},
+            {
+                "table": "media_item_copies",
+                "values": {
+                    "server_item_id": "m1",
+                    "verified_at": "2026-11-01T00:00:00",
+                    "labels": ["Kept"],
+                },
+            },
+        ]
+    },
 }
 
 
@@ -468,7 +481,11 @@ async def test_jellyfin_filters_are_compared_with_the_values_and_counts_offered(
     text = report.read_text()
     assert "| jellyfin values | Genre |" in text
     assert "does not offer drama" in text
-    assert "jellyfin says Alien holds 'Drama'" in text
+    # Overture's copy holds what its last sync read, against the server's save.
+    assert (
+        "jellyfin says Alien holds 'Drama'; jellyfin saved it at None, and "
+        "Overture last read it at 2026-11-01T00:00:00, holding 1 label"
+    ) in text
     # Jellyfin counts four horror films where Overture counts one.
     assert "| jellyfin count | Genre is 'Horror' | 1 |  | 4 |" in text
     assert "recommend" not in text
@@ -900,3 +917,51 @@ async def test_a_server_that_does_not_lead_differs_in_details_but_not_in_labels(
         "Tag": "Overture does not offer kept",
         "Tag is 'Kept'": "counts differ",
     }
+
+
+async def test_servers_are_asked_what_overture_cannot_see_for_itself(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def server(request: httpx2.Request) -> httpx2.Response:
+        params = request.url.params
+        match request.url.path:
+            case "/Users":
+                users: list[dict[str, Any]] = [
+                    {"Id": "u1", "Name": "guest", "Policy": {}},
+                    {"Id": "u2", "Name": "admin", "Policy": {"IsAdministrator": True}},
+                ]
+                return httpx2.Response(200, json=users)
+            case "/Items":
+                # The members show only to a user.
+                count = 2 if params.get("UserId") == "u2" else 0
+                return httpx2.Response(
+                    200, json={"Items": [], "TotalRecordCount": count}
+                )
+            case "/library/sections/1/collections":
+                rows = [
+                    {"ratingKey": "c1", "title": "BFI Greats", "index": 7},
+                    {"ratingKey": "c2", "title": "Kept", "index": 8},
+                ]
+                return httpx2.Response(200, json={"MediaContainer": {"Metadata": rows}})
+            case _:
+                return httpx2.Response(404)
+
+    original = httpx2.AsyncClient
+
+    def client(**kwargs: Any) -> httpx2.AsyncClient:
+        return original(transport=httpx2.MockTransport(server), **kwargs)
+
+    monkeypatch.setattr(module.httpx2, "AsyncClient", client)
+    jellyfin = module.MediaBrowserServer("jellyfin", "http://jellyfin.test", "key")
+    plex = module.PlexServer("http://plex-server.test", "token")
+    library = cast("Any", type("L", (), {"key": "1"}))
+    try:
+        members = await jellyfin.members_to_a_user("box")
+        # Plex lists collection 7 under the title it was made with.
+        renamed = await plex.renamed(library, {"greats": "7", "kept": "8", "gone": "9"})
+    finally:
+        await jellyfin.client.aclose()
+        await plex.client.aclose()
+
+    assert members == "jellyfin lists 2 members to admin, and none to the API key alone"
+    assert renamed == {"greats": "BFI Greats"}

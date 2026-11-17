@@ -303,9 +303,12 @@ class Overture:
         return response.json()
 
     async def status(self, path: str) -> tuple[int, str]:
-        """Return the status and content type a GET answers with."""
+        """Return the status a GET answers with, and its content type or error."""
         response = await self.client.get(path)
-        return response.status_code, response.headers.get("content-type", "")
+        kind = response.headers.get("content-type", "")
+        if response.status_code >= 400:
+            return response.status_code, detail(response)
+        return response.status_code, kind
 
     async def post(self, path: str, body: dict[str, Any]) -> Any:
         if path not in OVERTURE_READS:
@@ -1364,7 +1367,21 @@ class PlexServer(Server):
             missing = {name: key for name, key in held.items() if name not in offered}
             if unheld := await self.unheld(library, entry["filter"], missing):
                 notes.append(f"no title holds {named(unheld)}")
-            if real := set(missing) - unheld:
+            real = set(missing) - unheld
+            # Plex lists the titles without a rating under "None".
+            if spec["field"] == "content_rating" and "none" in real:
+                real.discard("none")
+                notes.append("Plex lists the titles without a rating as None")
+            if spec["field"] == "collection" and real:
+                renamed = await self.renamed(
+                    library, {name: held[name] for name in real}
+                )
+                real -= set(renamed)
+                notes.extend(
+                    f"Plex's list names {new!r} by its old title {old!r}"
+                    for old, new in renamed.items()
+                )
+            if real:
                 problem = f"Overture does not offer {named(real)}"
                 if FIELDS[spec["field"]].tmdb:
                     notes.append(f"{problem}: Overture offers TMDB's, Plex its own")
@@ -1376,6 +1393,23 @@ class PlexServer(Server):
                     "them through the titles holding them"
                 )
             case.note = "; ".join(notes)
+
+    async def renamed(self, library: Library, listed: dict[str, str]) -> dict[str, str]:
+        """The collections Plex's list still names by an old title, by that title.
+
+        Plex keeps a collection's filter value under the title it was made
+        with; the collection's ``index`` is that value's key.
+        """
+        titles = {
+            str(row["index"]): row["title"]
+            for row in (await self.collections(library.key)).values()
+            if row.get("index") is not None
+        }
+        return {
+            name: titles[key]
+            for name, key in listed.items()
+            if key in titles and titles[key].casefold() != name
+        }
 
     async def explain(
         self,
@@ -1525,14 +1559,7 @@ class MediaBrowserServer(Server):
                     else:
                         case.error = problem
                         first = spelt[min(missing)]
-                        holder = await self.items(
-                            library.key, library.media_type, Limit=1, **{param: first}
-                        )
-                        if holder["Items"]:
-                            case.note += (
-                                f"; {self.server} says {holder['Items'][0]['Name']} "
-                                f"holds {first!r}"
-                            )
+                        case.note += await self.held_by(library, param, first)
             if not values:
                 continue
             value = values[0]
@@ -1556,6 +1583,78 @@ class MediaBrowserServer(Server):
             case.held = counted["TotalRecordCount"]
             if case.mismatch and differs:
                 case.note = differs
+
+    async def members_to_a_user(self, collection_id: str) -> str:
+        """How many members the server lists in a collection to an administrator.
+
+        Told apart from the none it lists to the API key alone, this shows
+        whether the server lists a collection's members only to a user.
+        """
+        users: list[dict[str, Any]] = await self.get("/Users")
+        policies: list[dict[str, Any]] = [user.get("Policy") or {} for user in users]
+        admin = next(
+            (
+                user
+                for user, policy in zip(users, policies, strict=True)
+                if policy.get("IsAdministrator")
+            ),
+            None,
+        )
+        if admin is None:
+            return f"{self.server} has no administrator to ask as"
+        found = await self.get(
+            "/Items", ParentId=collection_id, UserId=admin["Id"], Limit=0
+        )
+        return (
+            f"{self.server} lists {found['TotalRecordCount']} members to "
+            f"{admin['Name']}, and none to the API key alone"
+        )
+
+    async def held_by(self, library: Library, param: str, value: str) -> str:
+        """Name a title the server says holds a value, and what Overture keeps of it.
+
+        Overture's copy of the title holds the labels its last sync of it read,
+        so a label added on the server since then is not there yet.
+        """
+        found = await self.items(
+            library.key,
+            library.media_type,
+            Limit=1,
+            Fields="DateLastSaved",
+            **{param: value},
+        )
+        if not found["Items"]:
+            return ""
+        row = found["Items"][0]
+        note = f"; {self.server} says {row['Name']} holds {value!r}"
+        item = next(
+            (
+                item
+                for item in library.items
+                if item_copy_id(item, library.id) == str(row["Id"])
+            ),
+            None,
+        )
+        if item is None:
+            return note + ", a title Overture does not list"
+        record = await library.overture.get(f"/api/library/items/{item['id']}/record")
+        copy = next(
+            (
+                stored["values"]
+                for stored in record["stored"]
+                if stored["table"] == "media_item_copies"
+                and stored["values"].get("server_item_id") == str(row["Id"])
+            ),
+            None,
+        )
+        if copy is None:
+            return note + ", whose copy Overture does not hold"
+        labels: list[str] = copy.get("labels") or []
+        return (
+            f"{note}; {self.server} saved it at {row.get('DateLastSaved')}, and "
+            f"Overture last read it at {copy.get('verified_at')}, holding "
+            f"{len(labels)} label{'' if len(labels) == 1 else 's'}"
+        )
 
     async def collection_ids(self) -> dict[str, dict[str, Any]]:
         found = await self.get(
@@ -1626,6 +1725,19 @@ async def check_media_browser_collections(
             **{key: f"{row['Name']} ({key})" for key, row in listed.items()},
         },
     )
+    # Sync leaves out a collection whose members it cannot place in a library.
+    if lacking := sorted(set(listed) - set(mine) - skipped):
+        members = await direct.get("/Items", ParentId=lacking[0], Limit=0)
+        if not members["TotalRecordCount"]:
+            case.note = "; ".join(
+                part
+                for part in (
+                    case.note,
+                    f"{listed[lacking[0]]['Name']}: "
+                    + await direct.members_to_a_user(lacking[0]),
+                )
+                if part
+            )
     cases = [case]
     held: dict[str, int] = {}
     for key, row in listed.items():
@@ -2221,6 +2333,8 @@ class WriteCheck:
         self.made.append(created.id)
         held = await self.provider.get_collection_member_ids(created.id)
         check.count, check.held = 2, len(set(held) & {first, second})
+        if not held and isinstance(self.direct, MediaBrowserServer):
+            check.note = await self.direct.members_to_a_user(created.id)
         return created.id
 
     async def members(self, check: Case, collection_id: str, items: list[str]) -> None:
@@ -2279,6 +2393,9 @@ class WriteCheck:
                 "order": row.get("DisplayOrder"),
             }
             wanted["order"] = "SortName"
+            # Jellyfin answers with the sort name it derives, in lower case.
+            kept["sort title"] = str(kept["sort title"] or "").casefold()
+            wanted["sort title"] = wanted["sort title"].casefold()
         wrong = [name for name, value in kept.items() if value != wanted[name]]
         if plex and not await self.on_home(library, collection_id):
             wrong.append("Home visibility")
