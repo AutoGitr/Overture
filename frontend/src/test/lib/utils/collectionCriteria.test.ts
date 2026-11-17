@@ -31,6 +31,12 @@ describe("collection criteria helpers", () => {
     expect(availableFields(undefined, true)).toEqual([]);
   });
 
+  it("offers a smart collection's library without Plex the fields Overture evaluates", () => {
+    const jellyfin = { ...capabilities, smart: false, server_types: ["jellyfin" as const] };
+    expect(availableFields(jellyfin, true)).toEqual(availableFields(jellyfin, false));
+    expect(availableFields(jellyfin, true).map((entry) => entry.field)).not.toContain("hdr");
+  });
+
   it("offers only the operators the chosen evaluation tests", () => {
     const resolution = {
       ...field("genre"),

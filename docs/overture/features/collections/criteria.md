@@ -80,7 +80,10 @@ Smart when Plex filters every condition natively, or when a filter only Plex
 has needs it, and Regular when lists, tags, TMDB facts, an operator Plex lacks
 or a custom order need it.
 
-Jellyfin and Emby have no smart collections, so the choice is not shown there.
+Jellyfin and Emby have no smart collections, so the choice is shown only when
+the collection holds a Plex library, and applies to its Plex libraries alone.
+In its Jellyfin and Emby libraries a smart collection stays regular, and their
+criteria offer the fields Overture evaluates.
 
 Imported Plex smart collections keep their Plex filter until you choose
 **Replace the Plex filter with these criteria**.

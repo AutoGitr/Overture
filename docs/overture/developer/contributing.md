@@ -94,16 +94,22 @@ PLEX_TOKEN=... JELLYFIN_API_KEY=... EMBY_API_KEY=... \
 
 Through Overture's API it previews every field and operator, order, list
 source and set dimension in each library, checks the collection kind
-recommended for each field, previews each managed collection's rule against
-the members the server holds, plans the adoption of each unmanaged one, loads
-every collection image and reads a sample of contribution issues. Against each
+recommended for each condition, previews each managed collection's rule
+against the members each server's copy holds, plans the adoption of each
+unmanaged one, loads every collection image, from the server and from
+Overture's own copy, and reads a sample of contribution issues. Against each
 media server directly it compares the libraries, items and collections
-Overture lists with the server's own, the values Overture offers with those
-the server lists, and Overture's counts with the server's: on Plex as a smart
-filter, naming the first title the two disagree on with the values Plex holds
-for it; on Jellyfin and Emby with the server's own item filters. It reports
+Overture lists with the server's own, naming why Overture leaves a collection
+out (a separator, other items, or importing unmanaged collections being off),
+the members, title, kind and theme of each, the values Overture offers with
+those the server lists, and Overture's counts with the server's: on Plex as a
+smart filter, halving the years until it names the title the two disagree on,
+with the values Plex holds for it and whether Plex lists the value at all; on
+Jellyfin and Emby with the server's own item filters. Where Plex refuses a
+text value it asks Plex directly which character it refuses. It reports
 every Plex filter, field, sort and operator, and every Jellyfin and Emby
-filter, Overture cannot use. With `TMDB_API_KEY` and `MDBLIST_API_KEY` set,
+filter, Overture cannot use. A check that fails is reported and the others
+still run. With `TMDB_API_KEY` and `MDBLIST_API_KEY` set,
 and `--radarr` and `--sonarr` given with `RADARR_API_KEY` and
 `SONARR_API_KEY`, it also reads what those services offer: every TMDB chart,
 MDBList's lists, list search and title details (including whether it names a
@@ -117,7 +123,10 @@ is checked through Overture alone. Pass `--sources sources.json`, a list of
 source objects as the API takes them, to include TMDB lists, franchises,
 people and MDBList lists. With `--write` it also makes, changes and deletes
 temporary "zz Overture verify" collections with Overture's own media server
-clients, to show how each server takes them. Run it before each release and
+clients, to show how each server takes them: members and their order, title,
+sort title, summary, display order and Home visibility, poster and
+background, and on Plex a smart collection's filter, each read back from the
+server itself and reported on its own with the request a server refused. Run it before each release and
 after changing `src/overture/services/collections/` or
 `src/overture/media_servers/`, and turn each problem it reports into a test.
 

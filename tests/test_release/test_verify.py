@@ -3,7 +3,7 @@
 lazy import json
 lazy from dataclasses import replace
 lazy from pathlib import Path
-lazy from typing import Any, override
+lazy from typing import Any, cast, override
 
 lazy import httpx2
 lazy import pytest
@@ -70,8 +70,11 @@ def _collection(identity: int, title: str, *, managed: bool) -> dict[str, Any]:
         "copies": [
             {"server_id": 1, "server_item_id": f"c{identity}", "library_ids": ["1:1"]}
         ],
-        "thumb_url": f"/api/collections/{identity}/image/poster?t=1",
-        "art_url": None,
+        "server_poster_version": "1",
+        "server_background_version": None,
+        "poster_hash": None,
+        "background_hash": None,
+        "has_theme": False,
     }
 
 
@@ -100,7 +103,16 @@ _MOVIES: dict[str, Any] = {
     ],
     "/api/collections/5": {
         "rule": {
-            "criteria": {"conditions": [{"kind": "field"}]},
+            "libraries": [
+                {
+                    "library_id": "1:1",
+                    "criteria": {
+                        "conditions": [
+                            {"field": "genre", "operator": "is", "value": "Horror"}
+                        ]
+                    },
+                }
+            ],
             "last_synced_at": None,
             "source_summary": None,
         }
@@ -130,10 +142,23 @@ def _preview(body: dict[str, Any]) -> httpx2.Response:
     if body["rule"].get("smart"):
         return httpx2.Response(
             200,
-            json={"libraries": [{"member_count": 2, "members": ["Alien", "Aliens"]}]},
+            json={
+                "libraries": [
+                    {
+                        "library_id": "1:1",
+                        "member_count": 2,
+                        "members": ["Alien", "Aliens"],
+                    }
+                ]
+            },
         )
     return httpx2.Response(
-        200, json={"libraries": [{"member_count": 1, "members": ["Alien"]}]}
+        200,
+        json={
+            "libraries": [
+                {"library_id": "1:1", "member_count": 1, "members": ["Alien"]}
+            ]
+        },
     )
 
 
@@ -155,6 +180,7 @@ _FIXED: dict[str, Any] = {
     "/api/catalog/items/2/issue": _issue("show.yml", "Aliens"),
     "/api/collections/tags/radarr": [{"id": 1, "label": "requests"}],
     "/api/collections/arr-options": {"root_folders": [], "quality_profiles": []},
+    "/api/collections/groups": ["Charts"],
 }
 
 
@@ -183,7 +209,8 @@ def _overture(
                     "media_servers": [
                         {"id": index, "title": title, "type": kind, "collections": True}
                         for index, (title, kind) in enumerate(servers, start=1)
-                    ]
+                    ],
+                    "collection_import_unmanaged": True,
                 },
             )
         case "/api/collections/capabilities":
@@ -223,6 +250,8 @@ def _plex(request: httpx2.Request) -> httpx2.Response:
                 Metadata=[
                     {"ratingKey": "c5", "title": "Scary", "childCount": 3, "smart": 0},
                     {"ratingKey": "c9", "title": "Elsewhere", "childCount": 1},
+                    # The separator of the Charts group, which Overture keeps.
+                    {"ratingKey": "c10", "title": "Charts", "childCount": 0},
                 ]
             )
         case "/library/sections/1/genre":
@@ -234,10 +263,13 @@ def _plex(request: httpx2.Request) -> httpx2.Response:
                 Meta={
                     "Type": [
                         {
-                            "type": "1",
+                            "type": "movie",
                             "Filter": [
                                 {"filter": "genre", "key": "/library/sections/1/genre"},
                                 {"filter": "unknownFilter"},
+                            ],
+                            "Field": [
+                                {"key": "resolution", "type": "resolution"},
                             ],
                             "Sort": [{"key": "titleSort"}],
                         }
@@ -245,6 +277,12 @@ def _plex(request: httpx2.Request) -> httpx2.Response:
                     "FieldType": [
                         {"type": "tag", "Operator": [{"key": "=", "title": "is"}]},
                         {"type": "string", "Operator": [{"key": "~", "title": "like"}]},
+                        # Plex types its media fields by name.
+                        {
+                            "type": "resolution",
+                            "Operator": [{"key": "=", "title": "is"}],
+                        },
+                        {"type": "hologram", "Operator": []},
                     ],
                 }
             )
@@ -260,6 +298,9 @@ def _plex(request: httpx2.Request) -> httpx2.Response:
 def _jellyfin(request: httpx2.Request) -> httpx2.Response:
     assert request.headers["Authorization"] == 'MediaBrowser Token="jelly"'
     params = request.url.params
+    # Jellyfin knows its libraries by its own ID, never by Overture's.
+    if params.get("ParentId", "1") != "1":
+        return httpx2.Response(400)
     match request.url.path:
         case "/Library/VirtualFolders":
             return httpx2.Response(
@@ -373,13 +414,16 @@ async def test_a_run_checks_overture_against_plex_and_names_each_problem(
     assert "only Plex selects Aliens; Plex holds genre='Horror'" in text
     assert "recommends regular, expected smart" in text
     assert "Genre 'horror' is offered as 'Horror'" in text
-    assert "| image | Scary poster |" in text
+    assert "| image | Scary poster from the server |" in text
     assert "HTTP 502" in text
     assert "Overture lacks items m3" in text
     assert "Overture lacks collections c9" in text
+    assert "left out by design: Charts (a separator)" in text
     assert "Overture does not offer western" in text
     assert "| plex field | unknownFilter |" in text
     assert "| plex operator | string ~ (like) |" in text
+    assert "| plex operator | hologram |" in text
+    assert "resolution" not in text
     assert "opens ['show.yml']" in text
     # Plex is only ever read, and Overture only through its reads.
     assert {method for host, method, _, _ in requests if host == "plex-server"} == {
@@ -512,6 +556,8 @@ class _Collections:
             ),
             "kept": ServerCollection(id="kept", title="Mine", member_ids=()),
         }
+        #: Each collection as the server's own API answers for it.
+        self.items: dict[str, dict[str, Any]] = {}
         self.fail_at = fail_at
         self.closed = False
 
@@ -526,6 +572,7 @@ class _Collections:
     ) -> ServerCollection:
         made = ServerCollection(id=title, title=title, member_ids=tuple(members))
         self.held[made.id] = made
+        self.items[made.id] = {"Name": title, "ImageTags": {}}
         return made
 
     async def get_collection_member_ids(self, collection_id: str) -> list[str]:
@@ -535,9 +582,18 @@ class _Collections:
         self, collection_id: str, members: list[str], **_kwargs: Any
     ) -> list[str]:
         if self.fail_at == "members":
-            raise MediaServerError("Plex refused the order")
+            # The server refuses the request, as Overture's client reports it.
+            request = httpx2.Request(
+                "POST", f"http://jellyfin.test/Collections/{collection_id}/Items?ids=a"
+            )
+            response = httpx2.Response(400, text="Bad ids", request=request)
+            cause = httpx2.HTTPStatusError("400", request=request, response=response)
+            raise MediaServerError(
+                "Verify returned an unsuccessful response"
+            ) from cause
+        # Jellyfin keeps its own order.
         self.held[collection_id] = replace(
-            self.held[collection_id], member_ids=tuple(members)
+            self.held[collection_id], member_ids=tuple(sorted(members))
         )
         return members
 
@@ -545,17 +601,22 @@ class _Collections:
         self, collection_id: str, **kwargs: Any
     ) -> None:
         self.held[collection_id] = replace(
-            self.held[collection_id],
-            title=kwargs["title"],
-            sort_title=kwargs["sort_title"],
-            summary=kwargs["summary"],
-            visible_home=kwargs["visible_home"],
+            self.held[collection_id], title=kwargs["title"]
         )
+        self.items[collection_id] |= {
+            "Name": kwargs["title"],
+            "ForcedSortName": kwargs["sort_title"],
+            "Overview": kwargs["summary"],
+            "DisplayOrder": "SortName"
+            if kwargs["order"] is module.CollectionOrder.TITLE_ASC
+            else "PremiereDate",
+        }
 
-    async def upload_collection_art(self, collection_id: str, *_args: Any) -> None:
-        self.held[collection_id] = replace(
-            self.held[collection_id], thumb_url="/thumb/new"
-        )
+    async def upload_collection_art(
+        self, collection_id: str, art_type: Any, *_args: Any
+    ) -> None:
+        if art_type is module.ArtType.POSTER:
+            self.items[collection_id]["ImageTags"] = {"Primary": "new"}
 
     async def delete_collection(self, collection_id: str) -> None:
         del self.held[collection_id]
@@ -565,9 +626,17 @@ class _Collections:
 
 
 class _Jellyfin(module.MediaBrowserServer):
+    def __init__(self, server: _Collections) -> None:
+        super().__init__("jellyfin", "http://jellyfin.test", "key")
+        self.server_state = server
+
     @override
     async def items(self, library_id: str, media_type: str, **params: Any) -> Any:
         return {"Items": [{"Id": "a"}, {"Id": "b"}, {"Id": "c"}]}
+
+    @override
+    async def get(self, path: str, **params: Any) -> Any:
+        return self.server_state.items[path.removeprefix("/Items/")]
 
 
 @pytest.mark.parametrize("fail_at", [None, "members"])
@@ -580,7 +649,7 @@ async def test_writes_touch_only_their_own_collections_and_delete_them_whatever_
         return server, server
 
     monkeypatch.setattr(module, "write_provider", provider)
-    direct = _Jellyfin("jellyfin", "http://jellyfin.test", "key")
+    direct = _Jellyfin(server)
     try:
         cases = await module.WriteCheck(
             direct, "http://jellyfin.test", "key", verify=True
@@ -591,5 +660,148 @@ async def test_writes_touch_only_their_own_collections_and_delete_them_whatever_
     # A collection left by a killed run is deleted, and only Overture's go.
     assert list(server.held) == ["kept"]
     assert server.closed
-    problems = [case.problem for case in cases if case.problem]
-    assert problems == (["Plex refused the order"] if fail_at else [])
+    problems = {case.label: case.problem for case in cases if case.problem}
+    # Each step is reported on its own, the refused request named, and the
+    # steps after a refused one still run; this server keeps no background.
+    refused = (
+        "Verify returned an unsuccessful response: POST "
+        "/Collections/zz Overture verify regular/Items answered 'Bad ids'"
+    )
+    assert problems == {
+        **({"replace a member": refused} if fail_at else {}),
+        "upload a poster and a background": "the server names the same background",
+    }
+
+
+def test_the_kind_expected_follows_who_tests_the_condition() -> None:
+    plex = {"operators": ["is"], "smart_operators": ["is"], "labelled": False}
+    labelled = {**plex, "labelled": True}
+    only_plex = {"operators": [], "smart_operators": ["is"], "labelled": False}
+    assert module.expected_kind(plex, "is") == "smart"
+    # A label Overture keeps is refreshed on each sync, so it suits regular.
+    assert module.expected_kind(labelled, "is") == "regular"
+    assert module.expected_kind(only_plex, "is") == "smart"
+
+
+def test_a_collection_overture_leaves_out_is_named_with_why() -> None:
+    listing = module.Listing(frozenset({"charts"}), import_unmanaged=False)
+    assert listing.reason("Charts", 0, None, "movie") == "a separator"
+    assert listing.reason("Old", 0, None, "movie") == "empty"
+    assert listing.reason("Seasons", 3, "season", "show") == "holds seasons"
+    assert "importing unmanaged collections is off" in listing.reason(
+        "Mine", 3, "show", "show"
+    )
+    assert not module.Listing(frozenset(), import_unmanaged=True).reason(
+        "Mine", 3, None, "show"
+    )
+
+
+class _Previews:
+    """Previews where Plex selects one title Overture leaves out, in 1994."""
+
+    def __init__(self) -> None:
+        self.titles = {f"Film {index:03}": 1950 + index % 60 for index in range(200)}
+        self.sent = 0
+
+    async def preview(
+        self, rule: dict[str, Any], _collection_id: int | None = None
+    ) -> list[dict[str, Any]]:
+        self.sent += 1
+        bounds = {
+            condition["operator"]: condition["value"]
+            for condition in rule["libraries"][0]["criteria"]["conditions"]
+            if condition["field"] == "year"
+        }
+        selected = sorted(
+            title
+            for title, year in self.titles.items()
+            if bounds.get("gte", 0) <= year <= bounds.get("lte", 9999)
+            and (rule["smart"] or title != "Film 104")
+        )
+        return [
+            {
+                "library_id": "1:1",
+                "member_count": len(selected),
+                "members": selected[:20],
+            }
+        ]
+
+
+async def test_the_years_are_narrowed_until_the_title_that_differs_is_named() -> None:
+    previews = _Previews()
+    library = module.Library(
+        cast("Any", previews),
+        "Plex",
+        _capabilities("plex"),
+        "movie",
+        {"id": "1:1", "title": "Movies"},
+        set(),
+        [{"title": title, "year": year} for title, year in previews.titles.items()],
+        [],
+        None,
+        module.Listing(frozenset(), import_unmanaged=True),
+    )
+    first = module.Members(199, sorted(previews.titles)[:20])
+    span, ours, theirs = await library.narrow(
+        {"field": "genre"}, first, module.Members(200, sorted(previews.titles)[:20])
+    )
+
+    assert span is not None
+    assert span[0] <= 1994 <= span[1]
+    assert ours.whole
+    assert theirs.whole
+    assert module.first_difference(ours.names, theirs.names, complete=(True, True)) == (
+        "Film 104",
+        True,
+    )
+    # Halving the years takes a handful of previews, not one per year.
+    assert previews.sent <= 20
+
+
+def test_a_refused_request_is_named_with_what_the_server_answered() -> None:
+    request = httpx2.Request(
+        "GET", "http://plex.test/library/sections/1/all?title%3D%3D=x"
+    )
+    response = httpx2.Response(500, text="  Internal\n error ", request=request)
+    error = httpx2.HTTPStatusError("500", request=request, response=response)
+    assert module.failure(error) == (
+        "HTTP 500: GET /library/sections/1/all answered 'Internal error'"
+    )
+
+
+async def test_the_character_plex_refuses_in_a_text_value_is_named(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def plex(request: httpx2.Request) -> httpx2.Response:
+        # Plex fails on a quote in an exact match, and reads a doubled one.
+        query = request.url.query.decode()
+        if "%27%27" in query:
+            return httpx2.Response(200, json={"MediaContainer": {"totalSize": 1}})
+        if "%27" in query:
+            return httpx2.Response(500)
+        return httpx2.Response(200, json={"MediaContainer": {"totalSize": 0}})
+
+    original = httpx2.AsyncClient
+
+    def client(**kwargs: Any) -> httpx2.AsyncClient:
+        return original(transport=httpx2.MockTransport(plex), **kwargs)
+
+    monkeypatch.setattr(module.httpx2, "AsyncClient", client)
+    server = module.PlexServer("http://plex-server.test", "token")
+    library = cast("Any", type("L", (), {"key": "2", "media_type": "show"}))
+    try:
+        note = await server.refused(
+            library,
+            {
+                "kind": "field",
+                "field": "title",
+                "operator": "is",
+                "value": "'Allo 'Allo!",
+            },
+        )
+    finally:
+        await server.client.aclose()
+
+    assert note == (
+        "Plex answers once \"'\" is left out of the value; with ' doubled it selects 1"
+    )

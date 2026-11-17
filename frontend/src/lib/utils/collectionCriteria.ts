@@ -72,14 +72,18 @@ export function groupIsEmpty(group: FilterGroupInput): boolean {
   return !group.conditions?.length && (group.groups ?? []).every(groupIsEmpty);
 }
 
-/** The fields a collection can test, with the operators of Overture or of Plex. */
+/**
+ * The fields a collection can test, with the operators of Overture or of Plex.
+ * A smart collection is smart only on Plex; elsewhere Overture evaluates it.
+ */
 export function availableFields(
   capabilities: CollectionCapabilities | undefined,
   smart: boolean,
 ): CollectionFieldRead[] {
+  const plex = smart && !!capabilities?.smart;
   return (capabilities?.fields ?? [])
-    .filter((field) => (smart ? field.smart : field.local))
-    .map((field) => (smart ? { ...field, operators: field.smart_operators } : field));
+    .filter((field) => (plex ? field.smart : field.local))
+    .map((field) => (plex ? { ...field, operators: field.smart_operators } : field));
 }
 
 export function availableOrders(

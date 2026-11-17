@@ -8,23 +8,34 @@ media server is asked directly, so Overture's answers are compared with the
 server's own:
 
 - **Inventory**: the libraries, every item and every collection Overture lists
-  are the ones the server holds, with the members the server counts.
+  are the ones the server holds, with the members, title, kind and theme the
+  server holds. A collection the server holds that Overture leaves out is
+  named with why: a separator, an empty one, one of other items, or an
+  unmanaged one while importing them is off.
 - **Fields**: every field and operator previews in every library; on Plex a
   field both evaluators know is previewed by Overture and by Plex, the counts
-  must agree, and where they differ the first title they disagree on is shown
-  with the values Plex holds for it. On Jellyfin and Emby the fields the server
-  filters on are counted by the server as well.
+  must agree, and where they differ the range of years is narrowed until the
+  title they disagree on is found, shown with the values Plex holds for it and
+  whether Plex lists the value at all. Where Plex refuses a text value, the
+  value is sent to Plex directly to show which character it refuses. On
+  Jellyfin and Emby the fields the server filters on are counted by the
+  server as well.
 - **Values**: every tag and text field lists its values, and they include every
-  value the server lists for its own filters.
+  value the server lists for its own filters; on Plex, the values Overture
+  offers that Plex does not list, which no smart collection can select, are
+  noted.
 - **Orders**: every order previews; where Overture and Plex both sort, their
   first members are compared (ties may legitimately differ).
-- **Kinds**: the kind recommended for each field is one that can evaluate it.
+- **Kinds**: the kind recommended for each condition is the one Overture's
+  rule names: smart where Plex tests it itself or only Plex can, regular where
+  Overture evaluates it, including through labels.
 - **Sources and sets**: Radarr and Sonarr tags, every TMDB chart, any given
   sources and every set dimension, with the defaults it starts with, preview.
-- **Collections**: each managed collection's rule previews to the members the
-  server holds; each unmanaged one plans an adoption whose criteria the editor
-  offers and that selects what the server holds; every poster and background
-  Overture serves loads.
+- **Collections**: in each library, each managed collection's rule previews to
+  the members the server's copy holds; each unmanaged one plans an adoption
+  whose criteria the editor offers and that selects what the server holds;
+  every poster and background Overture serves, from the server or its own
+  cache, loads.
 - **OvertureDB**: a sample of each library's contribution issues are links to
   the OvertureDB form of their media type.
 - **What the server offers**: every Plex filter, field, sort and operator is one
@@ -48,8 +59,10 @@ sent.
   server takes Overture's own collection writes. Overture's media server
   clients, the code a sync runs, create a regular collection and on Plex a
   smart one, change and order their members, edit their title, sort title,
-  summary and Home visibility, upload a poster and delete them, reading the
-  server back after each step. Everything they make is titled "zz Overture
+  summary and order (and on Plex its Home visibility), upload a poster and a
+  background, change the smart one's filter and delete them, reading the
+  server itself back after each step. Each step is reported on its own, with
+  the request the server refused. Everything they make is titled "zz Overture
   verify" and deleted at the end, whatever fails; one left by a run that was
   killed is deleted first. No item, library or other collection is changed.
 
@@ -95,7 +108,7 @@ lazy import asyncio
 lazy import json
 lazy import os
 lazy import sys
-lazy from collections.abc import Iterator
+lazy from collections.abc import Awaitable, Callable, Iterator
 lazy from dataclasses import dataclass, field
 lazy from pathlib import Path
 lazy from typing import Any
@@ -112,9 +125,9 @@ lazy from overture.domain import (
     CollectionOrder,
     MediaType,
 )
-lazy from overture.media_servers.adapters import ServerCollection
 lazy from overture.media_servers.base import BaseMediaServerProvider
 lazy from overture.media_servers.errors import MediaServerError
+lazy from overture.media_servers.plex.client import PLEX_CUSTOM_SORT
 lazy from overture.media_servers.registry import ProviderRegistry
 lazy from overture.schemas.collections import CollectionRuleWrite, FilterGroup
 lazy from overture.services.collections.plex_query import (
@@ -123,6 +136,7 @@ lazy from overture.services.collections.plex_query import (
     plex_operators,
     plex_sort,
 )
+lazy from overture.utils.collection_fields import FIELDS, PlexFieldType
 lazy from overture.utils.generated_art import render_art
 lazy from overture.utils.http_security import API_KEY_HEADER
 lazy from scripts.json_values import is_array, is_object
@@ -158,9 +172,16 @@ PLEX_DIFFERS: dict[tuple[str, str], str] = {
 }
 #: Fields whose regular evaluation reads play state as of the last library sync.
 PLAY_STATE = frozenset({"in_progress", "unplayed", "plays", "last_played"})
-#: Plex's metadata type numbers, and the scope its fields take in a section.
-PLEX_SCOPES = {"1": "movie", "2": "show", "3": "season", "4": "episode"}
+#: The scopes Plex lists a section's filters, fields and sorts under.
+PLEX_SCOPES = frozenset({"movie", "show", "season", "episode"})
 PLEX_TYPES = {"movie": 1, "show": 2}
+PLEX_EPISODE = 4
+#: The Plex field types Overture writes; Plex types its media fields by name.
+PLEX_FIELD_TYPES: frozenset[PlexFieldType] = frozenset(
+    {"string", "tag", "integer", "float", "date", "boolean"}
+)
+#: Characters Plex may refuse in a text value, each probed on its own.
+PLEX_TEXT_PROBES = ("'", "!", "&", '"', "%")
 #: Where a title's metadata holds a filter's tags, when not under its name.
 PLEX_TAGS = {"actor": "Role", "contentRating": "contentRating"}
 #: The overture field each Jellyfin and Emby item filter tests, by the filter's
@@ -268,10 +289,18 @@ class Overture:
             raise ApiError(detail(response))
         return response.json()
 
-    async def preview(self, rule: dict[str, Any]) -> dict[str, Any]:
-        """What the rule's only library previews to."""
-        found = await self.post("/api/collections/preview", {"rule": rule})
-        return found["libraries"][0]
+    async def preview(
+        self, rule: dict[str, Any], collection_id: int | None = None
+    ) -> list[dict[str, Any]]:
+        """What each of the rule's libraries previews to.
+
+        A saved collection is named, so it never counts as another collection
+        holding its own members.
+        """
+        found = await self.post(
+            "/api/collections/preview", {"rule": rule, "collection_id": collection_id}
+        )
+        return found["libraries"]
 
 
 class Server:
@@ -288,10 +317,26 @@ class Server:
         )
 
     async def get(self, path: str, **params: Any) -> Any:
-        """The only request a media server is sent."""
-        response = await self.client.get(path, params=params)
+        """The only request a media server is sent.
+
+        Without *params* a query written into *path* is sent as it is.
+        """
+        response = await self.client.get(path, params=params or None)
         response.raise_for_status()
         return response.json()
+
+
+def failure(exc: Exception) -> str:
+    """Name a failure, with the request a server refused and what it answered."""
+    cause = exc.__cause__ if isinstance(exc, MediaServerError) else exc
+    if not isinstance(cause, httpx2.HTTPStatusError):
+        return str(exc)
+    request, response = cause.request, cause.response
+    answer = " ".join(response.text.split())[:200]
+    return (
+        f"{exc if cause is not exc else f'HTTP {response.status_code}'}: "
+        f"{request.method} {request.url.path} answered {answer!r}"
+    )
 
 
 def item_copy_id(item: dict[str, Any], library_id: str) -> str:
@@ -306,15 +351,10 @@ def item_copy_id(item: dict[str, Any], library_id: str) -> str:
     )
 
 
-def collection_copy_id(row: dict[str, Any], library_id: str) -> str:
-    """The ID of the server collection holding a collection's members in a library."""
+def collection_copy(row: dict[str, Any], library_id: str) -> dict[str, Any] | None:
+    """The server collection holding a collection's members in a library."""
     return next(
-        (
-            str(copy["server_item_id"])
-            for copy in row["copies"]
-            if library_id in copy["library_ids"]
-        ),
-        "",
+        (copy for copy in row["copies"] if library_id in copy["library_ids"]), None
     )
 
 
@@ -339,6 +379,17 @@ def field_value(kind: str, operator: str, values: list[dict[str, Any]]) -> Any:
         return None
     text = str(common["value"])
     return text[:3] if operator in {"contains", "does_not_contain"} else text
+
+
+def expected_kind(entry: dict[str, Any], operator: str) -> str:
+    """The kind Overture's rule recommends for one condition on Plex.
+
+    A condition only Plex tests needs a smart collection; one Overture
+    evaluates, itself or through a label it keeps, suits a regular one unless
+    Plex tests it natively.
+    """
+    native = operator in entry["smart_operators"] and not entry["labelled"]
+    return "smart" if native or operator not in entry["operators"] else "regular"
 
 
 def field_conditions(group: dict[str, Any]) -> Iterator[dict[str, Any]]:
@@ -372,6 +423,39 @@ def first_difference(
     return None
 
 
+@dataclass(slots=True, frozen=True)
+class Members:
+    """What one evaluator selects: how many, and the first of them by title."""
+
+    count: int
+    names: list[str]
+
+    @property
+    def whole(self) -> bool:
+        return len(self.names) == self.count
+
+
+@dataclass(slots=True, frozen=True)
+class Listing:
+    """Why Overture leaves out a collection the server holds."""
+
+    #: Collection groups, by folded name: Plex holds a separator for some.
+    groups: frozenset[str]
+    import_unmanaged: bool
+
+    def reason(
+        self, title: str, members: int | None, subtype: str | None, media_type: str
+    ) -> str:
+        """Why the collection is left out, or ``""`` when it should be listed."""
+        if members == 0:
+            return "a separator" if title.casefold() in self.groups else "empty"
+        if subtype and subtype != media_type:
+            return f"holds {subtype}s"
+        if not self.import_unmanaged:
+            return "unmanaged, and importing unmanaged collections is off"
+        return ""
+
+
 class Library:
     """The checks of one library on one instance, and on its server."""
 
@@ -386,6 +470,7 @@ class Library:
         items: list[dict[str, Any]],
         collections: list[dict[str, Any]],
         direct: PlexServer | MediaBrowserServer | None,
+        listing: Listing,
     ) -> None:
         self.overture = overture
         self.server = server
@@ -402,6 +487,9 @@ class Library:
         self.items = items
         self.collections = collections
         self.direct = direct
+        self.listing = listing
+        #: The members the server counts in each of its collections, by its ID.
+        self.held: dict[str, int] = {}
         self._values: dict[str, list[dict[str, Any]] | ApiError] = {}
         self.cases: list[Case] = []
 
@@ -427,28 +515,40 @@ class Library:
             raise found
         return found
 
+    def record(self, case: Case, rule: dict[str, Any], count: int) -> None:
+        """Note a count as Plex's when Plex evaluates the rule, else as Overture's."""
+        if rule.get("smart") and self.plex_smart:
+            case.smart_count = count
+        else:
+            case.count = count
+
     async def preview(self, case: Case, rule: dict[str, Any]) -> list[str]:
-        """Record what a rule previews to: Overture's count, or Plex's if smart."""
+        """Record what a rule of this library previews to; return its members."""
         try:
-            result = await self.overture.preview(rule)
+            result = (await self.overture.preview(rule))[0]
         except ApiError as exc:
             case.error = str(exc)
             return []
-        if rule.get("smart"):
-            case.smart_count = result["member_count"]
-        else:
-            case.count = result["member_count"]
+        self.record(case, rule, result["member_count"])
         case.members = result["members"][:ORDER_DEPTH]
         return result["members"]
 
     async def check(self, extra_sources: list[dict[str, Any]]) -> list[Case]:
-        await self.check_fields()
-        await self.check_orders()
-        await self.check_sources(extra_sources)
-        await self.check_sets()
-        await self.check_issues()
-        if self.direct is not None:
-            await self.direct.check_library(self)
+        """Run every check of the library; one that fails leaves the others to run."""
+        stages: list[tuple[str, Callable[[], Awaitable[None]]]] = [
+            ("fields", self.check_fields),
+            ("orders", self.check_orders),
+            ("sources", lambda: self.check_sources(extra_sources)),
+            ("sets", self.check_sets),
+            ("issues", self.check_issues),
+        ]
+        if (direct := self.direct) is not None:
+            stages.append((direct.server, lambda: direct.check_library(self)))
+        for name, stage in stages:
+            try:
+                await stage()
+            except (ApiError, httpx2.HTTPError) as exc:
+                self.case("stage", name).error = failure(exc)
         return self.cases
 
     async def check_fields(self) -> None:
@@ -481,46 +581,144 @@ class Library:
                     "value": value,
                 }
                 await self.check_recommendation(
-                    condition, local=operator in local, smart=operator in smart
+                    condition, expected_kind(entry, operator)
                 )
-                if operator not in smart:
-                    await self.preview(case, single(self.id, condition))
-                    continue
-                case.differs = PLEX_DIFFERS.get((entry["field"], operator), "")
-                if operator not in local:
-                    await self.preview(case, single(self.id, condition, smart=True))
-                    continue
-                # Both in one order, so the first title they disagree on shows why.
-                ordered = {"order_type": CollectionOrder.TITLE_ASC.value}
-                ours = await self.preview(case, single(self.id, condition, **ordered))
-                theirs = await self.preview(
-                    case, single(self.id, condition, smart=True, **ordered)
-                )
-                if case.mismatch and case.differs:
-                    case.note = case.differs
-                elif case.mismatch and isinstance(self.direct, PlexServer):
-                    case.note = await self.direct.explain(
-                        self,
-                        entry["field"],
-                        first_difference(
-                            ours,
-                            theirs,
-                            complete=(
-                                len(ours) == case.count,
-                                len(theirs) == case.smart_count,
-                            ),
-                        ),
+                if operator in local and operator in smart:
+                    await self.compare(entry, condition, case)
+                else:
+                    await self.preview(
+                        case, single(self.id, condition, smart=operator in smart)
                     )
-                if case.mismatch and entry["field"] in PLAY_STATE:
-                    case.note = (
-                        "Overture reads play state as of the last library sync; "
-                        "sync and run again. " + case.note
-                    ).strip()
+                if (
+                    isinstance(self.direct, PlexServer)
+                    and entry["kind"] == "text"
+                    and "HTTP 500" in case.error
+                ):
+                    case.note = await self.direct.refused(self, condition)
+
+    async def compare(
+        self, entry: dict[str, Any], condition: dict[str, Any], case: Case
+    ) -> None:
+        """Preview by both evaluators, and name a title they disagree on."""
+        case.differs = PLEX_DIFFERS.get((entry["field"], condition["operator"]), "")
+        # Both in one order, so the first title they disagree on shows why.
+        ordered = {"order_type": CollectionOrder.TITLE_ASC.value}
+        ours = await self.preview(case, single(self.id, condition, **ordered))
+        theirs = await self.preview(
+            case, single(self.id, condition, smart=True, **ordered)
+        )
+        if not case.mismatch or case.count is None or case.smart_count is None:
+            return
+        if case.differs:
+            case.note = case.differs
+        elif isinstance(self.direct, PlexServer):
+            case.note = await self.disagreement(
+                entry,
+                condition,
+                Members(case.count, ours),
+                Members(case.smart_count, theirs),
+            )
+        if entry["field"] in PLAY_STATE:
+            case.note = (
+                "Overture reads play state as of the last library sync; "
+                "sync and run again. " + case.note
+            ).strip()
+
+    async def disagreement(
+        self,
+        entry: dict[str, Any],
+        condition: dict[str, Any],
+        ours: Members,
+        theirs: Members,
+    ) -> str:
+        """Name the first title the evaluators disagree on, with Plex's values."""
+        assert isinstance(self.direct, PlexServer)
+        try:
+            span, ours, theirs = await self.narrow(condition, ours, theirs)
+        except ApiError as exc:
+            return f"the years could not be narrowed: {exc}"
+        if ours.count == theirs.count:
+            return "the titles that differ have no year"
+        where = (
+            ""
+            if span is None
+            else f"in {span[0]}: "
+            if span[0] == span[1]
+            else f"in {span[0]}-{span[1]}: "
+        )
+        difference = first_difference(
+            ours.names, theirs.names, complete=(ours.whole, theirs.whole)
+        )
+        if difference is None:
+            return where + "the first members agree; the titles that differ sort later"
+        return where + await self.direct.explain(
+            self, entry, condition["value"], difference
+        )
+
+    async def members(
+        self, condition: dict[str, Any], years: tuple[int, int], *, smart: bool
+    ) -> Members:
+        """What one evaluator selects of the titles released in *years*."""
+        criteria = {
+            "conditions": [
+                condition,
+                {
+                    "kind": "field",
+                    "field": "year",
+                    "operator": "gte",
+                    "value": years[0],
+                },
+                {
+                    "kind": "field",
+                    "field": "year",
+                    "operator": "lte",
+                    "value": years[1],
+                },
+            ]
+        }
+        rule = {
+            "libraries": [{"library_id": self.id, "criteria": criteria}],
+            "order_type": CollectionOrder.TITLE_ASC.value,
+            "smart": smart,
+        }
+        found = (await self.overture.preview(rule))[0]
+        return Members(found["member_count"], found["members"])
+
+    async def narrow(
+        self, condition: dict[str, Any], ours: Members, theirs: Members
+    ) -> tuple[tuple[int, int] | None, Members, Members]:
+        """The years whose members both evaluators name in full, and those members.
+
+        A preview names only its first members, so the years are halved, to
+        the half whose counts differ, until both lists are whole there.
+        """
+        years = sorted({item["year"] for item in self.items if item.get("year")})
+        if not years or (ours.whole and theirs.whole):
+            return None, ours, theirs
+        span = (years[0], years[-1])
+        ours = await self.members(condition, span, smart=False)
+        theirs = await self.members(condition, span, smart=True)
+        while (
+            ours.count != theirs.count
+            and not (ours.whole and theirs.whole)
+            and span[0] < span[1]
+        ):
+            middle = (span[0] + span[1]) // 2
+            low = (span[0], middle)
+            ours = await self.members(condition, low, smart=False)
+            theirs = await self.members(condition, low, smart=True)
+            if ours.count != theirs.count:
+                span = low
+                continue
+            span = (middle + 1, span[1])
+            ours = await self.members(condition, span, smart=False)
+            theirs = await self.members(condition, span, smart=True)
+        return span, ours, theirs
 
     async def check_recommendation(
-        self, condition: dict[str, Any], *, local: bool, smart: bool
+        self, condition: dict[str, Any], expected: str
     ) -> None:
-        """The kind recommended for a condition must be one that can test it."""
+        """The kind recommended for a condition must be the one the rule names."""
         if not self.plex_smart:
             return
         case = self.case("kind", f"{condition['field']} {condition['operator']}")
@@ -533,7 +731,6 @@ class Library:
             case.error = str(exc)
             return
         kind = advice["kind"] if advice else None
-        expected = "smart" if smart else "regular" if local else None
         case.note = advice["reason"] if advice else "no recommendation"
         if kind != expected:
             case.error = f"recommends {kind or 'nothing'}, expected {expected}"
@@ -652,17 +849,21 @@ class Library:
             case.note = "; ".join(issue["notes"])
 
     async def check_collection(self, collection: dict[str, Any]) -> None:
-        """Preview a collection's rule, or its adoption, against what it holds."""
+        """Preview a collection's rule, or its adoption, against what it holds here.
+
+        Each server collection is compared on its own: the collection's count
+        is of its members on every server, which one server's copy need not
+        hold.
+        """
         managed = collection["managed"]
         case = self.case(
             "collection" if managed else "adoption",
             f"{collection['title']} ({collection['kind']})",
         )
-        if collection["withheld"] or collection["unsynced"]:
+        copy = collection_copy(collection, self.id)
+        if collection["withheld"] or collection["unsynced"] or copy is None:
             case.note = "not on the server"
             return
-        await self.check_images(collection)
-        case.held = collection["child_count"]
         path = f"/api/collections/{collection['id']}"
         try:
             if managed:
@@ -688,22 +889,53 @@ class Library:
             return
         if case.error:
             return
-        await self.preview(case, rule)
+        parts = [
+            part
+            for part in rule["libraries"]
+            if part["library_id"] in copy["library_ids"]
+        ]
+        if not parts:
+            case.error = "its rule holds no criteria for this library"
+            return
+        try:
+            found = await self.overture.preview(
+                {**rule, "libraries": parts}, collection["id"] if managed else None
+            )
+        except ApiError as exc:
+            case.error = str(exc)
+            return
+        self.record(case, rule, sum(row["member_count"] for row in found))
+        case.members = found[0]["members"][:ORDER_DEPTH]
         if managed and collection["below_minimum"]:
-            case.held = None
+            return
+        server_id = str(copy["server_item_id"])
+        case.held = self.held.get(
+            server_id,
+            collection["child_count"] if len(collection["copies"]) == 1 else None,
+        )
 
     async def check_images(self, collection: dict[str, Any]) -> None:
         """Every image Overture links a collection to must load."""
-        for art, url in (
-            ("poster", collection.get("thumb_url")),
-            ("background", collection.get("art_url")),
-        ):
-            if not url:
-                continue
-            case = self.case("image", f"{collection['title']} {art}")
-            status, kind = await self.overture.status(url)
-            if status != 200 or not kind.startswith("image/"):
-                case.error = f"HTTP {status} {kind}".strip()
+        base = f"/api/collections/{collection['id']}"
+        for art in ("poster", "background"):
+            for label, url in (
+                (
+                    "from the server",
+                    (version := collection[f"server_{art}_version"])
+                    and f"{base}/image/{art}?t={version}",
+                ),
+                (
+                    "Overture uploaded",
+                    (digest := collection[f"{art}_hash"])
+                    and f"{base}/local-image/{art}?t={digest}",
+                ),
+            ):
+                if not url:
+                    continue
+                case = self.case("image", f"{collection['title']} {art} {label}")
+                status, kind = await self.overture.status(url)
+                if status != 200 or not kind.startswith("image/"):
+                    case.error = f"HTTP {status} {kind}".strip()
 
     async def check_offered(self, case: Case, criteria: dict[str, Any]) -> None:
         """Every tag and text value must be one the editor offers as it is spelt."""
@@ -745,6 +977,31 @@ def inventory(case: Case, overture: set[str], server: set[str], *, noun: str) ->
     case.error = "; ".join(problems)
 
 
+def left_out(
+    case: Case,
+    listing: Listing,
+    media_type: str,
+    held: dict[str, tuple[str, int | None, str | None]],
+    mine: set[str],
+) -> set[str]:
+    """Note the collections Overture leaves out by design; return their IDs.
+
+    *held* names each server collection's title, member count and the kind of
+    item it holds.
+    """
+    reasons = {
+        key: reason
+        for key, (title, members, subtype) in held.items()
+        if key not in mine
+        and (reason := listing.reason(title, members, subtype, media_type))
+    }
+    if reasons:
+        case.note = "left out by design: " + named(
+            [f"{held[key][0]} ({reason})" for key, reason in reasons.items()]
+        )
+    return set(reasons)
+
+
 class PlexServer(Server):
     """Plex, asked directly with its token."""
 
@@ -752,6 +1009,7 @@ class PlexServer(Server):
 
     def __init__(self, base_url: str, token: str, *, verify: bool = True) -> None:
         super().__init__(base_url, {"X-Plex-Token": token}, verify=verify)
+        self._directories: dict[tuple[str, int | None], set[str]] = {}
 
     async def container(self, path: str, **params: Any) -> dict[str, Any]:
         return (await self.get(path, **params))["MediaContainer"]
@@ -782,9 +1040,68 @@ class PlexServer(Server):
 
     async def collections(self, library_id: str) -> dict[str, dict[str, Any]]:
         rows = (
-            await self.container(f"/library/sections/{library_id}/collections")
+            await self.container(
+                f"/library/sections/{library_id}/collections", includeFields="theme"
+            )
         ).get("Metadata", [])
         return {str(row["ratingKey"]): row for row in rows}
+
+    async def directory(self, path: str, item_type: int | None = None) -> set[str]:
+        """The folded names Plex lists a filter's values under, fetched once."""
+        key = (path, item_type)
+        if key not in self._directories:
+            params = {} if item_type is None else {"type": item_type}
+            self._directories[key] = {
+                str(row.get("title", "")).casefold()
+                for row in (await self.container(path, **params)).get("Directory", [])
+            } - {""}
+        return self._directories[key]
+
+    async def count(self, library: Library, condition: dict[str, Any]) -> int | None:
+        """How many titles Plex selects by a condition, or ``None`` if it refuses it."""
+        query = compile_plex_query(
+            FilterGroup.model_validate({"conditions": [condition]}),
+            media_type=MediaType(library.media_type),
+            order=CollectionOrder.TITLE_ASC,
+            limit=None,
+            choices={},
+            labels={},
+        )
+        try:
+            page = await self.container(
+                f"/library/sections/{library.key}/all?"
+                f"type={PLEX_TYPES[library.media_type]}"
+                f"&X-Plex-Container-Start=0&X-Plex-Container-Size=0&{query}"
+            )
+        except httpx2.HTTPStatusError:
+            return None
+        return int(page.get("totalSize", page.get("size", 0)))
+
+    async def refused(self, library: Library, condition: dict[str, Any]) -> str:
+        """Which character of a text value Plex refuses, asked of Plex directly."""
+        value = str(condition["value"])
+        culprits = [
+            char
+            for char in PLEX_TEXT_PROBES
+            if char in value
+            and await self.count(
+                library, {**condition, "value": value.replace(char, "")}
+            )
+            is not None
+        ]
+        if not culprits:
+            return "Plex refuses the value whichever character is left out"
+        note = "Plex answers once {} is left out of the value".format(
+            " or ".join(repr(char) for char in culprits)
+        )
+        if "'" in culprits:
+            doubled = await self.count(
+                library, {**condition, "value": value.replace("'", "''")}
+            )
+            note += "; with ' doubled " + (
+                "it refuses it too" if doubled is None else f"it selects {doubled}"
+            )
+        return note
 
     async def check_library(self, library: Library) -> None:
         """Compare what Overture lists and offers with what Plex holds and offers."""
@@ -810,65 +1127,69 @@ class PlexServer(Server):
         )
         listed = await self.collections(library.key)
         mine = {
-            key: row
+            str(copy["server_item_id"]): row
             for row in library.collections
-            if (key := collection_copy_id(row, library.id))
+            if (copy := collection_copy(row, library.id))
         }
-        inventory(
-            library.case("inventory", "collections"),
+        case = library.case("inventory", "collections")
+        skipped = left_out(
+            case,
+            library.listing,
+            library.media_type,
+            {
+                key: (row["title"], int(row.get("childCount", 0)), row.get("subtype"))
+                for key, row in listed.items()
+            },
             set(mine),
-            set(listed),
-            noun="collections",
         )
+        inventory(case, set(mine), set(listed) - skipped, noun="collections")
         for key, row in listed.items():
             if (ours := mine.get(key)) is None:
                 continue
+            library.held[key] = int(row.get("childCount", 0))
             case = library.case("inventory", f"{row['title']} members")
-            case.count, case.held = ours["child_count"], int(row.get("childCount", 0))
+            case.held = library.held[key]
+            # Overture counts the members on every server holding a copy.
+            if len(ours["copies"]) == 1:
+                case.count = ours["child_count"]
+            else:
+                case.note = (
+                    f"Overture counts its members on {len(ours['copies'])} servers"
+                )
+            problems: list[str] = []
             if bool(int(row.get("smart", 0))) != (ours["kind"] == "smart"):
-                case.error = (
+                problems.append(
                     f"Plex says smart={row.get('smart')}, Overture {ours['kind']}"
                 )
             if row["title"] != ours["title"]:
-                case.error = f"Plex names it {row['title']!r}"
+                problems.append(f"Plex names it {row['title']!r}")
+            if bool(row.get("theme")) != ours["has_theme"]:
+                problems.append(
+                    "Plex holds a theme Overture does not know"
+                    if row.get("theme")
+                    else "Overture lists a theme Plex does not hold"
+                )
+            case.error = "; ".join(problems)
 
     def check_offers(self, library: Library, meta: dict[str, Any]) -> None:
         """Each Plex filter, field, sort and operator must be one Overture uses."""
-        media_type = MediaType(library.media_type)
-        known = set(plex_field_keys(media_type))
-        sorts = _plex_sorts()
+        # Plex types media fields by name (``resolution``); Overture writes
+        # each as one of its own types, found through the fields of the type.
+        written_as: dict[str, set[PlexFieldType]] = {
+            kind: {kind} for kind in PLEX_FIELD_TYPES
+        }
         for kind in meta.get("Type", []):
-            scope = PLEX_SCOPES.get(str(kind.get("type")))
-            if scope is None:
-                continue
-            prefix = "" if scope == library.media_type else f"{scope}."
-            offered = {
-                *(entry["filter"] for entry in kind.get("Filter", [])),
-                *(entry["key"] for entry in kind.get("Field", [])),
-            }
-            for key in sorted(offered):
-                scoped = (key if "." in key else f"{prefix}{key}").removeprefix(
-                    f"{library.media_type}."
-                )
-                if scoped not in known:
-                    library.case(
-                        "plex field", scoped
-                    ).error = "Overture cannot test this Plex field"
-            if prefix:
-                continue
-            for entry in kind.get("Sort", []):
-                if entry["key"] not in sorts:
-                    library.case(
-                        "plex sort", entry["key"]
-                    ).error = "Overture cannot order by this Plex sort"
+            if kind.get("type") in PLEX_SCOPES:
+                self.check_scope(library, kind, written_as)
         for field_type in meta.get("FieldType", []):
-            kind = field_type.get("type")
-            if kind not in {"string", "tag", "integer", "float", "date", "boolean"}:
+            kind = str(field_type.get("type"))
+            ours = written_as.get(kind)
+            if not ours:
                 library.case(
-                    "plex operator", str(kind)
+                    "plex operator", kind
                 ).error = "Overture has no Plex field of this type"
                 continue
-            written = plex_operators(kind)
+            written = frozenset[str]().union(*map(plex_operators, ours))
             for operator in field_type.get("Operator", []):
                 if operator["key"] not in written:
                     library.case(
@@ -876,17 +1197,54 @@ class PlexServer(Server):
                         f"{kind} {operator['key']} ({operator['title']})",
                     ).error = "Overture never writes this Plex operator"
 
+    @staticmethod
+    def check_scope(
+        library: Library,
+        kind: dict[str, Any],
+        written_as: dict[str, set[PlexFieldType]],
+    ) -> None:
+        """Check the filters, fields and sorts Plex lists for one item type.
+
+        Adds the Overture type each Plex field type is written as to
+        *written_as*.
+        """
+        known = plex_field_keys(MediaType(library.media_type))
+        prefix = "" if kind["type"] == library.media_type else f"{kind['type']}."
+
+        def scoped(key: str) -> str:
+            return (key if "." in key else f"{prefix}{key}").removeprefix(
+                f"{library.media_type}."
+            )
+
+        for entry in kind.get("Field", []):
+            field_name = known.get(scoped(entry["key"]))
+            plex = FIELDS[field_name].plex if field_name else None
+            if plex is not None and entry.get("type"):
+                written_as.setdefault(entry["type"], set()).add(plex.type)
+        offered = {
+            *(entry["filter"] for entry in kind.get("Filter", [])),
+            *(entry["key"] for entry in kind.get("Field", [])),
+        }
+        for key in sorted(offered):
+            if scoped(key) not in known:
+                library.case(
+                    "plex field", scoped(key)
+                ).error = "Overture cannot test this Plex field"
+        if prefix:
+            return
+        sorts = _plex_sorts()
+        for entry in kind.get("Sort", []):
+            if entry["key"] not in sorts:
+                library.case(
+                    "plex sort", entry["key"]
+                ).error = "Overture cannot order by this Plex sort"
+
     async def check_values(self, library: Library, meta: dict[str, Any]) -> None:
         """Each value Plex lists for a filter must be one Overture offers."""
         keys = plex_field_keys(MediaType(library.media_type))
         types: list[dict[str, Any]] = meta.get("Type", [])
         own = next(
-            (
-                kind
-                for kind in types
-                if PLEX_SCOPES.get(str(kind.get("type"))) == library.media_type
-            ),
-            None,
+            (kind for kind in types if kind.get("type") == library.media_type), None
         )
         filters: list[dict[str, Any]] = own.get("Filter", []) if own else []
         for entry in filters:
@@ -894,46 +1252,60 @@ class PlexServer(Server):
             spec = library.fields.get(str(field_name)) if field_name else None
             if spec is None or spec["kind"] != "tag" or not entry.get("key"):
                 continue
-            plex = {
-                str(row.get("title", "")).casefold()
-                for row in (await self.container(entry["key"])).get("Directory", [])
-            } - {""}
+            plex = await self.directory(entry["key"])
             try:
                 await library.values(spec["field"])
             except ApiError:
                 continue
+            offered = library.offered_values(spec["field"])
             case = library.case("plex values", spec["label"])
-            case.count, case.held = (
-                len(library.offered_values(spec["field"])),
-                len(plex),
-            )
-            if missing := plex - library.offered_values(spec["field"]):
+            case.count, case.held = len(offered), len(plex)
+            if missing := plex - offered:
                 case.error = f"Overture does not offer {named(missing)}"
+            if unlisted := offered - plex:
+                case.note = (
+                    f"Plex does not list {named(unlisted)}, so no smart collection "
+                    "can select them"
+                )
 
     async def explain(
-        self, library: Library, field_name: str, difference: tuple[str, bool] | None
+        self,
+        library: Library,
+        entry: dict[str, Any],
+        value: Any,
+        difference: tuple[str, bool],
     ) -> str:
-        """Name the first title the evaluators disagree on, with Plex's values."""
-        if difference is None:
-            return "the first members agree; the titles that differ sort later"
+        """Name the title the evaluators disagree on, with what Plex holds for it."""
         title, plex_holds = difference
-        item = next((row for row in library.items if row["title"] == title), None)
         side = "only Plex selects" if plex_holds else "only Overture selects"
-        if item is None or not (key := item_copy_id(item, library.id)):
+        plex = FIELDS[entry["field"]].plex
+        if plex is None:
             return f"{side} {title}"
-        rows = (await self.container(f"/library/metadata/{key}")).get("Metadata", [{}])
-        key = next(
-            (
-                plex
-                for plex, ours in plex_field_keys(MediaType(library.media_type)).items()
-                if str(ours) == field_name
-            ),
-            field_name,
-        )
-        tag = PLEX_TAGS.get(key, key.capitalize())
-        raw = rows[0].get(tag, rows[0].get(key)) if rows else None
-        shown = ", ".join(str(tag.get("tag")) for tag in raw) if is_array(raw) else raw
-        return f"{side} {title}; Plex holds {key}={shown!r}"
+        key = plex.key_for(MediaType(library.media_type))
+        found = f"{side} {title}"
+        item = next((row for row in library.items if row["title"] == title), None)
+        if item is not None and (rating_key := item_copy_id(item, library.id)):
+            rows = (await self.container(f"/library/metadata/{rating_key}")).get(
+                "Metadata", [{}]
+            )
+            tag = PLEX_TAGS.get(key, key.capitalize())
+            raw = rows[0].get(tag, rows[0].get(key)) if rows else None
+            shown = (
+                ", ".join(str(tag.get("tag")) for tag in raw) if is_array(raw) else raw
+            )
+            found += f"; Plex holds {key}={shown!r}"
+        if plex.type == "tag" and not plex.keyed:
+            episode = key.startswith("episode.")
+            listed = await self.directory(
+                f"/library/sections/{library.key}/{key.removeprefix('episode.')}",
+                PLEX_EPISODE if episode else PLEX_TYPES[library.media_type],
+            )
+            if str(value).casefold() not in listed:
+                found += (
+                    f"; Plex's {key} list does not name {value!r}, so no smart "
+                    "collection can select it"
+                )
+        return found
 
 
 class MediaBrowserServer(Server):
@@ -976,6 +1348,14 @@ class MediaBrowserServer(Server):
             **params,
         )
 
+    async def item(self, item_id: str, fields: str) -> dict[str, Any]:
+        """One item with the given fields, as the server holds it."""
+        found = await self.get(
+            "/Items", Ids=item_id, Fields=fields, EnableImages="false"
+        )
+        rows: list[dict[str, Any]] = found["Items"]
+        return rows[0] if rows else {}
+
     async def check_library(self, library: Library) -> None:
         """Compare what Overture lists and counts with what the server does."""
         found = await self.items(library.key, library.media_type, Fields="")
@@ -987,7 +1367,7 @@ class MediaBrowserServer(Server):
         )
         filters = await self.get(
             "/Items/Filters",
-            ParentId=library.id,
+            ParentId=library.key,
             IncludeItemTypes=MEDIA_BROWSER_TYPES[library.media_type],
         )
         for field_name, (param, listed) in MEDIA_BROWSER_FILTERS.items():
@@ -1027,7 +1407,7 @@ class MediaBrowserServer(Server):
                 ),
             )
             counted = await self.items(
-                library.id, library.media_type, Limit=0, **{param: value}
+                library.key, library.media_type, Limit=0, **{param: value}
             )
             case.held = counted["TotalRecordCount"]
 
@@ -1050,9 +1430,16 @@ def _plex_sorts() -> set[str]:
 
 
 async def check_media_browser_collections(
-    direct: MediaBrowserServer, server_id: int, collections: list[dict[str, Any]]
-) -> list[Case]:
-    """BoxSets live outside libraries, so they are compared once per server."""
+    direct: MediaBrowserServer,
+    server_id: int,
+    collections: list[dict[str, Any]],
+    listing: Listing,
+) -> tuple[list[Case], dict[str, int]]:
+    """BoxSets live outside libraries, so they are compared once per server.
+
+    Returns the cases and the members the server counts in each BoxSet
+    Overture lists.
+    """
     listed = await direct.collection_ids()
     mine = {
         str(copy["server_item_id"]): row
@@ -1061,16 +1448,33 @@ async def check_media_browser_collections(
         if copy["server_id"] == server_id
     }
     case = Case(direct.server, "", "inventory", "collections")
-    inventory(case, set(mine), set(listed), noun="collections")
+    # A BoxSet holds movies and shows alike, so what it holds is not told apart.
+    skipped = left_out(
+        case,
+        listing,
+        "",
+        {
+            key: (row["Name"], row.get("ChildCount"), None)
+            for key, row in listed.items()
+        },
+        set(mine),
+    )
+    inventory(case, set(mine), set(listed) - skipped, noun="collections")
     cases = [case]
+    held: dict[str, int] = {}
     for key, row in listed.items():
         if (ours := mine.get(key)) is None:
             continue
         members = await direct.get("/Items", ParentId=key, Limit=0)
+        held[key] = members["TotalRecordCount"]
         found = Case(direct.server, "", "inventory", f"{row['Name']} members")
-        found.count, found.held = ours["child_count"], members["TotalRecordCount"]
+        found.held = held[key]
+        if len(ours["copies"]) == 1:
+            found.count = ours["child_count"]
+        if row["Name"] != ours["title"]:
+            found.error = f"{direct.server} names it {row['Name']!r}"
         cases.append(found)
-    return cases
+    return cases, held
 
 
 async def verify_instance(
@@ -1091,25 +1495,42 @@ async def verify_instance(
     overture = Overture(url, api_key, verify=verify)
     cases: list[Case] = []
     try:
-        servers = (await overture.get("/api/settings"))["media_servers"]
+        settings = await overture.get("/api/settings")
+        servers = settings["media_servers"]
         kinds = [server["type"] for server in servers]
         items = (await overture.get("/api/library/items"))["items"]
         everything = await overture.get("/api/collections")
+        listing = Listing(
+            frozenset(
+                name.casefold()
+                for name in await overture.get("/api/collections/groups")
+            ),
+            settings["collection_import_unmanaged"],
+        )
+    except (ApiError, httpx2.HTTPError) as exc:
+        await overture.client.aclose()
+        return [Case(url, "", "instance", "reach the API", error=failure(exc))]
+    try:
         for server in servers:
             paired = (
                 direct.get(server["type"]) if kinds.count(server["type"]) == 1 else None
             )
-            cases.extend(
-                await verify_server(
-                    overture, server, items, everything, extra_sources, paired
+            try:
+                cases.extend(
+                    await verify_server(
+                        overture,
+                        server,
+                        items,
+                        everything,
+                        extra_sources,
+                        paired,
+                        listing,
+                    )
                 )
-            )
-    except ApiError as exc:
-        cases.append(Case(url, "", "instance", "reach the API", error=str(exc)))
-    except httpx2.HTTPError as exc:
-        cases.append(
-            Case(url, "", "instance", "reach the media server", error=str(exc))
-        )
+            except (ApiError, httpx2.HTTPError) as exc:
+                cases.append(
+                    Case(server["title"], "", "server", "check", error=failure(exc))
+                )
     finally:
         await overture.client.aclose()
     return cases
@@ -1122,11 +1543,13 @@ async def verify_server(
     everything: list[dict[str, Any]],
     extra_sources: list[dict[str, Any]],
     direct: PlexServer | MediaBrowserServer | None,
+    listing: Listing,
 ) -> list[Case]:
     """Check the libraries and collections one of an instance's servers holds."""
     title = server["title"]
     cases: list[Case] = []
     held: list[dict[str, Any]] = []
+    checked: list[tuple[dict[str, Library], list[dict[str, Any]]]] = []
     for media_type in ("movie", "show"):
         found = [
             library
@@ -1180,25 +1603,48 @@ async def verify_server(
                 ],
                 [row for row in collections if library["id"] in row["library_ids"]],
                 direct,
+                listing,
             )
             for library in found
         }
         for library in libraries.values():
             print(f"Checking {title}: {library.name}...", flush=True)
             await library.check(extra_sources)
+        checked.append((libraries, collections))
+    if isinstance(direct, MediaBrowserServer):
+        found_cases, counts = await check_media_browser_collections(
+            direct, server["id"], held, listing
+        )
+        cases.extend(found_cases)
+        for libraries, _ in checked:
+            for library in libraries.values():
+                library.held = counts
+    for libraries, collections in checked:
         for collection in collections:
-            # A collection across several of this server's libraries is
-            # previewed once, in the first of them.
-            first = next(
-                (lid for lid in collection["library_ids"] if lid in libraries), None
-            )
-            if first is not None:
-                await libraries[first].check_collection(collection)
+            await check_collection(libraries, collection)
         for library in libraries.values():
             cases.extend(library.cases)
-    if isinstance(direct, MediaBrowserServer):
-        cases.extend(await check_media_browser_collections(direct, server["id"], held))
     return cases
+
+
+async def check_collection(
+    libraries: dict[str, Library], collection: dict[str, Any]
+) -> None:
+    """Check each of a collection's server collections, and its images once.
+
+    Each server collection is checked in the first library it holds;
+    Jellyfin's and Emby's span several.
+    """
+    here = [lid for lid in collection["library_ids"] if lid in libraries]
+    seen: set[str] = set()
+    for library_id in here:
+        copy = collection_copy(collection, library_id)
+        key = str(copy["server_item_id"]) if copy else library_id
+        if key not in seen:
+            seen.add(key)
+            await libraries[library_id].check_collection(collection)
+    if here:
+        await libraries[here[0]].check_images(collection)
 
 
 #: What a TMDB chart is called in TMDB's API, per media type.
@@ -1457,7 +1903,8 @@ def write_provider(
 class WriteCheck:
     """Make, change and delete temporary collections with Overture's own client.
 
-    Each step reads the server back. Only collections titled ``WRITE_PREFIX``
+    Each step reads the server itself back, and is reported on its own with
+    the request the server refused. Only collections titled ``WRITE_PREFIX``
     are touched, and every one made is deleted at the end, whatever failed.
     """
 
@@ -1481,15 +1928,34 @@ class WriteCheck:
         self.cases.append(found)
         return found
 
-    async def listed(self, collection_id: str) -> ServerCollection | None:
-        return next(
-            (
-                row
-                for row in await self.provider.list_collections()
-                if row.id == collection_id
-            ),
-            None,
-        )
+    async def step[T](
+        self, label: str, action: Callable[[Case], Awaitable[T]]
+    ) -> T | None:
+        """Run one step as its own case; ``None`` when the server refused it."""
+        case = self.case(label)
+        try:
+            return await action(case)
+        except (MediaServerError, httpx2.HTTPError) as exc:
+            case.error = failure(exc)
+            return None
+
+    async def held(self, collection_id: str) -> dict[str, Any]:
+        """The collection as the server itself holds it."""
+        if isinstance(self.direct, PlexServer):
+            rows = (
+                await self.direct.container(f"/library/metadata/{collection_id}")
+            ).get("Metadata", [{}])
+            return rows[0]
+        return await self.direct.get(f"/Items/{collection_id}")
+
+    async def art(self, collection_id: str) -> tuple[Any, Any]:
+        """What the server names the collection's poster and background by."""
+        row = await self.held(collection_id)
+        if isinstance(self.direct, PlexServer):
+            return row.get("thumb"), row.get("art")
+        tags: dict[str, Any] = row.get("ImageTags") or {}
+        backdrops: list[Any] = row.get("BackdropImageTags") or []
+        return tags.get("Primary"), next(iter(backdrops), None)
 
     async def run(self) -> list[Case]:
         try:
@@ -1498,14 +1964,46 @@ class WriteCheck:
                     await self.provider.delete_collection(stale.id)
             if (found := await self.movies()) is not None:
                 library, items = found
-                collection_id = await self.members(library, items)
-                await self.details(library, collection_id)
-                await self.poster(collection_id)
+                made = await self.step(
+                    "create a collection with two members",
+                    lambda case: self.create(case, library, items),
+                )
+                if made is not None:
+                    await self.step(
+                        "replace a member"
+                        + (
+                            " and keep a custom order"
+                            if isinstance(self.direct, PlexServer)
+                            else ""
+                        ),
+                        lambda case: self.members(case, made, items),
+                    )
+                    await self.step(
+                        "edit the title, sort title, summary and order"
+                        + (
+                            " and Home visibility"
+                            if isinstance(self.direct, PlexServer)
+                            else ""
+                        ),
+                        lambda case: self.details(case, library, made),
+                    )
+                    await self.step(
+                        "upload a poster and a background",
+                        lambda case: self.artwork(case, made),
+                    )
                 if isinstance(self.direct, PlexServer):
-                    await self.smart(library)
-                await self.delete()
+                    smart = await self.step(
+                        "create a smart collection Plex fills itself",
+                        lambda case: self.smart(case, library),
+                    )
+                    if smart is not None:
+                        await self.step(
+                            "change the smart collection's filter",
+                            lambda case: self.refilter(case, library, smart),
+                        )
+                await self.step("delete the collections it made", self.delete)
         except (MediaServerError, httpx2.HTTPError) as exc:
-            self.case("write to the media server").error = str(exc)
+            self.case("write to the media server").error = failure(exc)
         finally:
             for collection_id in self.made:
                 try:
@@ -1513,7 +2011,7 @@ class WriteCheck:
                 except (MediaServerError, httpx2.HTTPError) as exc:
                     self.case(
                         f"delete {collection_id}"
-                    ).error = f"left on the server, delete it by hand: {exc}"
+                    ).error = f"left on the server, delete it by hand: {failure(exc)}"
             await self.registry.close()
         return self.cases
 
@@ -1544,29 +2042,40 @@ class WriteCheck:
             return None
         return section.library_id, items
 
-    async def members(self, library: str, items: list[str]) -> str:
-        """Create a collection, then replace and order its members."""
-        first, second, third = items
-        check = self.case("create a collection with two members")
+    async def create(self, check: Case, library: str, items: list[str]) -> str:
+        """Create a regular collection of the first two movies."""
+        first, second, _ = items
         created = await self.provider.create_collection(
             library, f"{WRITE_PREFIX} regular", MediaType.MOVIE, [first, second]
         )
         self.made.append(created.id)
         held = await self.provider.get_collection_member_ids(created.id)
         check.count, check.held = 2, len(set(held) & {first, second})
-
-        check = self.case("replace a member and keep a custom order")
-        await self.provider.set_collection_members(
-            created.id, [third, first], order=CollectionOrder.CUSTOM
-        )
-        order = await self.provider.get_collection_member_ids(created.id)
-        if order != [third, first]:
-            check.error = f"the server holds {order}, not [{third}, {first}]"
         return created.id
 
-    async def details(self, library: str, collection_id: str) -> None:
-        """Edit what a sync sends, and read it back."""
-        check = self.case("edit the title, sort title, summary and Home visibility")
+    async def members(self, check: Case, collection_id: str, items: list[str]) -> None:
+        """Replace a member; Plex keeps the order given, the others their own."""
+        first, _, third = items
+        await self.provider.set_collection_members(
+            collection_id, [third, first], order=CollectionOrder.CUSTOM
+        )
+        held = await self.provider.get_collection_member_ids(collection_id)
+        if isinstance(self.direct, PlexServer):
+            if held != [third, first]:
+                check.error = f"the server holds {held}, not [{third}, {first}]"
+        elif set(held) != {third, first}:
+            check.error = (
+                f"the server holds {sorted(held)}, not {sorted([third, first])}"
+            )
+
+    async def details(self, check: Case, library: str, collection_id: str) -> None:
+        """Edit what a sync sends, and read the server itself back.
+
+        Plex keeps a custom order; Jellyfin and Emby sort a collection by
+        one of their display orders.
+        """
+        plex = isinstance(self.direct, PlexServer)
+        order = CollectionOrder.CUSTOM if plex else CollectionOrder.TITLE_ASC
         wanted = {
             "title": f"{WRITE_PREFIX} edited",
             "sort title": f"{WRITE_PREFIX} sort",
@@ -1579,72 +2088,125 @@ class WriteCheck:
             summary=wanted["summary"],
             sort_title=wanted["sort title"],
             mode=CollectionMode.DEFAULT,
-            order=CollectionOrder.CUSTOM,
+            order=order,
             smart=False,
             visible_home=True,
         )
-        row = await self.listed(collection_id)
-        if row is None:
-            check.error = "the edited collection is no longer listed"
-            return
-        kept = {
-            "title": row.title,
-            "sort title": row.sort_title,
-            "summary": row.summary,
-        }
-        wrong = [
-            name
-            for name, value in kept.items()
-            if value is not None and value != wanted[name]
-        ]
-        if isinstance(self.direct, PlexServer) and not row.visible_home:
+        row = await self.held(collection_id)
+        if plex:
+            kept = {
+                "title": row.get("title"),
+                "sort title": row.get("titleSort"),
+                "summary": row.get("summary"),
+                "order": str(row.get("collectionSort")),
+            }
+            wanted["order"] = str(PLEX_CUSTOM_SORT)
+        else:
+            kept = {
+                "title": row.get("Name"),
+                "sort title": row.get("ForcedSortName") or row.get("SortName"),
+                "summary": row.get("Overview"),
+                "order": row.get("DisplayOrder"),
+            }
+            wanted["order"] = "SortName"
+        wrong = [name for name, value in kept.items() if value != wanted[name]]
+        if plex and not await self.on_home(library, collection_id):
             wrong.append("Home visibility")
         if wrong:
-            check.error = f"the server kept another {', '.join(wrong)}"
+            check.error = "the server holds another " + ", ".join(
+                f"{name} ({kept.get(name)!r})" if name in kept else name
+                for name in wrong
+            )
 
-    async def poster(self, collection_id: str) -> None:
-        check = self.case("upload a poster")
-        before = await self.listed(collection_id)
-        await self.provider.upload_collection_art(
-            collection_id,
-            ArtType.POSTER,
-            render_art(ArtType.POSTER, ArtStyle.DARK, WRITE_PREFIX),
-            "image/png",
+    async def on_home(self, library: str, collection_id: str) -> bool:
+        """Whether Plex promotes the collection's hub to its owner's Home."""
+        assert isinstance(self.direct, PlexServer)
+        section = library.partition(":")[2]
+        hubs: list[dict[str, Any]] = (
+            await self.direct.container(
+                f"/hubs/sections/{section}/manage", metadataItemId=collection_id
+            )
+        ).get("Hub", [])
+        return any(
+            hub.get("identifier") == f"custom.collection.{section}.{collection_id}"
+            and bool(hub.get("promotedToOwnHome"))
+            for hub in hubs
         )
-        after = await self.listed(collection_id)
-        if (
-            after is None
-            or not after.thumb_url
-            or (before is not None and after.thumb_url == before.thumb_url)
-        ):
-            check.note = "the server lists the same poster address after the upload"
 
-    async def smart(self, library: str) -> None:
-        """Create a smart collection from Overture's query; Plex fills it."""
-        check = self.case("create a smart collection Plex fills itself")
-        query = compile_plex_query(
-            FilterGroup.model_validate({"conditions": [EVERYTHING]}),
+    async def artwork(self, check: Case, collection_id: str) -> None:
+        before = await self.art(collection_id)
+        for art_type in (ArtType.POSTER, ArtType.BACKGROUND):
+            await self.provider.upload_collection_art(
+                collection_id,
+                art_type,
+                render_art(art_type, ArtStyle.DARK, WRITE_PREFIX),
+                "image/png",
+            )
+        after = await self.art(collection_id)
+        unchanged = [
+            name
+            for name, old, new in zip(
+                ("poster", "background"), before, after, strict=True
+            )
+            if not new or new == old
+        ]
+        if unchanged:
+            check.error = f"the server names the same {' and '.join(unchanged)}"
+
+    def everything_since(self, year: int) -> str:
+        """Overture's Plex query for the movies released after *year*."""
+        return compile_plex_query(
+            FilterGroup.model_validate(
+                {
+                    "conditions": [
+                        {
+                            "kind": "field",
+                            "field": "year",
+                            "operator": "gt",
+                            "value": year,
+                        }
+                    ]
+                }
+            ),
             media_type=MediaType.MOVIE,
             order=CollectionOrder.TITLE_ASC,
             limit=None,
             choices={},
             labels={},
         )
+
+    async def filled(
+        self, check: Case, library: str, collection_id: str, query: str
+    ) -> None:
+        """Plex holds what its own query selects, and keeps the query."""
+        matching, _ = await self.provider.find_matching(
+            library, MediaType.MOVIE, query, 0
+        )
+        held = await self.provider.get_collection_member_ids(collection_id)
+        check.count, check.held = matching, len(held)
+        kept = await self.provider.smart_collection_filter(collection_id)
+        if kept != query:
+            check.note = f"Plex keeps the filter as {kept}"
+
+    async def smart(self, check: Case, library: str) -> str:
+        """Create a smart collection from Overture's query; Plex fills it."""
+        query = self.everything_since(0)
         created = await self.provider.create_smart_collection(
             library, f"{WRITE_PREFIX} smart", MediaType.MOVIE, query
         )
         self.made.append(created.id)
-        matching, _ = await self.provider.find_matching(
-            library, MediaType.MOVIE, query, 0
-        )
-        held = await self.provider.get_collection_member_ids(created.id)
-        check.count, check.held = matching, len(held)
-        kept = await self.provider.smart_collection_filter(created.id)
-        if "year" not in kept:
-            check.note = f"Plex keeps the filter as {kept}"
+        await self.filled(check, library, created.id, query)
+        return created.id
 
-    async def delete(self) -> None:
-        check = self.case("delete the collections it made")
+    async def refilter(self, check: Case, library: str, collection_id: str) -> None:
+        """Change a smart collection's query, as a sync of an edited rule does."""
+        query = self.everything_since(2000)
+        await self.provider.update_smart_collection_filter(
+            collection_id, library, MediaType.MOVIE, query
+        )
+        await self.filled(check, library, collection_id, query)
+
+    async def delete(self, check: Case) -> None:
         for collection_id in list(self.made):
             await self.provider.delete_collection(collection_id)
             self.made.remove(collection_id)

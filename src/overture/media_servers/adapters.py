@@ -185,9 +185,6 @@ class ServerCollection:
     collection_mode: CollectionMode | None = None
     order_type: CollectionOrder | None = None
     collection_filtering: CollectionFiltering | None = None
-    visible_home: bool = False
-    visible_shared: bool = False
-    visible_library: bool = False
     thumb_url: str | None = None
     art_url: str | None = None
     theme_id: str | None = None
