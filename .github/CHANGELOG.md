@@ -8,14 +8,23 @@
 - **API:** library items and collections list their `metadata_issues`, and `/api/library/filters` lists what custom filters can test, matches their conditions and keeps saved ones.
 - **Interface:** the sidebar's TMDB search also finds the titles of a person, a company, a keyword or a public list, by name, TMDB ID or link.
 - **Media servers:** Overture works with several Plex, Jellyfin and Emby servers at once, named in `MEDIA_SERVERS` and configured with `MEDIA_SERVER_<NAME>_*` variables: titles are shared across servers, files are written under every name their servers read, collections span libraries on any server (a smart collection is smart in its Plex libraries and regular in the others), and `PATH_MAP` maps folders a server sees elsewhere.
+- **Collections:** Plex smart collections test **Subtitle codec**, **File size (GB)** and **Bitrate (Mbps)**, and for shows **Episode added** and **Episode last played**, and order shows by **Latest episode added** and **Unplayed episodes**.
 
 ### Changed
 
 - **API:** library IDs name their server (`1:2`); titles and collections list their `copies` on each server, the lead first, instead of one `server_item_id`; settings list `media_servers`, and collection capabilities, server links and server audit results are per server.
+- **Collections:** a smart collection tests a show's **Network** as TMDB names it, through a label, as a regular one does, rather than by Plex's own network names.
+- **Collections:** **In the last** and **not in the last** count days back from the moment they are tested, as Plex does, rather than whole days.
 
 ### Removed
 
 - **Settings:** `MEDIA_SERVER`, `MEDIA_SERVER_URL`, `MEDIA_SERVER_API_KEY`, `MEDIA_SERVER_VERIFY_TLS` and `JELLYFIN_COLLECTIONS_PATH`. Name the server instead: `MEDIA_SERVERS=Plex` with `MEDIA_SERVER_PLEX_TYPE=plex`, `MEDIA_SERVER_PLEX_URL`, `MEDIA_SERVER_PLEX_API_KEY` and, for Jellyfin, `MEDIA_SERVER_<NAME>_COLLECTIONS_PATH`; with the same type and URL, your library, choices and collections carry over.
+
+### Fixed
+
+- **Collections:** Jellyfin 12 creates and edits collections; it refuses the way Overture read a single item with an API key.
+- **Collections:** Plex smart collections select actors and other values Plex leaves off its list of a library's values, which holds only some of its actors.
+- **Collections:** Plex smart collections whose title or other text condition holds an apostrophe sync instead of failing; Plex cannot match such text exactly, so **is** matches a text starting and ending with it, and **is not** leaves out every text containing it.
 
 ## 0.3.0 - 2026-11-15
 

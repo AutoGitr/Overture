@@ -1584,3 +1584,38 @@ def test_one_servers_titles_become_copies_of_server_one_and_back() -> None:
             ]
     finally:
         engine.dispose()
+
+
+def test_show_orders_are_admitted_and_fall_back_to_older_ones_on_downgrade() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "e4b1c8f2a903")
+            conn.exec_driver_sql(
+                "INSERT INTO collection_groups (id, name, separator) "
+                "VALUES (1, 'Airing', 0), (2, 'Backlog', 0)"
+            )
+            with pytest.raises(IntegrityError):
+                conn.exec_driver_sql(
+                    "UPDATE collection_groups SET order_type = 'episode_added.desc'"
+                )
+
+            command.upgrade(config, "3ae7fb38a1bb")
+            conn.exec_driver_sql(
+                "UPDATE collection_groups SET order_type = 'episode_added.desc' "
+                "WHERE id = 1"
+            )
+            conn.exec_driver_sql(
+                "UPDATE collection_groups SET order_type = 'unplayed_episodes.asc' "
+                "WHERE id = 2"
+            )
+
+            command.downgrade(config, "e4b1c8f2a903")
+            # The latest episode's date sorts by the date added; the other inherits.
+            assert conn.exec_driver_sql(
+                "SELECT order_type FROM collection_groups ORDER BY id"
+            ).all() == [("added.desc",), (None,)]
+    finally:
+        engine.dispose()

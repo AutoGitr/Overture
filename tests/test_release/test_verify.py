@@ -115,7 +115,11 @@ _MOVIES: dict[str, Any] = {
             ],
             "last_synced_at": None,
             "source_summary": None,
-        }
+        },
+        "server_poster_version": "1",
+        "server_background_version": None,
+        "poster_hash": None,
+        "background_hash": None,
     },
     # Plex names the genre as it lists it, not as the editor offers it.
     "/api/collections/6/adopt": {
@@ -255,7 +259,14 @@ def _plex(request: httpx2.Request) -> httpx2.Response:
                 ]
             )
         case "/library/sections/1/genre":
-            return container(Directory=[{"title": "Horror"}, {"title": "Western"}])
+            return container(
+                Directory=[
+                    {"key": "1", "title": "Horror"},
+                    {"key": "2", "title": "Western"},
+                    # Plex still lists a genre no movie holds any longer.
+                    {"key": "3", "title": "Gone"},
+                ]
+            )
         case "/library/metadata/m2":
             return container(Metadata=[{"Genre": [{"tag": "Horror"}]}])
         case "/library/sections/1/all" if request.url.params.get("includeMeta"):
@@ -267,9 +278,12 @@ def _plex(request: httpx2.Request) -> httpx2.Response:
                             "Filter": [
                                 {"filter": "genre", "key": "/library/sections/1/genre"},
                                 {"filter": "unknownFilter"},
+                                {"filter": "duplicate"},
                             ],
                             "Field": [
                                 {"key": "resolution", "type": "resolution"},
+                                # Listed again with its scope.
+                                {"key": "movie.unknownFilter", "type": "string"},
                             ],
                             "Sort": [{"key": "titleSort"}],
                         }
@@ -286,6 +300,9 @@ def _plex(request: httpx2.Request) -> httpx2.Response:
                     ],
                 }
             )
+        case "/library/sections/1/all" if "genre" in request.url.params:
+            held = request.url.params["genre"] != "3"
+            return container(totalSize=int(held), size=0)
         case "/library/sections/1/all":
             # Plex holds a third movie Overture never listed.
             return container(
@@ -316,7 +333,7 @@ def _jellyfin(request: httpx2.Request) -> httpx2.Response:
         case "/Items" if params.get("Genres") == "Horror":
             return httpx2.Response(200, json={"Items": [], "TotalRecordCount": 4})
         case "/Items":
-            items = [{"Id": "m1"}, {"Id": "m2"}]
+            items = [{"Id": "m1", "Name": "Alien"}, {"Id": "m2", "Name": "Aliens"}]
             return httpx2.Response(200, json={"Items": items, "TotalRecordCount": 2})
         case _:
             return httpx2.Response(404)
@@ -417,10 +434,13 @@ async def test_a_run_checks_overture_against_plex_and_names_each_problem(
     assert "| image | Scary poster from the server |" in text
     assert "HTTP 502" in text
     assert "Overture lacks items m3" in text
-    assert "Overture lacks collections c9" in text
+    assert "Overture lacks collections Elsewhere (c9, 1 members)" in text
     assert "left out by design: Charts (a separator)" in text
     assert "Overture does not offer western" in text
-    assert "| plex field | unknownFilter |" in text
+    assert "no title holds gone" in text
+    assert text.count("| plex field | unknownFilter |") == 1
+    assert "| plex field | duplicate |" in text
+    assert "left out by choice: it tells the library's upkeep" in text
     assert "| plex operator | string ~ (like) |" in text
     assert "| plex operator | hologram |" in text
     assert "resolution" not in text
@@ -448,6 +468,7 @@ async def test_jellyfin_filters_are_compared_with_the_values_and_counts_offered(
     text = report.read_text()
     assert "| jellyfin values | Genre |" in text
     assert "does not offer drama" in text
+    assert "jellyfin says Alien holds 'Drama'" in text
     # Jellyfin counts four horror films where Overture counts one.
     assert "| jellyfin count | Genre is 'Horror' | 1 |  | 4 |" in text
     assert "recommend" not in text
@@ -636,7 +657,8 @@ class _Jellyfin(module.MediaBrowserServer):
 
     @override
     async def get(self, path: str, **params: Any) -> Any:
-        return self.server_state.items[path.removeprefix("/Items/")]
+        assert path == "/Items"
+        return {"Items": [self.server_state.items[params["Ids"]]]}
 
 
 @pytest.mark.parametrize("fail_at", [None, "members"])
@@ -740,6 +762,7 @@ async def test_the_years_are_narrowed_until_the_title_that_differs_is_named() ->
         [],
         None,
         module.Listing(frozenset(), import_unmanaged=True),
+        lead=True,
     )
     first = module.Members(199, sorted(previews.titles)[:20])
     span, ours, theirs = await library.narrow(
@@ -805,3 +828,75 @@ async def test_the_character_plex_refuses_in_a_text_value_is_named(
     assert note == (
         "Plex answers once \"'\" is left out of the value; with ' doubled it selects 1"
     )
+
+
+class _Offers:
+    """An Overture that offers Drama alone and counts one title of each value."""
+
+    async def get(self, path: str, **params: Any) -> Any:
+        assert path == "/api/collections/field-values"
+        return [{"value": "Drama", "count": 1}]
+
+    async def preview(
+        self, rule: dict[str, Any], _collection_id: int | None = None
+    ) -> list[dict[str, Any]]:
+        return [{"library_id": "3:1", "member_count": 1, "members": ["Alien"]}]
+
+
+async def test_a_server_that_does_not_lead_differs_in_details_but_not_in_labels(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def emby(request: httpx2.Request) -> httpx2.Response:
+        # Emby lists each filter's values at its own address.
+        assert request.url.params["ParentId"] == "1"
+        names = {
+            "/emby/Genres": ["Drama", "Horror"],
+            "/emby/Tags": ["Kept", "Drama"],
+            "/emby/OfficialRatings": [],
+            "/emby/Years": [],
+        }
+        if request.url.path in names:
+            rows = [{"Name": name} for name in names[request.url.path]]
+            return httpx2.Response(200, json={"Items": rows})
+        return httpx2.Response(200, json={"Items": [], "TotalRecordCount": 4})
+
+    original = httpx2.AsyncClient
+
+    def client(**kwargs: Any) -> httpx2.AsyncClient:
+        return original(transport=httpx2.MockTransport(emby), **kwargs)
+
+    monkeypatch.setattr(module.httpx2, "AsyncClient", client)
+    capabilities = _capabilities("emby")
+    capabilities["fields"].append(
+        {**capabilities["fields"][0], "field": "label", "label": "Tag"}
+    )
+    library = module.Library(
+        cast("Any", _Offers()),
+        "Emby",
+        capabilities,
+        "movie",
+        {"id": "3:1", "title": "Movies"},
+        set(),
+        [],
+        [],
+        None,
+        module.Listing(frozenset(), import_unmanaged=True),
+        lead=False,
+    )
+    server = module.MediaBrowserServer("emby", "http://emby.test", "key")
+    try:
+        await server.check_library(library)
+    finally:
+        await server.client.aclose()
+
+    problems = {case.label: case.problem for case in library.cases if case.problem}
+    notes = {case.label: case.note for case in library.cases}
+    # The lead server gives the genres, so Emby's own are only noted.
+    assert "Genre" not in problems
+    assert "Overture does not offer horror" in notes["Genre"]
+    assert module.LEAD_DETAILS in notes["Genre is 'Drama'"]
+    # Labels are Emby's own, so one Overture lacks, or counts apart, is a problem.
+    assert problems == {
+        "Tag": "Overture does not offer kept",
+        "Tag is 'Kept'": "counts differ",
+    }

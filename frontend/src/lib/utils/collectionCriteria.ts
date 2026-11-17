@@ -52,6 +52,10 @@ export const ORDER_LABELS: Record<CollectionOrder, string> = {
   "plays.asc": "Plays (fewest first)",
   "last_played.desc": "Last played (most recent first)",
   "last_played.asc": "Last played (least recent first)",
+  "episode_added.desc": "Latest episode added (newest first)",
+  "episode_added.asc": "Latest episode added (oldest first)",
+  "unplayed_episodes.desc": "Unplayed episodes (most first)",
+  "unplayed_episodes.asc": "Unplayed episodes (fewest first)",
   random: "Random",
 };
 

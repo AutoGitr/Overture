@@ -91,6 +91,12 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
         """List the keys and names a smart filter field accepts in a section."""
         raise NotImplementedError
 
+    async def item_filter_choices(
+        self, server_item_id: str, field: str
+    ) -> list[tuple[str, str]]:
+        """List the keys and names of the values one item holds in a filter field."""
+        raise NotImplementedError
+
     async def smart_collection_filter(self, server_collection_id: str) -> str:
         """Return the filter query a smart collection made on the server keeps."""
         raise NotImplementedError

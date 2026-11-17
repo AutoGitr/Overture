@@ -1,7 +1,7 @@
 """Emby API client built on the shared MediaBrowser protocol."""
 
 lazy import operator
-lazy from typing import Any, ClassVar, override
+lazy from typing import ClassVar, override
 
 lazy from ...domain import MediaType
 lazy from ..errors import MediaServerError
@@ -11,7 +11,6 @@ lazy from ..wire import (
     MediaBrowserSection,
     media_browser_sections_page,
     media_browser_server_id,
-    wire_object,
 )
 
 
@@ -28,6 +27,8 @@ class EmbyClient(JellyfinClient):
     )
     #: Emby ignores ForcedSortName in an update and takes SortName instead.
     _SORT_NAME_FIELD: ClassVar[str] = "SortName"
+    #: Emby lists an item's locked fields only when asked.
+    _DETAIL_FIELDS: ClassVar[str] = "Overview,Taglines,LockedFields"
 
     @property
     @override
@@ -101,19 +102,3 @@ class EmbyClient(JellyfinClient):
             return media_browser_server_id(await self._get("/System/Info"))
 
         return await self._cache.get_or_compute(("emby_server_id",), fetch)
-
-    @override
-    async def collection_metadata(self, collection_id: str) -> dict[str, Any]:
-        data = wire_object(
-            await self._get(
-                "/Items",
-                params=self.query_params(
-                    ids=collection_id,
-                    fields="Overview,SortName,ProviderIds,LockedFields",
-                ),
-            )
-        )
-        rows: list[dict[str, Any]] = data.get("Items") or []
-        if len(rows) != 1 or rows[0].get("Id") != collection_id:
-            raise MediaServerError("Emby did not return the collection metadata")
-        return rows[0]

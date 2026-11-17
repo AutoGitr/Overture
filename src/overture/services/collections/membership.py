@@ -27,8 +27,14 @@ lazy from ...utils.collection_fields import labelled_field
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
 lazy from .access import CollectionAccess, LibraryScope
-lazy from .criteria import CriteriaContext, evaluate, order_items
-lazy from .plex_query import choice_keys, compile_plex_query, tag_keys
+lazy from .criteria import (
+    CriteriaContext,
+    FieldValue,
+    evaluate,
+    field_value,
+    order_items,
+)
+lazy from .plex_query import choice_keys, compile_plex_query, plex_field, tag_keys
 lazy from .rules import criteria_of
 lazy from .sources import (
     SOURCE_LABEL_PREFIX,
@@ -322,7 +328,7 @@ class Membership:
                 )
                 await self.sync_label(library_id, media_type, label, wanted, items)
         return await self._compile(
-            library_id, media_type, criteria, order, limit, labels
+            library_id, media_type, criteria, order, limit, labels, items
         )
 
     async def plex_filter(
@@ -330,10 +336,16 @@ class Membership:
         library_id: str,
         media_type: MediaType,
         criteria: FilterGroup,
+        items: Sequence[CollectionItem],
         order: CollectionOrder = CollectionOrder.TITLE_ASC,
     ) -> str:
-        """Compile criteria Plex tests itself into the query Plex evaluates."""
-        return await self._compile(library_id, media_type, criteria, order, None, {})
+        """Compile criteria Plex tests itself into the query Plex evaluates.
+
+        *items* are the library's, holding the values the criteria test.
+        """
+        return await self._compile(
+            library_id, media_type, criteria, order, None, {}, items
+        )
 
     async def _compile(
         self,
@@ -343,12 +355,42 @@ class Membership:
         order: CollectionOrder,
         limit: int | None,
         labels: dict[str, str],
+        items: Sequence[CollectionItem],
     ) -> str:
         provider = self._access.library_provider(library_id)
         choices = {
             key: choice_keys(await provider.filter_choices(library_id, media_type, key))
             for key in tag_keys(criteria, media_type, labels)
         }
+        # Plex's list of a field's values can leave out many its items hold,
+        # such as most actors; an item holding the value names its key.
+        for condition in criteria.field_conditions():
+            if condition.key in labels:
+                continue
+            plex = plex_field(condition.field)
+            key = plex.key_for(media_type)
+            wanted = str(condition.value).casefold()
+            # Keys are the values of keyed fields, and episodes hold an
+            # episode field's values rather than their show.
+            if (
+                plex.type != "tag"
+                or plex.keyed
+                or key != plex.key
+                or wanted in choices[key]
+            ):
+                continue
+            holder = next(
+                (
+                    item
+                    for item in items
+                    if item.server_item_id
+                    and wanted in _folded(field_value(item, condition.field))
+                ),
+                None,
+            )
+            if holder is not None and holder.server_item_id:
+                held = await provider.item_filter_choices(holder.server_item_id, key)
+                choices[key] = {**choice_keys(held), **choices[key]}
         return compile_plex_query(
             criteria,
             media_type=media_type,
@@ -357,3 +399,12 @@ class Membership:
             choices=choices,
             labels=labels,
         )
+
+
+def _folded(value: FieldValue) -> set[str]:
+    """A tag field's values, folded."""
+    return (
+        {entry.casefold() for entry in value}
+        if isinstance(value, Sequence) and not isinstance(value, str)
+        else set()
+    )

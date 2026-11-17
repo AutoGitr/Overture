@@ -332,6 +332,37 @@ FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
             _NO_SERVER,
             _media("audioCodec", "tag"),
         ),
+        FilterField.SUBTITLE_CODEC: FieldSpec(
+            "Subtitle codec",
+            FieldKind.TAG,
+            _MOVIES,
+            _NO_SERVER,
+            _media("subtitleCodec", "tag"),
+        ),
+        # Plex counts sizes in bytes and bitrates in kilobits per second.
+        FilterField.FILE_SIZE: FieldSpec(
+            "File size (GB)",
+            FieldKind.NUMBER,
+            _MOVIES,
+            _NO_SERVER,
+            PlexField(
+                "mediaSize",
+                "integer",
+                scale=1_000_000_000,
+                show_key="episode.mediaSize",
+            ),
+            integer=True,
+        ),
+        FilterField.BITRATE: FieldSpec(
+            "Bitrate (Mbps)",
+            FieldKind.NUMBER,
+            _MOVIES,
+            _NO_SERVER,
+            PlexField(
+                "mediaBitrate", "integer", scale=1000, show_key="episode.mediaBitrate"
+            ),
+            integer=True,
+        ),
         FilterField.AUDIO_LAYOUT: FieldSpec(
             "Audio channels",
             FieldKind.TAG,
@@ -444,6 +475,28 @@ FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
             _ALL_MEDIA,
             _PLEX,
             PlexField("lastViewedAt", "date"),
+        ),
+        FilterField.EPISODE_ADDED: FieldSpec(
+            "Episode added",
+            FieldKind.DATE,
+            _SHOWS,
+            _NO_SERVER,
+            PlexField("episode.addedAt", "date"),
+        ),
+        FilterField.EPISODE_LAST_PLAYED: FieldSpec(
+            "Episode last played",
+            FieldKind.DATE,
+            _SHOWS,
+            _NO_SERVER,
+            PlexField("episode.lastViewedAt", "date"),
+        ),
+        FilterField.UNPLAYED_EPISODES: FieldSpec(
+            "Unplayed episodes",
+            FieldKind.NUMBER,
+            _SHOWS,
+            _NO_SERVER,
+            PlexField("unviewedLeafCount", "integer", filterable=False),
+            integer=True,
         ),
         FilterField.UNPLAYED: FieldSpec(
             "Unplayed",
@@ -577,11 +630,18 @@ def field_label(field: FilterField, server: ServerType) -> str:
 
 
 def plex_tests(field: FilterField, server: ServerType, media_type: MediaType) -> bool:
-    """Whether Plex smart collections test the field themselves."""
+    """Whether Plex smart collections test the field themselves.
+
+    Overture reads a TMDB fact from TMDB, and offers TMDB's values for it, so
+    a smart collection tests it through a label too, even where Plex holds a
+    field of the same name: Plex's own values differ (``BBC`` for TMDB's
+    ``BBC One``), and the two kinds would select different titles.
+    """
     spec = FIELDS[field]
     plex = spec.plex
     return (
         server is ServerType.PLEX
+        and not spec.tmdb
         and plex is not None
         and plex.filterable
         and (
@@ -748,6 +808,8 @@ _LOCAL_ORDER_FIELDS: frozendict[str, FilterField | None] = frozendict(
         "duration": FilterField.DURATION,
         "plays": FilterField.PLAYS,
         "last_played": FilterField.LAST_PLAYED,
+        "episode_added": FilterField.EPISODE_ADDED,
+        "unplayed_episodes": FilterField.UNPLAYED_EPISODES,
         "random": None,
     }
 )

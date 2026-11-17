@@ -43,6 +43,8 @@ _STRING_OPERATORS: frozendict[FilterOperator, str] = frozendict(
     }
 )
 
+_EXACT = frozenset({FilterOperator.IS, FilterOperator.IS_NOT})
+
 #: Plex lists ``>>=`` and ``<<=``; its ``>=`` and ``<=`` are the inclusive bounds.
 _NUMBER_OPERATORS: frozendict[FilterOperator, str] = frozendict(
     {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
@@ -183,6 +185,20 @@ def _tag(key: str, operator: FilterOperator, keys: tuple[str, ...]) -> list[Pair
     return _nested([[_op(key, "!=", tag)] for tag in keys], "and")
 
 
+def _text(key: str, operator: FilterOperator, value: str) -> list[Pair]:
+    """Plex fails an exact match on a value holding an apostrophe (HTTP 500).
+
+    It tests the value's start, end and parts whatever it holds: a value
+    starting and ending a text is that text unless the text repeats it, and a
+    text without the value is not it.
+    """
+    if "'" not in value or operator not in _EXACT:
+        return [_op(key, _STRING_OPERATORS[operator], value)]
+    if operator is FilterOperator.IS:
+        return _nested([[_op(key, "<=", value)], [_op(key, ">=", value)]], "and")
+    return [_op(key, "!=", value)]
+
+
 def _field_pairs(
     condition: FieldCondition, media_type: MediaType, choices: PlexChoices
 ) -> list[Pair]:
@@ -193,7 +209,7 @@ def _field_pairs(
     operator, value = condition.operator, condition.value
     match plex.type:
         case "string":
-            return [_op(key, _STRING_OPERATORS[operator], value)]
+            return _text(key, operator, str(value))
         case "tag":
             keys = choices.get(key, {}).get(str(value).casefold(), (_MISSING_TAG,))
             return _tag(key, operator, keys)

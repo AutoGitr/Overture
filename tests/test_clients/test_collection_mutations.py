@@ -346,6 +346,33 @@ async def test_plex_filter_choices_decode_the_keys_plex_encodes(
     ] == [("/library/sections/1/studio", "1"), ("/library/sections/2/resolution", "4")]
 
 
+async def test_plex_names_the_filter_keys_of_the_values_an_item_holds(
+    monkeypatch: pytest.MonkeyPatch, app_config: Settings
+) -> None:
+    def handle(request: httpx2.Request) -> httpx2.Response:
+        assert request.url.path == "/library/metadata/7"
+        row = {
+            "ratingKey": "7",
+            "Role": [
+                {"id": 95049, "filter": "actor=95049", "tag": "Bess Flowers"},
+                {"id": 1, "tag": "No filter"},
+            ],
+        }
+        return httpx2.Response(200, json={"MediaContainer": {"Metadata": [row]}})
+
+    factory, _transport = mock_client_factory(handle)
+    client = PlexClient(
+        server=server_of(app_config), app_config=app_config, client_factory=factory
+    )
+    monkeypatch.setattr(PlexClient, "resolve_secure_url", keep_configured_plex_url)
+    try:
+        choices = await client.get_item_filter_choices("7", "actor")
+    finally:
+        await client.close()
+    # Plex lists an item's actors as its roles, each with the filter selecting it.
+    assert choices == [("95049", "Bess Flowers")]
+
+
 @pytest.mark.parametrize(
     ("current", "wanted", "settled"),
     [

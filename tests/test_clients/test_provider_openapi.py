@@ -92,7 +92,8 @@ async def test_media_browser_consumed_operations(
                 if ids
                 else [movie, {**movie, "Id": "movie2"}]
             )
-            offset = int(params["StartIndex" if emby else "startIndex"])
+            # One item is asked for by ID, without a page.
+            offset = int(params.get("StartIndex" if emby else "startIndex", "0"))
             # Servers may cap a page below the requested limit.
             return spec.response(
                 request,

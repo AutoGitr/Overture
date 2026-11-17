@@ -105,7 +105,10 @@ the members, title, kind and theme of each, the values Overture offers with
 those the server lists, and Overture's counts with the server's: on Plex as a
 smart filter, halving the years until it names the title the two disagree on,
 with the values Plex holds for it and whether Plex lists the value at all; on
-Jellyfin and Emby with the server's own item filters. Where Plex refuses a
+Jellyfin and Emby with the server's own item filters, where only labels are
+compared on a server that does not lead, since the lead server gives the
+other details of the titles it holds. A value Plex lists that no title holds
+any longer is noted rather than reported. Where Plex refuses a
 text value it asks Plex directly which character it refuses. It reports
 every Plex filter, field, sort and operator, and every Jellyfin and Emby
 filter, Overture cannot use. A check that fails is reported and the others

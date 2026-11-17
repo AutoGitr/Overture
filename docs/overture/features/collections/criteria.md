@@ -68,12 +68,29 @@ On Plex, **Collection type** chooses who evaluates the criteria:
 - **Smart**, a Plex smart collection Plex keeps current with every Plex filter,
   including languages, HDR, codecs and play state for each user.
 
+Plex cannot match text holding an apostrophe exactly, such as the title
+_'Allo 'Allo!_, so in a smart collection **is** matches a text that starts and
+ends with it, and **is not** leaves out every text containing it.
+
 Conditions Plex has no filter for, such as lists and tags, label the items they
 match, such as `overture:tmdb_person:5292:actor`, so Plex can filter on the
 labels. Fields Plex has no filter for, such as TMDB facts, original language
 or folder, work the same way: Overture labels the items that match the
 condition, such as `overture:field:original_language:is:ja`, and refreshes the
-labels on each sync.
+labels on each sync. A show's **Network** is a TMDB fact too, so a smart
+collection tests TMDB's networks through a label rather than Plex's own,
+whose names differ, and both kinds select the same shows.
+
+Some fields only Plex tests, so they are offered in smart collections alone:
+**Subtitle codec**, **File size (GB)** and **Bitrate (Mbps)**, which a show
+tests on its episodes, and for shows **Episode added** and **Episode last
+played**, such as shows with an episode added in the last 14 days. Smart show
+collections can also be ordered by **Latest episode added** and **Unplayed
+episodes**.
+
+**In the last** and **not in the last** count days back from the moment a
+condition is tested, as Plex does, so a title added 365 days and an hour ago
+is not in the last 365 days.
 
 As the criteria are edited, the editor suggests the type that suits them:
 Smart when Plex filters every condition natively, or when a filter only Plex

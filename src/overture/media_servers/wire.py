@@ -56,6 +56,8 @@ class PlexGuid(TypedDict, total=False):
 
 class PlexDirector(TypedDict, total=False):
     tag: str
+    #: The filter selecting the value, such as ``actor=95049``.
+    filter: str
 
 
 class PlexMetadata(TypedDict, total=False):

@@ -5,7 +5,7 @@ lazy import re
 lazy import unicodedata
 lazy from collections.abc import Callable, Iterable, Mapping, Sequence
 lazy from dataclasses import dataclass
-lazy from datetime import date, datetime, timedelta
+lazy from datetime import UTC, date, datetime, timedelta
 lazy from itertools import chain
 
 lazy from ...domain import (
@@ -41,13 +41,14 @@ def _iso_day(value: str | None) -> date | None:
         return None
 
 
-def _day(value: datetime | None) -> date | None:
-    return value.date() if value else None
+def _moment(value: datetime | None) -> datetime | None:
+    """A stored time, which SQLite may keep without its UTC zone."""
+    return value if value is None or value.tzinfo else value.replace(tzinfo=UTC)
 
 
-def _last_played(item: CollectionItem) -> date:
+def _last_played(item: CollectionItem) -> datetime:
     """A title never played was last played before any date."""
-    return item.last_played_at.date() if item.last_played_at else date.min
+    return _moment(item.last_played_at) or datetime.min.replace(tzinfo=UTC)
 
 
 def _minutes(item: CollectionItem) -> int | None:
@@ -123,7 +124,7 @@ _GETTERS: dict[FilterField, _Getter] = {
     FilterField.USER_RATING: lambda item: item.user_rating,
     FilterField.DURATION: _minutes,
     FilterField.PLAYS: lambda item: item.plays,
-    FilterField.ADDED: lambda item: _day(item.server_added_at),
+    FilterField.ADDED: lambda item: _moment(item.server_added_at),
     FilterField.RELEASED: lambda item: _iso_day(item.release_date),
     FilterField.LAST_PLAYED: _last_played,
     FilterField.UNPLAYED: lambda item: item.unplayed,
@@ -191,20 +192,26 @@ def _number(candidate: float | None, operator: FilterOperator, target: float) ->
 
 
 def _date(
-    candidate: date | None, operator: FilterOperator, target: str | float, today: date
+    candidate: date | None, operator: FilterOperator, target: str | float, now: datetime
 ) -> bool:
+    """Test a date, or a time as Plex does: days back from this very moment."""
     # Like Plex, an unknown date matches no date condition.
     if candidate is None:
         return False
+    day = candidate.date() if isinstance(candidate, datetime) else candidate
     match operator:
-        case FilterOperator.IN_LAST:
-            return candidate >= today - timedelta(days=float(target))
-        case FilterOperator.NOT_IN_LAST:
-            return candidate < today - timedelta(days=float(target))
+        case FilterOperator.IN_LAST | FilterOperator.NOT_IN_LAST:
+            span = timedelta(days=float(target))
+            within = (
+                candidate >= now - span
+                if isinstance(candidate, datetime)
+                else day >= now.date() - span
+            )
+            return within is (operator is FilterOperator.IN_LAST)
         case FilterOperator.BEFORE:
-            return candidate < date.fromisoformat(str(target))
+            return day < date.fromisoformat(str(target))
         case FilterOperator.AFTER:
-            return candidate > date.fromisoformat(str(target))
+            return day > date.fromisoformat(str(target))
         case _:
             return False
 
@@ -230,7 +237,7 @@ def _matches_field(
             day = value if isinstance(value, date) else None
             if isinstance(target, bool):
                 return False
-            return _date(day, operator, target, context.now.date())
+            return _date(day, operator, target, context.now)
         case FieldKind.BOOLEAN:
             return (bool(value) == target) is (operator is FilterOperator.IS)
 

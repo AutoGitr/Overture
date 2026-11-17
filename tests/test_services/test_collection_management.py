@@ -159,6 +159,9 @@ class Provider(PlexProvider):
         self.smart_filters: dict[str, str] = {}
         self.synced_labels: list[tuple[str, list[str], list[str]]] = []
         self.choices: dict[str, list[tuple[str, str]]] = {}
+        #: The values each item holds per filter field, which a section's list
+        #: of the field's values can leave out.
+        self.item_choices: dict[tuple[str, str], list[tuple[str, str]]] = {}
         self.fail = False
         self.rejected_updates: set[str] = set()
         self.queries: list[str] = []
@@ -225,6 +228,12 @@ class Provider(PlexProvider):
         self, library_id: str, media_type: MediaType, field: str
     ) -> list[tuple[str, str]]:
         return self.choices.get(field, [])
+
+    @override
+    async def item_filter_choices(
+        self, server_item_id: str, field: str
+    ) -> list[tuple[str, str]]:
+        return self.item_choices.get((server_item_id, field), [])
 
     @override
     async def find_matching(
@@ -2881,6 +2890,22 @@ async def test_plex_counts_a_dimension_only_it_knows(manager: Manager) -> None:
                 generator=generator.model_copy(update={"smart": False}),
             )
         )
+
+
+async def test_a_value_plex_leaves_off_its_list_is_found_through_an_item_holding_it(
+    manager: Manager,
+) -> None:
+    # Plex lists no genres here, while the first movie holds Action as key 12.
+    manager.provider.item_choices = {("m0", "genre"): [("12", "Action")]}
+    await manager.service.discovery.preview(
+        CollectionPreviewRequest(
+            rule=library_rule(
+                criteria=where(FilterField.GENRE, FilterOperator.IS, "Action"),
+                smart=True,
+            ),
+        )
+    )
+    assert "genre=12" in manager.provider.queries[-1]
 
 
 async def test_previews_count_members_before_saving(manager: Manager) -> None:

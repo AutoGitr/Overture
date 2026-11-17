@@ -2,7 +2,7 @@
 
 lazy from collections import Counter
 lazy from collections.abc import Sequence
-lazy from datetime import UTC, datetime
+lazy from datetime import UTC, datetime, timedelta
 lazy from typing import cast
 
 lazy import pytest
@@ -50,6 +50,7 @@ lazy from overture.utils.collection_fields import (
     dimension_available,
     field_available,
     field_label,
+    labelled_field,
 )
 lazy from tests.collection_helpers import library_rule
 lazy from tests.runtime_helpers import unused
@@ -152,6 +153,16 @@ def test_field_conditions_match_synced_metadata(
     condition: FieldCondition, expected: bool
 ) -> None:
     assert _matches(_item(), condition) is expected
+
+
+def test_times_count_days_back_from_this_moment_as_plex_does() -> None:
+    # Added a year and an hour ago: on the year's last day, but not within it.
+    added = _item(server_added_at=NOW - timedelta(days=365, hours=1))
+    assert not _matches(added, _field(FilterField.ADDED, FilterOperator.IN_LAST, 365))
+    assert _matches(added, _field(FilterField.ADDED, FilterOperator.NOT_IN_LAST, 365))
+    # A time SQLite kept without its zone is UTC.
+    naive = _item(server_added_at=NOW.replace(tzinfo=None) - timedelta(hours=1))
+    assert _matches(naive, _field(FilterField.ADDED, FilterOperator.IN_LAST, 1))
 
 
 def test_criteria_read_only_the_values_they_test() -> None:
@@ -395,6 +406,35 @@ def test_plex_query_works_around_what_plex_ignores_and_names_show_fields() -> No
     ]
 
 
+def test_plex_query_matches_text_with_an_apostrophe_by_its_start_and_end() -> None:
+    title = "'Allo 'Allo!"
+    query = compile_plex_query(
+        FilterGroup(
+            conditions=[
+                _field(FilterField.TITLE, FilterOperator.IS, title),
+                _field(FilterField.TITLE, FilterOperator.IS_NOT, title),
+            ]
+        ),
+        media_type=MediaType.SHOW,
+        order=CollectionOrder.TITLE_ASC,
+        limit=None,
+        choices={},
+        labels={},
+    )
+    # Plex fails "title==" and "title!==" on an apostrophe.
+    value = "%27Allo%20%27Allo%21"
+    assert query.split("&") == [
+        "sort=titleSort",
+        "push=1",
+        f"title%3C={value}",
+        "and=1",
+        f"title%3E={value}",
+        "pop=1",
+        "and=1",
+        f"title%21={value}",
+    ]
+
+
 def test_plex_query_nests_groups_and_filters_sources_by_label() -> None:
     source = SourceCondition(source=MdblistSource(identifiers=["user/list"]))
     criteria = FilterGroup(
@@ -481,6 +521,73 @@ def test_plex_show_queries_test_media_fields_on_episodes() -> None:
     assert not field_available(
         FilterField.EDITION, ServerType.PLEX, MediaType.SHOW, smart=True
     )
+
+
+def test_plex_tests_show_episodes_files_and_subtitles_in_its_own_units() -> None:
+    shows = compile_plex_query(
+        FilterGroup(
+            conditions=[
+                _field(FilterField.EPISODE_ADDED, FilterOperator.IN_LAST, 14),
+                _field(FilterField.EPISODE_LAST_PLAYED, FilterOperator.IN_LAST, 30),
+                _field(FilterField.FILE_SIZE, FilterOperator.GT, 2),
+            ]
+        ),
+        media_type=MediaType.SHOW,
+        order=CollectionOrder.EPISODE_ADDED_DESC,
+        limit=None,
+        choices={},
+        labels={},
+    )
+    # Plex counts sizes in bytes; more than 2 GB starts at 3 whole gigabytes.
+    assert shows.split("&") == [
+        "sort=episode.addedAt%3Adesc",
+        "episode.addedAt%3E%3E=-14d",
+        "and=1",
+        "episode.lastViewedAt%3E%3E=-30d",
+        "and=1",
+        "episode.mediaSize%3E=3000000000",
+    ]
+    movies = compile_plex_query(
+        FilterGroup(
+            conditions=[
+                _field(FilterField.BITRATE, FilterOperator.GTE, 20),
+                _field(FilterField.SUBTITLE_CODEC, FilterOperator.IS, "SRT"),
+            ]
+        ),
+        media_type=MediaType.MOVIE,
+        order=CollectionOrder.TITLE_ASC,
+        limit=None,
+        choices={"subtitleCodec": choice_keys([("srt", "SRT")])},
+        labels={},
+    )
+    assert movies.split("&") == [
+        "sort=titleSort",
+        "mediaBitrate%3E=20000",
+        "and=1",
+        "subtitleCodec=srt",
+    ]
+    # Plex alone tests them, and orders shows by their episodes.
+    assert not field_available(
+        FilterField.EPISODE_ADDED, ServerType.PLEX, MediaType.SHOW, smart=False
+    )
+    assert not field_available(
+        FilterField.EPISODE_ADDED, ServerType.PLEX, MediaType.MOVIE, smart=True
+    )
+    shows_smart = available_orders(ServerType.PLEX, MediaType.SHOW, smart=True)
+    assert {
+        CollectionOrder.EPISODE_ADDED_DESC,
+        CollectionOrder.UNPLAYED_EPISODES_ASC,
+    } <= set(shows_smart)
+    assert CollectionOrder.EPISODE_ADDED_DESC not in available_orders(
+        ServerType.PLEX, MediaType.MOVIE, smart=True
+    )
+    assert CollectionOrder.EPISODE_ADDED_DESC not in available_orders(
+        ServerType.PLEX, MediaType.SHOW, smart=False
+    )
+
+
+def test_a_tmdb_fact_is_tested_through_a_label_even_where_plex_names_it() -> None:
+    assert labelled_field(FilterField.NETWORK, ServerType.PLEX, MediaType.SHOW)
 
 
 def test_fields_adapt_to_the_server_and_evaluation() -> None:

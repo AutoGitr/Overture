@@ -94,6 +94,11 @@ PLEX_COLLECTION_FILTERING: frozendict[CollectionFiltering, int] = frozendict(
 )
 
 
+#: Where an item's metadata lists a filter field's values, when not under the
+#: field's capitalised name.
+_TAG_LISTS = {"actor": "Role"}
+
+
 def _filter_key(key: str) -> str:
     """Decode a filter value's key; Plex percent-encodes some once or twice.
 
@@ -841,6 +846,25 @@ class PlexClient(MediaServerHttpClient):
             (key, str(entry.get("title") or key))
             for entry in map(wire_object, entries)
             if entry.get("key") is not None and (key := _filter_key(str(entry["key"])))
+        ]
+
+    async def get_item_filter_choices(
+        self, rating_key: str, field: str
+    ) -> list[tuple[str, str]]:
+        """List the keys and names of the values an item holds in a filter field.
+
+        A section's list of a field's values can leave out many that its items
+        hold, such as most actors, while each item names its own with the
+        filter that selects them (``actor=95049``).
+        """
+        item = await self.get_metadata(rating_key) or {}
+        entries: list[object] = (
+            item.get(_TAG_LISTS.get(field, field.capitalize())) or []
+        )
+        return [
+            (key, str(entry.get("tag") or key))
+            for entry in map(wire_object, entries)
+            if (key := _filter_key(str(entry.get("filter", "")).partition("=")[2]))
         ]
 
     async def find_matching(

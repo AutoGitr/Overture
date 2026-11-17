@@ -112,7 +112,7 @@ lazy from collections.abc import Awaitable, Callable, Iterator
 lazy from dataclasses import dataclass, field
 lazy from pathlib import Path
 lazy from typing import Any
-lazy from urllib.parse import parse_qs, urlsplit
+lazy from urllib.parse import parse_qs, unquote, urlsplit
 
 lazy import httpx2
 
@@ -170,6 +170,26 @@ PLEX_DIFFERS: dict[tuple[str, str], str] = {
         "so is not leaves them out"
     ),
 }
+#: Plex filters and sorts Overture leaves out by choice, and why; an episode's
+#: form of a key without its own entry shares the key's.
+_MAINTENANCE = "it tells the library's upkeep, not what a collection holds"
+_EPISODE_OF_SHOW = "a show collection tests the show's own value"
+PLEX_KNOWN_GAPS: dict[str, str] = {
+    "duplicate": _MAINTENANCE,
+    "trash": _MAINTENANCE,
+    "unmatched": _MAINTENANCE,
+    "location": (
+        "Plex offers only the library's root folders, and Folder tests any path"
+    ),
+    "episode.title": _EPISODE_OF_SHOW,
+    "episode.year": _EPISODE_OF_SHOW,
+    "episode.originallyAvailableAt": _EPISODE_OF_SHOW,
+    "episode.userRating": _EPISODE_OF_SHOW,
+    "episode.viewCount": _EPISODE_OF_SHOW,
+    "episode.collection": _EPISODE_OF_SHOW,
+    "episode.unwatched": "Unplayed tests a show's unplayed episodes",
+    "mediaHeight": "a collection is rarely wanted in order of resolution",
+}
 #: Fields whose regular evaluation reads play state as of the last library sync.
 PLAY_STATE = frozenset({"in_progress", "unplayed", "plays", "last_played"})
 #: The scopes Plex lists a section's filters, fields and sorts under.
@@ -180,6 +200,8 @@ PLEX_EPISODE = 4
 PLEX_FIELD_TYPES: frozenset[PlexFieldType] = frozenset(
     {"string", "tag", "integer", "float", "date", "boolean"}
 )
+#: Values per field Plex is asked whether any title holds.
+VALUE_PROBES = 20
 #: Characters Plex may refuse in a text value, each probed on its own.
 PLEX_TEXT_PROBES = ("'", "!", "&", '"', "%")
 #: Where a title's metadata holds a filter's tags, when not under its name.
@@ -193,6 +215,10 @@ MEDIA_BROWSER_FILTERS: dict[str, tuple[str, str]] = {
     "year": ("Years", "Years"),
 }
 MEDIA_BROWSER_TYPES = {"movie": "Movie", "show": "Series"}
+#: The filters testing what each server holds of its own copy of a title; the
+#: lead server gives the rest of the details of the titles it holds.
+PER_COPY = frozenset({"label"})
+LEAD_DETAILS = "the lead server gives the details of the titles it holds too"
 #: The Overture requests that only read, besides GET.
 OVERTURE_READS = frozenset(
     {
@@ -471,6 +497,8 @@ class Library:
         collections: list[dict[str, Any]],
         direct: PlexServer | MediaBrowserServer | None,
         listing: Listing,
+        *,
+        lead: bool,
     ) -> None:
         self.overture = overture
         self.server = server
@@ -488,6 +516,8 @@ class Library:
         self.collections = collections
         self.direct = direct
         self.listing = listing
+        #: Its server leads, so it gives the details of the titles it holds.
+        self.lead = lead
         #: The members the server counts in each of its collections, by its ID.
         self.held: dict[str, int] = {}
         self._values: dict[str, list[dict[str, Any]] | ApiError] = {}
@@ -619,6 +649,9 @@ class Library:
                 Members(case.smart_count, theirs),
             )
         if entry["field"] in PLAY_STATE:
+            # A regular collection reads play state as of the last sync, by
+            # design, so the two differ until the next one.
+            case.differs = "play state"
             case.note = (
                 "Overture reads play state as of the last library sync; "
                 "sync and run again. " + case.note
@@ -934,7 +967,16 @@ class Library:
                     continue
                 case = self.case("image", f"{collection['title']} {art} {label}")
                 status, kind = await self.overture.status(url)
-                if status != 200 or not kind.startswith("image/"):
+                if status == 200 and kind.startswith("image/"):
+                    continue
+                # A sync between the listing and the image can change the image.
+                now = await self.overture.get(base, media_type=self.media_type)
+                if (now[f"server_{art}_version"], now[f"{art}_hash"]) != (
+                    version,
+                    digest,
+                ):
+                    case.note = f"the {art} changed since the collection was listed"
+                else:
                     case.error = f"HTTP {status} {kind}".strip()
 
     async def check_offered(self, case: Case, criteria: dict[str, Any]) -> None:
@@ -966,14 +1008,26 @@ class Library:
         )
 
 
-def inventory(case: Case, overture: set[str], server: set[str], *, noun: str) -> None:
-    """Report what one side holds that the other does not."""
+def inventory(
+    case: Case,
+    overture: set[str],
+    server: set[str],
+    *,
+    noun: str,
+    names: dict[str, str] | None = None,
+) -> None:
+    """Report what one side holds that the other does not, by *names* if given."""
     case.count, case.held = len(overture), len(server)
     problems: list[str] = []
+    shown = names or {}
     if missing := server - overture:
-        problems.append(f"Overture lacks {noun} {named(missing)}")
+        problems.append(
+            f"Overture lacks {noun} {named([shown.get(key, key) for key in missing])}"
+        )
     if extra := overture - server:
-        problems.append(f"the server lacks {noun} {named(extra)}")
+        problems.append(
+            f"the server lacks {noun} {named([shown.get(key, key) for key in extra])}"
+        )
     case.error = "; ".join(problems)
 
 
@@ -1009,7 +1063,7 @@ class PlexServer(Server):
 
     def __init__(self, base_url: str, token: str, *, verify: bool = True) -> None:
         super().__init__(base_url, {"X-Plex-Token": token}, verify=verify)
-        self._directories: dict[tuple[str, int | None], set[str]] = {}
+        self._directories: dict[tuple[str, int | None], dict[str, str]] = {}
 
     async def container(self, path: str, **params: Any) -> dict[str, Any]:
         return (await self.get(path, **params))["MediaContainer"]
@@ -1046,16 +1100,42 @@ class PlexServer(Server):
         ).get("Metadata", [])
         return {str(row["ratingKey"]): row for row in rows}
 
-    async def directory(self, path: str, item_type: int | None = None) -> set[str]:
-        """The folded names Plex lists a filter's values under, fetched once."""
+    async def directory(
+        self, path: str, item_type: int | None = None
+    ) -> dict[str, str]:
+        """The keys Plex lists a filter's values under, by folded name, fetched once."""
         key = (path, item_type)
         if key not in self._directories:
             params = {} if item_type is None else {"type": item_type}
             self._directories[key] = {
-                str(row.get("title", "")).casefold()
+                str(row["title"]).casefold(): unquote(str(row["key"]))
                 for row in (await self.container(path, **params)).get("Directory", [])
-            } - {""}
+                if row.get("title") and row.get("key")
+            }
         return self._directories[key]
+
+    async def unheld(
+        self, library: Library, filter_name: str, values: dict[str, str]
+    ) -> set[str]:
+        """Which of *values* no title of the library holds, asked of Plex.
+
+        Plex keeps listing a value after the last title holding it loses it,
+        and lists labels only collections hold.
+        """
+        found: set[str] = set()
+        for name, key in list(values.items())[:VALUE_PROBES]:
+            page = await self.container(
+                f"/library/sections/{library.key}/all",
+                type=PLEX_TYPES[library.media_type],
+                **{
+                    filter_name: key,
+                    "X-Plex-Container-Start": 0,
+                    "X-Plex-Container-Size": 0,
+                },
+            )
+            if not int(page.get("totalSize", page.get("size", 0))):
+                found.add(name)
+        return found
 
     async def count(self, library: Library, condition: dict[str, Any]) -> int | None:
         """How many titles Plex selects by a condition, or ``None`` if it refuses it."""
@@ -1142,7 +1222,19 @@ class PlexServer(Server):
             },
             set(mine),
         )
-        inventory(case, set(mine), set(listed) - skipped, noun="collections")
+        inventory(
+            case,
+            set(mine),
+            set(listed) - skipped,
+            noun="collections",
+            names={
+                **{key: f"{row['title']} ({key})" for key, row in mine.items()},
+                **{
+                    key: f"{row['title']} ({key}, {row.get('childCount', 0)} members)"
+                    for key, row in listed.items()
+                },
+            },
+        )
         for key, row in listed.items():
             if (ours := mine.get(key)) is None:
                 continue
@@ -1221,26 +1313,26 @@ class PlexServer(Server):
             plex = FIELDS[field_name].plex if field_name else None
             if plex is not None and entry.get("type"):
                 written_as.setdefault(entry["type"], set()).add(plex.type)
+        # Plex lists some keys both bare and with their scope (``show.title``).
         offered = {
-            *(entry["filter"] for entry in kind.get("Filter", [])),
-            *(entry["key"] for entry in kind.get("Field", [])),
+            *(scoped(entry["filter"]) for entry in kind.get("Filter", [])),
+            *(scoped(entry["key"]) for entry in kind.get("Field", [])),
         }
-        for key in sorted(offered):
-            if scoped(key) not in known:
-                library.case(
-                    "plex field", scoped(key)
-                ).error = "Overture cannot test this Plex field"
+        for key in sorted(offered - set(known)):
+            gap(library.case("plex field", key), key, "test this Plex field")
         if prefix:
             return
         sorts = _plex_sorts()
         for entry in kind.get("Sort", []):
             if entry["key"] not in sorts:
-                library.case(
-                    "plex sort", entry["key"]
-                ).error = "Overture cannot order by this Plex sort"
+                gap(
+                    library.case("plex sort", entry["key"]),
+                    entry["key"],
+                    "order by this Plex sort",
+                )
 
     async def check_values(self, library: Library, meta: dict[str, Any]) -> None:
-        """Each value Plex lists for a filter must be one Overture offers."""
+        """Each value a title holds by Plex's list must be one Overture offers."""
         keys = plex_field_keys(MediaType(library.media_type))
         types: list[dict[str, Any]] = meta.get("Type", [])
         own = next(
@@ -1250,23 +1342,40 @@ class PlexServer(Server):
         for entry in filters:
             field_name = keys.get(entry["filter"])
             spec = library.fields.get(str(field_name)) if field_name else None
-            if spec is None or spec["kind"] != "tag" or not entry.get("key"):
+            plex = FIELDS[field_name].plex if field_name else None
+            if spec is None or plex is None or spec["kind"] != "tag":
                 continue
-            plex = await self.directory(entry["key"])
+            if not entry.get("key"):
+                continue
+            listed = await self.directory(entry["key"])
+            # A keyed field's values are Plex's keys (``1080``), not its names.
+            held = (
+                {key.casefold(): key for key in listed.values()}
+                if plex.keyed
+                else listed
+            )
             try:
                 await library.values(spec["field"])
             except ApiError:
                 continue
             offered = library.offered_values(spec["field"])
             case = library.case("plex values", spec["label"])
-            case.count, case.held = len(offered), len(plex)
-            if missing := plex - offered:
-                case.error = f"Overture does not offer {named(missing)}"
-            if unlisted := offered - plex:
-                case.note = (
-                    f"Plex does not list {named(unlisted)}, so no smart collection "
-                    "can select them"
+            notes = [f"Overture offers {len(offered)}, Plex lists {len(held)}"]
+            missing = {name: key for name, key in held.items() if name not in offered}
+            if unheld := await self.unheld(library, entry["filter"], missing):
+                notes.append(f"no title holds {named(unheld)}")
+            if real := set(missing) - unheld:
+                problem = f"Overture does not offer {named(real)}"
+                if FIELDS[spec["field"]].tmdb:
+                    notes.append(f"{problem}: Overture offers TMDB's, Plex its own")
+                else:
+                    case.error = problem
+            if unlisted := offered - set(held):
+                notes.append(
+                    f"Plex's list leaves out {named(unlisted)}; Overture finds "
+                    "them through the titles holding them"
                 )
+            case.note = "; ".join(notes)
 
     async def explain(
         self,
@@ -1301,10 +1410,7 @@ class PlexServer(Server):
                 PLEX_EPISODE if episode else PLEX_TYPES[library.media_type],
             )
             if str(value).casefold() not in listed:
-                found += (
-                    f"; Plex's {key} list does not name {value!r}, so no smart "
-                    "collection can select it"
-                )
+                found += f"; Plex's {key} list does not name {value!r}"
         return found
 
 
@@ -1348,13 +1454,38 @@ class MediaBrowserServer(Server):
             **params,
         )
 
-    async def item(self, item_id: str, fields: str) -> dict[str, Any]:
-        """One item with the given fields, as the server holds it."""
-        found = await self.get(
-            "/Items", Ids=item_id, Fields=fields, EnableImages="false"
-        )
+    async def item(self, item_id: str) -> dict[str, Any]:
+        """One item as the server holds it.
+
+        Asked as a query by ID: Jellyfin 12 refuses ``/Items/{id}`` without a
+        user, which an API key has none of.
+        """
+        found = await self.get("/Items", Ids=item_id, Fields="SortName,Overview")
         rows: list[dict[str, Any]] = found["Items"]
         return rows[0] if rows else {}
+
+    async def filter_values(self, library: Library) -> dict[str, list[Any]]:
+        """The values the server lists for each of its item filters in a library."""
+        kind = MEDIA_BROWSER_TYPES[library.media_type]
+        if self.server == "jellyfin":
+            return await self.get(
+                "/Items/Filters", ParentId=library.key, IncludeItemTypes=kind
+            )
+        # Emby lists each filter's values on its own.
+        found: dict[str, list[Any]] = {}
+        for _, listed in MEDIA_BROWSER_FILTERS.values():
+            try:
+                rows = await self.get(
+                    f"/{listed}",
+                    ParentId=library.key,
+                    IncludeItemTypes=kind,
+                    Recursive="true",
+                )
+            except httpx2.HTTPError as exc:
+                library.case(f"{self.server} filter", listed).error = failure(exc)
+                continue
+            found[listed] = [row["Name"] for row in rows["Items"]]
+        return found
 
     async def check_library(self, library: Library) -> None:
         """Compare what Overture lists and counts with what the server does."""
@@ -1365,21 +1496,17 @@ class MediaBrowserServer(Server):
             {str(row["Id"]) for row in found["Items"]},
             noun="items",
         )
-        filters = await self.get(
-            "/Items/Filters",
-            ParentId=library.key,
-            IncludeItemTypes=MEDIA_BROWSER_TYPES[library.media_type],
-        )
+        filters = await self.filter_values(library)
         for field_name, (param, listed) in MEDIA_BROWSER_FILTERS.items():
             spec = library.fields.get(field_name)
-            listed_values: list[Any] = filters.get(listed) or []
-            values = [str(value) for value in listed_values]
+            values = [str(value) for value in filters.get(listed) or []]
             if spec is None:
                 if values:
                     library.case(
                         f"{self.server} filter", param
                     ).error = "Overture does not offer this filter"
                 continue
+            differs = "" if library.lead or field_name in PER_COPY else LEAD_DETAILS
             if spec["kind"] == "tag":
                 try:
                     await library.values(field_name)
@@ -1387,13 +1514,30 @@ class MediaBrowserServer(Server):
                     continue
                 case = library.case(f"{self.server} values", spec["label"])
                 offered = library.offered_values(field_name)
-                case.count, case.held = len(offered), len(values)
-                if missing := {value.casefold() for value in values} - offered:
-                    case.error = f"Overture does not offer {named(missing)}"
+                case.note = (
+                    f"Overture offers {len(offered)}, {self.server} lists {len(values)}"
+                )
+                spelt = {value.casefold(): value for value in values}
+                if missing := set(spelt) - offered:
+                    problem = f"Overture does not offer {named(missing)}"
+                    if differs:
+                        case.note += f"; {problem}: {differs}"
+                    else:
+                        case.error = problem
+                        first = spelt[min(missing)]
+                        holder = await self.items(
+                            library.key, library.media_type, Limit=1, **{param: first}
+                        )
+                        if holder["Items"]:
+                            case.note += (
+                                f"; {self.server} says {holder['Items'][0]['Name']} "
+                                f"holds {first!r}"
+                            )
             if not values:
                 continue
             value = values[0]
             case = library.case(f"{self.server} count", f"{spec['label']} is {value!r}")
+            case.differs = differs
             await library.preview(
                 case,
                 single(
@@ -1410,12 +1554,25 @@ class MediaBrowserServer(Server):
                 library.key, library.media_type, Limit=0, **{param: value}
             )
             case.held = counted["TotalRecordCount"]
+            if case.mismatch and differs:
+                case.note = differs
 
     async def collection_ids(self) -> dict[str, dict[str, Any]]:
         found = await self.get(
             "/Items", IncludeItemTypes="BoxSet", Recursive="true", Fields="ChildCount"
         )
         return {str(row["Id"]): row for row in found["Items"]}
+
+
+def gap(case: Case, key: str, what: str) -> None:
+    """Note a Plex feature Overture leaves out by choice; report any other."""
+    reason = PLEX_KNOWN_GAPS.get(key) or PLEX_KNOWN_GAPS.get(
+        key.removeprefix("episode.")
+    )
+    if reason:
+        case.note = f"left out by choice: {reason}"
+    else:
+        case.error = f"Overture cannot {what}"
 
 
 def _plex_sorts() -> set[str]:
@@ -1459,7 +1616,16 @@ async def check_media_browser_collections(
         },
         set(mine),
     )
-    inventory(case, set(mine), set(listed) - skipped, noun="collections")
+    inventory(
+        case,
+        set(mine),
+        set(listed) - skipped,
+        noun="collections",
+        names={
+            **{key: f"{row['title']} ({key})" for key, row in mine.items()},
+            **{key: f"{row['Name']} ({key})" for key, row in listed.items()},
+        },
+    )
     cases = [case]
     held: dict[str, int] = {}
     for key, row in listed.items():
@@ -1525,6 +1691,7 @@ async def verify_instance(
                         extra_sources,
                         paired,
                         listing,
+                        servers[0],
                     )
                 )
             except (ApiError, httpx2.HTTPError) as exc:
@@ -1544,8 +1711,12 @@ async def verify_server(
     extra_sources: list[dict[str, Any]],
     direct: PlexServer | MediaBrowserServer | None,
     listing: Listing,
+    lead: dict[str, Any],
 ) -> list[Case]:
-    """Check the libraries and collections one of an instance's servers holds."""
+    """Check the libraries and collections one of an instance's servers holds.
+
+    *lead* is the instance's lead server.
+    """
     title = server["title"]
     cases: list[Case] = []
     held: list[dict[str, Any]] = []
@@ -1578,7 +1749,7 @@ async def verify_server(
         collections = [
             row
             for row in everything
-            if row["media_types"][0] == media_type and ids & set(row["library_ids"])
+            if media_type in row["media_types"] and ids & set(row["library_ids"])
         ]
         held.extend(collections)
         libraries = {
@@ -1604,6 +1775,7 @@ async def verify_server(
                 [row for row in collections if library["id"] in row["library_ids"]],
                 direct,
                 listing,
+                lead=server is lead,
             )
             for library in found
         }
@@ -1946,7 +2118,7 @@ class WriteCheck:
                 await self.direct.container(f"/library/metadata/{collection_id}")
             ).get("Metadata", [{}])
             return rows[0]
-        return await self.direct.get(f"/Items/{collection_id}")
+        return await self.direct.item(collection_id)
 
     async def art(self, collection_id: str) -> tuple[Any, Any]:
         """What the server names the collection's poster and background by."""
@@ -1959,9 +2131,7 @@ class WriteCheck:
 
     async def run(self) -> list[Case]:
         try:
-            for stale in await self.provider.list_collections():
-                if stale.title.startswith(WRITE_PREFIX):
-                    await self.provider.delete_collection(stale.id)
+            await self.sweep()
             if (found := await self.movies()) is not None:
                 library, items = found
                 made = await self.step(
@@ -2206,10 +2376,23 @@ class WriteCheck:
         )
         await self.filled(check, library, collection_id, query)
 
+    async def sweep(self) -> None:
+        """Delete every collection a run made, recorded or not.
+
+        A server can make a collection and then fail the request, so the one
+        it made is found by its title.
+        """
+        for row in await self.provider.list_collections():
+            if row.title.startswith(WRITE_PREFIX):
+                await self.provider.delete_collection(row.id)
+                if row.id in self.made:
+                    self.made.remove(row.id)
+
     async def delete(self, check: Case) -> None:
         for collection_id in list(self.made):
             await self.provider.delete_collection(collection_id)
             self.made.remove(collection_id)
+        await self.sweep()
         left = [
             row.title
             for row in await self.provider.list_collections()

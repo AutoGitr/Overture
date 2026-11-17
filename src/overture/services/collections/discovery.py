@@ -364,7 +364,7 @@ class CollectionDiscovery:
                 library_id,
                 media_type,
                 await self._membership.plex_filter(
-                    library_id, media_type, criteria, order
+                    library_id, media_type, criteria, items, order
                 ),
                 _PREVIEW_MEMBERS,
             )

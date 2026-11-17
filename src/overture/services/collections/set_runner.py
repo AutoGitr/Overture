@@ -293,6 +293,9 @@ class CollectionSets:
             },
             key=str.casefold,
         )
+        items = await self._access.library_items(
+            library_id, media_type, criteria_terms([generator.criteria], [])
+        )
         counts: Counter[str] = Counter()
         for title in titles:
             criteria = FilterGroup(
@@ -304,7 +307,9 @@ class CollectionSets:
             total, _ = await provider.find_matching(
                 library_id,
                 media_type,
-                await self._membership.plex_filter(library_id, media_type, criteria),
+                await self._membership.plex_filter(
+                    library_id, media_type, criteria, items
+                ),
                 0,
             )
             counts[title] = total

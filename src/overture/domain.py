@@ -97,6 +97,10 @@ class CollectionOrder(StrEnum):
     PLAYS_ASC = "plays.asc"
     LAST_PLAYED_DESC = "last_played.desc"
     LAST_PLAYED_ASC = "last_played.asc"
+    EPISODE_ADDED_DESC = "episode_added.desc"
+    EPISODE_ADDED_ASC = "episode_added.asc"
+    UNPLAYED_EPISODES_DESC = "unplayed_episodes.desc"
+    UNPLAYED_EPISODES_ASC = "unplayed_episodes.asc"
     RANDOM = "random"
 
 
@@ -221,7 +225,10 @@ class FilterField(StrEnum):
     ATMOS = "atmos"
     VIDEO_CODEC = "video_codec"
     AUDIO_CODEC = "audio_codec"
+    SUBTITLE_CODEC = "subtitle_codec"
     AUDIO_LAYOUT = "audio_layout"
+    FILE_SIZE = "file_size"
+    BITRATE = "bitrate"
     YEAR = "year"
     DECADE = "decade"
     CRITIC_RATING = "critic_rating"
@@ -233,6 +240,10 @@ class FilterField(StrEnum):
     ADDED = "added"
     RELEASED = "released"
     LAST_PLAYED = "last_played"
+    #: When a show's latest episode was added, and one of them last played.
+    EPISODE_ADDED = "episode_added"
+    EPISODE_LAST_PLAYED = "episode_last_played"
+    UNPLAYED_EPISODES = "unplayed_episodes"
     UNPLAYED = "unplayed"
     IN_PROGRESS = "in_progress"
     #: Whether another listed collection holds the title; false is a catch-all.

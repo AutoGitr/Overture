@@ -531,6 +531,12 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         )
 
     @override
+    async def item_filter_choices(
+        self, server_item_id: str, field: str
+    ) -> list[tuple[str, str]]:
+        return await self.client.get_item_filter_choices(server_item_id, field)
+
+    @override
     async def find_matching(
         self, library_id: str, media_type: MediaType, filter_query: str, size: int
     ) -> tuple[int, list[str]]:

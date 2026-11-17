@@ -72,6 +72,8 @@ class JellyfinClient(MediaServerHttpClient):
     )
     #: The DTO field a metadata update reads the sort name from.
     _SORT_NAME_FIELD: ClassVar[str] = "ForcedSortName"
+    #: Item fields an update sends back beside a listing's, so it keeps them.
+    _DETAIL_FIELDS: ClassVar[str] = "Overview,Taglines"
 
     @property
     def web_base_url(self) -> str:
@@ -336,7 +338,26 @@ class JellyfinClient(MediaServerHttpClient):
         )
 
     async def get_item(self, item_id: str) -> MediaBrowserItem:
-        return parse_wire(_ITEM, await self._get(f"/Items/{item_id}"))
+        return parse_wire(_ITEM, await self._item_details(item_id))
+
+    async def _item_details(self, item_id: str) -> dict[str, Any]:
+        """One item with every field a metadata update sends back.
+
+        Asked as a query by ID: Jellyfin 12 refuses ``/Items/{id}`` without a
+        user, which an API key has none of.
+        """
+        data = wire_object(
+            await self._get(
+                "/Items",
+                params=self.query_params(
+                    ids=item_id, fields=f"{self._ITEM_FIELDS},{self._DETAIL_FIELDS}"
+                ),
+            )
+        )
+        rows: list[dict[str, Any]] = data.get("Items") or []
+        if len(rows) != 1 or rows[0].get("Id") != item_id:
+            raise MediaServerError(f"{self.server.title} did not return item {item_id}")
+        return rows[0]
 
     async def _theme_items(self, item_id: str) -> list[MediaBrowserItem]:
         return media_browser_items(
@@ -456,4 +477,4 @@ class JellyfinClient(MediaServerHttpClient):
 
     async def collection_metadata(self, collection_id: str) -> dict[str, Any]:
         """Read the complete DTO so metadata edits preserve unrelated fields."""
-        return wire_object(await self._get(f"/Items/{collection_id}"))
+        return await self._item_details(collection_id)
