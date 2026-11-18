@@ -29,6 +29,8 @@ export interface AssetsConfig {
   allCollections: boolean;
   /** Collection groups that join the run, when not every collection does. */
   collectionGroups: string[];
+  /** Collections that join the run one by one, beside the chosen groups. */
+  collectionIds: number[];
   includeUnmonitored: boolean;
   overwriteExisting: boolean;
   enableArt: boolean;
@@ -147,7 +149,11 @@ export function disabledSources(catalogEnabled: boolean): readonly string[] {
 
 export interface BulkAssetsRequestParams {
   selectedLibraries: string[];
+  /** The sidebar's items, which run alone. */
   itemIds?: number[];
+  /** The sidebar's collections, which run alone. */
+  sidebarCollectionIds?: number[];
+  /** Collections chosen one by one beside the libraries; ignored with every collection. */
   collectionIds?: number[];
   /** Collection groups beside the libraries; ignored with every collection. */
   collectionGroups?: string[];
@@ -167,12 +173,18 @@ export interface BulkAssetsRequestParams {
 /** Build the bulk-assets start request from the current popup configuration. */
 export function buildBulkAssetsRequest(params: BulkAssetsRequestParams): BulkAssetsRequest {
   // A sidebar snapshot runs alone; otherwise libraries and collections combine.
-  const snapshot = params.itemIds !== undefined || params.collectionIds !== undefined;
-  const groups = snapshot || params.allCollections ? [] : (params.collectionGroups ?? []);
+  const snapshot = params.itemIds !== undefined || params.sidebarCollectionIds !== undefined;
+  const chosen = snapshot || params.allCollections;
+  const groups = chosen ? [] : (params.collectionGroups ?? []);
+  const collectionIds = snapshot
+    ? params.sidebarCollectionIds
+    : params.allCollections
+      ? undefined
+      : params.collectionIds;
   return {
     library_ids: snapshot ? [] : params.selectedLibraries,
     ...(params.itemIds === undefined ? {} : { item_ids: [...params.itemIds] }),
-    ...(params.collectionIds === undefined ? {} : { collection_ids: [...params.collectionIds] }),
+    ...(collectionIds?.length ? { collection_ids: [...collectionIds] } : {}),
     ...(!snapshot && params.allCollections ? { all_collections: true } : {}),
     ...(groups.length ? { collection_groups: [...groups] } : {}),
     include_unmonitored: params.includeUnmonitored,

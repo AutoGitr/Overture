@@ -1,15 +1,9 @@
-<script lang="ts" module>
-  /** A managed collection a run can choose by itself. */
-  export interface ChoosableCollection {
-    id: number;
-    title: string;
-    /** The group it belongs to, Ungrouped when it has none. */
-    group: string;
-  }
-</script>
-
 <script lang="ts">
-  import { toggleCollectionGroup, type CollectionChoice } from "../utils/popupSelection";
+  import {
+    toggleCollectionGroup,
+    type ChoosableCollection,
+    type CollectionChoice,
+  } from "../utils/popupSelection";
   import Checklist from "./Checklist.svelte";
   import CheckboxList from "./CheckboxList.svelte";
 

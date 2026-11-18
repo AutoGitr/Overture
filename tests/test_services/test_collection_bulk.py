@@ -178,10 +178,11 @@ async def test_incremental_fill_keeps_choices_and_deletion_cascades_jobs(
         assert (await session.exec(select(DownloadJob))).all() == []
 
 
-def test_bulk_requests_take_exactly_one_scope() -> None:
+def test_bulk_requests_choose_collections_beside_libraries_and_items_alone() -> None:
     invalid: list[dict[str, Any]] = [
-        {"collection_ids": [1], "library_ids": ["1:movies"], "themes": {}},
+        {"collection_ids": [1], "all_collections": True, "themes": {}},
         {"collection_groups": ["Sagas"], "all_collections": True, "themes": {}},
+        {"item_ids": [1], "collection_ids": [1], "themes": {}},
         {"collection_ids": [], "themes": {}},
         {"collection_groups": [], "art": {}},
         {"themes": {}},
@@ -192,6 +193,8 @@ def test_bulk_requests_take_exactly_one_scope() -> None:
     for scope in (
         {"collection_ids": [1]},
         {"collection_groups": ["Sagas"]},
+        {"collection_ids": [1], "collection_groups": ["Sagas"]},
+        {"collection_ids": [1], "library_ids": ["1:movies"]},
         {"all_collections": True},
     ):
         request = BulkAssetsRequest.model_validate({**scope, "art": {}, "themes": {}})

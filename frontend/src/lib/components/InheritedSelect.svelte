@@ -8,6 +8,7 @@
     inherited,
     options,
     hint,
+    disabled = false,
   }: {
     label: string;
     /** Offer Default, which inherits the value named in it. */
@@ -16,6 +17,8 @@
     inherited?: T | null;
     options: readonly (readonly [T, string])[];
     hint?: string;
+    /** Keep the choice but take no input, as when another setting makes it moot. */
+    disabled?: boolean;
   } = $props();
 
   const id = $props.id();
@@ -25,6 +28,7 @@
 <FieldRow {label} for={id} {hint}>
   <select
     {id}
+    {disabled}
     value={value == null ? "" : String(value)}
     onchange={(event) => {
       const raw = event.currentTarget.value;

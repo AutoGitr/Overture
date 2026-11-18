@@ -288,8 +288,14 @@ class StatsService:
             overall=movies + shows + (collection_themes or Coverage()),
         )
 
-    async def _database_stats(self, session: AsyncSession) -> DatabaseStats:
-        """Read SQLite PRAGMA information, file sizes, and table counts."""
+    @staticmethod
+    async def _database_stats(
+        session: AsyncSession, files: tuple[int, int]
+    ) -> DatabaseStats:
+        """Read SQLite PRAGMA information and table counts, beside *files*' sizes.
+
+        *files* are the sizes of the database file and its write-ahead log.
+        """
         conn = await session.connection()
 
         async def pragma(name: str, default: int) -> int:
@@ -300,12 +306,6 @@ class StatsService:
         page_count = await pragma("page_count", 0)
         freelist_count = await pragma("freelist_count", 0)
 
-        db_bytes, wal_bytes = await owned_thread(
-            _get_db_file_sizes, self._database.engine.url.database
-        )
-        if db_bytes == 0 and page_count > 0:
-            db_bytes = page_count * page_size
-
         models = table_models()
         # One statement for every table, so a new table costs no extra query.
         columns: list[Any] = [
@@ -315,6 +315,9 @@ class StatsService:
         counts: tuple[int, ...] = tuple(
             (await session.exec(cast("Select[Any]", select(*columns)))).one()
         )
+        db_bytes, wal_bytes = files
+        if db_bytes == 0 and page_count > 0:
+            db_bytes = page_count * page_size
         return DatabaseStats(
             file_size_bytes=db_bytes,
             wal_size_bytes=wal_bytes,
@@ -336,11 +339,14 @@ class StatsService:
     async def get_stats(self) -> StatsResponse:
         """Gather and compute comprehensive statistics across all domain entities."""
         collections = await self._collections()
+        files = await owned_thread(
+            _get_db_file_sizes, self._database.engine.url.database
+        )
         async with self._database.read_session() as session:
             library = await self._library(session, collections)
             art = await self._art(session, library, collections)
             themes = await self._themes(session, library, collections)
-            database = await self._database_stats(session)
+            database = await self._database_stats(session, files)
 
         backups = await owned_thread(self._backups.store.list_backups)
         backup_bytes = sum(b.size_bytes for b in backups)

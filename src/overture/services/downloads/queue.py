@@ -6,7 +6,7 @@ lazy from typing import Self
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ...db.models.download_job import DownloadJob
-lazy from ...domain import ArtType, AssetScope, JobType
+lazy from ...domain import ArtType, AssetScope, CollectionPosterStyle, JobType
 lazy from ...repositories.downloads import DownloadJobRepository
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...utils.time import utc_now
@@ -16,8 +16,9 @@ lazy from ...utils.time import utc_now
 class JobTarget:
     """The one asset a download job writes, and where its content comes from.
 
-    Build targets with :meth:`art`, :meth:`theme` or :meth:`collection_theme`,
-    so a target always names exactly what its job type needs.
+    Build targets with :meth:`art`, :meth:`theme`, :meth:`collection_art` or
+    :meth:`collection_theme`, so a target always names exactly what its job
+    type needs.
     """
 
     job_type: JobType
@@ -30,6 +31,8 @@ class JobTarget:
     collection_title: str | None = None
     #: An uploaded image in the image cache, the source of an art job without a link.
     upload_hash: str | None = None
+    #: Which OvertureDB poster a collection poster link is contributed as.
+    poster_style: CollectionPosterStyle | None = None
 
     @classmethod
     def art(
@@ -66,6 +69,34 @@ class JobTarget:
     def theme(cls, media_item_id: int, youtube_id: str) -> Self:
         """Target an item's theme."""
         return cls(JobType.THEME, youtube_id, media_item_id=media_item_id)
+
+    @classmethod
+    def collection_art(
+        cls,
+        collection_id: int,
+        title: str,
+        art_type: ArtType,
+        url: str | None,
+        *,
+        upload_hash: str | None = None,
+        poster_style: CollectionPosterStyle | None = None,
+    ) -> Self:
+        """Target a collection's poster or background on each server's copy.
+
+        Raises:
+            ValueError: When the target names not exactly one source.
+        """
+        if (url is None) == (upload_hash is None):
+            raise ValueError("Artwork comes from a link or an upload")
+        return cls(
+            JobType.COLLECTION_ART,
+            url,
+            art_type=art_type,
+            collection_id=collection_id,
+            collection_title=title,
+            upload_hash=upload_hash,
+            poster_style=poster_style,
+        )
 
     @classmethod
     def collection_theme(cls, collection_id: int, title: str, youtube_id: str) -> Self:
@@ -116,9 +147,10 @@ async def add_job(
     repository = DownloadJobRepository(session)
     active = await repository.list_active_with_titles(scope=target.slot)
     for existing, _ in active:
-        same = (existing.target_url, existing.upload_hash) == (
+        same = (existing.target_url, existing.upload_hash, existing.poster_style) == (
             target.target_url,
             target.upload_hash,
+            target.poster_style,
         )
         if same or not supersede:
             return existing.id, False, []

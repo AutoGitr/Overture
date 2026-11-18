@@ -590,13 +590,16 @@ async def run_server_audit(
             async for target, results in audited:
                 if job.stop_requested():
                     break
-                result = _reported(results)
-                await job.report(
-                    result.status.outcome,
-                    f"{result.title or _owner(target)} ({target.asset})",
-                    result.reason or result.status,
-                    results=tally.collect(*differences(results)),
-                )
+                # One line per server compared; the last one finishes the target.
+                for index, result in enumerate(results, start=1):
+                    await job.report(
+                        result.status.outcome,
+                        f"{result.title or _owner(target)} ({target.asset})",
+                        result.reason or result.status,
+                        finished=index == len(results),
+                        server=result.server,
+                        results=tally.collect(*differences([result])),
+                    )
 
 
 def _owner(target: AuditWork) -> str:
@@ -623,8 +626,3 @@ async def audit_target[T: AuditWork](
 def differences(results: list[ServerAuditResult]) -> list[ServerAuditResult]:
     """Return the results whose server asset differs from the local file."""
     return [result for result in results if not result.status.matched]
-
-
-def _reported(results: list[ServerAuditResult]) -> ServerAuditResult:
-    """Return the result the progress log reports: the first difference, if any."""
-    return next(iter(differences(results)), results[0])

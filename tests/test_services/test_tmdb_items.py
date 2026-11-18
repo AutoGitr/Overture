@@ -65,6 +65,7 @@ lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     NoopTmdb,
     NoopYoutube,
+    art_service,
     unused,
 )
 
@@ -178,7 +179,7 @@ def _asset_services(
         database=database,
     )
     return (
-        art_module.ArtService(
+        art_service(
             app_config=app_config,
             database=database,
             asset_storage=asset_storage,

@@ -43,6 +43,7 @@ lazy from overture.utils.time import utc_now
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
+    art_service,
     make_download_service,
     unused,
 )
@@ -78,7 +79,7 @@ def _service(
     downloads: DownloadService | None = None,
 ) -> ArtService:
     registry = NoopProviderRegistry()
-    return ArtService(
+    return art_service(
         app_config=app_config,
         database=database,
         asset_storage=AssetStorage(app_config=app_config),

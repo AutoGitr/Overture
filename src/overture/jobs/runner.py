@@ -2,7 +2,7 @@
 
 lazy import asyncio
 lazy import time
-lazy from collections import Counter
+lazy from collections import Counter, defaultdict
 lazy from collections.abc import AsyncGenerator, Callable, Coroutine, Mapping
 lazy from contextlib import asynccontextmanager
 lazy from dataclasses import dataclass, field, replace
@@ -57,6 +57,7 @@ class JobPersistence:
         self.run_id = uuid4().hex
         self.log_total = 0
         self.log_outcomes: Counter[JobOutcome] = Counter()
+        self.log_servers: defaultdict[str, Counter[JobOutcome]] = defaultdict(Counter)
         self._log: list[dict[str, Any]] = []
         self._summarised_at: float | None = None
 
@@ -65,6 +66,8 @@ class JobPersistence:
         self._log.append(entry.model_dump(mode="json"))
         self.log_total += 1
         self.log_outcomes[entry.outcome] += 1
+        if entry.server is not None:
+            self.log_servers[entry.server][entry.outcome] += 1
 
     async def record(
         self,
@@ -158,6 +161,10 @@ class JobContext:
                     self.persistence.add_log(JobLogEntry.model_validate(entry))
                 payload["log_total"] = self.persistence.log_total
                 payload["log_outcomes"] = dict(self.persistence.log_outcomes)
+                payload["log_servers"] = {
+                    server: dict(outcomes)
+                    for server, outcomes in self.persistence.log_servers.items()
+                }
             await publish_job_lifecycle(
                 self.lifecycle.kind,
                 status,
@@ -246,17 +253,21 @@ class ManagedJob[TallyT: JobTally]:
         *,
         count: int = 1,
         finished: bool = True,
+        server: str | None = None,
         **payload: Any,
     ) -> None:
         """Write one outcome for *count* targets to the log and count it.
 
         *finished* says the line is the target's final word in this run, so it
         also advances ``done``; a download's later outcome passes ``False``.
+        *server* names the media server the line is about, if it is about one.
         """
         self.tally.count(outcome, count)
         if finished:
             self.tally.done += count
-        await self.progress(log=log_entry(outcome, target, reason), **payload)
+        await self.progress(
+            log=log_entry(outcome, target, reason, server=server), **payload
+        )
 
     async def progress(self, **payload: Any) -> None:
         """Publish a ``progress`` event carrying the current counters."""

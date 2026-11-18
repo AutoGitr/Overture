@@ -122,7 +122,8 @@ got there. History belongs in commit messages and the changelog.
 
 - `Database.write_session()` serialises every writer behind SQLite's single
   write lock, so keep write transactions short: no network calls, file I/O or
-  hashing inside one. Run blocking work with `owned_thread`.
+  hashing inside one. Run blocking work with `owned_thread`. Read sessions
+  share a bounded pool, so they follow the same rule.
 - Take asset locks (`AssetStorage.asset_locks`) before opening a write session,
   never inside one, and hold them only around work that must not overlap on the
   same item or collection.
@@ -189,7 +190,8 @@ These fail when a change costs more or reaches across a layer. Fix the cause;
 raise a budget or add an allowed edge only for a change that earns it.
 
 - `tests/conftest.py` fails any test that makes a network request, starts
-  blocking work or takes an asset lock inside a write transaction.
+  blocking work, takes an asset lock or waits for a bounded resource inside a
+  write transaction or a read session.
 - `tests/test_architecture/test_layers.py` holds which layer may import which,
   and that only services open transactions.
 - `tests/test_architecture/test_workloads.py` and `test_route_costs.py` measure

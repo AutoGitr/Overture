@@ -44,8 +44,9 @@ export function logEntry(
   target: string,
   reason: string,
   at = "2026-01-01T12:00:00Z",
+  server: string | null = null,
 ): JobLogEntry {
-  return { outcome, target, reason, at };
+  return { outcome, target, reason, at, server };
 }
 
 /** The configured media servers, numbered from 1 and named after their kind, lead first. */

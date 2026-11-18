@@ -586,11 +586,11 @@ async def test_run_sync_broadcasts_progress_and_saves_completed_snapshot(
     assert probe.events[2][1]["done"] == 0
     assert (
         JobLogEntry.model_validate(probe.events[3][1]["log"]).format()
-        == "Added One - pulled"
+        == "[Plex] Added One - pulled"
     )
     assert (
         JobLogEntry.model_validate(probe.events[4][1]["log"]).format()
-        == "Unchanged Two - checked"
+        == "[Plex] Unchanged Two - checked"
     )
     assert {payload["total"] for _, payload in probe.events[2:]} == {listed}
 

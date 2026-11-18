@@ -47,6 +47,9 @@
           ? undefined
           : { all: config.allCollections, groups: form.selectedCollectionGroups }}
         onchange={(choice) => form.chooseCollections(choice)}
+        collections={form.collectionOptions}
+        collectionIds={config.useSidebarItems ? [] : form.selectedCollectionIds}
+        oncollectionschange={(ids) => form.chooseCollectionIds(ids)}
       />
     {/if}
   </div>

@@ -46,14 +46,20 @@ are OvertureDB, ThemerrDB and YouTube search. Local-image matching finds a
 source for artwork already on disk.
 
 **Sync** and **Assets** share one checklist that lists **All collections** and
-each group below Movies and Shows; tick every collection or chosen groups, now
-or on a schedule. In **Assets**, one run covers the libraries and collections
-you tick; or use **Current sidebar items** from the collection list to target
-its filtered rows. Only collections Overture manages are touched. Collection
-posters and backgrounds come from OvertureDB, or local-image matching against
-the server's current image, and are uploaded to the media server. Collection
-themes use OvertureDB and ThemerrDB in the configured order; YouTube search
-applies to movies and shows.
+each group below Movies and Shows, and under **Specific collections** each
+collection Overture manages; tick every collection, or chosen groups and
+collections, now or on a schedule. In **Assets**, one run covers the libraries
+and collections you tick; or use **Current sidebar items** from the collection
+list to target its filtered rows. Only collections Overture manages are
+touched. Collection posters and backgrounds come from OvertureDB, or
+local-image matching against the server's current image; the run queues each
+choice as a download, and the art lane's worker uploads it to every server's
+copy. Collection themes use OvertureDB and ThemerrDB in the configured order;
+YouTube search applies to movies and shows.
+
+Each run's log lists **Queued** lines for the downloads it starts, then a
+**Downloaded** or **Error** line as each one ends, whether it is art or a
+theme, for a title or a collection.
 
 ### How Assets treats existing choices and files
 
@@ -105,9 +111,19 @@ Renamer scan also notices files deleted outside Overture.
 
 Server audit compares the local assets on disk with what the server displays and
 plays, and optionally the images Overture uploaded to collections with the
-server's copies. Fix the selected differences, and Server audit checks whether the
-changes took effect. If the server shows old artwork, run Server audit and check the
-server's local-assets setting.
+server's copies. Each server holding a file is compared on its own, with a
+line and a result per server. Fix the selected differences, and Server audit
+checks whether the changes took effect. If a server still shows other artwork,
+check its [settings](../install/media-servers.mdx) and the competing file
+names in [Files](files.md#where-each-asset-goes-and-how-each-server-takes-it).
+
+## Logs and results
+
+A run's log has a filter for each outcome it logged, and, when its lines are
+about particular media servers, one for each server, by its `MEDIA_SERVERS`
+name; each such line shows its server. Sync's lines name the server they were
+read from, and Server audit's the server compared. Server audit's results can
+be filtered by server the same way.
 
 ## Schedules
 

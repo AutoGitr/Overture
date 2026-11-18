@@ -87,6 +87,9 @@
             <span class="badge {STATUS_BADGES[result.status] ?? 'badge-muted'}">
               {AUDIT_STATUS_LABELS[result.status]}
             </span>
+            {#if result.server}
+              <span class="badge badge-muted">{result.server}</span>
+            {/if}
             {#if result.hamming != null}
               <span class="badge badge-accent">d={result.hamming}</span>
             {/if}

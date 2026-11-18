@@ -153,6 +153,13 @@ class MediaBrowserItem(TypedDict, total=False):
     RunTimeTicks: int | None
 
 
+class MediaBrowserImage(TypedDict, total=False):
+    ImageType: Required[str]
+    ImageIndex: int | None
+    #: Where the server keeps the image file, as the server sees it.
+    Path: str | None
+
+
 class PlexSection(TypedDict, total=False):
     key: Required[Identifier | int]
     type: Required[Identifier]

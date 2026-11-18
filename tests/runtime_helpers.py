@@ -61,9 +61,12 @@ lazy from overture.schemas.settings import ConnectivityStatusResponse
 lazy from overture.schemas.sync import SyncRunRequest
 lazy from overture.schemas.themes import ThemeSearchResult
 lazy from overture.services.art.candidates import ArtCandidates
+lazy from overture.services.art.choice import ArtSelector
+lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.art.matcher import ArtMatcher
 lazy from overture.services.art.phash import PhashService
 lazy from overture.services.art.service import ArtService
+lazy from overture.services.art.uploads import ArtUploads
 lazy from overture.services.asset_manager.service import AssetManagerService
 lazy from overture.services.assets import AssetsService
 lazy from overture.services.auth import AuthService
@@ -181,6 +184,57 @@ def unused[T](protocol: type[T], label: str | None = None) -> T:
     """
     name = label or getattr(protocol, "__name__", "dependency")
     return cast("T", _UnusedDependency(name))
+
+
+def art_service(
+    *,
+    app_config: Settings,
+    database: Database,
+    asset_storage: AssetStorage,
+    matcher: ArtMatcher,
+    phash: PhashService,
+    downloads: DownloadService,
+    publisher: protocols.EventPublisher,
+    provider_registry: ProviderRegistry,
+    candidates: ArtCandidates,
+    image_clients: ProxyClientManager,
+    image_cache: ImageCache,
+    remover: AssetRemover,
+) -> ArtService:
+    """Build the artwork services from their collaborators, as the runtime does."""
+    uploads = ArtUploads(database=database, image_cache=image_cache, phash=phash)
+    selector = ArtSelector(
+        app_config=app_config,
+        database=database,
+        provider_registry=provider_registry,
+        image_clients=image_clients,
+        uploads=uploads,
+    )
+    return ArtService(
+        database=database,
+        asset_storage=asset_storage,
+        matcher=matcher,
+        downloads=downloads,
+        publisher=publisher,
+        candidates=candidates,
+        uploads=uploads,
+        selector=selector,
+        collections=CollectionArtService(
+            app_config=app_config,
+            database=database,
+            asset_locks=asset_storage.asset_locks,
+            matcher=matcher,
+            publisher=publisher,
+            provider_registry=provider_registry,
+            candidates=candidates,
+            image_clients=image_clients,
+            image_cache=image_cache,
+            selector=selector,
+            uploads=uploads,
+            remover=remover,
+        ),
+        remover=remover,
+    )
 
 
 class NoopProviderRegistry(ProviderRegistry):
@@ -604,7 +658,7 @@ def make_runtime(
         else themes
     )
     art = (
-        ArtService(
+        art_service(
             app_config=app_config,
             database=database,
             asset_storage=asset_storage,
@@ -870,9 +924,11 @@ def make_download_service(
     app_config: Settings,
     database: Database,
     image_cache: ImageCache | None = None,
+    collection_art: CollectionArtService | None = None,
 ) -> DownloadService:
     """Wire a real download queue with the test's external collaborators."""
     return DownloadService(
+        collection_art=collection_art or unused(CollectionArtService),
         art_handler=DownloadArtHandler(
             provider_registry=provider_registry,
             asset_storage=asset_storage,

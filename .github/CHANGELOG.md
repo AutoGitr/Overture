@@ -4,6 +4,9 @@
 
 ### Added
 
+- **Collections:** a collection's **Background** tab also offers its members' TMDB backgrounds, the largest 10 of each and 100 in all, fetched only when the tab opens.
+- **Operations:** job logs and Server audit results can be filtered by media server, and each line about one names its server by its `MEDIA_SERVERS` name.
+- **Operations:** Assets can run collections chosen one by one under **Specific collections**, beside groups and libraries, now or on a schedule.
 - **Collections:** **Theme** (global, per group or per collection) can be **Not needed**, so a collection's theme counts as complete without one, in its status, filters and statistics, and none is chosen for it automatically.
 - **Collections:** the configure view's **Missing** section is shown only for collections whose criteria include TMDB or MDBList lists.
 - **Interface:** **Add saved filter...** adds a saved filter to any criteria, a collection's included, as a group.
@@ -16,6 +19,11 @@
 
 ### Changed
 
+- **Operations:** an Assets run queues collection posters and backgrounds in the art download lane, as it does a title's, so its log shows them **Queued** and then **Downloaded**.
+- **Operations:** Server audit logs one line per media server compared, rather than one per file.
+- **Collections:** **Automatic theme** stays shown, and off, while **Theme** is **Not needed**.
+- **Interface:** a page or popup that fails to draw shows the error with **Try again** instead of leaving the app unresponsive.
+- **API:** download events name a collection's art or theme as one `collection` target with its `job_type` and `art_type`, instead of a `collection_theme` target.
 - **Collections:** **Automatic art** and **OvertureDB posters** are ordered lists you tick and drag: Automatic art tries OvertureDB, TMDB and Generate in your order, and a collection takes the first OvertureDB poster style it holds, such as Matte, then Individual. Saved choices keep what they did.
 - **Collections:** **Contribute to OvertureDB as** starts from the first style the collection's **OvertureDB posters** takes.
 - **Interface:** library lists are grouped under their media server, in `MEDIA_SERVERS` order, instead of naming the server on every library.
@@ -38,6 +46,12 @@
 
 ### Fixed
 
+- **Operations:** a busy Assets run no longer fails with "QueuePool limit of size 5 overflow 0 reached"; Overture keeps more database connections and waits for one instead of failing.
+- **Themes:** a theme that failed to download is tried again by later runs once a download of it for that title has succeeded, as choosing it by hand does.
+- **Media servers:** a background Overture writes is the one Jellyfin and Emby show: the backgrounds they downloaded are removed first, since they add a local one after them.
+- **Media servers:** Emby keeps a collection's sort title through refreshes.
+- **Collections:** a managed collection takes over the collection Jellyfin or Emby made for the same TMDB collection under another name, instead of making a second one.
+- **Operations:** a collection theme's container log line says it was uploaded to the media server rather than written to disk.
 - **Collections:** **Jump to** in the configure view puts the section's header at the top, also for the last sections and while content above it is still loading.
 - **Collections:** a collection whose settings or OvertureDB say it needs no theme reports its theme as complete after a theme is chosen or removed.
 - **Collections:** Jellyfin 12 creates and edits collections; it refuses the way Overture read a single item with an API key.

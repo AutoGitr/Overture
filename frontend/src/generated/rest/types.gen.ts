@@ -930,7 +930,13 @@ export type BulkAssetsRequestInput = {
      */
     all_collections?: boolean;
     art?: BulkAssetsArtConfigInput | null;
+    /**
+     * The collections of these groups.
+     */
     collection_groups?: GroupNames | null;
+    /**
+     * These collections, besides any groups.
+     */
     collection_ids?: UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0 | null;
     /**
      * Include Unmonitored
@@ -965,7 +971,13 @@ export type BulkAssetsRequestOutput = {
      */
     all_collections: boolean;
     art: BulkAssetsArtConfigOutput | null;
+    /**
+     * The collections of these groups.
+     */
     collection_groups: GroupNames | null;
+    /**
+     * These collections, besides any groups.
+     */
     collection_ids: UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0 | null;
     /**
      * Include Unmonitored
@@ -2398,6 +2410,35 @@ export type CollectionDimensionRead = {
 };
 
 /**
+ * CollectionDownloadTarget
+ *
+ * Target for a collection's artwork or theme, uploaded to its server copies.
+ */
+export type CollectionDownloadTarget = {
+    art_type: ArtType | null;
+    /**
+     * Collection Id
+     */
+    collection_id: number;
+    /**
+     * Job Type
+     */
+    job_type: 'collection_art' | 'collection_theme';
+    /**
+     * Source
+     */
+    source: string | null;
+    /**
+     * Target Type
+     */
+    target_type: 'collection';
+    /**
+     * Title
+     */
+    title: string;
+};
+
+/**
  * CollectionFieldRead
  *
  * A criteria field as the active server offers it.
@@ -3593,30 +3634,6 @@ export type CollectionSourceRead = {
 };
 
 /**
- * CollectionThemeDownloadTarget
- *
- * Target for a media-server collection theme upload.
- */
-export type CollectionThemeDownloadTarget = {
-    /**
-     * Collection Id
-     */
-    collection_id: number;
-    /**
-     * Source
-     */
-    source: string | null;
-    /**
-     * Target Type
-     */
-    target_type: 'collection_theme';
-    /**
-     * Title
-     */
-    title: string;
-};
-
-/**
  * CollectionThemeStatusResponse
  *
  * Collection theme status response.
@@ -3910,8 +3927,8 @@ export type DownloadJobMetadata = {
     target: ({
         target_type: 'item';
     } & ItemDownloadTarget) | ({
-        target_type: 'collection_theme';
-    } & CollectionThemeDownloadTarget);
+        target_type: 'collection';
+    } & CollectionDownloadTarget);
 };
 
 /**
@@ -4251,6 +4268,12 @@ export type JobLogEntry = {
     at: string;
     outcome: JobOutcome;
     reason: PublicText;
+    /**
+     * Server
+     *
+     * The media server the entry is about, by its MEDIA_SERVERS name; none for an entry about no single server.
+     */
+    server: string | null;
     /**
      * Target
      */
@@ -9889,6 +9912,12 @@ export type GetJobLogData = {
          * Only lines of these outcomes.
          */
         outcome?: Array<JobOutcome> | null;
+        /**
+         * Hide Server
+         *
+         * No lines about these media servers, by name.
+         */
+        hide_server?: Array<string> | null;
     };
     url: '/api/job-snapshots/log/{run_id}';
 };

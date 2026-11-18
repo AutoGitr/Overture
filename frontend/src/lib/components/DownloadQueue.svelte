@@ -39,7 +39,7 @@
 
   /** What a download fetches, so art and theme rows read apart at a glance. */
   function kind(job: DownloadJob): { label: string; badge: string } {
-    if (job.job_type === "collection_theme") return { label: "Collection", badge: "badge-muted" };
+    if (job.collection_id !== null) return { label: "Collection", badge: "badge-muted" };
     const asset = job.job_type === "theme" ? "theme" : job.art_type;
     return isAsset(asset)
       ? { label: ASSET_LABELS[asset], badge: ASSET_BADGES[asset] }

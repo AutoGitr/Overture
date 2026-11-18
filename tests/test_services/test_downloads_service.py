@@ -37,6 +37,7 @@ lazy from overture.domain import (
 lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.plex import PlexProvider
 lazy from overture.repositories.downloads import DownloadJobRepository
+lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.art.phash import PHASH_HEX_LENGTH, PhashService
 lazy from overture.services.downloads import art as art_module
 lazy from overture.services.downloads.art import DownloadArtHandler
@@ -285,6 +286,7 @@ def _download_manager(
 ) -> DownloadService:
     asset_storage = AssetStorage(app_config=app_config)
     return DownloadService(
+        collection_art=unused(CollectionArtService),
         art_handler=DownloadArtHandler(
             provider_registry=NoopProviderRegistry(provider),
             asset_storage=asset_storage,
@@ -1044,6 +1046,7 @@ async def test_snapshot_events_restore_every_persisted_active_download(
     event_publisher = DownloadEventPublisher(publisher)
     asset_storage = AssetStorage(app_config=app_config)
     manager = DownloadService(
+        collection_art=unused(CollectionArtService),
         art_handler=DownloadArtHandler(
             provider_registry=NoopProviderRegistry(),
             asset_storage=asset_storage,

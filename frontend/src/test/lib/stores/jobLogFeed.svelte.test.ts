@@ -40,6 +40,33 @@ function storedOutcomes(outcomes: JobOutcome[]) {
   });
 }
 
+/** A stored log of `[outcome, server]` lines, which the server filters as asked. */
+function storedServers(lines: [JobOutcome, string | null][]) {
+  return mockFetchRoutes({
+    "/api/job-snapshots/log/run": ({ url }: FetchCall) => {
+      const params = new URL(url, location.origin).searchParams;
+      const offset = Number(params.get("offset"));
+      const asked = params.getAll("outcome");
+      const hidden = params.getAll("hide_server");
+      const shown = lines
+        .map(([outcome, server], ordinal) =>
+          logEntry(outcome, `Line ${ordinal}`, "stored", undefined, server),
+        )
+        .filter(
+          (entry) =>
+            (!asked.length || asked.includes(entry.outcome)) &&
+            !(entry.server && hidden.includes(entry.server)),
+        );
+      return Response.json({
+        run_id: "run",
+        total: shown.length,
+        offset,
+        items: shown.slice(offset, offset + 200),
+      });
+    },
+  });
+}
+
 describe("JobLogFeed", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -186,5 +213,35 @@ describe("JobLogFeed", () => {
     await vi.waitFor(() => expect(feed.lines.size).toBe(4));
     expect(feed.total).toBe(4);
     expect(feed.lines.has(4)).toBe(false);
+  });
+  it("hides a media server's lines and keeps lines about no server", async () => {
+    storedServers([
+      ["Added", "Plex"],
+      ["Added", "Emby"],
+      ["Error", "Emby"],
+      ["Started", null],
+    ]);
+    const feed = new JobLogFeed();
+    feed.apply({
+      run_id: "run",
+      log_total: 4,
+      log_outcomes: { Added: 2, Error: 1, Started: 1 },
+      log_servers: { Plex: { Added: 1 }, Emby: { Added: 1, Error: 1 } },
+    });
+    feed.show(0, 4);
+    expect(feed.serverGroups.map(({ key, count }) => [key, count])).toEqual([
+      ["Plex", 1],
+      ["Emby", 2],
+    ]);
+
+    feed.toggleServer("Emby");
+
+    expect(feed.total).toBe(2);
+    await vi.waitFor(() => expect(feed.lines.get(1)?.target).toBe("Line 3"));
+    expect(feed.lines.get(0)?.target).toBe("Line 0");
+
+    // Both filters together count only the lines each leaves.
+    feed.toggleOutcome("Started");
+    expect(feed.total).toBe(1);
   });
 });

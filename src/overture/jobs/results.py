@@ -4,6 +4,7 @@ lazy from datetime import datetime
 lazy from typing import Any
 
 lazy from pydantic_core import to_jsonable_python
+lazy from sqlalchemy import ColumnElement
 lazy from sqlmodel import col, delete, func, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -53,6 +54,7 @@ async def persist(
                     run_id=run_id,
                     ordinal=run.log_total,
                     outcome=entry["outcome"],
+                    server=entry.get("server"),
                     entry=entry,
                 )
             )
@@ -104,20 +106,28 @@ async def log_page(
     offset: int,
     limit: int,
     outcomes: frozenset[JobOutcome] = frozenset(),
+    hidden_servers: frozenset[str] = frozenset(),
 ) -> JobLogPage:
-    """Read a stable page of a run's progress log, of only *outcomes* when given.
+    """Read a stable page of a run's progress log, filtered when asked.
 
-    A filtered page counts *offset* and ``total`` among the matching lines.
+    Only lines of *outcomes* are listed when given, and none about a media
+    server in *hidden_servers*. A filtered page counts *offset* and ``total``
+    among the matching lines.
     """
     async with database.read_session() as session:
         run = await _visible_run(session, run_id)
         query = select(JobLogLine).where(JobLogLine.run_id == run_id)
+        filters: list[ColumnElement[bool]] = []
         if outcomes:
-            matching = col(JobLogLine.outcome).in_(outcomes)
-            query = query.where(matching).offset(offset)
+            filters.append(col(JobLogLine.outcome).in_(outcomes))
+        if hidden_servers:
+            server = col(JobLogLine.server)
+            filters.append(server.is_(None) | server.not_in(hidden_servers))
+        if filters:
+            query = query.where(*filters).offset(offset)
             total = (
                 await session.exec(
-                    select(func.count()).where(JobLogLine.run_id == run_id, matching)
+                    select(func.count()).where(JobLogLine.run_id == run_id, *filters)
                 )
             ).one()
         else:

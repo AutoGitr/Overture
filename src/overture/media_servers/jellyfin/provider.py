@@ -288,7 +288,12 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
     async def refresh_item(
         self, item_id: str, *, unlock: Collection[ServerAsset]
     ) -> None:
-        """Refresh an item; MediaBrowser servers lock no fields a refresh replaces."""
+        """Refresh an item, so a replaced background is the one it shows.
+
+        MediaBrowser servers lock no fields a refresh replaces.
+        """
+        if ServerAsset.BACKGROUND in unlock:
+            await self.client.drop_downloaded_backdrops(item_id)
         await self.client.refresh_item(item_id)
 
     @override

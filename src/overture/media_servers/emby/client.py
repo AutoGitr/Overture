@@ -1,7 +1,7 @@
 """Emby API client built on the shared MediaBrowser protocol."""
 
 lazy import operator
-lazy from typing import ClassVar, override
+lazy from typing import Any, ClassVar, override
 
 lazy from ...domain import MediaType
 lazy from ..errors import MediaServerError
@@ -25,11 +25,23 @@ class EmbyClient(JellyfinClient):
     _ITEM_FIELDS: ClassVar[str] = (
         "ProviderIds,Path,Studios,Genres,DateCreated,ProductionYear,Tags,SortName"
     )
-    #: Emby ignores ForcedSortName in an update and takes SortName instead.
-    _SORT_NAME_FIELD: ClassVar[str] = "SortName"
     _UNGROUPED: ClassVar[dict[str, str]] = {"groupItemsIntoCollections": "false"}
     #: Emby lists an item's locked fields only when asked.
     _DETAIL_FIELDS: ClassVar[str] = "Overview,Taglines,LockedFields"
+
+    @staticmethod
+    @override
+    def _set_sort_title(details: dict[str, Any], sort_title: str) -> None:
+        """Set or, when empty, release the sort title in an item update.
+
+        Emby derives the sort name from the title on every refresh unless
+        ``SortName`` is a locked field, as its own editor locks it.
+        """
+        held: list[str] = details.get("LockedFields") or []
+        locked = [field for field in held if field != "SortName"]
+        details["ForcedSortName"] = sort_title or None
+        details["SortName"] = sort_title or None
+        details["LockedFields"] = [*locked, "SortName"] if sort_title else locked
 
     @override
     async def _member_reader(self) -> dict[str, str]:

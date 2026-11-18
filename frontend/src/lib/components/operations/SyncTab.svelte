@@ -13,7 +13,7 @@
   import JobPanel from "../JobPanel.svelte";
   import PendingButton from "../PendingButton.svelte";
   import JobFooter from "./JobFooter.svelte";
-  import CollectionChecklist, { type ChoosableCollection } from "../CollectionChecklist.svelte";
+  import CollectionChecklist from "../CollectionChecklist.svelte";
   import LibraryChecklist from "../LibraryChecklist.svelte";
   import FieldRow from "../FieldRow.svelte";
   import Schedules from "../Schedules.svelte";
@@ -21,7 +21,6 @@
     createSyncScheduleMutation,
     deleteSyncScheduleMutation,
     getCatalogStatusOptions,
-    listCollectionsOptions,
     listServerLibrariesOptions,
     listSyncSchedulesOptions,
     runSyncMutation,
@@ -34,14 +33,18 @@
   import { settingsState } from "../../stores/settingsState.svelte";
   import { syncState } from "../../stores/jobStates.svelte";
   import { syncSelection } from "../../stores/syncSelection.svelte";
-  import { UNGROUPED_GROUP } from "../../../generated/settings";
   import { collectionSummary } from "../../utils/assetsPopup";
   import { librarySummary } from "../../utils/libraries.svelte";
-  import { collectionGroupNames } from "../../utils/collectionGroups.svelte";
+  import {
+    choosableCollections,
+    collectionGroupNames,
+  } from "../../utils/collectionGroups.svelte";
   import { errorMessage } from "../../utils/errors";
   import { createClearResults } from "../../utils/jobSnapshots";
   import { formatDateInTimezone } from "../../utils/popupFormat";
   import {
+    chosenApart,
+    chosenTitles,
     filterAvailableValues,
     selectedValuesForAll,
     toggleSelectedValue,
@@ -117,28 +120,11 @@
   let selectedCollectionGroups = $derived(
     filterAvailableValues(syncSelection.groups, collectionGroups()),
   );
-  const collectionsQuery = createQuery(() => ({
-    ...listCollectionsOptions(),
-    enabled: isActive && collectionsSupported,
-  }));
-  /** The collections a sync can send by themselves: those Overture manages. */
-  let choosableCollections = $derived<ChoosableCollection[]>(
-    (collectionsQuery.data ?? [])
-      .filter((row) => row.managed && row.kind !== "separator")
-      .map((row) => ({
-        id: row.id,
-        title: row.title,
-        group: row.collection_group ?? UNGROUPED_GROUP,
-      }))
-      .sort((a, b) => a.title.localeCompare(b.title)),
-  );
+  const collections = choosableCollections(() => isActive && collectionsSupported);
   /** The saved collection choice, less collections that no longer exist or a group covers. */
-  let selectedCollectionIds = $derived.by(() => {
-    const chosen = new Set(syncSelection.collectionIds);
-    return choosableCollections
-      .filter((row) => chosen.has(row.id) && !selectedCollectionGroups.includes(row.group))
-      .map((row) => row.id);
-  });
+  let selectedCollectionIds = $derived(
+    chosenApart(syncSelection.collectionIds, collections(), selectedCollectionGroups),
+  );
 
   let scheduleMode = $state<SyncScheduleMode>("full");
   let scheduleCronExpression = $state("0 * * * *");
@@ -221,12 +207,6 @@
       ...(selectedCollectionIds.length && { collection_ids: selectedCollectionIds }),
       items,
     };
-  }
-
-  /** The titles of saved collection choices that still exist. */
-  function collectionTitles(ids: number[] | null | undefined): string[] {
-    const chosen = new Set(ids);
-    return choosableCollections.filter((row) => chosen.has(row.id)).map((row) => row.title);
   }
 
   function toggleAll(checked: boolean) {
@@ -323,7 +303,7 @@
             syncSelection.allCollections = choice.all;
             syncSelection.groups = choice.groups;
           }}
-          collections={choosableCollections}
+          collections={collections()}
           collectionIds={selectedCollectionIds}
           oncollectionschange={(ids) => (syncSelection.collectionIds = ids)}
         />
@@ -414,7 +394,7 @@
             Collections: {collectionSummary(
               schedule.config.include_collections,
               schedule.config.collection_groups,
-              collectionTitles(schedule.config.collection_ids),
+              chosenTitles(schedule.config.collection_ids, collections()),
             )}
           </div>
         {/if}

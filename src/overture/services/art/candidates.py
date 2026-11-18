@@ -6,7 +6,7 @@ offer and compare the same images under the same settings.
 
 lazy import asyncio
 lazy import logging
-lazy from collections.abc import Coroutine
+lazy from collections.abc import Coroutine, Sequence
 lazy from dataclasses import dataclass, field
 lazy from typing import Any, Self
 
@@ -26,6 +26,7 @@ lazy from ...domain import (
     AspectRatioTolerance,
     CatalogMediaType,
     CollectionPosterStyle,
+    MediaType,
     TmdbLanguageFilter,
 )
 lazy from ...integrations.tmdb import TMDBClient
@@ -45,6 +46,19 @@ lazy from ..schedule_store import CATALOG_SCHEDULE, load_schedule
 lazy from ..server_identity import resolve_art_owners
 
 logger = logging.getLogger(__name__)
+
+
+#: The source that offers a collection its members' backgrounds.
+MEMBER_BACKGROUNDS = "Members"
+#: Backgrounds each member offers its collection, the largest.
+MEMBER_BACKGROUNDS_EACH = 10
+#: Members' backgrounds a collection is offered at most, the largest. As
+#: many members are read, since more could offer none of their own.
+MEMBER_BACKGROUNDS_TOTAL = 100
+
+
+def _pixels(candidate: ArtCandidate) -> int:
+    return (candidate.width or 0) * (candidate.height or 0)
 
 
 @dataclass(slots=True, frozen=True)
@@ -282,6 +296,51 @@ class ArtCandidates:
             in_source_order({ArtSource.OVERTUREDB: catalog, **found.by_source}),
             found.errors,
         )
+
+    async def member_backgrounds(
+        self,
+        title: str,
+        members: Sequence[tuple[MediaType, int]],
+        policy: CandidatePolicy,
+    ) -> list[ArtCandidate]:
+        """Return the members' TMDB backgrounds for their collection, largest first.
+
+        Each member offers its :data:`MEMBER_BACKGROUNDS_EACH` largest, and
+        the :data:`MEMBER_BACKGROUNDS_TOTAL` largest of those are kept. A
+        member TMDB cannot answer for offers none.
+        """
+        if not self._app_config.tmdb_configured or not members:
+            return []
+        results = await asyncio.gather(
+            *(
+                self._tmdb.art_candidates(
+                    media_type,
+                    tmdb_id,
+                    ArtType.BACKGROUND,
+                    language_filter=policy.tmdb_language_filter,
+                )
+                for media_type, tmdb_id in members
+            ),
+            return_exceptions=True,
+        )
+        offered: dict[str, ArtCandidate] = {}
+        failed = 0
+        for result in results:
+            if isinstance(result, httpx2.HTTPError | ValueError):
+                failed += 1
+                continue
+            if isinstance(result, BaseException):
+                raise result
+            accepted = [c for c in result if policy.accepts(c, ArtType.BACKGROUND)]
+            for candidate in sorted(accepted, key=_pixels, reverse=True)[
+                :MEMBER_BACKGROUNDS_EACH
+            ]:
+                offered.setdefault(candidate.url, candidate)
+        if failed:
+            logger.warning("Backgrounds of %s members of %s failed", failed, title)
+        return sorted(offered.values(), key=_pixels, reverse=True)[
+            :MEMBER_BACKGROUNDS_TOTAL
+        ]
 
     @staticmethod
     def _collection_person(collection: MediaCollection) -> int | None:

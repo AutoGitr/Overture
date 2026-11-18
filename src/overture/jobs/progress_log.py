@@ -106,12 +106,25 @@ class JobLogEntry(StrictBaseModel):
     target: str
     reason: PublicText
     at: str = Field(description="When the job wrote the entry, as an ISO timestamp.")
+    server: str | None = Field(
+        default=None,
+        description="The media server the entry is about, by its MEDIA_SERVERS "
+        "name; none for an entry about no single server.",
+    )
 
     def format(self) -> str:
         """Return the entry as the line the container log writes for it."""
-        return f"{self.outcome} {self.target} - {self.reason}"
+        prefix = f"[{self.server}] " if self.server else ""
+        return f"{prefix}{self.outcome} {self.target} - {self.reason}"
 
 
-def log_entry(outcome: JobOutcome, target: str, reason: str) -> JobLogEntry:
-    """Return the entry for one target and the reason for its outcome, stamped now."""
-    return JobLogEntry(outcome=outcome, target=target, reason=reason, at=utc_now_iso())
+def log_entry(
+    outcome: JobOutcome, target: str, reason: str, *, server: str | None = None
+) -> JobLogEntry:
+    """Return the entry for one target and the reason for its outcome, stamped now.
+
+    *server* names the media server the entry is about, if it is about one.
+    """
+    return JobLogEntry(
+        outcome=outcome, target=target, reason=reason, at=utc_now_iso(), server=server
+    )

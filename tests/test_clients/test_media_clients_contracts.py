@@ -872,3 +872,47 @@ async def test_plex_serves_a_theme_without_its_version_and_unlocks_only_collecti
         ("DELETE", "/library/metadata/8/theme", {}),
         ("PUT", "/library/metadata/8", {"theme.locked": "0"}),
     ]
+
+
+async def test_media_browser_refresh_drops_downloaded_backdrops_for_a_new_background(
+    *, app_config: Settings
+) -> None:
+    configure(app_config, url="http://jellyfin.local:8096")
+    images = [
+        {"ImageType": "Primary", "Path": "/config/metadata/7/poster.jpg"},
+        {"ImageType": "Backdrop", "ImageIndex": 0, "Path": "/config/metadata/7/b.jpg"},
+        {"ImageType": "Backdrop", "ImageIndex": 1, "Path": "/movies/Film/fanart.jpg"},
+        {"ImageType": "Backdrop", "ImageIndex": 2, "Path": "/config/metadata/7/c.jpg"},
+    ]
+
+    def handle(request: httpx2.Request) -> httpx2.Response:
+        if request.url.path == "/Items" and request.method == "GET":
+            item = {"Id": "7", "Path": "/movies/Film/Film.mkv", "IsFolder": False}
+            return httpx2.Response(200, json={"Items": [item], "TotalRecordCount": 1})
+        if request.url.path == "/Items/7/Images":
+            return httpx2.Response(200, json=images)
+        return httpx2.Response(204)
+
+    factory, transport = mock_client_factory(handle)
+    server = server_of(app_config, ServerType.JELLYFIN)
+    client = JellyfinClient(server=server, client_factory=factory)
+    provider = JellyfinProvider(
+        server=server, server_id=TEST_SERVER_ID, app_config=app_config, client=client
+    )
+    try:
+        await provider.refresh_item("7", unlock={ServerAsset.POSTER})
+        await provider.refresh_item("7", unlock={ServerAsset.BACKGROUND})
+    finally:
+        await client.close()
+
+    # The backdrop beside the media stays; the downloaded ones go, last first.
+    assert [
+        (request.method, request.url.path)
+        for request in transport.requests
+        if request.method != "GET"
+    ] == [
+        ("POST", "/Items/7/Refresh"),
+        ("DELETE", "/Items/7/Images/Backdrop/2"),
+        ("DELETE", "/Items/7/Images/Backdrop/0"),
+        ("POST", "/Items/7/Refresh"),
+    ]

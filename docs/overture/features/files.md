@@ -33,17 +33,28 @@ After Overture writes or removes an asset, it asks every server holding the
 title or collection to pick the change up, so each server shows the same
 choice.
 
-| Asset                            | Plex                                                                           | Jellyfin                                                                                  | Emby                                        |
-| -------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------- |
-| Title poster and background      | File in the title's folder; Overture unlocks the field and refreshes the title | File in the title's folder; Overture refreshes the title, replacing its images            | As Jellyfin                                 |
-| Season poster                    | `Season01.jpg` in the season folder; unlocked and refreshed with the show      | `poster.jpg` in the season folder; refreshed with the show                                | As Jellyfin                                 |
-| Title theme                      | `theme.mp3` in the title's folder; unlocked and refreshed                      | `theme.mp3` in the title's folder; refreshed                                              | As Jellyfin                                 |
-| Collection poster and background | Uploaded to each library's copy of the collection                              | Uploaded to the one BoxSet                                                                | Uploaded to the one BoxSet                  |
-| Collection theme                 | Uploaded to each library's copy                                                | `theme.mp3` in the BoxSet's folder under `COLLECTIONS_PATH`, then the BoxSet is refreshed | Not stored: Emby keeps no collection themes |
+| Asset                            | Plex                                                                           | Jellyfin                                                                                                                           | Emby                                        |
+| -------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Title poster and background      | File in the title's folder; Overture unlocks the field and refreshes the title | File in the title's folder; for a background, Overture first removes the backgrounds Jellyfin downloaded, then refreshes the title | As Jellyfin                                 |
+| Season poster                    | `Season01.jpg` in the season folder; unlocked and refreshed with the show      | `poster.jpg` in the season folder; refreshed with the show                                                                         | As Jellyfin                                 |
+| Title theme                      | `theme.mp3` in the title's folder; unlocked and refreshed                      | `theme.mp3` in the title's folder; refreshed                                                                                       | As Jellyfin                                 |
+| Collection poster and background | Uploaded to each library's copy of the collection                              | Uploaded to the one BoxSet                                                                                                         | Uploaded to the one BoxSet                  |
+| Collection theme                 | Uploaded to each library's copy                                                | `theme.mp3` in the BoxSet's folder under `COLLECTIONS_PATH`, then the BoxSet is refreshed                                          | Not stored: Emby keeps no collection themes |
 
 Plex takes an item's local files on a refresh only for fields that are not
 locked; Overture unlocks just the fields it changed, so an asset you locked in
 Plex for another reason stays as it is.
+
+Jellyfin and Emby pick a folder's image by name, in a fixed order. A poster
+named after the video file (`Movie (2000).jpg`) comes before `poster.jpg`, and
+`fanart.jpg` comes before `background.jpg`, so remove or rename such files
+(**Renamer** lists them) when the server shows one of them instead of
+Overture's. See [server settings](../install/media-servers.mdx) for how to
+keep the servers from saving them.
+
+Every download, a collection's art and theme included, runs in the download
+queue: one lane for art and one for themes, each with its own number of
+workers (`ART_DOWNLOAD_WORKERS`, `THEME_DOWNLOAD_WORKERS`).
 
 ## Renamer
 

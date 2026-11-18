@@ -2,13 +2,22 @@
 
 lazy from collections.abc import Collection, Iterable
 lazy from datetime import datetime
+lazy from typing import Literal
 
+lazy from sqlalchemy.orm import aliased
 lazy from sqlmodel import col, delete, func, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ..db.models.download_job import DownloadJob
 lazy from ..db.models.media_item import MediaItem
-lazy from ..domain import ACTIVE_JOB_STATUSES, ArtType, AssetScope, JobStatus, JobType
+lazy from ..domain import (
+    ACTIVE_JOB_STATUSES,
+    ArtType,
+    AssetScope,
+    CollectionPosterStyle,
+    JobStatus,
+    JobType,
+)
 
 #: Statuses a finished job can be in, and therefore safe to age out.
 _FINISHED_STATUSES = (JobStatus.DONE, JobStatus.FAILED, JobStatus.CANCELLED)
@@ -46,6 +55,7 @@ class DownloadJobRepository:
         collection_id: int | None = None,
         collection_title: str | None = None,
         upload_hash: str | None = None,
+        poster_style: CollectionPosterStyle | None = None,
     ) -> DownloadJob:
         """Create and stage a new download job."""
         job = DownloadJob(
@@ -57,6 +67,7 @@ class DownloadJobRepository:
             collection_id=collection_id,
             collection_title=collection_title,
             upload_hash=upload_hash,
+            poster_style=poster_style,
             created_at=created_at,
         )
         self.session.add(job)
@@ -128,36 +139,52 @@ class DownloadJobRepository:
     async def failed_themes_by_item(
         self, item_ids: list[int] | None = None
     ) -> dict[int, set[str]]:
-        """Return the YouTube IDs of failed theme downloads, by media item ID."""
-        stmt = select(
-            col(DownloadJob.media_item_id), col(DownloadJob.target_url)
-        ).where(
-            col(DownloadJob.job_type) == JobType.THEME,
-            col(DownloadJob.status) == JobStatus.FAILED,
-            col(DownloadJob.media_item_id).is_not(None),
-            col(DownloadJob.target_url).is_not(None),
-        )
-        if item_ids is not None:
-            stmt = stmt.where(col(DownloadJob.media_item_id).in_(item_ids))
-        failed: dict[int, set[str]] = {}
-        for item_id, url in (await self.session.exec(stmt)).all():
-            if item_id is not None and url is not None:
-                failed.setdefault(item_id, set()).add(url)
-        return failed
+        """Return the YouTube IDs that failed as item themes, by media item ID."""
+        return await self._failed_themes(JobType.THEME, "media_item_id", item_ids)
 
     async def failed_themes_by_collection(
         self, collection_ids: list[int]
     ) -> dict[int, set[str]]:
-        """Return failed catalog videos for a bounded collection batch."""
-        rows = await self.session.exec(
-            select(DownloadJob.collection_id, DownloadJob.target_url).where(
-                col(DownloadJob.collection_id).in_(collection_ids),
-                col(DownloadJob.status) == JobStatus.FAILED,
-                col(DownloadJob.target_url).is_not(None),
-            )
+        """Return the YouTube IDs that failed as collection themes, by collection ID."""
+        return await self._failed_themes(
+            JobType.COLLECTION_THEME, "collection_id", collection_ids
         )
+
+    async def _failed_themes(
+        self,
+        job_type: JobType,
+        owner_field: Literal["media_item_id", "collection_id"],
+        owner_ids: list[int] | None,
+    ) -> dict[int, set[str]]:
+        """Return each owner's YouTube IDs that failed and have not succeeded since.
+
+        A later successful download of the same video for the same owner, such
+        as a manual retry, clears the failure.
+        """
+        later = aliased(DownloadJob)
+        owner = col(getattr(DownloadJob, owner_field))
+        succeeded_since = (
+            select(later.id)
+            .where(
+                col(later.job_type) == job_type,
+                col(later.status) == JobStatus.DONE,
+                col(getattr(later, owner_field)) == owner,
+                col(later.target_url) == col(DownloadJob.target_url),
+                col(later.created_at) > col(DownloadJob.created_at),
+            )
+            .exists()
+        )
+        stmt = select(owner, col(DownloadJob.target_url)).where(
+            col(DownloadJob.job_type) == job_type,
+            col(DownloadJob.status) == JobStatus.FAILED,
+            owner.is_not(None),
+            col(DownloadJob.target_url).is_not(None),
+            ~succeeded_since,
+        )
+        if owner_ids is not None:
+            stmt = stmt.where(owner.in_(owner_ids))
         failed: dict[int, set[str]] = {}
-        for collection_id, youtube_id in rows:
-            if collection_id is not None and youtube_id is not None:
-                failed.setdefault(collection_id, set()).add(youtube_id)
+        for owner_id, youtube_id in (await self.session.exec(stmt)).all():
+            if owner_id is not None and youtube_id is not None:
+                failed.setdefault(owner_id, set()).add(youtube_id)
         return failed

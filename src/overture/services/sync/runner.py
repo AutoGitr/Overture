@@ -4,6 +4,7 @@ lazy import asyncio
 lazy from collections import Counter
 lazy from collections.abc import Sequence
 lazy from contextlib import AsyncExitStack
+lazy from functools import partial
 lazy from pathlib import Path
 
 lazy from ... import protocols
@@ -180,13 +181,24 @@ async def _reachable(
         except MediaServerError as exc:
             failure = exc
             await job.report(
-                JobOutcome.ERROR, provider.server.title, exc.message, finished=False
+                JobOutcome.ERROR,
+                provider.server.title,
+                exc.message,
+                finished=False,
+                server=provider.server.title,
             )
             continue
         reachable.append(provider)
     if not reachable and failure is not None:
         raise failure
     return reachable
+
+
+async def _on_server(
+    job: ManagedJob[SyncTally], server: str, entry: JobLogEntry
+) -> None:
+    """Log one line of a server's reconcile as about that server."""
+    await job.progress(log=entry.model_copy(update={"server": server}))
 
 
 async def _sync_with_providers(
@@ -205,9 +217,6 @@ async def _sync_with_providers(
     total fixed before the first item is reconciled.
     """
 
-    async def on_progress(entry: JobLogEntry) -> None:
-        await job.progress(log=entry)
-
     moves: Counter[tuple[str, MediaType, str]] = Counter()
     with operation_directory(config_dir) as directory:
         listings: list[tuple[Provider, StagedListing]] = []
@@ -218,6 +227,7 @@ async def _sync_with_providers(
                         JobOutcome.STARTED,
                         "Sync",
                         f"reading libraries from {provider.server.title}",
+                        server=provider.server.title,
                     ),
                 )
                 await reconciler.record_libraries(
@@ -241,7 +251,7 @@ async def _sync_with_providers(
                     ServerTurn(provider.server_id, frozenset(server_order[:position])),
                     library_ids=library_ids,
                     tally=job.tally,
-                    progress_cb=on_progress,
+                    progress_cb=partial(_on_server, job, provider.server.title),
                     stop_check=job.stop_requested,
                 )
                 moves += result.library_moves

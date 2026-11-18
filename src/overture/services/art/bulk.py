@@ -563,6 +563,8 @@ async def run_bulk_art_match(
                         params,
                         collection_plan,
                         art=art,
+                        downloads=downloads,
+                        watch=watch,
                         app_config=app_config,
                         database=database,
                     )

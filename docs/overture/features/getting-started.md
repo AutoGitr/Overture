@@ -86,6 +86,12 @@ The storage footprint includes the image cache, with its originals and
 thumbnails, and your uploads. Artwork coverage and sizes include collection
 posters, backgrounds and themes, so the numbers show what still needs attention.
 
+Statistics count what Overture keeps, not what each server holds. A title on
+several servers is one title, with one set of files, and a collection on
+several servers or libraries is one collection. The same film in two folders,
+such as a 4K and an HD copy, is two titles, since each folder needs its own
+files. A season poster written under each server's name counts its size once.
+
 ## Database record
 
 Every item and collection has a database record view that lists every stored

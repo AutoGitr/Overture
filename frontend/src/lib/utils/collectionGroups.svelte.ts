@@ -3,12 +3,14 @@ import { createMutation, createQuery } from "@tanstack/svelte-query";
 import {
   deleteCollectionGroupMutation,
   listCollectionGroupsOptions,
+  listCollectionsOptions,
   renameCollectionGroupMutation,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type { CollectionGroupDelete } from "../../generated/rest/types.gen";
 import { UNGROUPED_GROUP } from "../../generated/settings";
 import { chooseAction, confirmAction, createNotifier } from "../stores/notificationState.svelte";
 import { errorMessage } from "./errors";
+import type { ChoosableCollection } from "./popupSelection";
 
 /** Actions for the selected group; the popup owns which group is selected. */
 export class CollectionGroupActions {
@@ -117,4 +119,20 @@ export class CollectionGroupActions {
 export function collectionGroupNames(enabled: () => boolean): () => string[] {
   const query = createQuery(() => ({ ...listCollectionGroupsOptions(), enabled: enabled() }));
   return () => query.data ?? [];
+}
+
+/** The collections a run can choose one by one: those Overture manages, by title. */
+export function choosableCollections(enabled: () => boolean): () => ChoosableCollection[] {
+  const query = createQuery(() => ({ ...listCollectionsOptions(), enabled: enabled() }));
+  const rows = $derived(
+    (query.data ?? [])
+      .filter((row) => row.managed && row.kind !== "separator")
+      .map((row) => ({
+        id: row.id,
+        title: row.title,
+        group: row.collection_group ?? UNGROUPED_GROUP,
+      }))
+      .sort((a, b) => a.title.localeCompare(b.title)),
+  );
+  return () => rows;
 }

@@ -68,7 +68,9 @@ describe("downloadState", () => {
 
   it("announces a collection theme once its download completes", () => {
     const target = {
-      target_type: "collection_theme",
+      target_type: "collection",
+      job_type: "collection_theme",
+      art_type: null,
       source: null,
       collection_id: 1,
       title: "Star Wars",
@@ -91,7 +93,7 @@ describe("downloadState", () => {
     expect(notify.success).not.toHaveBeenCalled();
 
     downloadState.handleFinished(event("completed"));
-    expect(notify.success).toHaveBeenCalledExactlyOnceWith("Theme applied to Star Wars.");
+    expect(notify.success).toHaveBeenCalledExactlyOnceWith("Applied the theme to Star Wars.");
     expect(downloadState.isDownloadingCollection(1)).toBe(false);
   });
 
@@ -138,7 +140,9 @@ describe("downloadState", () => {
         kind: "download",
         status: "pending",
         target: {
-          target_type: "collection_theme",
+          target_type: "collection",
+          job_type: "collection_theme",
+          art_type: null,
           source: null,
           collection_id: 1,
           title: "Movies",
@@ -272,7 +276,9 @@ describe("downloadState", () => {
         kind: "download",
         status: "failed",
         target: {
-          target_type: "collection_theme",
+          target_type: "collection",
+          job_type: "collection_theme",
+          art_type: null,
           source: null,
           collection_id: 1,
           title: "Saga",

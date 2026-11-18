@@ -18,6 +18,10 @@ function form({ catalog = true, loaded = true } = {}) {
     librariesLoaded: () => loaded,
     catalogEnabled: () => catalog,
     collectionGroups: () => ["Sagas", "Studios"],
+    collections: () => [
+      { id: 7, title: "Alien", group: "Sagas" },
+      { id: 8, title: "Pixar", group: "Studios" },
+    ],
   });
 }
 
@@ -186,5 +190,22 @@ describe("collection theme scope", () => {
 
     expect(assets.config.allCollections).toBe(false);
     expect(assets.selectedCollectionGroups).toEqual(["Studios"]);
+  });
+  it("runs collections chosen one by one beside the chosen groups and libraries", () => {
+    const assets = form();
+    assets.toggleLibrary("1");
+    assets.config.artTypes = ["poster"];
+    assets.chooseCollections({ all: false, groups: ["Sagas"] });
+    // A collection a chosen group covers is not sent apart from it.
+    assets.chooseCollectionIds([7, 8]);
+
+    expect(assets.request()).toMatchObject({
+      library_ids: ["1"],
+      collection_groups: ["Sagas"],
+      collection_ids: [8],
+    });
+
+    assets.chooseCollections({ all: true, groups: [] });
+    expect(assets.request()).not.toHaveProperty("collection_ids");
   });
 });

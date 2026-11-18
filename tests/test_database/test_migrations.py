@@ -1730,3 +1730,34 @@ def test_saved_filters_become_one_per_name_for_movies_and_shows() -> None:
             ]
     finally:
         engine.dispose()
+
+
+def test_job_log_lines_keep_their_lines_and_name_no_server() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "f1b8d4e6a273")
+            conn.exec_driver_sql(
+                "INSERT INTO job_runs (id, kind, started_at, event, summary, total, "
+                "log_total, cleared) VALUES ('run', 'sync', '2026-11-18', "
+                "'sync.completed', '{}', 0, 1, 0)"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO job_log_lines (run_id, ordinal, outcome, entry) "
+                "VALUES ('run', 0, 'Added', '{\"outcome\": \"Added\"}')"
+            )
+
+            command.upgrade(config, "a4c7e1d9b352")
+
+            assert conn.exec_driver_sql(
+                "SELECT ordinal, outcome, server FROM job_log_lines"
+            ).all() == [(0, "Added", None)]
+
+            command.downgrade(config, "f1b8d4e6a273")
+            assert conn.exec_driver_sql(
+                "SELECT ordinal, outcome FROM job_log_lines"
+            ).all() == [(0, "Added")]
+    finally:
+        engine.dispose()

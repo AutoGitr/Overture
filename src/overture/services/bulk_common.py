@@ -350,11 +350,11 @@ async def _holds_selection(
     """Return whether *target*'s slot still holds the *planned* selection."""
     if target.collection_id is not None:
         collection = await session.get(MediaCollection, target.collection_id)
-        return (
-            collection is not None
-            and collection.last_synced_at is not None
-            and collection.youtube_id == planned
-        )
+        if collection is None or collection.last_synced_at is None:
+            return False
+        if target.art_type is None:
+            return collection.youtube_id == planned
+        return saved_art(read_art_slot(collection, target.art_type)) == planned
     item = await session.get(MediaItem, target.media_item_id)
     if item is None:
         return False
@@ -440,7 +440,7 @@ async def report_downloads[TallyT: BulkAssetTally](
                 await job.report(
                     JobOutcome.DOWNLOADED,
                     outcome.target,
-                    "written to disk",
+                    outcome.destination,
                     finished=False,
                 )
             if job.stop_requested():

@@ -5,7 +5,6 @@ lazy from collections.abc import Sequence
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ... import protocols
-lazy from ...config import Settings
 lazy from ...db.art_slots import (
     ArtFileFacts,
     clear_art_selection,
@@ -25,8 +24,6 @@ lazy from ...domain import (
     JobType,
     ServerAsset,
 )
-lazy from ...integrations.proxy import ProxyClientManager
-lazy from ...media_servers.registry import ProviderRegistry
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...schemas.art import (
     ArtMatchResponse,
@@ -48,12 +45,10 @@ lazy from ..library.completion import auto_unmonitor_completed
 lazy from ..library.items import emit_library_item_upserted, require_item
 lazy from ..removal import ITEM_ART, AssetRemover
 lazy from ..storage.assets import AssetStorage
-lazy from ..storage.image_cache import ImageCache
 lazy from .candidates import ArtCandidates, CandidatePolicy, CandidateSources
 lazy from .choice import ArtSelection, ArtSelector
 lazy from .collection_art import CollectionArtService
 lazy from .matcher import ArtMatcher
-lazy from .phash import PhashService
 lazy from .uploads import ArtUploads
 
 
@@ -119,17 +114,15 @@ class ArtService:
     def __init__(
         self,
         *,
-        app_config: Settings,
         database: Database,
         asset_storage: AssetStorage,
         matcher: ArtMatcher,
-        phash: PhashService,
         downloads: DownloadService,
         publisher: protocols.EventPublisher,
-        provider_registry: ProviderRegistry,
         candidates: ArtCandidates,
-        image_clients: ProxyClientManager,
-        image_cache: ImageCache,
+        uploads: ArtUploads,
+        selector: ArtSelector,
+        collections: CollectionArtService,
         remover: AssetRemover,
     ) -> None:
         self._database = database
@@ -139,30 +132,9 @@ class ArtService:
         self._downloads = downloads
         self._publisher = publisher
         self._candidates = candidates
-        self.uploads = ArtUploads(
-            database=database, image_cache=image_cache, phash=phash
-        )
-        self.selector = ArtSelector(
-            app_config=app_config,
-            database=database,
-            provider_registry=provider_registry,
-            image_clients=image_clients,
-            uploads=self.uploads,
-        )
-        self.collections = CollectionArtService(
-            app_config=app_config,
-            database=database,
-            asset_locks=asset_storage.asset_locks,
-            matcher=matcher,
-            publisher=publisher,
-            provider_registry=provider_registry,
-            candidates=candidates,
-            image_clients=image_clients,
-            image_cache=image_cache,
-            selector=self.selector,
-            uploads=self.uploads,
-            remover=remover,
-        )
+        self.uploads = uploads
+        self.selector = selector
+        self.collections = collections
 
     async def _gather(
         self,

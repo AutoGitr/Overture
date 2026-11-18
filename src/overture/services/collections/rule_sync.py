@@ -317,23 +317,29 @@ class RuleSync:
         return True
 
     async def _take_over_copies(self, row: MediaCollection) -> None:
-        """Hold, where the collection has no copy, the server's one of its title.
+        """Hold, where the collection has no copy, the server's one of it.
 
         A server keeps the collections Overture made on it, such as before it
         left MEDIA_SERVERS, and a title names one collection in a library.
-        The unmanaged collection the last sync listed for it goes, so the
-        server has one collection, and the sync sends it this one's choices.
+        Jellyfin and Emby also make a collection for each TMDB franchise
+        themselves, under their own name for it. The unmanaged collection the
+        last sync listed with the title or franchise goes, so the server has
+        one collection, and the sync sends it this one's choices.
         """
         waiting = {part.library_id for part in row.libraries if not part.server_item_id}
         if not waiting:
             return
         title = row.title.casefold()
+        franchise = row.tmdb_collection_id
         async with self._access.database.read_session() as session:
             others = [
                 other
                 for other in await CollectionRepository(session).list_listed()
                 if other.rule is None
-                and other.title.casefold() == title
+                and (
+                    other.title.casefold() == title
+                    or (franchise is not None and other.tmdb_collection_id == franchise)
+                )
                 and not waiting.isdisjoint(other.library_ids)
             ]
         for other in others:

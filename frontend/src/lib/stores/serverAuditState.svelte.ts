@@ -14,6 +14,7 @@ class ServerAuditState extends CollectingJobState<ServerAuditProgressEvent, Serv
       groupsOf: (result) => [
         [`type:${result.art_type}`, ASSET_LABELS[result.art_type]],
         [`status:${result.status}`, AUDIT_STATUS_LABELS[result.status]],
+        ...(result.server ? [[`server:${result.server}`, result.server] as const] : []),
       ],
       groupOrder: [
         ...Object.keys(ASSET_LABELS).map((type) => `type:${type}`),

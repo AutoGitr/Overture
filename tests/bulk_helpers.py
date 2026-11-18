@@ -24,6 +24,7 @@ lazy from overture.jobs.runner import JobContext
 lazy from overture.services.art import bulk as art_bulk
 lazy from overture.services.art.bulk_work import ArtTarget, BulkArtWork
 lazy from overture.services.art.candidates import ArtCandidates
+lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.art.matcher import ArtMatcher
 lazy from overture.services.art.phash import PHASH_HEX_LENGTH, PhashService
 lazy from overture.services.bulk_common import AssetPlan
@@ -72,7 +73,11 @@ def progress_logs(context: Context) -> list[str]:
 
 
 def make_bulk_downloads(
-    *, app_config: Settings, database: Database, provider: object | None = None
+    *,
+    app_config: Settings,
+    database: Database,
+    provider: object | None = None,
+    collection_art: CollectionArtService | None = None,
 ) -> DownloadService:
     return make_download_service(
         NullEventPublisher(),
@@ -83,6 +88,7 @@ def make_bulk_downloads(
         youtube_resolver=unused(YouTubeResolver),
         app_config=app_config,
         database=database,
+        collection_art=collection_art,
     )
 
 

@@ -35,13 +35,13 @@ lazy from overture.schemas.art import ArtCandidate, SaveCollectionArtRequest
 lazy from overture.schemas.collections import collection_artwork
 lazy from overture.schemas.removal import AssetRemoval
 lazy from overture.services.art.candidates import (
+    MEMBER_BACKGROUNDS_TOTAL,
     ArtCandidates,
     CandidatePolicy,
     CandidateSources,
 )
 lazy from overture.services.art.matcher import ArtMatcher, CandidateComparison
 lazy from overture.services.art.phash import PhashService
-lazy from overture.services.art.service import ArtService
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.removal import AssetRemover
 lazy from overture.services.storage.assets import AssetStorage
@@ -52,7 +52,7 @@ lazy from overture.utils.image import THUMB_EXTENSION
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_catalog
 lazy from tests.collection_helpers import managing_rule, stored_collection
-lazy from tests.runtime_helpers import NoopProviderRegistry, unused
+lazy from tests.runtime_helpers import NoopProviderRegistry, art_service, unused
 lazy from tests.test_services.test_collection_management import Provider
 lazy from tests.test_services.test_collections_service import FakePublisher
 
@@ -188,7 +188,7 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
         await session.flush()
         session.add(managing_rule(1))
     image_cache = ImageCache(tmp_path / "images", tmp_path / "uploads")
-    service = ArtService(
+    service = art_service(
         app_config=app_config,
         database=database,
         asset_storage=AssetStorage(app_config=app_config),
@@ -301,7 +301,7 @@ async def test_an_uploaded_collection_image_is_shown_from_the_cache_and_sent_aga
         )
         await session.flush()
         session.add(managing_rule(1))
-    service = ArtService(
+    service = art_service(
         app_config=app_config,
         database=database,
         asset_storage=AssetStorage(app_config=app_config),
@@ -378,7 +378,7 @@ async def test_an_inactive_collection_records_its_art_for_the_sync_that_restores
         )
         await session.flush()
         session.add(managing_rule(2))
-    service = ArtService(
+    service = art_service(
         app_config=app_config,
         database=database,
         asset_storage=AssetStorage(app_config=app_config),
@@ -519,7 +519,7 @@ async def test_generated_art_is_offered_chosen_and_generated_again_for_a_new_tit
         )
         await session.flush()
         session.add(managing_rule(1))
-    service = ArtService(
+    service = art_service(
         app_config=app_config,
         database=database,
         asset_storage=AssetStorage(app_config=app_config),
@@ -666,7 +666,7 @@ async def test_generated_backgrounds_never_show_text_and_title_only_posters_stay
         )
         await session.flush()
         session.add(managing_rule(1))
-    service = ArtService(
+    service = art_service(
         app_config=app_config,
         database=database,
         asset_storage=AssetStorage(app_config=app_config),
@@ -718,3 +718,54 @@ async def test_generated_backgrounds_never_show_text_and_title_only_posters_stay
     assert provider.uploads[-1][1] == render_art(
         ArtType.POSTER, ArtStyle.DARK, "Renamed"
     )
+
+
+async def test_member_backgrounds_are_the_largest_of_each_member_and_of_all(
+    database: Database, app_config: Settings
+) -> None:
+    class Tmdb(TMDBClient):
+        def __init__(self) -> None:
+            pass
+
+        @override
+        async def art_candidates(
+            self,
+            media_type: MediaType | CatalogMediaType,
+            tmdb_id: int,
+            art_type: ArtType,
+            *,
+            season_num: int | None = None,
+            language_filter: TmdbLanguageFilter = TmdbLanguageFilter.EN_NULL,
+        ) -> list[ArtCandidate]:
+            assert art_type is ArtType.BACKGROUND
+            if tmdb_id == 99:
+                raise ValueError("TMDB unavailable")
+            # Twelve 16:9 backgrounds, member 1's the largest of all.
+            return [
+                ArtCandidate(
+                    url=f"https://image.tmdb.org/t/p/original/{tmdb_id}-{size}.jpg",
+                    width=(width := 1920 + 16 * (size + 12 * tmdb_id)),
+                    height=width * 9 // 16,
+                )
+                for size in range(12)
+            ]
+
+    app_config.TMDB_API_KEY = SecretStr("key")
+    candidates = ArtCandidates(
+        database=database,
+        provider_registry=NoopProviderRegistry(),
+        tmdb_client=Tmdb(),
+        app_config=app_config,
+    )
+    members = [(MediaType.MOVIE, tmdb_id) for tmdb_id in (*range(1, 12), 99)]
+
+    offered = await candidates.member_backgrounds(
+        "Saga", members, CandidatePolicy.of(AppSettings())
+    )
+
+    assert len(offered) == MEMBER_BACKGROUNDS_TOTAL
+    sizes = [(c.width or 0) * (c.height or 0) for c in offered]
+    assert sizes == sorted(sizes, reverse=True)
+    # Each member offers only its ten largest: its two smallest never appear.
+    assert not any(c.url.endswith(("-0.jpg", "-1.jpg")) for c in offered)
+    assert offered[0].url.endswith("/11-11.jpg")

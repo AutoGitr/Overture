@@ -178,7 +178,8 @@ describe("Sync tab", () => {
     await renderSync();
     expect(screen.getByRole("checkbox", { name: "Movies" })).not.toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Select all collections" })).not.toBeChecked();
-    await fireEvent.click(screen.getByText(/Specific collections/));
+    // The hidden Assets tab offers the same choice.
+    await fireEvent.click(within(screen.getByRole("tabpanel")).getByText(/Specific collections/));
     expect(await screen.findByRole("checkbox", { name: "Pixar" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Alien" })).not.toBeChecked();
 

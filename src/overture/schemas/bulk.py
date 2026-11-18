@@ -54,8 +54,12 @@ class _BulkSharedRunFields(StrictBaseModel):
 
     library_ids: LibraryIds = Field(default_factory=list[str])
     item_ids: UniqueList[Annotated[int, Field(gt=0)]] | None = None
-    collection_ids: UniqueList[Annotated[int, Field(gt=0)]] | None = None
-    collection_groups: GroupNames | None = None
+    collection_ids: UniqueList[Annotated[int, Field(gt=0)]] | None = Field(
+        default=None, description="These collections, besides any groups."
+    )
+    collection_groups: GroupNames | None = Field(
+        default=None, description="The collections of these groups."
+    )
     all_collections: bool = False
     include_unmonitored: bool = Field(
         default=False, description="Include unmonitored items in either target scope."
@@ -83,22 +87,18 @@ class _BulkSharedRunFields(StrictBaseModel):
 
     @model_validator(mode="after")
     def validate_target_selection(self) -> Self:
-        """Libraries may run beside chosen groups or every collection.
+        """Libraries may run beside every collection, or chosen groups and collections.
 
-        Sidebar snapshots (items or collections) run alone, and an empty list
-        never means everything.
+        A sidebar snapshot of items runs alone, and an empty list never means
+        everything.
         """
         if self.collection_ids == []:
             raise ValueError("collection_ids must include at least one collection")
-        if self.collection_groups is not None and self.all_collections:
-            raise ValueError("Select collection groups or every collection")
-        snapshots = (self.item_ids is not None, self.collection_ids is not None)
-        others = (
-            bool(self.library_ids),
-            self.collection_groups is not None,
-            self.all_collections,
-        )
-        if sum(snapshots) > 1 or (any(snapshots) and any(others)):
+        if self.all_collections and (
+            self.collection_groups is not None or self.collection_ids is not None
+        ):
+            raise ValueError("Select some collections or every collection")
+        if self.item_ids is not None and (self.library_ids or self.collection_scope):
             raise ValueError("Select collections, items, or libraries")
         if self.item_ids is not None:
             if self.library_ids:

@@ -26,7 +26,6 @@ lazy from overture.repositories.copies import CopyRepository
 lazy from overture.services.art.candidates import ArtCandidates
 lazy from overture.services.art.matcher import ArtMatcher
 lazy from overture.services.art.phash import PhashService
-lazy from overture.services.art.service import ArtService
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.removal import AssetRemover
 lazy from overture.services.server_identity import resolve_art_owners
@@ -42,6 +41,7 @@ lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     NoopTmdb,
     RecordingPublisher,
+    art_service,
     unused,
 )
 
@@ -134,7 +134,7 @@ async def test_art_sources_release_connection_during_discovery_and_candidates(
                     )
                 )
     registry = NoopProviderRegistry(Provider())
-    service = ArtService(
+    service = art_service(
         app_config=app_config,
         database=database,
         asset_storage=AssetStorage(app_config=app_config),

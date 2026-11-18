@@ -15,6 +15,7 @@ lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.jellyfin import JellyfinProvider
 lazy from overture.media_servers.plex import PlexProvider
 lazy from overture.repositories.collections import CollectionRepository
+lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.downloads.art import DownloadArtHandler
 lazy from overture.services.downloads.collection_theme import folder_lacks_theme
 lazy from overture.services.downloads.events import DownloadEventPublisher
@@ -62,6 +63,7 @@ def _download_service(
     pub = publisher or RecordingPublisher()
     events = DownloadEventPublisher(pub)
     return DownloadService(
+        collection_art=unused(CollectionArtService),
         art_handler=unused(DownloadArtHandler),
         theme_handler=DownloadThemeHandler(
             asset_storage=unused(AssetStorage),

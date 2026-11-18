@@ -105,6 +105,7 @@
 
   const id = $props.id();
   let inherits = $derived(level !== "global");
+  let themesWanted = $derived((policy.themes ?? defaults?.themes) !== false);
   let sorts = $derived(sortedOrders(orders).map((order) => [order, ORDER_LABELS[order]] as const));
 </script>
 
@@ -188,16 +189,17 @@
     options={WANTED_NOT}
     hint="Not needed: a collection's theme is complete without one, and none is chosen automatically."
   />
-  {#if (policy.themes ?? defaults?.themes) !== false}
-    <InheritedSelect
-      label="Automatic theme"
-      {inherits}
-      bind:value={policy.auto_match_theme}
-      inherited={defaults?.auto_match_theme}
-      options={ON_OFF}
-      hint="Picks the OvertureDB theme after a sync when none is chosen."
-    />
-  {/if}
+  <InheritedSelect
+    label="Automatic theme"
+    {inherits}
+    bind:value={policy.auto_match_theme}
+    inherited={defaults?.auto_match_theme}
+    options={ON_OFF}
+    disabled={!themesWanted}
+    hint={themesWanted
+      ? "Picks the OvertureDB theme after a sync when none is chosen."
+      : "Off while Theme is Not needed, which chooses no theme automatically."}
+  />
   {#if inherits && memberLabels}
     <FieldRow
       label="Member label"

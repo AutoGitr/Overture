@@ -4210,6 +4210,35 @@ async def test_a_collection_takes_over_the_server_one_of_its_title(
     assert [row.title for row in await manager.service.reader.listed()] == ["Saga"]
 
 
+async def test_a_collection_takes_over_the_server_one_of_its_franchise(
+    manager: Manager, database: Database
+) -> None:
+    saved = await manager.service.editor.create(
+        CollectionCreate(title="Saga", rule=chosen(manager))
+    )
+    async with database.write_session() as session:
+        row = await session.get(MediaCollection, saved.id)
+        assert row is not None
+        row.tmdb_collection_id = 1565
+        session.add(row)
+        # Emby names the franchise collection it makes after TMDB.
+        session.add(
+            stored_collection(
+                server_item_id="9",
+                library_id="1:movies",
+                title="Saga Collection",
+                tmdb_collection_id=1565,
+                last_synced_at=utc_now(),
+            )
+        )
+
+    detail = await synced(manager.service, saved.id)
+
+    assert manager.provider.created == []
+    assert [copy.server_item_id for copy in detail.copies] == ["9"]
+    assert [row.title for row in await manager.service.reader.listed()] == ["Saga"]
+
+
 async def test_collections_sets_and_schedules_follow_a_moved_library(
     manager: Manager, app_config: Settings, database: Database
 ) -> None:

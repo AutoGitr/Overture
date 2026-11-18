@@ -60,7 +60,13 @@ lazy from ..collections.copies import lead_part
 lazy from ..removal import NO_COLLECTION_ART_FILE, AssetRemover
 lazy from ..storage.image_cache import CachedOriginal, ImageCache
 lazy from ..storage.responses import cached_image_response
-lazy from .candidates import ArtCandidates, CandidatePolicy, in_source_order
+lazy from .candidates import (
+    MEMBER_BACKGROUNDS,
+    MEMBER_BACKGROUNDS_TOTAL,
+    ArtCandidates,
+    CandidatePolicy,
+    in_source_order,
+)
 lazy from .choice import ArtSelector, require_valid_aspect_ratio
 lazy from .matcher import ArtMatcher
 lazy from .uploads import ArtUploads
@@ -181,7 +187,25 @@ class CollectionArtService:
         async with self._database.read_session() as db:
             row = await self._require(db, collection_id, art_type)
             policy = CandidatePolicy.of(await get_app_settings(db))
+            members = (
+                await CollectionRepository(db).member_tmdb_titles(
+                    collection_id, MEMBER_BACKGROUNDS_TOTAL
+                )
+                if art_type is ArtType.BACKGROUND
+                else []
+            )
         found = await self._found(row, art_type, policy)
+        # Only the picker offers them: matching a run's collections would
+        # fingerprint a hundred more images each.
+        from_members = (
+            {
+                MEMBER_BACKGROUNDS: await self._candidates.member_backgrounds(
+                    row.title, members, policy
+                )
+            }
+            if members
+            else {}
+        )
         variants = (
             (False, True)
             if art_type is ArtType.POSTER and _headed(row)
@@ -202,7 +226,11 @@ class CollectionArtService:
         return found.model_copy(
             update={
                 "sources": in_source_order(
-                    {**found.sources, ArtSource.GENERATED: generated}
+                    {
+                        **found.sources,
+                        **from_members,
+                        ArtSource.GENERATED: generated,
+                    }
                 )
             }
         )

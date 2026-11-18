@@ -475,6 +475,16 @@ describe("collection criteria", () => {
     expect(screen.getByLabelText("Request missing")).toBeInTheDocument();
   });
 
+  it("keeps Automatic theme in view but off while themes are not needed", () => {
+    const policy = $state<PolicyData>({ themes: null, auto_match_theme: true });
+    renderWithQueryClient(CollectionPolicyFields, {
+      policy,
+      level: "collection",
+      defaults: { themes: false },
+    });
+    expect(screen.getByLabelText("Automatic theme")).toBeDisabled();
+  });
+
   it("offers the sorts the server supports", () => {
     const policy = $state<PolicyData>({ order_type: null });
     renderWithQueryClient(CollectionPolicyFields, {

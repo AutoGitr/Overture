@@ -33,7 +33,10 @@
   import { errorMessage } from "../../utils/errors";
   import { createClearResults } from "../../utils/jobSnapshots";
   import { AssetsForm } from "../../utils/assetsForm.svelte";
-  import { collectionGroupNames } from "../../utils/collectionGroups.svelte";
+  import {
+    choosableCollections,
+    collectionGroupNames,
+  } from "../../utils/collectionGroups.svelte";
   import { ScheduleController } from "../../utils/schedules.svelte";
 
   let {
@@ -78,6 +81,7 @@
     librariesLoaded: () => librariesLoaded,
     catalogEnabled: () => catalogEnabled,
     collectionGroups,
+    collections: choosableCollections(() => isActive && collectionsSupported),
   });
   const config = form.config;
 
@@ -205,6 +209,7 @@
       scheduleCronExpression={config.scheduleCronExpression}
       controller={scheduleController}
       libraries={[...movieLibraries, ...showLibraries]}
+      collections={form.collectionOptions}
       oncronchange={(value) => (config.scheduleCronExpression = value)}
       onedit={editSchedule}
     />

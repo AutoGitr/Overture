@@ -23,17 +23,21 @@ class ItemDownloadTarget(StrictBaseModel):
     source: str | None = None
 
 
-class CollectionThemeDownloadTarget(StrictBaseModel):
-    """Target for a media-server collection theme upload."""
+class CollectionDownloadTarget(StrictBaseModel):
+    """Target for a collection's artwork or theme, uploaded to its server copies."""
 
-    target_type: Literal["collection_theme"]
+    target_type: Literal["collection"]
     collection_id: int
     title: str
+    job_type: Literal[JobType.COLLECTION_ART, JobType.COLLECTION_THEME]
+    #: The slot a collection art download fills; none for a theme.
+    art_type: ArtType | None = None
+    #: Where the download comes from: the art's host, or YouTube.
     source: str | None = None
 
 
 DownloadJobTarget = Annotated[
-    ItemDownloadTarget | CollectionThemeDownloadTarget,
+    ItemDownloadTarget | CollectionDownloadTarget,
     Field(discriminator="target_type"),
 ]
 

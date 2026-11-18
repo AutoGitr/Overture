@@ -28,7 +28,12 @@ import {
 } from "./assetsPopup";
 import { DEFAULT_CRON_EXPRESSION } from "./cronPresets";
 import { persistedState } from "./persistedState.svelte";
-import { toggleSelectedValue, type CollectionChoice } from "./popupSelection";
+import {
+  chosenApart,
+  toggleSelectedValue,
+  type ChoosableCollection,
+  type CollectionChoice,
+} from "./popupSelection";
 
 /** What the form reads from the server: the libraries and whether OvertureDB is on. */
 export interface AssetsFormSource {
@@ -37,6 +42,8 @@ export interface AssetsFormSource {
   librariesLoaded(): boolean;
   catalogEnabled(): boolean;
   collectionGroups(): string[];
+  /** The collections the run can choose one by one. */
+  collections(): ChoosableCollection[];
 }
 
 /**
@@ -49,6 +56,7 @@ export class AssetsForm {
     useSidebarItems: false,
     allCollections: false,
     collectionGroups: [] as string[],
+    collectionIds: [] as number[],
     includeUnmonitored: false,
     overwriteExisting: false,
     enableArt: true,
@@ -119,10 +127,21 @@ export class AssetsForm {
     return this.config.collectionGroups.filter((group) => groups.has(group));
   });
 
+  get collectionOptions(): ChoosableCollection[] {
+    return this.source.collections();
+  }
+
+  /** The saved collection choice, less collections that no longer exist or a group covers. */
+  readonly selectedCollectionIds = $derived(
+    chosenApart(this.config.collectionIds, this.collectionOptions, this.selectedCollectionGroups),
+  );
+
   /** Collections chosen in the form, beside any libraries. */
   readonly collectionsChosen = $derived(
     !this.config.useSidebarItems &&
-      (this.config.allCollections || this.selectedCollectionGroups.length > 0),
+      (this.config.allCollections ||
+        this.selectedCollectionGroups.length > 0 ||
+        this.selectedCollectionIds.length > 0),
   );
 
   /** The run covers collections, from the form or the sidebar. */
@@ -194,10 +213,11 @@ export class AssetsForm {
         config.useSidebarItems && !this.collectionScope
           ? (sidebarState.current?.itemIds ?? [])
           : undefined,
-      collectionIds:
+      sidebarCollectionIds:
         config.useSidebarItems && this.collectionScope
           ? sidebarState.collections?.collectionIds
           : undefined,
+      collectionIds: this.selectedCollectionIds,
       collectionGroups: this.selectedCollectionGroups,
       allCollections: config.allCollections,
       includeUnmonitored: config.includeUnmonitored,
@@ -236,6 +256,12 @@ export class AssetsForm {
     this.config.collectionGroups = choice.groups;
   }
 
+  /** Run these collections beside the chosen groups, in place of the sidebar's selection. */
+  chooseCollectionIds(ids: number[]): void {
+    this.config.useSidebarItems = false;
+    this.config.collectionIds = ids;
+  }
+
   toggleArtType(type: ArtType): void {
     this.config.artTypes = toggleSelectedValue(this.config.artTypes, type);
   }
@@ -268,6 +294,7 @@ export class AssetsForm {
     config.useSidebarItems = false;
     config.allCollections = saved.all_collections;
     config.collectionGroups = saved.collection_groups ?? [];
+    config.collectionIds = saved.collection_ids ?? [];
     config.includeUnmonitored = saved.include_unmonitored;
     config.overwriteExisting = saved.overwrite_existing;
     config.scheduleCronExpression = schedule.cron_expression;

@@ -92,13 +92,45 @@ async def test_boxsets_create_diff_edit_art_and_delete(
     metadata = json.loads(mutations[3].content)
     assert metadata["Name"] == "After"
     assert metadata["ProviderIds"] == {"Tmdb": "10"}
-    assert metadata["LockedFields"] == ["Overview"]
+    # Emby keeps a sort title through refreshes only while SortName is locked.
+    assert metadata["LockedFields"] == (
+        ["Overview", "SortName"] if emby else ["Overview"]
+    )
     assert metadata["DisplayOrder"] == "SortName"
-    # Jellyfin's editor sends ForcedSortName; Emby ignores it and reads SortName.
-    assert metadata["SortName" if emby else "ForcedSortName"] == "!After"
+    assert metadata["ForcedSortName"] == "!After"
     assert base64.b64decode(mutations[4].content) == b"image"
     assert mutations[4].headers["Content-Type"] == "image/png"
     assert mutations[-1].method == "DELETE"
+
+
+async def test_emby_clearing_a_sort_title_releases_its_lock(
+    app_config: Settings,
+) -> None:
+    item = {
+        "Id": "box",
+        "Name": "Box",
+        "SortName": "!Box",
+        "ForcedSortName": "!Box",
+        "LockedFields": ["Overview", "SortName"],
+    }
+    updates: list[dict[str, object]] = []
+
+    def handle(request: httpx2.Request) -> httpx2.Response:
+        if request.method == "POST":
+            updates.append(json.loads(request.content))
+            return httpx2.Response(204)
+        return httpx2.Response(200, json={"Items": [item], "TotalRecordCount": 1})
+
+    factory, _transport = mock_client_factory(handle)
+    client = media_client(EmbyClient, app_config, client_factory=factory)
+    try:
+        await client.update_collection_details(
+            "box", "Box", None, "", CollectionOrder.TITLE_ASC
+        )
+    finally:
+        await client.close()
+    assert updates[0]["LockedFields"] == ["Overview"]
+    assert updates[0]["ForcedSortName"] is None
 
 
 async def test_plex_creates_then_diffs_moves_and_uploads_bytes(

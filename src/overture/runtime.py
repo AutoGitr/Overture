@@ -34,9 +34,12 @@ lazy from .runtime_paths import (
 lazy from .schemas.media_server import media_server_status
 lazy from .schemas.settings import ConnectivityStatusResponse
 lazy from .services.art.candidates import ArtCandidates
+lazy from .services.art.choice import ArtSelector
+lazy from .services.art.collection_art import CollectionArtService
 lazy from .services.art.matcher import ArtMatcher
 lazy from .services.art.phash import PhashService
 lazy from .services.art.service import ArtService
+lazy from .services.art.uploads import ArtUploads
 lazy from .services.asset_manager.service import AssetManagerService
 lazy from .services.assets import AssetsService
 lazy from .services.auth import AuthService
@@ -472,6 +475,33 @@ def build_runtime(
         compare_concurrency=max(2, app_config.PHASH_WORKERS * 2),
     )
     background_jobs = BackgroundJobRegistry(events, database=database)
+    remover = AssetRemover(
+        asset_storage=asset_storage,
+        provider_registry=provider_registry,
+        database=database,
+    )
+    art_uploads = ArtUploads(database=database, image_cache=image_cache, phash=phash)
+    art_selector = ArtSelector(
+        app_config=app_config,
+        database=database,
+        provider_registry=provider_registry,
+        image_clients=proxy_clients,
+        uploads=art_uploads,
+    )
+    collection_art = CollectionArtService(
+        app_config=app_config,
+        database=database,
+        asset_locks=asset_storage.asset_locks,
+        matcher=art_matcher,
+        publisher=events,
+        provider_registry=provider_registry,
+        candidates=candidates,
+        image_clients=proxy_clients,
+        image_cache=image_cache,
+        selector=art_selector,
+        uploads=art_uploads,
+        remover=remover,
+    )
     downloads = DownloadService(
         art_handler=DownloadArtHandler(
             provider_registry=provider_registry,
@@ -482,6 +512,7 @@ def build_runtime(
             app_config=app_config,
             database=database,
         ),
+        collection_art=collection_art,
         theme_handler=DownloadThemeHandler(
             asset_storage=asset_storage,
             youtube_resolver=youtube,
@@ -509,11 +540,6 @@ def build_runtime(
         app_config=app_config,
         database=database,
     )
-    remover = AssetRemover(
-        asset_storage=asset_storage,
-        provider_registry=provider_registry,
-        database=database,
-    )
     themes = ThemesService(
         database=database,
         asset_storage=asset_storage,
@@ -523,17 +549,15 @@ def build_runtime(
         remover=remover,
     )
     art = ArtService(
-        app_config=app_config,
         database=database,
         asset_storage=asset_storage,
         matcher=art_matcher,
-        phash=phash,
         downloads=downloads,
         publisher=events,
-        provider_registry=provider_registry,
         candidates=candidates,
-        image_clients=proxy_clients,
-        image_cache=image_cache,
+        uploads=art_uploads,
+        selector=art_selector,
+        collections=collection_art,
         remover=remover,
     )
     library = LibraryService(

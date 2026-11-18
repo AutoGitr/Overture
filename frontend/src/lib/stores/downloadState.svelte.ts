@@ -7,11 +7,11 @@ import { notify } from "./notificationState.svelte";
 /** How long a failed download stays listed after its notice. */
 const FAILURE_DISPLAY_MS = 5000;
 
-/** The worker pool a download runs in: artwork, or themes of items and collections. */
+/** The worker pool a download runs in: artwork, or themes, of items and collections. */
 export type DownloadLane = "art" | "theme";
 
 export function downloadLane(jobType: string): DownloadLane {
-  return jobType === "art" ? "art" : "theme";
+  return jobType === "art" || jobType === "collection_art" ? "art" : "theme";
 }
 
 export interface DownloadJob {
@@ -41,15 +41,15 @@ export interface DownloadJob {
 function buildJob(data: DownloadJobEvent, status?: DownloadJob["status"]): DownloadJob {
   const target = data.job.target;
   const itemTarget = target.target_type === "item" ? target : null;
-  const collectionTarget = target.target_type === "collection_theme" ? target : null;
+  const collectionTarget = target.target_type === "collection" ? target : null;
 
   return {
     job_id: data.job.id,
     media_item_id: itemTarget?.media_item_id ?? null,
     collection_id: collectionTarget?.collection_id ?? null,
     title: itemTarget?.title ?? collectionTarget?.title ?? null,
-    job_type: itemTarget?.job_type ?? target.target_type,
-    art_type: itemTarget?.art_type ?? null,
+    job_type: itemTarget?.job_type ?? collectionTarget?.job_type ?? target.target_type,
+    art_type: target.art_type ?? null,
     season_id: itemTarget?.season_id ?? null,
     source: target.source ?? null,
     percent: data.percent ?? 0,
@@ -148,8 +148,9 @@ class DownloadState {
     const requested = this.requested.delete(data.job.id);
     if (data.job.status !== "completed") return;
     const target = data.job.target;
-    if (target.target_type === "collection_theme") {
-      notify.success(`Theme applied to ${target.title}.`);
+    if (target.target_type === "collection") {
+      const asset = ASSET_LABELS[target.art_type ?? "theme"].toLowerCase();
+      notify.success(`Applied the ${asset} to ${target.title}.`);
     } else if (requested) {
       const asset = ASSET_LABELS[target.art_type ?? "theme"].toLowerCase();
       const title = target.title ? ` for ${target.title}` : "";

@@ -12,6 +12,7 @@ lazy import socket
 lazy import traceback
 lazy from collections import deque
 lazy from contextlib import asynccontextmanager
+lazy from contextvars import ContextVar
 lazy from datetime import UTC, datetime
 lazy from typing import Any, cast
 
@@ -73,6 +74,8 @@ lazy from tests.pause_clock import PauseClock
 lazy from tests.runtime_helpers import TEMP_IMAGE_CACHES
 lazy from tests.workload import WRITING
 
+READING: ContextVar[bool] = ContextVar("reading", default=False)
+
 
 @pytest.fixture
 def app_config() -> Settings:
@@ -131,17 +134,29 @@ def pause_clock(monkeypatch: pytest.MonkeyPatch) -> PauseClock:
 
 
 @pytest.fixture(autouse=True)
-def _write_transactions_stay_short(
+def _sessions_stay_short(
     monkeypatch: pytest.MonkeyPatch,
 ) -> Generator[None]:
-    """Fail any test whose code waits on something else while holding the writer.
+    """Fail any test whose code waits on something else while holding a connection.
 
-    SQLite has one write lock, so a network call, blocking work or an asset
-    lock inside a write transaction stalls every other writer behind it. The
-    failures are collected, since the code under test may catch what it hits.
+    SQLite has one write lock, so a network call, blocking work, an asset lock
+    or a wait for a bounded resource inside a write transaction stalls every
+    other writer behind it; inside a read session it keeps a pooled connection
+    from every other reader. The failures are collected, since the code under
+    test may catch what it hits.
     """
     violations: list[str] = []
     write_session = Database.write_session
+    read_session = Database.read_session
+
+    @asynccontextmanager
+    async def tracked_read(self: Database) -> AsyncGenerator[AsyncSession]:
+        async with read_session(self) as session:
+            token = READING.set(True)
+            try:
+                yield session
+            finally:
+                READING.reset(token)
 
     @asynccontextmanager
     async def tracked(self: Database) -> AsyncGenerator[AsyncSession]:
@@ -153,9 +168,16 @@ def _write_transactions_stay_short(
                 WRITING.reset(token)
 
     def note(what: str) -> None:
-        if WRITING.get():
+        held = (
+            "a write transaction"
+            if WRITING.get()
+            else "a read session"
+            if READING.get()
+            else None
+        )
+        if held is not None:
             frames = traceback.format_stack(limit=8)[:-2]
-            violations.append(f"{what} in a write transaction:\n{''.join(frames)}")
+            violations.append(f"{what} in {held}:\n{''.join(frames)}")
 
     send = AsyncClient.send
     to_thread = asyncio.to_thread
@@ -173,10 +195,19 @@ def _write_transactions_stay_short(
         note("an asset lock")
         return acquire(self, key)
 
+    semaphore_acquire = asyncio.Semaphore.acquire
+
+    async def checked_semaphore(self: asyncio.Semaphore) -> bool:
+        if self.locked():
+            note("waiting for a bounded resource")
+        return await semaphore_acquire(self)
+
     monkeypatch.setattr(Database, "write_session", tracked)
+    monkeypatch.setattr(Database, "read_session", tracked_read)
     monkeypatch.setattr(AsyncClient, "send", checked_send)
     monkeypatch.setattr(asyncio, "to_thread", checked_to_thread)
     monkeypatch.setattr(KeyedLock, "acquire", checked_acquire)
+    monkeypatch.setattr(asyncio.Semaphore, "acquire", checked_semaphore)
     yield
     assert not violations, "\n".join(violations)
 

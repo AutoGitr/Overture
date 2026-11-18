@@ -1,3 +1,11 @@
+/** A managed collection a run can choose by itself. */
+export interface ChoosableCollection {
+  id: number;
+  title: string;
+  /** The group it belongs to, Ungrouped when it has none. */
+  group: string;
+}
+
 export function toggleSelectedValue<T extends string>(values: T[], value: T): T[] {
   return values.includes(value)
     ? values.filter((current) => current !== value)
@@ -39,4 +47,25 @@ export function toggleCollectionGroup(
     all: false,
     groups: toggleSelectedValue(choice.all ? [...available] : choice.groups, group),
   };
+}
+
+/** The chosen collections that still exist and that no chosen group covers. */
+export function chosenApart(
+  ids: readonly number[],
+  collections: readonly ChoosableCollection[],
+  groups: readonly string[],
+): number[] {
+  const chosen = new Set(ids);
+  return collections
+    .filter((row) => chosen.has(row.id) && !groups.includes(row.group))
+    .map((row) => row.id);
+}
+
+/** The titles of the chosen collections that still exist. */
+export function chosenTitles(
+  ids: readonly number[] | null | undefined,
+  collections: readonly ChoosableCollection[],
+): string[] {
+  const chosen = new Set(ids);
+  return collections.filter((row) => chosen.has(row.id)).map((row) => row.title);
 }

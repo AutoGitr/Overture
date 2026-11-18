@@ -20,6 +20,7 @@
   import Header from "./lib/components/Header.svelte";
   import Notice from "./lib/components/Notice.svelte";
   import PinnedNotices from "./lib/components/PinnedNotices.svelte";
+  import PopupShell from "./lib/components/PopupShell.svelte";
   import Sidebar from "./lib/components/Sidebar.svelte";
 
   import { POPUP_COMPONENTS } from "./lib/popups/registry";
@@ -75,6 +76,11 @@
   });
   // Reconnects that succeed straight away never surface a notice.
   const showLiveNotice = delayedFlag(() => liveNotice !== null);
+  /** Keep a contained failure in the console, where its stack can be read. */
+  function reportFailure(error: unknown) {
+    console.error(error);
+  }
+
   let ActivePopup = $derived(uiState.openPopup ? POPUP_COMPONENTS[uiState.openPopup] : null);
 
   function waitForHiddenLayoutFrame(): Promise<void> {
@@ -180,14 +186,43 @@
     />
 
     <div class="detail-wrapper">
-      <Router />
+      <!-- A failure while drawing a page stays on that page, shown, rather
+           than leaving the whole app unresponsive until a reload. -->
+      <svelte:boundary onerror={reportFailure}>
+        <Router />
+        {#snippet failed(error, reset)}
+          {@render failure(error, reset)}
+        {/snippet}
+      </svelte:boundary>
     </div>
   </div>
 
-  {#if ActivePopup}
-    <ActivePopup />
-  {/if}
+  {#key ActivePopup}
+    {#if ActivePopup}
+      <svelte:boundary onerror={reportFailure}>
+        <ActivePopup />
+        {#snippet failed(error, reset)}
+          <PopupShell
+            title="This window stopped working"
+            size="dialog"
+            onclose={() => uiState.closePopup()}
+          >
+            {@render failure(error, reset)}
+          </PopupShell>
+        {/snippet}
+      </svelte:boundary>
+    {/if}
+  {/key}
 </div>
+
+{#snippet failure(error: unknown, reset: () => void)}
+  <Notice
+    tone="error"
+    title="Something went wrong"
+    message={errorMessage(error, "This view could not be shown.")}
+    action={{ label: "Try again", pendingLabel: "Retrying...", pending: false, run: reset }}
+  />
+{/snippet}
 
 {#if !ready}
   <div class="startup-overlay">

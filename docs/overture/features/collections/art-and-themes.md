@@ -48,6 +48,11 @@ theme.
 Collections whose criteria list a TMDB person offer that person's photos as
 poster candidates.
 
+The **Background** tab also offers the members' own TMDB backgrounds, under
+**Members**: the 10 largest of each member, and the 100 largest of all, read
+from the first 100 members in the collection's order. They are fetched only
+when you open the tab, and runs never compare them.
+
 ## OvertureDB posters
 
 **OvertureDB posters**, a collection setting (global, per group or per
@@ -107,7 +112,8 @@ no theme is chosen for it automatically and Assets runs leave it out. A theme
 you choose for it is still kept and sent.
 
 A collection's automatic theme follows the **Automatic theme** setting, in the
-same order of OvertureDB and ThemerrDB the Assets run uses. New collection IDs
+same order of OvertureDB and ThemerrDB the Assets run uses. While **Theme** is
+**Not needed**, Automatic theme is shown but off. New collection IDs
 imported by a full Sync also use the catalog theme order of an enabled
 incremental schedule covering their library. On Jellyfin, BoxSet themes are
 written to the server's `COLLECTIONS_PATH`; a sync writes the theme again to a
@@ -125,7 +131,7 @@ that holds the collection, stands for what the servers show.
 
 | When                                     | Art (poster and background)                                                                                                                                                                                                                                          | Theme                                                                                                                                                                                            |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| You choose it                            | Overture fetches or reads the image, keeps it in its image cache, uploads it to every copy and records that it sent it. An inactive collection only records the choice.                                                                                              | The download is queued; when it runs, the track is downloaded once, uploaded to each Plex copy and written as `theme.mp3` to each Jellyfin collection's folder. Emby keeps no collection themes. |
+| You choose it                            | Overture fetches or reads the image, keeps it in its image cache, uploads it to every copy and records that it sent it. An inactive collection only records the choice. An Assets run queues its choice as a download, which does the same when it runs.             | The download is queued; when it runs, the track is downloaded once, uploaded to each Plex copy and written as `theme.mp3` to each Jellyfin collection's folder. Emby keeps no collection themes. |
 | The collection syncs                     | A slot nothing was chosen for gets **Automatic art**. Generated art is drawn again when the title or group changed. A copy the sync makes, new or in place of one deleted on its server, gets the chosen art: the image Overture keeps, else its link fetched again. | A copy the sync makes, or a Jellyfin folder without its theme, gets the chosen theme. With nothing chosen, **Automatic theme** queues the catalog's theme.                                       |
 | A server syncs                           | The lead copy's images are read. When the lead shows another image than the one Overture sent, Overture no longer counts it as sent; the choice stays, and **Audit** or the next new copy sends it again.                                                            | When the lead copy holds another theme than the one Overture sent, it was replaced on the server, so Overture forgets its choice. On Jellyfin the folder's `theme.mp3` is read.                  |
 | A full Sync identifies a TMDB collection | Nothing changes until the collection's own sync.                                                                                                                                                                                                                     | Catalog themes are queued in the order of an enabled incremental schedule covering its library.                                                                                                  |

@@ -13,6 +13,7 @@ lazy from ...jobs.progress_log import JobOutcome, log_entry
 lazy from ...schemas.downloads import DownloadJobEvent
 lazy from ...utils.art_urls import art_source_label
 lazy from ...utils.job_events import build_job_payload
+lazy from .watch import UPLOADED, WRITTEN
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ _STATUSES = frozendict(
 
 def _source(job: DownloadJob) -> str | None:
     """Name where a download comes from: the art's host, or YouTube for themes."""
-    if job.job_type is not JobType.ART:
+    if not job.job_type.is_art:
         return "YouTube"
     if job.upload_hash:
         return ArtSource.UPLOAD.label
@@ -41,11 +42,13 @@ def _source(job: DownloadJob) -> str | None:
 
 def job_target(job: DownloadJob, title: str | None) -> dict[str, int | str | None]:
     """Return a stable target descriptor for item or collection download events."""
-    if job.job_type is JobType.COLLECTION_THEME:
+    if job.job_type.for_collection:
         return {
-            "target_type": "collection_theme",
+            "target_type": "collection",
             "collection_id": job.collection_id,
             "title": title or job.collection_title,
+            "job_type": job.job_type,
+            "art_type": job.art_type,
             "source": _source(job),
         }
     return {
@@ -61,8 +64,9 @@ def job_target(job: DownloadJob, title: str | None) -> dict[str, int | str | Non
 
 def _download_label(job: DownloadJob, title: str | None) -> str:
     """Name a download the way job logs name their targets."""
-    if job.job_type is JobType.COLLECTION_THEME:
-        return f"{title or job.collection_title or 'collection'} (collection theme)"
+    if job.job_type.for_collection:
+        asset = job.art_type or "theme"
+        return f"{title or job.collection_title or 'collection'} (collection {asset})"
     kind = job.art_type or ("theme" if job.job_type is JobType.THEME else "artwork")
     return f"{title or f'item {job.media_item_id}'} ({kind})"
 
@@ -82,7 +86,8 @@ def _log_outcome(
         level, outcome = logging.DEBUG, JobOutcome.DOWNLOADED
         reason = "download is identical to the local file; kept on disk"
     elif status is DownloadStatus.COMPLETED:
-        level, outcome, reason = logging.INFO, JobOutcome.DOWNLOADED, "written to disk"
+        level, outcome = logging.INFO, JobOutcome.DOWNLOADED
+        reason = UPLOADED if job.job_type.for_collection else WRITTEN
     elif status is DownloadStatus.FAILED:
         level, outcome = logging.WARNING, JobOutcome.ERROR
         reason = f"download failed: {payload.get('error') or 'unknown error'}"

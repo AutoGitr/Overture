@@ -3,9 +3,9 @@
 // Models that also appear in openapi.json are imported from the REST bundle
 // rather than redeclared, so both generators describe one type universe.
 
-import type { Agreement, ArtSource, ArtType, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CatalogSelections, CatalogStatus, CatalogSyncOutcome, CatalogSyncStats, CollectionThemeDownloadTarget, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemCopyRead, ItemDownloadTarget, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaServerState, MediaServerStatus, MediaType, MetadataIssue, PublicError, PublicText, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource } from "./rest/types.gen";
+import type { Agreement, ArtSource, ArtType, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CatalogSelections, CatalogStatus, CatalogSyncOutcome, CatalogSyncStats, CollectionDownloadTarget, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemCopyRead, ItemDownloadTarget, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaServerState, MediaServerStatus, MediaType, MetadataIssue, PublicError, PublicText, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource } from "./rest/types.gen";
 
-export type { Agreement, ArtSource, ArtType, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CatalogSelections, CatalogStatus, CatalogSyncOutcome, CatalogSyncStats, CollectionThemeDownloadTarget, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemCopyRead, ItemDownloadTarget, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaServerState, MediaServerStatus, MediaType, MetadataIssue, PublicError, PublicText, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource } from "./rest/types.gen";
+export type { Agreement, ArtSource, ArtType, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CatalogSelections, CatalogStatus, CatalogSyncOutcome, CatalogSyncStats, CollectionDownloadTarget, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemCopyRead, ItemDownloadTarget, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaServerState, MediaServerStatus, MediaType, MetadataIssue, PublicError, PublicText, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource } from "./rest/types.gen";
 
 export type LifecycleStatus = "started" | "progress" | "completed" | "stopped" | "failed";
 
@@ -28,6 +28,11 @@ export interface SyncJobEvent {
   log_outcomes?: {
     [key: string]: number;
   } | null;
+  log_servers?: {
+    [key: string]: {
+      [key: string]: number;
+    };
+  } | null;
   done?: number | null;
   total?: number | null;
   added?: number | null;
@@ -47,6 +52,11 @@ export interface BulkArtJobEvent {
   log_total?: number | null;
   log_outcomes?: {
     [key: string]: number;
+  } | null;
+  log_servers?: {
+    [key: string]: {
+      [key: string]: number;
+    };
   } | null;
   done?: number | null;
   total?: number | null;
@@ -69,6 +79,11 @@ export interface BulkThemeJobEvent {
   log_total?: number | null;
   log_outcomes?: {
     [key: string]: number;
+  } | null;
+  log_servers?: {
+    [key: string]: {
+      [key: string]: number;
+    };
   } | null;
   done?: number | null;
   total?: number | null;
@@ -108,6 +123,11 @@ export interface AssetScanProgressEvent {
   log_total?: number | null;
   log_outcomes?: {
     [key: string]: number;
+  } | null;
+  log_servers?: {
+    [key: string]: {
+      [key: string]: number;
+    };
   } | null;
   results_total?: number | null;
   done?: number | null;
@@ -155,6 +175,11 @@ export interface ServerAuditProgressEvent {
   log_outcomes?: {
     [key: string]: number;
   } | null;
+  log_servers?: {
+    [key: string]: {
+      [key: string]: number;
+    };
+  } | null;
   results_total?: number | null;
   done?: number | null;
   total?: number | null;
@@ -173,6 +198,11 @@ export interface ServerAuditFixEvent {
   log_total?: number | null;
   log_outcomes?: {
     [key: string]: number;
+  } | null;
+  log_servers?: {
+    [key: string]: {
+      [key: string]: number;
+    };
   } | null;
   done?: number | null;
   total?: number | null;
@@ -210,6 +240,11 @@ export interface CatalogSyncEvent {
   log_outcomes?: {
     [key: string]: number;
   } | null;
+  log_servers?: {
+    [key: string]: {
+      [key: string]: number;
+    };
+  } | null;
   started_at?: string | null;
   finished_at?: string | null;
   stats?: CatalogSyncStats;
@@ -223,6 +258,11 @@ export interface BackupJobEvent {
   log_total?: number | null;
   log_outcomes?: {
     [key: string]: number;
+  } | null;
+  log_servers?: {
+    [key: string]: {
+      [key: string]: number;
+    };
   } | null;
   filename?: string | null;
   scheduled?: boolean | null;

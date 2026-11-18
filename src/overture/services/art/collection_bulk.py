@@ -1,8 +1,10 @@
-"""Collection poster and background runs, planned like item art.
+"""Collection poster and background runs, planned and queued like item art.
 
-Collection art lives on the media server, so a chosen image is uploaded at
-once rather than queued as a download.
+A chosen image is queued as a download in the art lane, whose worker uploads
+it to each server's copy of the collection.
 """
+
+lazy from functools import partial
 
 lazy import httpx2
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
@@ -28,8 +30,13 @@ lazy from ..bulk_common import (
     count_label,
     no_match_reason,
     planned_outcome,
+    queue_and_report,
+    queue_download,
 )
 lazy from ..catalog.index import CatalogIndex, CatalogPick
+lazy from ..downloads.queue import JobTarget
+lazy from ..downloads.service import DownloadService
+lazy from ..downloads.watch import DownloadWatch
 lazy from .collection_art import (
     CollectionArtService,
     chosen_poster_style,
@@ -152,12 +159,12 @@ async def _choose(
     art: CollectionArtService,
     index: CatalogIndex,
 ) -> tuple[JobOutcome, str, SaveCollectionArtRequest | None]:
-    """Return the outcome, its reason and the artwork to upload, if any."""
+    """Return the outcome, its reason and, for a queued one, the artwork to upload."""
     slot = read_art_slot(row, art_type)
     saved = saved_art(slot)
     if saved is not None and not params.overwrite_existing:
         return (
-            JobOutcome.DOWNLOADED,
+            JobOutcome.QUEUED,
             "restores the saved selection",
             SaveCollectionArtRequest(
                 url=saved.url,
@@ -173,7 +180,7 @@ async def _choose(
                 return JobOutcome.SKIPPED, f"already uploaded: {pick.label}", None
             if pick.value is not None:
                 return (
-                    JobOutcome.DOWNLOADED,
+                    JobOutcome.QUEUED,
                     pick.label,
                     SaveCollectionArtRequest(
                         url=pick.value,
@@ -205,10 +212,12 @@ async def run_collection_art(
     plan: AssetPlan[ArtType],
     *,
     art: CollectionArtService,
+    downloads: DownloadService,
+    watch: DownloadWatch,
     app_config: Settings,
     database: Database,
 ) -> None:
-    """Visit planned collection slots, uploading what each source chose."""
+    """Visit planned collection slots, queueing what each source chose."""
     for batch in plan.batches():
         if job.stop_requested():
             return
@@ -236,12 +245,32 @@ async def run_collection_art(
                     outcome, reason, chosen = await _choose(
                         row, art_type, params, art=art, index=index
                     )
-                    if chosen is not None:
-                        await art.apply(row.id or 0, art_type, chosen)
                 except _ERRORS as exc:
                     await job.report(JobOutcome.ERROR, target, str(exc))
                     continue
-                await job.report(outcome, target, reason)
+                if chosen is None:
+                    await job.report(outcome, target, reason)
+                    continue
+                await queue_and_report(
+                    job,
+                    target,
+                    reason,
+                    partial(
+                        queue_download,
+                        JobTarget.collection_art(
+                            row.id or 0,
+                            row.title,
+                            art_type,
+                            chosen.url,
+                            upload_hash=chosen.upload_hash,
+                            poster_style=chosen.poster_style,
+                        ),
+                        planned=saved_art(read_art_slot(row, art_type)),
+                        downloads=downloads,
+                        on_queued=watch.tracking(target),
+                        database=database,
+                    ),
+                )
             async with database.write_session() as session:
                 if stored := await session.get(MediaCollection, row.id):
                     stored.last_matched_at = utc_now()

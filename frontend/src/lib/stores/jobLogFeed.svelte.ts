@@ -16,6 +16,7 @@ export interface JobLogEvent {
   run_id?: string | null;
   log_total?: number | null;
   log_outcomes?: Partial<Record<JobOutcome, number>> | null;
+  log_servers?: Record<string, Partial<Record<JobOutcome, number>>> | null;
   log?: JobLogEntry | null;
 }
 
@@ -27,8 +28,10 @@ export interface JobLogEvent {
  * run's events, and the rest are paged in as they scroll into view. A job
  * that is not persisted numbers its live lines itself.
  *
- * Hiding outcomes lists only the other lines: `total` and the positions in
- * `lines` then count among those, and the server pages them filtered.
+ * Hiding outcomes, or the lines about a media server, lists only the other
+ * lines: `total` and the positions in `lines` then count among those, and the
+ * server pages them filtered. A line about no server is never hidden by a
+ * server filter.
  */
 export class JobLogFeed {
   runId = $state<string | null>(null);
@@ -39,8 +42,12 @@ export class JobLogFeed {
   readonly lines = new SvelteMap<number, JobLogEntry>();
   /** Outcomes whose lines are hidden. */
   readonly hidden = new SvelteSet<JobOutcome>();
+  /** Media servers whose lines are hidden, by name. */
+  readonly hiddenServers = new SvelteSet<string>();
   /** The run's lines per outcome, as its latest event counts them. */
   counts = $state<Partial<Record<JobOutcome, number>>>({});
+  /** The run's lines about each media server, per outcome. */
+  serverCounts = $state<Record<string, Partial<Record<JobOutcome, number>>>>({});
   private view: readonly [number, number] = [0, 0];
   /** The requests in flight, by page. */
   private readonly loading = new SvelteMap<number, AbortController>();
@@ -59,6 +66,29 @@ export class JobLogFeed {
     }));
   }
 
+  /** Each media server the run's lines are about, with its count, for the log's filters. */
+  get serverGroups(): ResultGroup[] {
+    if (!this.runId) return [];
+    return Object.entries(this.serverCounts).map(([server, outcomes]) => ({
+      key: server,
+      label: server,
+      count: OUTCOMES.reduce((sum, outcome) => sum + (outcomes[outcome] ?? 0), 0),
+      shown: !this.hiddenServers.has(server),
+    }));
+  }
+
+  /** Whether any filter hides lines. */
+  get filtered(): boolean {
+    return this.hidden.size > 0 || this.hiddenServers.size > 0;
+  }
+
+  /** Whether the filters show *entry*. */
+  private shows(entry: JobLogEntry): boolean {
+    return (
+      !this.hidden.has(entry.outcome) && !(entry.server && this.hiddenServers.has(entry.server))
+    );
+  }
+
   /** Take the line an event adds, and follow the run it names. */
   apply(event: JobLogEvent) {
     if (event.run_id && event.run_id !== this.runId) {
@@ -66,14 +96,15 @@ export class JobLogFeed {
       this.runId = event.run_id;
     }
     if (event.log_outcomes) this.counts = event.log_outcomes;
+    if (event.log_servers) this.serverCounts = event.log_servers;
     this.logTotal = Math.max(
       this.logTotal,
       event.log_total ?? (event.log ? this.logTotal + 1 : this.logTotal),
     );
-    if (this.hidden.size) {
+    if (this.filtered) {
       // The counts include the line this event adds, so it is the last shown.
       this.total = this.listed();
-      if (event.log && !this.hidden.has(event.log.outcome)) {
+      if (event.log && this.shows(event.log)) {
         this.lines.set(this.total - 1, event.log);
       }
     } else {
@@ -86,21 +117,35 @@ export class JobLogFeed {
   /** Show an outcome's lines again, or hide them, and list the lines anew. */
   toggleOutcome(outcome: JobOutcome) {
     if (!this.hidden.delete(outcome)) this.hidden.add(outcome);
+    this.relist();
+  }
+
+  /** Show the lines about a media server again, or hide them, and list the lines anew. */
+  toggleServer(server: string) {
+    if (!this.hiddenServers.delete(server)) this.hiddenServers.add(server);
+    this.relist();
+  }
+
+  private relist() {
     this.abortLoads();
     this.lines.clear();
     this.error = "";
-    this.total = this.hidden.size ? this.listed() : this.logTotal;
+    this.total = this.filtered ? this.listed() : this.logTotal;
     const [first, end] = this.view;
     const from = Math.max(0, Math.min(first, this.total - (end - first)));
     this.show(from, from + (end - first));
   }
 
-  /** The lines the filter shows, by the run's counts. */
+  /** The lines the filters show, by the run's counts. */
   private listed(): number {
-    return OUTCOMES.reduce(
-      (sum, outcome) => (this.hidden.has(outcome) ? sum : sum + (this.counts[outcome] ?? 0)),
-      0,
-    );
+    return OUTCOMES.reduce((sum, outcome) => {
+      if (this.hidden.has(outcome)) return sum;
+      let hiddenLines = 0;
+      for (const server of this.hiddenServers) {
+        hiddenLines += this.serverCounts[server]?.[outcome] ?? 0;
+      }
+      return sum + (this.counts[outcome] ?? 0) - hiddenLines;
+    }, 0);
   }
 
   /** Lines `first` up to `end` are on screen: fetch those not held, drop far ones. */
@@ -127,9 +172,10 @@ export class JobLogFeed {
   finish(event: JobLogEvent) {
     this.finished = true;
     if (event.log_outcomes) this.counts = event.log_outcomes;
+    if (event.log_servers) this.serverCounts = event.log_servers;
     if (event.log_total != null) {
       this.logTotal = event.log_total;
-      this.total = this.hidden.size ? this.listed() : this.logTotal;
+      this.total = this.filtered ? this.listed() : this.logTotal;
       this.truncate();
     }
     // A terminal event guarantees persistence. Discard any earlier page
@@ -142,10 +188,12 @@ export class JobLogFeed {
     this.abortLoads();
     this.lines.clear();
     this.hidden.clear();
+    this.hiddenServers.clear();
     this.runId = null;
     this.total = 0;
     this.logTotal = 0;
     this.counts = {};
+    this.serverCounts = {};
     this.error = "";
     this.view = [0, 0];
     this.finished = false;
@@ -183,11 +231,12 @@ export class JobLogFeed {
     const outcome = this.hidden.size
       ? OUTCOMES.filter((shown) => !this.hidden.has(shown))
       : undefined;
+    const hide_server = this.hiddenServers.size ? [...this.hiddenServers] : undefined;
     try {
       const result = await sdkData(
         getJobLog({
           path: { run_id: runId },
-          query: { offset: page * PAGE_SIZE, limit: PAGE_SIZE, outcome },
+          query: { offset: page * PAGE_SIZE, limit: PAGE_SIZE, outcome, hide_server },
           signal: request.signal,
           throwOnError: true,
         }),

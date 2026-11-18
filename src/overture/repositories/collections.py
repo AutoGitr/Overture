@@ -8,7 +8,7 @@ lazy from itertools import batched
 lazy from typing import Any, NamedTuple, cast
 
 lazy from sqlalchemy.sql.elements import ColumnElement
-lazy from sqlmodel import and_, col, delete, func, select, update
+lazy from sqlmodel import and_, col, delete, func, or_, select, update
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from sqlmodel.sql.expression import Select
 
@@ -257,20 +257,28 @@ class CollectionRepository:
     ) -> list[MediaCollection]:
         """Return a bounded page of listed, managed collections in the scope.
 
-        Asset runs leave collections Overture does not manage as they are.
+        The scope is *collection_ids* and the collections of
+        *collection_groups*, or every collection when neither is given. Asset
+        runs leave collections Overture does not manage as they are.
         """
         stmt = select(MediaCollection).where(
             col(MediaCollection.id) > after,
             col(MediaCollection.last_synced_at).is_not(None),
             col(MediaCollection.id).in_(select(CollectionRule.collection_id)),
         )
+        chosen: list[ColumnElement[bool]] = []
         if collection_ids is not None:
-            stmt = stmt.where(col(MediaCollection.id).in_(collection_ids))
+            chosen.append(col(MediaCollection.id).in_(collection_ids))
         if collection_groups is not None:
-            stmt = stmt.join(
-                CollectionGroup,
-                col(MediaCollection.group_id) == col(CollectionGroup.id),
-            ).where(col(CollectionGroup.name).in_(collection_groups))
+            chosen.append(
+                col(MediaCollection.group_id).in_(
+                    select(CollectionGroup.id).where(
+                        col(CollectionGroup.name).in_(collection_groups)
+                    )
+                )
+            )
+        if chosen:
+            stmt = stmt.where(or_(*chosen))
         if not include_unmonitored:
             stmt = stmt.where(col(MediaCollection.monitored).is_(True))
         return list(
@@ -326,6 +334,33 @@ class CollectionRepository:
                 )
             )
             for row in (await self.session.exec(stmt)).all()
+        ]
+
+    async def member_tmdb_titles(
+        self, collection_id: int, limit: int
+    ) -> list[tuple[MediaType, int]]:
+        """Return the TMDB identity of up to *limit* visible members, in order."""
+        rows = await self.session.exec(
+            select(col(MediaItem.media_type), col(MediaItem.tmdb_id))
+            .join(
+                MediaCollectionMember,
+                col(MediaCollectionMember.media_item_id) == col(MediaItem.id),
+            )
+            .where(
+                col(MediaCollectionMember.collection_id) == collection_id,
+                col(MediaItem.server_removed_at).is_(None),
+                col(MediaItem.tmdb_id).is_not(None),
+            )
+            .order_by(
+                col(MediaCollectionMember.position),
+                col(MediaCollectionMember.media_item_id),
+            )
+            .limit(limit)
+        )
+        return [
+            (MediaType(media_type), tmdb_id)
+            for media_type, tmdb_id in rows
+            if tmdb_id is not None
         ]
 
     async def members_of(self, collection_ids: Collection[int]) -> list[CollectionItem]:

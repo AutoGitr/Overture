@@ -48,8 +48,17 @@ async def get_job_log(
     outcome: Annotated[
         list[JobOutcome] | None, Query(description="Only lines of these outcomes.")
     ] = None,
+    hide_server: Annotated[
+        list[str] | None,
+        Query(description="No lines about these media servers, by name."),
+    ] = None,
 ) -> JobLogPage:
     """Return an ordered, bounded page of a retained run's progress log."""
     return await job_results.log_page(
-        database, run_id, offset, limit, frozenset(outcome or ())
+        database,
+        run_id,
+        offset,
+        limit,
+        frozenset(outcome or ()),
+        frozenset(hide_server or ()),
     )

@@ -1840,7 +1840,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "The collections of these groups."
           },
           "collection_ids": {
             "anyOf": [
@@ -1850,7 +1851,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "These collections, besides any groups."
           },
           "include_unmonitored": {
             "default": false,
@@ -1928,7 +1930,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "The collections of these groups."
           },
           "collection_ids": {
             "anyOf": [
@@ -1938,7 +1941,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "These collections, besides any groups."
           },
           "include_unmonitored": {
             "default": false,
@@ -5268,6 +5272,64 @@
         "title": "CollectionDimensionRead",
         "type": "object"
       },
+      "CollectionDownloadTarget": {
+        "additionalProperties": false,
+        "description": "Target for a collection's artwork or theme, uploaded to its server copies.",
+        "properties": {
+          "art_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_id": {
+            "title": "Collection Id",
+            "type": "integer"
+          },
+          "job_type": {
+            "enum": [
+              "collection_art",
+              "collection_theme"
+            ],
+            "title": "Job Type",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "target_type": {
+            "const": "collection",
+            "title": "Target Type",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_type",
+          "collection_id",
+          "title",
+          "job_type",
+          "art_type",
+          "source"
+        ],
+        "title": "CollectionDownloadTarget",
+        "type": "object"
+      },
       "CollectionFieldRead": {
         "additionalProperties": false,
         "description": "A criteria field as the active server offers it.",
@@ -8551,44 +8613,6 @@
         "title": "CollectionSourceRead",
         "type": "object"
       },
-      "CollectionThemeDownloadTarget": {
-        "additionalProperties": false,
-        "description": "Target for a media-server collection theme upload.",
-        "properties": {
-          "collection_id": {
-            "title": "Collection Id",
-            "type": "integer"
-          },
-          "source": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source"
-          },
-          "target_type": {
-            "const": "collection_theme",
-            "title": "Target Type",
-            "type": "string"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "target_type",
-          "collection_id",
-          "title",
-          "source"
-        ],
-        "title": "CollectionThemeDownloadTarget",
-        "type": "object"
-      },
       "CollectionThemeStatusResponse": {
         "additionalProperties": false,
         "description": "Collection theme status response.",
@@ -9090,7 +9114,7 @@
           "target": {
             "discriminator": {
               "mapping": {
-                "collection_theme": "#/components/schemas/CollectionThemeDownloadTarget",
+                "collection": "#/components/schemas/CollectionDownloadTarget",
                 "item": "#/components/schemas/ItemDownloadTarget"
               },
               "propertyName": "target_type"
@@ -9100,7 +9124,7 @@
                 "$ref": "#/components/schemas/ItemDownloadTarget"
               },
               {
-                "$ref": "#/components/schemas/CollectionThemeDownloadTarget"
+                "$ref": "#/components/schemas/CollectionDownloadTarget"
               }
             ],
             "title": "Target"
@@ -9775,6 +9799,18 @@
           "reason": {
             "$ref": "#/components/schemas/PublicText"
           },
+          "server": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The media server the entry is about, by its MEDIA_SERVERS name; none for an entry about no single server.",
+            "title": "Server"
+          },
           "target": {
             "title": "Target",
             "type": "string"
@@ -9784,7 +9820,8 @@
           "outcome",
           "target",
           "reason",
-          "at"
+          "at",
+          "server"
         ],
         "title": "JobLogEntry",
         "type": "object"
@@ -21423,6 +21460,27 @@
               ],
               "description": "Only lines of these outcomes.",
               "title": "Outcome"
+            }
+          },
+          {
+            "description": "No lines about these media servers, by name.",
+            "in": "query",
+            "name": "hide_server",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "No lines about these media servers, by name.",
+              "title": "Hide Server"
             }
           },
           {

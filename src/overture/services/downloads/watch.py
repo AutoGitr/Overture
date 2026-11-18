@@ -4,6 +4,11 @@ lazy import asyncio
 lazy from collections.abc import AsyncIterator, Callable
 lazy from dataclasses import dataclass
 
+#: Where a completed download of an item's asset went, as logs say.
+WRITTEN = "written to disk"
+#: Where a completed download of a collection's asset went, as logs say.
+UPLOADED = "uploaded to the media server"
+
 
 @dataclass(frozen=True, slots=True)
 class DownloadOutcome:
@@ -15,6 +20,13 @@ class DownloadOutcome:
     unchanged: bool = False
     #: The download was cancelled before it finished.
     cancelled: bool = False
+    #: The download went to the media server rather than to disk.
+    uploaded: bool = False
+
+    @property
+    def destination(self) -> str:
+        """Where the completed download went."""
+        return UPLOADED if self.uploaded else WRITTEN
 
 
 class DownloadWatch:
@@ -57,12 +69,13 @@ class DownloadWatch:
         *,
         unchanged: bool = False,
         cancelled: bool = False,
+        uploaded: bool = False,
     ) -> None:
         """Record how one job ended, if it is one this watch queued."""
         target = self._targets.pop(job_id, None)
         if target is not None:
             self._outcomes.put_nowait(
-                DownloadOutcome(target, error, unchanged, cancelled)
+                DownloadOutcome(target, error, unchanged, cancelled, uploaded)
             )
 
     async def stream(self) -> AsyncIterator[DownloadOutcome]:

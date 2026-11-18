@@ -29,6 +29,18 @@ _MIGRATIONS_DIR = Path(__file__).resolve().parents[1] / "migrations"
 #: rather than a queue.
 _BUSY_TIMEOUT_MS = 5_000
 
+#: Connections the app keeps open. An assets run alone decides several
+#: targets at a time in each of its lanes while the download workers, the
+#: run's log and the browser's requests read too; every one of them holds a
+#: connection only between awaits, and WAL readers never block each other,
+#: so a connection each costs a page cache rather than any waiting.
+_POOL_SIZE = 16
+
+#: How long a session waits for a free connection. Waiting is queueing behind
+#: other short sessions, which takes longer while blocking work competes for
+#: the interpreter, not a fault to fail the work on.
+_POOL_TIMEOUT_SECONDS = 60
+
 PAGE_SIZE = 100
 """Rows per write transaction, and per page whose rows are worked on in turn.
 
@@ -145,9 +157,9 @@ class Database:
                     url,
                     echo=False,
                     poolclass=AsyncAdaptedQueuePool,
-                    pool_size=5,
+                    pool_size=_POOL_SIZE,
                     max_overflow=0,
-                    pool_timeout=5,
+                    pool_timeout=_POOL_TIMEOUT_SECONDS,
                     connect_args={"check_same_thread": False},
                 )
             )

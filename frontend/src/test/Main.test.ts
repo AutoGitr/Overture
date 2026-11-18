@@ -14,6 +14,9 @@ const { realtimeTransport } = vi.hoisted(() => ({
   realtimeTransport: { connect: vi.fn(), disconnect: vi.fn(), retry: vi.fn() },
 }));
 vi.mock("../lib/realtime/transport", () => ({ realtimeTransport }));
+vi.mock("../lib/popups/StatsPopup.svelte", async () => ({
+  default: (await import("./helpers/FailingView.svelte")).default,
+}));
 
 const alien = mediaItem({ id: 1, title: "Alien", media_type: "movie" });
 
@@ -155,5 +158,23 @@ describe("Main", () => {
     uiState.closePopup();
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+  it("contains a popup that fails to draw, and the app keeps working", async () => {
+    backend();
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    renderWithQueryClient(Main, { onLogout: vi.fn() });
+
+    uiState.openPopupByName("stats");
+
+    const dialog = await screen.findByRole("dialog", { name: "This window stopped working" });
+    expect(within(dialog).getByText("The view broke")).toBeInTheDocument();
+    expect(logged).toHaveBeenCalled();
+    await fireEvent.click(within(dialog).getByRole("button", { name: "Close popup" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    uiState.openPopupByName("filters");
+
+    expect(await screen.findByRole("dialog", { name: "Filters & operations" })).toBeVisible();
+    logged.mockRestore();
   });
 });

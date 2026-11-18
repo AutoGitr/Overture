@@ -134,6 +134,9 @@ test("RP logout revokes a copied cookie and lands on the auto-login bypass", asy
   await expect(page).toHaveURL("http://127.0.0.1:8697/");
   expect(await authenticated(page)).toBe(true);
   const cookie = (await context.cookies()).find((value) => value.name === "overture_token")!;
+  // The app reacts to its own socket's 4001 close by navigating, so probe from a
+  // same-origin backend page where no app code runs.
+  await page.goto("/api/auth/me");
   const closeCode = await page.evaluate(async () => {
     const socket = new WebSocket(`ws://${window.location.host}/ws`);
     const closed = new Promise<number>((resolve) => {
@@ -147,7 +150,6 @@ test("RP logout revokes a copied cookie and lands on the auto-login bypass", asy
       .split("; ")
       .find((value) => value.startsWith("overture_csrf="))!
       .split("=")[1]!;
-    window.history.replaceState(null, "", "/login?autologin=0");
     const response = await fetch("/api/auth/logout", {
       method: "POST",
       headers: { "X-CSRF-Token": csrf },

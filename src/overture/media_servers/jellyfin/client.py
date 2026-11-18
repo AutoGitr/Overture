@@ -5,6 +5,7 @@ lazy import operator
 lazy from collections import Counter
 lazy from collections.abc import AsyncIterator
 lazy from itertools import batched
+lazy from pathlib import PurePath, PurePosixPath, PureWindowsPath
 lazy from typing import Any, ClassVar, override
 lazy from urllib.parse import urlencode
 
@@ -20,6 +21,7 @@ lazy from ..errors import MediaServerError
 lazy from ..http_client import MediaServerHttpClient
 lazy from ..wire import (
     MEDIA_BROWSER_SECTION_LIST,
+    MediaBrowserImage,
     MediaBrowserItem,
     MediaBrowserSection,
     media_browser_items,
@@ -44,6 +46,12 @@ COLLECTION_TYPES = frozendict({MediaType.MOVIE: "movies", MediaType.SHOW: "tvsho
 #: The item type a library of each media type lists.
 ITEM_TYPES = frozendict({MediaType.MOVIE: "Movie", MediaType.SHOW: "Series"})  # pyright: ignore[reportCallIssue] -- stale frozendict stub
 _ITEM = TypeAdapter(MediaBrowserItem)
+_IMAGES = TypeAdapter(list[MediaBrowserImage])
+
+
+def _server_path(path: str) -> PurePath:
+    """Return a path as the server spells it, which may be a Windows one."""
+    return PureWindowsPath(path) if "\\" in path else PurePosixPath(path)
 
 
 def provider_ids(item: MediaBrowserItem) -> dict[str, str]:
@@ -71,8 +79,6 @@ class JellyfinClient(MediaServerHttpClient):
         "Genres,ProviderIds,Path,Studios,DateCreated,DateLastMediaAdded,"
         "Tags,ProductionLocations,Width,SortName"
     )
-    #: The DTO field a metadata update reads the sort name from.
-    _SORT_NAME_FIELD: ClassVar[str] = "ForcedSortName"
     #: Lists a library's titles each on its own. With grouping into
     #: collections on, Jellyfin lists a collection in place of its titles,
     #: as if it were one of them.
@@ -439,6 +445,38 @@ class JellyfinClient(MediaServerHttpClient):
     async def delete_item(self, item_id: str) -> None:
         await self._request("DELETE", f"/Items/{item_id}")
 
+    async def drop_downloaded_backdrops(self, item_id: str) -> None:
+        """Delete the backdrops the server keeps outside the item's folder.
+
+        A refresh adds the backdrops beside the media after the ones the item
+        already has, so the one it shows stays the first the server
+        downloaded. Those live in the server's metadata folder and can be
+        downloaded again; files beside the media are left alone.
+        """
+        item = await self.get_item(item_id)
+        if not (path := item.get("Path")):
+            return
+        media = _server_path(path)
+        folder = media if item.get("IsFolder") else media.parent
+        images = parse_wire(_IMAGES, await self._get(f"/Items/{item_id}/Images"))
+        downloaded = sorted(
+            (
+                image.get("ImageIndex") or 0
+                for image in images
+                if image["ImageType"] == "Backdrop"
+                and (kept := image.get("Path"))
+                and not _server_path(kept).is_relative_to(folder)
+            ),
+            reverse=True,
+        )
+        # Deleting one moves those after it up, so the last goes first.
+        for index in downloaded:
+            await self._request(
+                "DELETE",
+                f"/Items/{item_id}/Images/Backdrop/{index}",
+                allow_not_found=True,
+            )
+
     async def delete_image(self, item_id: str, art_type: ArtType) -> None:
         """Delete an item's first image of the art type; a saved file goes with it."""
         await self._request(
@@ -512,8 +550,17 @@ class JellyfinClient(MediaServerHttpClient):
         if summary is not None:
             details["Overview"] = summary
         if sort_title is not None:
-            details[self._SORT_NAME_FIELD] = sort_title or None
+            self._set_sort_title(details, sort_title)
         await self._request("POST", f"/Items/{collection_id}", json=details)
+
+    @staticmethod
+    def _set_sort_title(details: dict[str, Any], sort_title: str) -> None:
+        """Set or, when empty, release the sort title in an item update.
+
+        Jellyfin keeps a forced sort name through refreshes and refuses
+        ``SortName`` as a locked field.
+        """
+        details["ForcedSortName"] = sort_title or None
 
     async def upload_collection_art(
         self, collection_id: str, art_type: ArtType, image_bytes: bytes, mime_type: str

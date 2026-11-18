@@ -262,19 +262,6 @@ test("all popups stay strictly inside the viewport and prevent overlay scrolling
       },
     }),
   );
-  await page.route("**/api/stats", (route) =>
-    route.fulfill({
-      json: {
-        storage: {
-          artwork_size_bytes: 1000,
-          themes_size_bytes: 1000,
-          database_size_bytes: 1000,
-          backups_size_bytes: 1000,
-          total_footprint_bytes: 4000,
-        },
-      },
-    }),
-  );
   await logIn(page);
   const viewport = page.viewportSize()!;
 

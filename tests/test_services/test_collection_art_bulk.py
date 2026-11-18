@@ -38,10 +38,12 @@ lazy from overture.services.art.collection_bulk import (
     run_collection_art,
 )
 lazy from overture.services.art.perfect_match import PERFECT_MATCH_MAX_DISTANCE
+lazy from overture.services.bulk_common import report_downloads
 lazy from overture.services.themes.collection_bulk import plan_collection_themes
 lazy from overture.utils.art_urls import PublicArtUrl
+lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
-lazy from tests.bulk_helpers import disable_catalog, enable_catalog
+lazy from tests.bulk_helpers import disable_catalog, enable_catalog, make_bulk_downloads
 lazy from tests.collection_helpers import managing_rule, stored_collection
 lazy from tests.runtime_helpers import JobProbe
 
@@ -79,6 +81,8 @@ async def test_group_scope_resolves_to_the_groups_collections(
 
     assert await planned(collection_groups=["Sagas"]) == 1
     assert await planned(collection_groups=["Sagas", "Studios"]) == 2
+    # A chosen collection joins the chosen groups' collections.
+    assert await planned(collection_groups=["Sagas"], collection_ids=[3]) == 2
     assert await planned(all_collections=True) == 3
 
 
@@ -192,15 +196,30 @@ async def _run(
 ) -> BulkAssetTally:
     plan = await plan_collection_art(params, app_config=app_config, database=database)
     probe = JobProbe(lifecycle=ManagedJobLifecycle(JobKind.BULK_ART))
-    async with run_managed_job(
-        probe.context, BulkAssetTally(), database=database
-    ) as job:
-        await job.started()
-        await job.planned(plan.total)
-        await run_collection_art(
-            job, params, plan, art=art, app_config=app_config, database=database
-        )
-        return job.tally
+    downloads = make_bulk_downloads(
+        app_config=app_config, database=database, collection_art=art
+    )
+    with downloads.watch() as watch:
+        async with run_managed_job(
+            probe.context, BulkAssetTally(), database=database
+        ) as job:
+            await job.started()
+            await job.planned(plan.total)
+            async with report_downloads(job, watch, downloads=downloads):
+                await run_collection_art(
+                    job,
+                    params,
+                    plan,
+                    art=art,
+                    downloads=downloads,
+                    watch=watch,
+                    app_config=app_config,
+                    database=database,
+                )
+                # The art lane's worker uploads what the run queued.
+                for job_id in watch.active_job_ids:
+                    await downloads.process_job(job_id)
+            return job.tally
 
 
 async def test_collection_art_run_uploads_the_catalog_art_it_finds(
@@ -262,3 +281,43 @@ async def test_local_matching_compares_the_server_image_overture_did_not_upload(
     assert art.thresholds == [PERFECT_MATCH_MAX_DISTANCE]
     assert art.adopted == [(1, ArtType.POSTER, CATALOG_URL)]
     assert tally.adopted == 1
+
+
+async def test_collection_art_whose_upload_fails_is_an_error_of_the_run(
+    *, app_config: Settings, database: Database
+) -> None:
+    await _seed(database)
+    async with database.write_session() as session:
+        row = await session.get(MediaCollection, 1)
+        assert row is not None
+        row.tmdb_collection_id = 10
+        session.add(row)
+        session.add(
+            CatalogCollection(
+                tmdb_id=10, title="Saga", poster_url_individual=CATALOG_URL
+            )
+        )
+        await enable_catalog(session)
+
+    class FailingArt(RecordingArt):
+        @override
+        async def apply(
+            self,
+            collection_id: int,
+            art_type: ArtType,
+            body: SaveCollectionArtRequest,
+        ) -> StatusResponse:
+            raise PublicServiceError(400, "Invalid aspect ratio for poster.")
+
+    tally = await _run(
+        BulkMatchArtRequest(
+            collection_ids=[1],
+            art_types=[ArtType.POSTER],
+            source_order=[ArtBulkSource.OVERTUREDB],
+        ),
+        FailingArt(),
+        app_config=app_config,
+        database=database,
+    )
+
+    assert (tally.queued, tally.downloaded, tally.errors) == (1, 0, 1)

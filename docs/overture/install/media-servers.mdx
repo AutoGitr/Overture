@@ -39,8 +39,11 @@ shows as "Living Room"). Each server takes these variables, with
 | `PATH_MAP`         | No       | Where Overture sees the server's media folders; see [Path maps](#path-maps)        |
 | `COLLECTIONS_PATH` | No       | Jellyfin only: its collections directory, mounted into Overture, for BoxSet themes |
 
-Every server should prefer local assets, so the files Overture writes beside
-your media are the ones it shows.
+Overture writes artwork and themes beside your media and uploads collection
+art to the server, so each server should show local files and leave
+collections to Overture. The settings below do that; Overture works without
+them, but a server that saves its own images into your media folders or makes
+its own collections keeps showing those instead.
 
 <Tabs groupId="media-server" queryString>
   <TabItem value="plex" label="Plex" default>
@@ -51,7 +54,13 @@ your media are the ones it shows.
    Keep `VERIFY_TLS=true`: Overture connects through Plex's verified
    `*.plex.direct` address, so every **Secure connections** setting works,
    including **Required**.
-3. In each library's **Advanced** settings, turn on **Use local assets**.
+3. In each library, under **Edit -> Advanced**:
+   - Turn on **Use local assets**, so Plex shows the posters, backgrounds and
+     `theme.mp3` beside your media.
+   - Set **Minimum automatic collection size** to **Disabled** in movie
+     libraries whose collections Overture manages. Collections Plex already
+     made stay until you delete them or a managed collection takes them over.
+4. Theme music plays only in Plex apps whose own settings play it.
 
 If your router's DNS rebinding protection blocks `plex.direct`, allow that
 domain.
@@ -61,7 +70,21 @@ domain.
 
 1. Create a key under **Dashboard -> API Keys**.
 2. Set `TYPE=jellyfin`, `URL=http://<server>:8096` and `API_KEY=<key>`.
-3. In each library, keep local images ahead of online image fetchers.
+3. In each library's settings:
+   - Turn off **Save artwork into media folders**. Jellyfin then keeps the
+     images it downloads in its own metadata folder, and the file Overture
+     writes beside your media is the one it shows. Images Jellyfin saved
+     there earlier, such as `backdrop.jpg` or `fanart.jpg`, can outrank
+     Overture's; **Renamer** lists them.
+   - In movie libraries whose collections Overture manages, turn off
+     **Automatically add to collection**.
+4. Theme songs play for users who turn on **Theme songs** under their
+   **Display** settings.
+
+Jellyfin always reads the images beside the media, but adds a local
+background after the ones it already has. When Overture writes a background
+it removes the backgrounds Jellyfin downloaded, so its file is shown first;
+files beside your media are never removed.
 
 To write themes for Jellyfin collections (BoxSets), mount Jellyfin's
 collections directory into Overture and name it in `COLLECTIONS_PATH`, such
@@ -79,7 +102,19 @@ them as one of its administrators; keep at least one.
 1. Create a key under **Dashboard -> Advanced -> API Keys**.
 2. Set `TYPE=emby`, `URL=http://<server>:8096` (include a base path such as
    `/emby` if you use one) and `API_KEY=<key>`.
-3. In each library, keep local images ahead of online image fetchers.
+3. In each library's settings:
+   - Turn off **Save artwork into media folders**, for the same reason as in
+     Jellyfin: Emby saves backgrounds there as `fanart.jpg`, which outranks
+     Overture's `background.jpg`.
+   - In movie libraries whose collections Overture manages, turn off the
+     option that imports collection information from TheMovieDb. Emby keeps
+     those collections in folders named `<title>-tmdb-<id>`.
+4. Theme songs play for users who turn them on in their display settings.
+   Emby keeps no collection themes.
+
+A managed collection takes over the server's collection of the same TMDB
+collection, or of the same title, instead of making a second one, so turning
+automatic collections off only stops new ones.
 
   </TabItem>
 </Tabs>
@@ -116,7 +151,7 @@ its folder, then by its IMDb, TMDB or TVDB ID.
   own, its library, labels, play state and rating, stays with its copy.
 - **Files** are written once, in the title's folder, under every name its
   servers read, such as both `Season01.jpg` and `poster.jpg` for a season;
-  see [Files](../features/files.md).
+  see [Files](../features/files.md) and [What servers share](#what-servers-share).
 - **Uploads and audits** reach every server holding the title. The Server
   audit compares each server on its own and lists the server with each
   result.
@@ -125,6 +160,30 @@ its folder, then by its IMDb, TMDB or TVDB ID.
   any server.
 - **A server that does not answer** is left out of that sync, with a notice
   naming it; the others sync as usual, and nothing it holds is removed.
+
+### What servers share
+
+Nothing is downloaded twice for another server:
+
+| Asset                                   | Downloaded          | Then                                                                             |
+| --------------------------------------- | ------------------- | -------------------------------------------------------------------------------- |
+| Title poster, background, season, theme | Once, to the folder | Every server reads the same file and is refreshed to show it                     |
+| Collection poster and background        | Once                | Uploaded to every server's copy; a later re-upload uses Overture's cached copy   |
+| Collection theme                        | Once                | Uploaded to each Plex copy and written once per Jellyfin server; Emby keeps none |
+
+What a server already shows is reused the same way:
+
+- **A public image a server uses**, such as a TMDB poster, becomes the title's
+  saved choice on Sync when the slot has none, from the first server in
+  `MEDIA_SERVERS` that has one. Assets then downloads it once to the folder,
+  and the other servers show that file.
+- **An image only a server holds**, such as one uploaded to it directly,
+  appears among that server's candidates in the art panel. Choosing it fetches
+  it from that server once and writes or uploads it for all of them.
+- **A server image identical to a source's**, found by local-image matching,
+  is adopted with that source's link and nothing is downloaded.
+- **A local file** another program put beside the media is used as it is;
+  every server reads it.
 
 ### Collections on several servers
 
@@ -178,6 +237,7 @@ themselves:
 
 | Behaviour                                  | Plex                                                                                      | Jellyfin and Emby                                  |
 | ------------------------------------------ | ----------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Sort title of a collection                 | Saved and locked                                                                          | Saved; Emby also locks it, so a refresh keeps it   |
 | Season poster file name                    | `Season01.jpg` in the season folder                                                       | `poster.jpg` in the season folder                  |
 | Deleting artwork through the API           | Not possible; delete the local file and Plex shows its agent's art after the next refresh | Supported                                          |
 | Smart collections                          | Supported, evaluated by Plex, with labels for conditions Plex has no filter for           | Not available; Overture evaluates every collection |

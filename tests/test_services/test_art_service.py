@@ -42,6 +42,7 @@ lazy from tests.media_servers import TEST_SERVER_ID
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     StaticImageClients,
+    art_service,
     database_for,
     make_download_service,
     make_local_assets,
@@ -124,7 +125,7 @@ def _art_service(
     image_clients: ProxyClientManager | None = None,
 ) -> module.ArtService:
     registry = provider_registry or NoopProviderRegistry()
-    return module.ArtService(
+    return art_service(
         app_config=app_config,
         database=database,
         asset_storage=AssetStorage(app_config=app_config),

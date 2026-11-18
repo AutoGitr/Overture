@@ -54,14 +54,17 @@ class JobLogLine(SQLModel, table=True):
     """One line of a run's progress log."""
 
     __tablename__: ClassVar[Any] = "job_log_lines"
-    # Pages a run's log filtered by outcome.
+    # Pages a run's log filtered by outcome or by media server.
     __table_args__ = (
         Index("ix_job_log_lines_run_outcome", "run_id", "outcome", "ordinal"),
+        Index("ix_job_log_lines_run_server", "run_id", "server", "ordinal"),
     )
 
     run_id: str = Field(primary_key=True, foreign_key="job_runs.id", ondelete="CASCADE")
     ordinal: int = Field(primary_key=True)
     outcome: str
+    #: The media server the line is about, as the entry names it.
+    server: str | None = None
     entry: dict[str, Any] = Field(sa_type=JSON)
 
     run: "JobRun" = Relationship(

@@ -663,7 +663,19 @@ class JobType(StrEnum):
 
     ART = "art"
     THEME = "theme"
+    #: A collection's poster or background, uploaded to each server's copy.
+    COLLECTION_ART = "collection_art"
     COLLECTION_THEME = "collection_theme"
+
+    @property
+    def for_collection(self) -> bool:
+        """Return whether the job writes a collection's asset rather than an item's."""
+        return self in {JobType.COLLECTION_ART, JobType.COLLECTION_THEME}
+
+    @property
+    def is_art(self) -> bool:
+        """Return whether the job writes artwork rather than a theme."""
+        return self in {JobType.ART, JobType.COLLECTION_ART}
 
 
 @dataclass(slots=True, frozen=True)

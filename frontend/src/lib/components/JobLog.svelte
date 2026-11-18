@@ -17,6 +17,11 @@
   groups={feed.groups}
   ontoggle={(outcome) => feed.toggleOutcome(outcome)}
 />
+<ResultFilters
+  label="Show log lines by media server"
+  groups={feed.serverGroups}
+  ontoggle={(server) => feed.toggleServer(server)}
+/>
 <div
   class="job-log"
   role="log"
@@ -34,9 +39,12 @@
       {#snippet row(index: number, style: string)}
         {@const entry = feed.lines.get(index)}
         {#if entry}
-          <div class="job-log-row" {style} title="{entry.target} - {entry.reason}">
+          <div class="job-log-row" {style} title="{entry.server ? `${entry.server}: ` : ""}{entry.target} - {entry.reason}">
             <time class="log-time" datetime={entry.at}>{logEntryTime(entry)}</time>
             <span class="log-outcome {OUTCOME_TONES[entry.outcome]}">{entry.outcome}</span>
+            {#if entry.server}
+              <span class="log-server">{entry.server}</span>
+            {/if}
             <span class="log-target">{entry.target}</span>
             <span class="log-reason">{entry.reason}</span>
           </div>
@@ -49,7 +57,7 @@
     </VirtualList>
   {:else}
     <span class="log-empty">
-      {feed.hidden.size ? "No lines match the filters above" : "Nothing logged yet"}
+      {feed.filtered ? "No lines match the filters above" : "Nothing logged yet"}
     </span>
   {/if}
   {#if feed.error}
@@ -139,6 +147,15 @@
   .log-outcome.muted {
     color: var(--text-tertiary);
     background: var(--badge-muted-bg);
+  }
+
+  .log-server {
+    flex: none;
+    padding: 0 var(--space-1);
+    border: var(--border-subtle);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    line-height: 16px;
   }
 
   .log-target,

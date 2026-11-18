@@ -12,6 +12,7 @@
     workflowSummary,
   } from "../utils/assetsPopup";
   import type { ScheduleController } from "../utils/schedules.svelte";
+  import { chosenTitles, type ChoosableCollection } from "../utils/popupSelection";
   import { librarySummary } from "../utils/libraries.svelte";
   import Schedules from "./Schedules.svelte";
 
@@ -20,6 +21,7 @@
     scheduleCronExpression,
     controller,
     libraries,
+    collections,
     oncronchange,
     onedit,
   }: {
@@ -27,6 +29,8 @@
     scheduleCronExpression: string;
     controller: ScheduleController<BulkAssetsRequest, BulkAssetsScheduleResponse>;
     libraries: LibrarySectionRead[];
+    /** The collections a schedule can name one by one. */
+    collections: ChoosableCollection[];
     /** The cron expression lives in the shared configuration, which the popup owns. */
     oncronchange: (value: string) => void;
     /** Loading a schedule also rewrites the shared configuration, which the popup owns. */
@@ -54,11 +58,12 @@
         Libraries: {librarySummary(schedule.config.library_ids, libraries)}
       </div>
     {/if}
-    {#if schedule.config.all_collections || schedule.config.collection_groups?.length}
+    {#if schedule.config.all_collections || schedule.config.collection_groups?.length || schedule.config.collection_ids?.length}
       <div>
         Collections: {collectionSummary(
           !!schedule.config.all_collections,
           schedule.config.collection_groups,
+          chosenTitles(schedule.config.collection_ids, collections),
         )}
       </div>
     {/if}

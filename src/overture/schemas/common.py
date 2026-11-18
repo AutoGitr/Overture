@@ -160,3 +160,8 @@ class JobEnvelope(StrictBaseModel):
         default=None,
         description="The run's log lines per outcome, with the one this event adds.",
     )
+    log_servers: dict[str, dict[JobOutcome, int]] | None = Field(
+        default=None,
+        description="The run's log lines about each media server, by outcome, "
+        "with the one this event adds.",
+    )

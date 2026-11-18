@@ -15,6 +15,7 @@ lazy from dataclasses import dataclass, field
 lazy from itertools import batched
 lazy from typing import Any
 
+lazy import httpx2
 lazy from sqlalchemy.exc import SQLAlchemyError
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -35,13 +36,16 @@ lazy from ...media_servers.errors import MediaServerError
 lazy from ...media_servers.registry import Provider, ProviderRegistry
 lazy from ...repositories.copies import CopyRepository
 lazy from ...repositories.downloads import DownloadJobRepository
+lazy from ...schemas.art import SaveCollectionArtRequest
 lazy from ...schemas.downloads import DownloadJobEvent
+lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.file import compute_bytes_hash
 lazy from ...utils.image import RemoteImageError
 lazy from ...utils.locks import KeyedLock
 lazy from ...utils.progress import ProgressUpdate
 lazy from ...utils.threads import owned_thread
 lazy from ...utils.time import utc_now
+lazy from ..art.collection_art import CollectionArtService
 lazy from ..library.completion import auto_unmonitor_completed
 lazy from ..library.items import emit_library_item_upserted
 lazy from ..storage.assets import (
@@ -77,7 +81,7 @@ logger = logging.getLogger(__name__)
 #: posters cannot end up stuck behind one theme in a single line.
 _LANES: frozendict[JobType, tuple[JobType, ...]] = frozendict(
     {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
-        JobType.ART: (JobType.ART,),
+        JobType.ART: (JobType.ART, JobType.COLLECTION_ART),
         JobType.THEME: (JobType.THEME, JobType.COLLECTION_THEME),
     }
 )
@@ -128,7 +132,7 @@ def _lock_key(job: DownloadJob) -> int | str:
 
 def _job_title(job: DownloadJob, item: MediaItem | None) -> str | None:
     """Return the name a job's events use for what it writes."""
-    if job.job_type is JobType.COLLECTION_THEME:
+    if job.job_type.for_collection:
         return job.collection_title
     return item.title if item else None
 
@@ -141,6 +145,7 @@ class DownloadService:
         *,
         art_handler: DownloadArtHandler,
         theme_handler: DownloadThemeHandler,
+        collection_art: CollectionArtService,
         provider_registry: ProviderRegistry,
         events: DownloadEventPublisher,
         publisher: protocols.EventPublisher,
@@ -151,6 +156,7 @@ class DownloadService:
         self._database = database
         self.art_handler = art_handler
         self.theme_handler = theme_handler
+        self._collection_art = collection_art
         self.provider_registry = provider_registry
         self._events = events
         self._publisher = publisher
@@ -363,6 +369,7 @@ class DownloadService:
         *,
         unchanged: bool = False,
         cancelled: bool = False,
+        uploaded: bool = False,
     ) -> None:
         """Tell whoever is watching how one job ended.
 
@@ -371,7 +378,13 @@ class DownloadService:
         that ended without saying anything.
         """
         for watch in self._watches:
-            watch.settle(job_id, error, unchanged=unchanged, cancelled=cancelled)
+            watch.settle(
+                job_id,
+                error,
+                unchanged=unchanged,
+                cancelled=cancelled,
+                uploaded=uploaded,
+            )
 
     async def snapshot_events(self) -> list[DownloadJobEvent]:
         """Return every queued and running download, for reconnect snapshots."""
@@ -480,6 +493,10 @@ class DownloadService:
 
         copies: list[tuple[Provider, str]] = []
         try:
+            if job.job_type is JobType.COLLECTION_ART:
+                # The upload takes the collection's locks itself.
+                await self._finish_commit(job.id, self._commit_collection_art(job))
+                return
             if job.job_type is JobType.COLLECTION_THEME:
                 downloaded_collection = (
                     await self.theme_handler.download_collection_theme(job, progress)
@@ -558,17 +575,17 @@ class DownloadService:
                 return None
 
             item: MediaItem | None = None
-            if job.job_type is not JobType.COLLECTION_THEME:
+            if not job.job_type.for_collection:
                 item = (
                     await session.get(MediaItem, job.media_item_id)
                     if job.media_item_id is not None
                     else None
                 )
-            if job.job_type is JobType.COLLECTION_THEME or item:
+            if job.job_type.for_collection or item:
                 job.status = JobStatus.RUNNING
                 session.add(job)
 
-        if job.job_type is not JobType.COLLECTION_THEME and not item:
+        if not job.job_type.for_collection and not item:
             await self.fail_job(job, "Media item not found", title=None)
             return None
 
@@ -700,11 +717,60 @@ class DownloadService:
 
         if job.status is not JobStatus.DONE:
             return False
-        self._settle(job.id)
+        self._settle(job.id, uploaded=True)
         await self._events.publish(
             job, DownloadStatus.COMPLETED, title=job.collection_title
         )
         return True
+
+    async def _commit_collection_art(self, job: DownloadJob) -> bool:
+        """Upload the chosen art to each server copy unless the job has ended.
+
+        Returns:
+            Whether the art was uploaded; ``False`` also when the job failed.
+        """
+        try:
+            if not await self._is_running(job.id):
+                return False
+            if job.collection_id is None or job.art_type is None:
+                raise DownloadError("The download names no collection slot")
+            await self._collection_art.apply(
+                job.collection_id,
+                job.art_type,
+                SaveCollectionArtRequest(
+                    url=job.target_url,
+                    upload_hash=job.upload_hash,
+                    poster_style=job.poster_style,
+                ),
+            )
+            await self._mark_done(job)
+        except (*_JOB_ERRORS, PublicServiceError, httpx2.HTTPError, OSError) as exc:
+            await self.fail_job(job, exc, title=job.collection_title)
+            return False
+
+        if job.status is not JobStatus.DONE:
+            return False
+        self._settle(job.id, uploaded=True)
+        await self._events.publish(
+            job, DownloadStatus.COMPLETED, title=job.collection_title
+        )
+        return True
+
+    async def _mark_done(self, job: DownloadJob) -> None:
+        """Mark a running job done once what it writes is recorded."""
+        async with self._database.write_session() as session:
+            stored = await DownloadJobRepository(session).get(job.id)
+            if not stored or stored.status is not JobStatus.RUNNING:
+                return
+            stored.status = JobStatus.DONE
+            stored.error_message = None
+            stored.progress_percent = 100
+            stored.completed_at = utc_now()
+            session.add(stored)
+        job.status = JobStatus.DONE
+        job.error_message = None
+        job.progress_percent = 100
+        job.completed_at = stored.completed_at
 
     async def record_job(
         self, job: DownloadJob, downloaded: DownloadResult, stored: StoredFile

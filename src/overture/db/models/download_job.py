@@ -6,7 +6,7 @@ lazy from typing import Any, ClassVar, Optional
 
 lazy from sqlmodel import Field, Index, Relationship, SQLModel
 
-lazy from ...domain import ArtType, JobStatus, JobType
+lazy from ...domain import ArtType, CollectionPosterStyle, JobStatus, JobType
 lazy from ..columns import enum_type, typed_columns
 lazy from .media_collection import MediaCollection
 lazy from .media_item import MediaItem
@@ -57,6 +57,10 @@ class DownloadJob(SQLModel, table=True):
         default=None, foreign_key="media_collections.id", ondelete="CASCADE", index=True
     )
     collection_title: str | None = None
+    #: Which OvertureDB poster a collection poster link is contributed as.
+    poster_style: CollectionPosterStyle | None = Field(
+        default=None, sa_type=enum_type(CollectionPosterStyle)
+    )
     status: JobStatus = Field(
         default=JobStatus.PENDING,
         sa_type=enum_type(JobStatus),
