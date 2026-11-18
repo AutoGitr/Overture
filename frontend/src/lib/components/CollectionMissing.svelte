@@ -98,7 +98,7 @@
     {:else if settingsState.current.tmdb_configured}
       <p class="text-muted">The library holds every title the lists do.</p>
     {:else}
-      <p class="text-muted">Set TMDB_API_KEY to list the titles the library lacks.</p>
+      <p class="text-muted">Set TMDB_READ_ACCESS_TOKEN to list the titles the library lacks.</p>
     {/if}
   {/if}
 </DetailSection>

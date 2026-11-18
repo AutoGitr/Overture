@@ -346,7 +346,7 @@ def _facts(tmdb_id: int) -> TmdbFacts:
 async def test_enrichment_reads_new_rematched_and_old_titles_once(
     *, app_config: Settings, database: Database
 ) -> None:
-    app_config.TMDB_API_KEY = SecretStr("key")
+    app_config.TMDB_READ_ACCESS_TOKEN = SecretStr("key")
     asked: list[int] = []
 
     class Tmdb(TMDBClient):
@@ -426,7 +426,7 @@ async def test_enrichment_reads_new_rematched_and_old_titles_once(
 async def test_enrichment_reports_titles_tmdb_could_not_read(
     *, app_config: Settings, database: Database
 ) -> None:
-    app_config.TMDB_API_KEY = SecretStr("key")
+    app_config.TMDB_READ_ACCESS_TOKEN = SecretStr("key")
 
     class Tmdb(TMDBClient):
         def __init__(self) -> None:
@@ -477,7 +477,7 @@ async def test_enrichment_reads_the_titles_in_the_sync_scope(
     app_config: Settings,
     database: Database,
 ) -> None:
-    app_config.TMDB_API_KEY = SecretStr("key")
+    app_config.TMDB_READ_ACCESS_TOKEN = SecretStr("key")
     asked: list[int] = []
 
     class Tmdb(TMDBClient):

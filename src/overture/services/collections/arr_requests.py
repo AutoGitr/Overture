@@ -55,7 +55,7 @@ class CollectionArr:
     async def missing(self, collection_id: int) -> CollectionMissing:
         """Titles the collection's lists hold that its libraries lack.
 
-        Each title is named from TMDB, so none are listed without a TMDB key.
+        Each title is named from TMDB, so none are listed without a TMDB token.
         """
         async with self._access.database.read_session() as session:
             row = await self._access.require(session, collection_id)

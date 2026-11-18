@@ -92,7 +92,7 @@ lists, and Overture's counts with the server's: on Plex as a smart filter,
 naming the first title the two disagree on with the values Plex holds for it;
 on Jellyfin and Emby with the server's own item filters. It reports every Plex
 filter, field, sort and operator, and every Jellyfin and Emby filter, Overture
-cannot use. With `TMDB_API_KEY` and `MDBLIST_API_KEY` set, and `--radarr` and
+cannot use. With `TMDB_READ_ACCESS_TOKEN` and `MDBLIST_API_KEY` set, and `--radarr` and
 `--sonarr` given with `RADARR_API_KEY` and `SONARR_API_KEY`, it also reads what
 those services offer: every TMDB chart, MDBList's lists, list search and title
 details (including whether it names a franchise), and Radarr's and Sonarr's

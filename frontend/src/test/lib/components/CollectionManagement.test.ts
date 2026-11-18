@@ -1116,7 +1116,7 @@ describe("collection management", () => {
     await fireEvent.click(await screen.findByRole("button", { name: "Missing" }));
     const missing = within(screen.getByRole("region", { name: "Missing" }));
     expect(
-      await missing.findByText("Set TMDB_API_KEY to list the titles the library lacks."),
+      await missing.findByText("Set TMDB_READ_ACCESS_TOKEN to list the titles the library lacks."),
     ).toBeInTheDocument();
     expect(missing.queryByText("The library holds every title the lists do.")).toBeNull();
   });

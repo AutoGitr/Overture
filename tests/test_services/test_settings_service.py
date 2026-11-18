@@ -110,7 +110,7 @@ async def test_get_settings_creates_default_row(
 async def test_get_settings_defaults_skip_tmdb_urls_disabled_even_when_tmdb_configured(
     db_session: AsyncSession, *, app_config: Settings
 ) -> None:
-    app_config.TMDB_API_KEY = SecretStr("a" * 32)
+    app_config.TMDB_READ_ACCESS_TOKEN = SecretStr("a" * 32)
 
     result = await module.get_settings(
         database=database_for(one_session(db_session)),
@@ -262,7 +262,7 @@ async def test_settings_mapping_includes_environment_fields(
     db_session: AsyncSession, app_config: Settings, saved: bool
 ) -> None:
     configure(app_config, type=ServerType.JELLYFIN)
-    app_config.TMDB_API_KEY = SecretStr("test-key")
+    app_config.TMDB_READ_ACCESS_TOKEN = SecretStr("test-key")
     app_config.ART_DOWNLOAD_WORKERS = 3
     app_config.THEME_DOWNLOAD_WORKERS = 2
     if saved:

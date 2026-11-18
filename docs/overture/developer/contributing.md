@@ -115,7 +115,7 @@ longer records as sent, and a server copy missing the art or theme Overture
 holds, asking each server what its copy shows. It reports
 every Plex filter, field, sort and operator, and every Jellyfin and Emby
 filter, Overture cannot use. A check that fails is reported and the others
-still run. With `TMDB_API_KEY` and `MDBLIST_API_KEY` set,
+still run. With `TMDB_READ_ACCESS_TOKEN` and `MDBLIST_API_KEY` set,
 and `--radarr` and `--sonarr` given with `RADARR_API_KEY` and
 `SONARR_API_KEY`, it also reads what those services offer: every TMDB chart,
 MDBList's lists, list search and title details (including whether it names a

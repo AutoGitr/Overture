@@ -66,7 +66,7 @@ async def test_art_sources_release_connection_during_discovery_and_candidates(
     async with engine.begin() as connection:
         await connection.run_sync(metadata.create_all)
         await seed_test_server(connection, ["1"])
-    app_config.TMDB_API_KEY = SecretStr("test-key")
+    app_config.TMDB_READ_ACCESS_TOKEN = SecretStr("test-key")
     discovery_started, discovery_release = asyncio.Event(), asyncio.Event()
     tmdb_started, server_started, candidates_release = (
         asyncio.Event(),

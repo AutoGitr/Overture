@@ -30,7 +30,7 @@ is the quickest start.
 | `MEDIA_SERVER_<NAME>_VERIFY_TLS`       | No              | `true`  | Set to `false` only for a self-signed certificate; keep it on for Plex                                                                |
 | `MEDIA_SERVER_<NAME>_PATH_MAP`         | No              |         | `server_path=local_path` pairs, comma-separated, for folders the server sees at another path                                          |
 | `MEDIA_SERVER_<NAME>_COLLECTIONS_PATH` | No              |         | Jellyfin only: local mount of its collections directory, used to write BoxSet themes                                                  |
-| `TMDB_API_KEY`                         | No              |         | Enables TMDB artwork and title/collection search directly in the sidebar; recommended for Plex                                        |
+| `TMDB_READ_ACCESS_TOKEN`               | No              |         | Enables TMDB artwork, titles, lists and search; the **API Read Access Token** under **Settings -> API** on themoviedb.org             |
 | `MDBLIST_API_KEY`                      | No              |         | Enables dynamic collection membership from MDBList JSON lists; kept on the backend                                                    |
 | `RADARR_URL`                           | No              |         | Radarr server URL with protocol, port and base path (e.g. `http://192.0.2.10:7878`); enables Radarr tag collection builders           |
 | `RADARR_API_KEY`                       | If using Radarr |         | Radarr API key; kept on the backend                                                                                                   |

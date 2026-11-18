@@ -147,7 +147,7 @@ class SourceResolver:
             and source.value.startswith("tmdb")
             and not self._config.tmdb_configured
         ):
-            return "Set TMDB_API_KEY to use TMDB"
+            return "Set TMDB_READ_ACCESS_TOKEN to use TMDB"
         return None
 
     def require(self, source: SourceType, media_type: MediaType) -> None:
@@ -174,7 +174,7 @@ class SourceResolver:
         ]
 
     async def tmdb_keywords(self, query: str) -> tuple[str, ...]:
-        """TMDB keywords named like *query*, none without a TMDB key."""
+        """TMDB keywords named like *query*, none without a TMDB token."""
         if not self._config.tmdb_configured:
             return ()
         return await self._tmdb.search_keywords(query)

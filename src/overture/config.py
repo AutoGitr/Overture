@@ -545,7 +545,7 @@ class Settings(RuntimeSettings):
         "tuple[MediaServerConfig, ...]", ""
     )
 
-    TMDB_API_KEY: SecretStr = SecretStr("")
+    TMDB_READ_ACCESS_TOKEN: SecretStr = SecretStr("")
     MDBLIST_API_KEY: SecretStr = SecretStr("")
     RADARR_URL: Annotated[str, AfterValidator(_radarr_url)] = ""
     RADARR_API_KEY: SecretStr = SecretStr("")
@@ -744,7 +744,7 @@ class Settings(RuntimeSettings):
     @property
     def tmdb_configured(self) -> bool:
         """Return whether TMDB access is configured."""
-        return bool(self.TMDB_API_KEY)
+        return bool(self.TMDB_READ_ACCESS_TOKEN)
 
     @property
     def mdblist_configured(self) -> bool:

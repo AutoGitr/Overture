@@ -666,7 +666,7 @@ async def test_art_sources_fetch_independently_and_keep_successful_results(
     *,
     app_config: Settings,
 ) -> None:
-    app_config.TMDB_API_KEY = SecretStr("test-key")
+    app_config.TMDB_READ_ACCESS_TOKEN = SecretStr("test-key")
     saved_url = "https://public.test/selected.jpg"
     item = media_item_factory(
         id=None,

@@ -412,7 +412,7 @@ class RuntimeServices:
             for provider in self.provider_registry.providers()
         }
         if config.tmdb_configured:
-            services["TMDB"] = (status.tmdb, "TMDB_API_KEY")
+            services["TMDB"] = (status.tmdb, "TMDB_READ_ACCESS_TOKEN")
         for name, (reachable, settings) in services.items():
             if reachable:
                 logger.info("Connected to %s", name)

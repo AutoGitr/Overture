@@ -591,7 +591,7 @@ def app_config(app_config: Settings) -> Settings:
     """TMDB and MDBList sources need their keys."""
     return app_config.model_copy(
         update={
-            "TMDB_API_KEY": SecretStr("tmdb"),
+            "TMDB_READ_ACCESS_TOKEN": SecretStr("tmdb"),
             "MDBLIST_API_KEY": SecretStr("mdblist"),
         }
     )

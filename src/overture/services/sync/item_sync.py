@@ -394,7 +394,7 @@ async def apply_server_metadata(
 async def apply_provider_collection(
     session: AsyncSession, item: MediaItem, server_item: ServerItem
 ) -> None:
-    """Record the TMDB collection a server names for a movie, without a TMDB key.
+    """Record the TMDB collection a server names for a movie, without a TMDB token.
 
     Jellyfin's TMDB plugin stores it among the movie's provider IDs. A
     rematched title drops the TMDB facts of its previous match.

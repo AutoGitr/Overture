@@ -223,7 +223,7 @@ class FieldSpec:
     plex: PlexField | None
     #: Whole numbers, which Plex compares without a fractional margin.
     integer: bool = False
-    #: TMDB enrichment stores the value, which needs ``TMDB_API_KEY``.
+    #: TMDB enrichment stores the value, which needs ``TMDB_READ_ACCESS_TOKEN``.
     tmdb: bool = False
     #: The library's own status of a title, which library filters test and
     #: collections never do.

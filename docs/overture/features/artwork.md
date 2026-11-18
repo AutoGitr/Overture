@@ -13,7 +13,7 @@ language, paste an image URL, or upload an image of your own. Saving a choice
 downloads it beside the media, named the way your server expects (see
 [Files](files.md)).
 
-Set `TMDB_API_KEY` to get TMDB candidates and to search TMDB for titles
+Set `TMDB_READ_ACCESS_TOKEN` to get TMDB candidates and to search TMDB for titles
 outside your library.
 
 ## Upload an image

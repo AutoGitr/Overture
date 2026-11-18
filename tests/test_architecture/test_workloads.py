@@ -135,7 +135,7 @@ def _forbid_inside_writes(provider: Provider) -> None:
 
 @pytest.fixture
 def app_config(app_config: Settings) -> Settings:
-    return app_config.model_copy(update={"TMDB_API_KEY": SecretStr("tmdb")})
+    return app_config.model_copy(update={"TMDB_READ_ACCESS_TOKEN": SecretStr("tmdb")})
 
 
 @pytest.fixture

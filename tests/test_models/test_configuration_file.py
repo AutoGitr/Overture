@@ -73,7 +73,7 @@ def test_compose_secrets_fill_settings_the_environment_leaves_empty(
 ) -> None:
     encoded = hash_password("a long simple password")
     (tmp_path / "app_password_hash").write_text(f"{encoded}\n")
-    (tmp_path / "tmdb_api_key").write_text("from-secret")
+    (tmp_path / "tmdb_read_access_token").write_text("from-secret")
     monkeypatch.setattr(config, "SECRETS_DIR", tmp_path)
     monkeypatch.setenv("MEDIA_SERVERS", "Plex")
     monkeypatch.setenv("MEDIA_SERVER_PLEX_TYPE", "plex")
@@ -81,7 +81,7 @@ def test_compose_secrets_fill_settings_the_environment_leaves_empty(
     monkeypatch.setenv("MEDIA_SERVER_PLEX_API_KEY", "test-key")
     # Compose passes an unset optional variable as an empty string.
     monkeypatch.setenv("APP_PASSWORD_HASH", "")
-    monkeypatch.setenv("TMDB_API_KEY", "from-environment")
+    monkeypatch.setenv("TMDB_READ_ACCESS_TOKEN", "from-environment")
     settings = load_configuration(Settings, tmp_path / "absent.env")
     assert settings.APP_PASSWORD_HASH.get_secret_value() == encoded
-    assert settings.TMDB_API_KEY.get_secret_value() == "from-environment"
+    assert settings.TMDB_READ_ACCESS_TOKEN.get_secret_value() == "from-environment"

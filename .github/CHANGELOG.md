@@ -42,6 +42,7 @@
 
 ### Removed
 
+- **Settings:** `TMDB_API_KEY`. Set `TMDB_READ_ACCESS_TOKEN` to the **API Read Access Token** under **Settings -> API** on themoviedb.org; Overture sends it in a header, so the credential never appears in a request URL. Until it is set, TMDB features are off.
 - **Settings:** `MEDIA_SERVER`, `MEDIA_SERVER_URL`, `MEDIA_SERVER_API_KEY`, `MEDIA_SERVER_VERIFY_TLS` and `JELLYFIN_COLLECTIONS_PATH`. Name the server instead: `MEDIA_SERVERS=Plex` with `MEDIA_SERVER_PLEX_TYPE=plex`, `MEDIA_SERVER_PLEX_URL`, `MEDIA_SERVER_PLEX_API_KEY` and, for Jellyfin, `MEDIA_SERVER_<NAME>_COLLECTIONS_PATH`; with the same type and URL, your library, choices and collections carry over.
 
 ### Fixed

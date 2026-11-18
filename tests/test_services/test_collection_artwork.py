@@ -446,7 +446,7 @@ async def test_collection_candidates_share_source_policy_and_catalog_toggle(
         ) -> list[ArtCandidate]:
             return [ArtCandidate(url=URL, width=200, height=300)]
 
-    app_config.TMDB_API_KEY = SecretStr("key")
+    app_config.TMDB_READ_ACCESS_TOKEN = SecretStr("key")
     tmdb = Tmdb()
     candidates = ArtCandidates(
         database=database,
@@ -750,7 +750,7 @@ async def test_member_backgrounds_are_the_largest_of_each_member_and_of_all(
                 for size in range(12)
             ]
 
-    app_config.TMDB_API_KEY = SecretStr("key")
+    app_config.TMDB_READ_ACCESS_TOKEN = SecretStr("key")
     candidates = ArtCandidates(
         database=database,
         provider_registry=NoopProviderRegistry(),

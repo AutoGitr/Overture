@@ -369,7 +369,8 @@ def _services(request: httpx2.Request) -> httpx2.Response:
     path = request.url.path
     match request.url.host:
         case "api.themoviedb.org":
-            assert request.url.params["api_key"] == "tmdb-secret"
+            assert request.headers["Authorization"] == "Bearer tmdb-secret"
+            assert "api_key" not in request.url.params
             if path == "/3/movie/upcoming":
                 return httpx2.Response(401)
             if path.endswith("/list"):
@@ -400,7 +401,12 @@ def _services(request: httpx2.Request) -> httpx2.Response:
 @pytest.fixture
 def requests(monkeypatch: pytest.MonkeyPatch) -> Requests:
     seen: Requests = []
-    for name in ("TMDB_API_KEY", "MDBLIST_API_KEY", "RADARR_API_KEY", "SONARR_API_KEY"):
+    for name in (
+        "TMDB_READ_ACCESS_TOKEN",
+        "MDBLIST_API_KEY",
+        "RADARR_API_KEY",
+        "SONARR_API_KEY",
+    ):
         monkeypatch.delenv(name, raising=False)
 
     def handler(request: httpx2.Request) -> httpx2.Response:
@@ -576,7 +582,7 @@ async def test_services_are_read_and_compared_without_their_keys_in_the_report(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, requests: Requests
 ) -> None:
     monkeypatch.setenv("OVERTURE_API_KEY", "plex-key")
-    monkeypatch.setenv("TMDB_API_KEY", "tmdb-secret")
+    monkeypatch.setenv("TMDB_READ_ACCESS_TOKEN", "tmdb-secret")
     monkeypatch.setenv("MDBLIST_API_KEY", "mdb-secret")
     monkeypatch.setenv("RADARR_API_KEY", "radarr-secret")
     report = tmp_path / "report.md"

@@ -160,7 +160,7 @@ class FakeYoutube(NoopYoutube):
 
 @pytest.fixture
 def tmdb_config(app_config: Settings) -> Settings:
-    app_config.TMDB_API_KEY = SecretStr("test-key")
+    app_config.TMDB_READ_ACCESS_TOKEN = SecretStr("test-key")
     return app_config
 
 
@@ -543,7 +543,7 @@ async def test_tmdb_must_be_configured_and_reachable(
         await _service(app_config=app_config, database=database).search(
             MediaType.MOVIE, "matrix"
         )
-    app_config.TMDB_API_KEY = SecretStr("test-key")
+    app_config.TMDB_READ_ACCESS_TOKEN = SecretStr("test-key")
     failing = FakeTmdb(error=httpx2.ConnectError("down"))
     with pytest.raises(PublicServiceError) as down:
         await _service(app_config=app_config, database=database, tmdb=failing).preview(

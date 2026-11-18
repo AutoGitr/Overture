@@ -351,9 +351,11 @@ class TMDBClient:
         self._cache: AsyncMemoizer[tuple[str | int, ...]] = AsyncMemoizer(maxsize=2_000)
 
         async def build() -> httpx2.AsyncClient:
+            # The read access token rides in a header, so it never reaches a
+            # URL, a log line or an error message.
+            token = app_config.TMDB_READ_ACCESS_TOKEN.get_secret_value()
             return client_factory(
-                base_url=_TMDB_BASE,
-                params={"api_key": app_config.TMDB_API_KEY.get_secret_value()},
+                base_url=_TMDB_BASE, headers={"Authorization": f"Bearer {token}"}
             )
 
         self._client = LazyClient(build, name="TMDB")

@@ -75,7 +75,7 @@ class TmdbStub(TMDBClient):
 async def test_full_sync_without_server_refreshes_only_unconnected_shows(
     tmp_path: Path, app_config: Settings, database: Database, fail_first: bool
 ) -> None:
-    app_config.TMDB_API_KEY = SecretStr("tmdb-test")
+    app_config.TMDB_READ_ACCESS_TOKEN = SecretStr("tmdb-test")
     client = TmdbStub(fail_first=fail_first)
     service = TmdbSeasonSync(
         app_config=app_config,
@@ -188,9 +188,9 @@ async def test_unconfigured_tmdb_and_show_linked_after_planning_are_skipped(
     )
     async with database.write_session() as session:
         session.add(MediaItem(id=1, title="Show", media_type=MediaType.SHOW, tmdb_id=1))
-    app_config.TMDB_API_KEY = SecretStr("")
+    app_config.TMDB_READ_ACCESS_TOKEN = SecretStr("")
     assert await service.targets() == []
-    app_config.TMDB_API_KEY = SecretStr("tmdb-test")
+    app_config.TMDB_READ_ACCESS_TOKEN = SecretStr("tmdb-test")
     [expected] = await service.targets()
     async with database.write_session() as session:
         current = await session.get(MediaItem, 1)

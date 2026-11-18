@@ -703,5 +703,5 @@ def test_tmdb_title_list_source_available_without_tmdb_key(
     assert resolver.unavailable(SourceType.TMDB_ITEM, MediaType.MOVIE) is None
     assert (
         resolver.unavailable(SourceType.TMDB_LIST, MediaType.MOVIE)
-        == "Set TMDB_API_KEY to use TMDB"
+        == "Set TMDB_READ_ACCESS_TOKEN to use TMDB"
     )

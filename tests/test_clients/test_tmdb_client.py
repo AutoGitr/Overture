@@ -22,7 +22,7 @@ def _client(
         return routes.get(request.url.path, httpx2.Response(404))
 
     factory, transport = mock_client_factory(handler)
-    app_config.TMDB_API_KEY = SecretStr("test-key")
+    app_config.TMDB_READ_ACCESS_TOKEN = SecretStr("test-key")
     client = TMDBClient(
         app_config=app_config,
         client_factory=factory,
@@ -72,7 +72,9 @@ async def test_search_reads_titles_years_and_posters(app_config: Settings) -> No
     params = transport.requests[0].url.params
     assert params["query"] == "Matrix"
     assert params["include_adult"] == "false"
-    assert params["api_key"] == "test-key"
+    # The token is a header, never part of the URL.
+    assert "api_key" not in params
+    assert transport.requests[0].headers["Authorization"] == "Bearer test-key"
 
 
 async def test_show_details_carry_external_ids_and_seasons(
@@ -250,7 +252,7 @@ async def test_public_lists_read_all_pages_filter_media_and_preserve_order(
     def handler(request: httpx2.Request) -> httpx2.Response:
         assert request.url.host == "api.themoviedb.org"
         assert request.url.path == "/4/list/123"
-        assert request.url.params["api_key"] == "test-key"
+        assert request.headers["Authorization"] == "Bearer test-key"
         page = request.url.params["page"]
         return httpx2.Response(
             200,
@@ -271,7 +273,7 @@ async def test_public_lists_read_all_pages_filter_media_and_preserve_order(
         )
 
     factory, transport = mock_client_factory(handler)
-    app_config.TMDB_API_KEY = SecretStr("test-key")
+    app_config.TMDB_READ_ACCESS_TOKEN = SecretStr("test-key")
     client = TMDBClient(
         app_config=app_config,
         client_factory=factory,

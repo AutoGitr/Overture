@@ -11,7 +11,7 @@ lists and people, or one per decade, genre or studio, and keeps them on the
 media server on a schedule. Every collection Overture creates has criteria;
 collections made outside Overture stay untouched until you adopt them.
 
-Set `TMDB_API_KEY` for TMDB lists, charts, titles, people, franchises and
+Set `TMDB_READ_ACCESS_TOKEN` for TMDB lists, charts, titles, people, franchises and
 facts, `MDBLIST_API_KEY` for MDBList, and the Radarr or Sonarr URL and API key
 for their tags, requests and member tags.
 

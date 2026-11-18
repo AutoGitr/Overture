@@ -85,7 +85,7 @@ and Emby in MEDIA_SERVERS:
         --sonarr http://localhost:8989 \
         --report verify.md
 
-Set TMDB_API_KEY and MDBLIST_API_KEY to probe those APIs too, and pass
+Set TMDB_READ_ACCESS_TOKEN and MDBLIST_API_KEY to probe those APIs too, and pass
 --radarr and --sonarr with RADARR_API_KEY and SONARR_API_KEY to compare them.
 
 A server that is not given, or one of several of its kind in MEDIA_SERVERS,
@@ -2146,7 +2146,7 @@ def shape(value: Any) -> str:
 async def check_tmdb(key: str, overture: Overture | None, verify: bool) -> list[Case]:
     """What TMDB serves: every chart, collection search and a title's details."""
     tmdb = Server("https://api.themoviedb.org/3", {}, verify=verify)
-    tmdb.client.params = tmdb.client.params.set("api_key", key)
+    tmdb.client.headers["Authorization"] = f"Bearer {key}"
     cases: list[Case] = []
 
     def case(label: str) -> Case:
@@ -2838,7 +2838,7 @@ async def check_services(args: argparse.Namespace, verify: bool) -> list[Case]:
     overture = Overture(args.url, api_key(), verify=verify)
     cases: list[Case] = []
     try:
-        if key := os.environ.get("TMDB_API_KEY"):
+        if key := os.environ.get("TMDB_READ_ACCESS_TOKEN"):
             print("Checking TMDB...", flush=True)
             cases.extend(await check_tmdb(key, overture, verify))
         if key := os.environ.get("MDBLIST_API_KEY"):

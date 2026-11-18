@@ -816,7 +816,7 @@ async def test_full_sync_stop_interrupts_collection_requests_and_frees_the_slot(
 ) -> None:
     entered = asyncio.Event()
     cancelled = asyncio.Event()
-    app_config.TMDB_API_KEY = SecretStr("key")
+    app_config.TMDB_READ_ACCESS_TOKEN = SecretStr("key")
 
     async def wait_for_cancel() -> None:
         entered.set()

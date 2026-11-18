@@ -22,7 +22,7 @@ search, then pick a result, whose ID takes its place, or type the ID.
 
 Radarr tags and TMDB franchises are offered for movie collections only, Sonarr
 tags for show collections only. TMDB title lists take IDs or links without any
-key, and with `TMDB_API_KEY` can be searched by name, as MDBList lists can
+key, and with `TMDB_READ_ACCESS_TOKEN` can be searched by name, as MDBList lists can
 with `MDBLIST_API_KEY`; each result picked is added to the condition. TMDB has
 no list search, so TMDB lists take IDs or links. TMDB list and title
 conditions take TMDB links as well as IDs.
@@ -32,11 +32,11 @@ MDBList conditions refuse franchise and official-list URLs
 to use instead, since MDBList's API serves neither.
 
 Listing the titles a collection's lists hold that its libraries lack needs
-`TMDB_API_KEY`. Failed list lookups keep existing members.
+`TMDB_READ_ACCESS_TOKEN`. Failed list lookups keep existing members.
 
 ## TMDB facts
 
-With `TMDB_API_KEY`, a full Sync also stores what TMDB says about each title,
+With `TMDB_READ_ACCESS_TOKEN`, a full Sync also stores what TMDB says about each title,
 read again weekly: original language, origin country, TMDB rating and votes,
 keywords, production companies, streaming services in the TMDB region, and for
 shows their network, status and last air date. The same request fills in IMDb

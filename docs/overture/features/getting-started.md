@@ -25,7 +25,7 @@ is complete when a choice is saved and its file exists; a show also needs a
 poster for every season with videos.
 
 For titles outside your library, switch the search field to one under **TMDB**
-(requires `TMDB_API_KEY`): **Title or ID**, or the titles of a **Person**
+(requires `TMDB_READ_ACCESS_TOKEN`): **Title or ID**, or the titles of a **Person**
 (everything they acted in or worked on), a **Company** or a **Keyword** (their
 most popular titles), or a public **List**. Each takes a name, a TMDB ID or a
 TMDB page link; a list takes its ID or link, since TMDB cannot search lists.
