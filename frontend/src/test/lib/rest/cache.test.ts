@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getItemOptions,
   getCollectionOptions,
+  getCatalogCollectionIssueOptions,
   getCatalogEntryOptions,
   getSeasonsOptions,
   getTmdbItemOptions,
@@ -293,6 +294,26 @@ describe("REST cache helpers", () => {
     expect(queryClient.getQueryData<CollectionRead[]>(key)).toMatchObject([
       { monitored: true, has_theme: true, youtube_id: "abc123" },
     ]);
+  });
+
+  it("refreshes the issue contributing a patched collection", () => {
+    const issueKey = (id: number) =>
+      getCatalogCollectionIssueOptions({ path: { collection_id: id } }).queryKey;
+    queryClient.setQueryData(issueKey(1), {
+      url: "https://github.com/old",
+      notes: [],
+      reason: null,
+    });
+    queryClient.setQueryData(issueKey(2), {
+      url: "https://github.com/other",
+      notes: [],
+      reason: null,
+    });
+
+    patchCollection(1, { youtube_id: "abc123" });
+
+    expect(queryClient.getQueryState(issueKey(1))?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(issueKey(2))?.isInvalidated).toBe(false);
   });
 });
 

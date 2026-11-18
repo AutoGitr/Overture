@@ -31,6 +31,7 @@
 - **Interface:** criteria offer a field's fixed values and the values your library holds in a list; IDs, TMDB keywords and labels stay typed.
 - **Interface:** the filters popup is wider, and **Custom filter** sits under Libraries; **Auto-match art on load** and **Auto-search themes on load** are under Workflow in Settings.
 - **Interface:** an item's link to its OvertureDB collection uses the collection icon.
+- **OvertureDB:** the **Contribute issue** link leaves **Reason for modification** empty for you to write, and its tooltip names what the issue replaces; GitHub writes a link's values back over the form as you edit other fields, so a prefilled reason undid what you typed.
 - **Interface:** the database record leaves out jobs and names each server copy after its server and library.
 - **Interface:** messages name the field, media type and media server they are about, such as "Unplayed is not available for shows on Jellyfin".
 - **Art:** perceptual hashes compare 256 points of detail instead of 64, so near-identical posters of another scan or grade no longer match at distance 0; existing fingerprints are computed again on the next refresh.
@@ -47,6 +48,7 @@
 
 ### Fixed
 
+- **OvertureDB:** a collection's **Contribute issue** link includes the theme, art and other choices made since the collection was opened.
 - **Operations:** a busy Assets run no longer fails with "QueuePool limit of size 5 overflow 0 reached"; Overture keeps more database connections and waits for one instead of failing.
 - **Themes:** a theme that failed to download is tried again by later runs once a download of it for that title has succeeded, as choosing it by hand does.
 - **Media servers:** a background Overture writes is the one Jellyfin and Emby show: the backgrounds they downloaded are removed first, since they add a local one after them.

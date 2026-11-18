@@ -94,7 +94,8 @@ async def get_catalog_collection_record(
     return await catalog.get_record_for_collection(collection_id)
 
 
-@router.get("/items/{item_id}/issue")
+# The issue carries the title's selections, so it refreshes with the library.
+@router.get("/items/{item_id}/issue", tags=["library"])
 async def get_catalog_item_issue(
     item_id: ItemIdPath, catalog: CatalogDep
 ) -> ContributionIssue:
@@ -102,7 +103,8 @@ async def get_catalog_item_issue(
     return await catalog.get_issue_for_item(item_id)
 
 
-@router.get("/collections/{collection_id}/issue")
+# The issue carries the collection's art and theme, so it refreshes with them.
+@router.get("/collections/{collection_id}/issue", tags=["collections"])
 async def get_catalog_collection_issue(
     collection_id: CollectionIdPath, catalog: CatalogDep
 ) -> ContributionIssue:

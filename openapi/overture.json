@@ -16649,7 +16649,8 @@
         },
         "summary": "Get Catalog Collection Issue",
         "tags": [
-          "catalog"
+          "catalog",
+          "collections"
         ]
       }
     },
@@ -16979,7 +16980,8 @@
         },
         "summary": "Get Catalog Item Issue",
         "tags": [
-          "catalog"
+          "catalog",
+          "library"
         ]
       }
     },

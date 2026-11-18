@@ -9,7 +9,12 @@ lazy from overture.db.art_slots import select_art
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, CollectionPosterStyle, MediaType
+lazy from overture.domain import (
+    ArtType,
+    CollectionPosterStyle,
+    MediaType,
+    ThemeBulkSource,
+)
 lazy from overture.services.catalog.issue import (
     collection_issue,
     contribution_issue,
@@ -91,6 +96,8 @@ async def test_a_collection_issue_needs_its_tmdb_collection(
             media_type=MediaType.MOVIE,
             title="Saga",
             tmdb_collection_id=tmdb_id,
+            youtube_id="abcdefghijk",
+            youtube_id_source=ThemeBulkSource.YOUTUBE_SEARCH,
             last_synced_at=utc_now(),
         )
         for key, tmdb_id in (("saga", 10), ("custom", None))
@@ -107,11 +114,13 @@ async def test_a_collection_issue_needs_its_tmdb_collection(
     assert unmatched.id is not None
 
     query = _query((await collection_issue(matched.id, database=database)).url)
-    assert (query["template"], query["title"], query["tmdb_id"]) == (
-        "collection.yml",
-        "[Collection]: Saga",
-        "10",
-    )
+    assert (
+        query["template"],
+        query["title"],
+        query["tmdb_id"],
+        query["poster_url_individual"],
+        query["youtube_id"],
+    ) == ("collection.yml", "[Collection]: Saga", "10", POSTER, "abcdefghijk")
     assert "year" not in query
     assert (await collection_issue(unmatched.id, database=database)).url is None
 
@@ -165,13 +174,14 @@ def test_a_replacement_names_what_it_replaces_for_its_reason() -> None:
     issue = contribution_issue(proposed, [], current=held)
 
     # A theme OvertureDB lacks is added, and a field left empty replaces nothing.
-    assert _query(issue.url)["modification_reason"] == (
-        "Replaces the poster, season 1 posters OvertureDB holds, because: "
-    )
-    assert issue.notes == ["Finish the reason for modification"]
-    assert "modification_reason" not in _query(
-        contribution_issue(held, [], current=held).url
-    )
+    assert "modification_reason" not in _query(issue.url)
+    assert issue.notes == [
+        (
+            "Explain under Reason for modification why it replaces the poster, "
+            "season 1 posters OvertureDB holds"
+        )
+    ]
+    assert contribution_issue(held, [], current=held).notes == []
 
 
 def test_a_collection_replacement_names_consistent_poster_before_background() -> None:
@@ -195,7 +205,10 @@ def test_a_collection_replacement_names_consistent_poster_before_background() ->
 
     issue = contribution_issue(proposed, [], current=held)
 
-    assert _query(issue.url)["modification_reason"] == (
-        "Replaces the matte poster, overlay poster, background OvertureDB holds, "
-        "because: "
-    )
+    assert "modification_reason" not in _query(issue.url)
+    assert issue.notes == [
+        (
+            "Explain under Reason for modification why it replaces the matte poster, "
+            "overlay poster, background OvertureDB holds"
+        )
+    ]

@@ -1,6 +1,7 @@
 import {
   getItemOptions,
   getCollectionOptions,
+  getCatalogCollectionIssueQueryKey,
   getCatalogEntryOptions,
   getCatalogItemIssueQueryKey,
   getSeasonsOptions,
@@ -182,6 +183,11 @@ export function patchCollection(collectionId: number, update: Partial<Collection
     { predicate: ({ queryKey }) => isTaggedQuery(queryKey, "getCollection") },
     (collection) => (collection?.id === collectionId ? { ...collection, ...update } : collection),
   );
+  // The issue contributing the collection carries its art and theme.
+  void queryClient.invalidateQueries({
+    queryKey: getCatalogCollectionIssueQueryKey({ path: { collection_id: collectionId } }),
+    exact: true,
+  });
 }
 
 /** Apply a rule response without overwriting newer collection metadata. */

@@ -93,9 +93,12 @@ def contribution_issue(
 ) -> ContributionIssue:
     """Return the issue that contributes *entry*, or why there is none.
 
-    *current* is the entry OvertureDB holds, whose values the issue names as
-    replaced. GitHub cannot tick an issue form's checkboxes from a link, so a
-    draft that records no theme says so instead.
+    *current* is the entry OvertureDB holds, whose values the notes name as
+    replaced. The link fills only fields complete as they stand: GitHub writes
+    a link's values back over a form's fields as the contributor edits others,
+    so the reason, which only the contributor can give, stays empty. GitHub
+    cannot tick an issue form's checkboxes from a link either, so a draft that
+    records no theme says so instead.
     """
     if entry is None:
         return ContributionIssue(reason="Nothing is selected to contribute")
@@ -114,10 +117,10 @@ def contribution_issue(
             query[form_field] = value
     notes = list(left_out)
     if replaced := _replaced(entry, current or {}):
-        query["modification_reason"] = (
-            f"Replaces the {', '.join(replaced)} OvertureDB holds, because: "
+        notes.append(
+            f"Explain under Reason for modification why it replaces the "
+            f"{', '.join(replaced)} OvertureDB holds"
         )
-        notes.append("Finish the reason for modification")
     if entry.get("no_theme"):
         notes.append("Tick No theme on the form")
     return ContributionIssue(

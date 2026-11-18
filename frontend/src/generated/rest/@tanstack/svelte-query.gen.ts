@@ -662,7 +662,7 @@ export const getCatalogEntryRecordOptions = (options: Options<GetCatalogEntryRec
     queryKey: getCatalogEntryRecordQueryKey(options)
 });
 
-export const getCatalogCollectionIssueQueryKey = (options: Options<GetCatalogCollectionIssueData>) => createQueryKey('getCatalogCollectionIssue', options, false, ['catalog']);
+export const getCatalogCollectionIssueQueryKey = (options: Options<GetCatalogCollectionIssueData>) => createQueryKey('getCatalogCollectionIssue', options, false, ['catalog', 'collections']);
 
 /**
  * Get Catalog Collection Issue
@@ -741,7 +741,7 @@ export const exportCatalogSelectionsOptions = (options?: Options<ExportCatalogSe
     queryKey: exportCatalogSelectionsQueryKey(options)
 });
 
-export const getCatalogItemIssueQueryKey = (options: Options<GetCatalogItemIssueData>) => createQueryKey('getCatalogItemIssue', options, false, ['catalog']);
+export const getCatalogItemIssueQueryKey = (options: Options<GetCatalogItemIssueData>) => createQueryKey('getCatalogItemIssue', options, false, ['catalog', 'library']);
 
 /**
  * Get Catalog Item Issue
