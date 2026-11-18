@@ -1,17 +1,13 @@
 """Reading collections as clients see them."""
 
 lazy from fastapi import Response
-lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ...catalog_contract.contract import entry_file_stem
-lazy from ...config import Settings
 lazy from ...db.art_slots import find_art_slot
-lazy from ...db.models.catalog import CatalogCollection
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.settings import get_app_settings
 lazy from ...domain import ITEM_ART_TYPES, ArtType, CollectionKind, ImageSize
 lazy from ...integrations.proxy import ProxyClientManager
-lazy from ...repositories.catalog import CatalogRepository
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.records import RecordRepository
 lazy from ...schemas.collections import (
@@ -26,21 +22,10 @@ lazy from ...utils.image import has_incorrect_aspect_ratio
 lazy from ..catalog.agreement import collection_agreement
 lazy from ..downloads.collection_theme import collection_theme_unavailable
 lazy from ..provider_images import proxy_provider_image
-lazy from ..schedule_store import CATALOG_SCHEDULE, load_schedule
-lazy from .access import CollectionAccess
+lazy from .access import CollectionAccess, catalog_collections
 lazy from .membership import display_order
 lazy from .policy import resolve_policy
-lazy from .rules import rule_read
-
-
-async def catalog_collections(
-    session: AsyncSession, tmdb_ids: set[int], *, app_config: Settings
-) -> dict[int, CatalogCollection]:
-    """Return the catalog's entries for these TMDB collections, if it is enabled."""
-    schedule = await load_schedule(session, CATALOG_SCHEDULE, timezone=app_config.TZ)
-    if not schedule.enabled or not tmdb_ids:
-        return {}
-    return await CatalogRepository(session).collections_by_tmdb_id(tmdb_ids)
+lazy from .rules import criteria_of, rule_read
 
 
 class CollectionReader:
@@ -79,10 +64,12 @@ class CollectionReader:
                 copies=self._access.held_copies(row),
                 trust_no_theme=defaults.overturedb_no_theme,
                 backgrounds=policy.backgrounds,
+                themes=policy.themes,
             ).model_copy(
                 update={
                     "below_minimum": row.child_count < policy.minimum_items,
                     "home_order": policy.home_order,
+                    "contributed_style": policy.contributed_style,
                     "catalog_selections": collection_agreement(
                         row,
                         catalog.get(row.tmdb_collection_id or 0),
@@ -108,10 +95,10 @@ class CollectionReader:
         """Return a collection's stored rows and what the API derives from them."""
         read = await self.get(collection_id)
         async with self._access.database.read_session() as session:
-            stored = await RecordRepository(session).rows(
-                MediaCollection, collection_id
-            )
-        return DatabaseRecord.of(stored, read)
+            records = RecordRepository(session)
+            stored = await records.rows(MediaCollection, collection_id)
+            libraries = await records.library_names(stored)
+        return DatabaseRecord.of(stored, read, libraries=libraries)
 
     async def get(self, collection_id: int) -> CollectionDetail:
         """Return one collection with its members and catalog entry.
@@ -154,10 +141,12 @@ class CollectionReader:
                 copies=self._access.held_copies(row),
                 trust_no_theme=trust_no_theme,
                 backgrounds=policy.backgrounds,
+                themes=policy.themes,
             )
             .model_copy(
                 update={
                     "below_minimum": row.child_count < policy.minimum_items,
+                    "contributed_style": policy.contributed_style,
                     "catalog_selections": collection_agreement(
                         row, entry, policy.overturedb_posters
                     ),
@@ -165,6 +154,11 @@ class CollectionReader:
             )
             .model_dump(),
             effective_sync_mode=policy.sync_mode,
+            lists_missing=any(
+                criteria_of(part).listing_sources()
+                for part in row.libraries
+                if saved is not None and part.criteria is not None
+            ),
             member_ids=[member.id for member in members],
             rule=rule_read(saved, row),
             theme_unavailable=reason,

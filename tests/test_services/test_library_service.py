@@ -18,6 +18,7 @@ lazy from overture.db.models.catalog import (
     CatalogItem,
     CatalogItemSeason,
 )
+lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.models.media_collection import (
     MediaCollection,
     MediaCollectionMember,
@@ -31,6 +32,8 @@ lazy from overture.domain import (
     ArtType,
     AspectRatioTolerance,
     ImageSize,
+    JobStatus,
+    JobType,
     MediaType,
     ServerType,
 )
@@ -38,6 +41,7 @@ lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.media_servers.adapters import ProviderImageRequest, ServerSection
 lazy from overture.repositories.libraries import LibraryRepository
 lazy from overture.schemas.library import BulkItemOperation
+lazy from overture.services.art.phash import PHASH_HEX_LENGTH
 lazy from overture.services.art.service import ArtService
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.library import service as library_module
@@ -52,7 +56,7 @@ lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.file import compute_file_hash
 lazy from overture.utils.time import utc_now
 lazy from tests.factories import seed_art_slot
-lazy from tests.media_servers import TEST_SERVER_ID, served_item
+lazy from tests.media_servers import TEST_SERVER, TEST_SERVER_ID, served_item
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
@@ -974,7 +978,7 @@ async def test_refresh_imports_unchanged_recorded_file_when_cache_is_cold(
             item,
             ArtType.POSTER,
             file_hash=file_hash,
-            phash="0" * 16,
+            phash="0" * PHASH_HEX_LENGTH,
             width=600,
             height=900,
             file_mtime_ns=file_stat.st_mtime_ns,
@@ -1265,6 +1269,34 @@ async def test_season_provider_art_is_proxied_by_the_season_server_id(
     with pytest.raises(PublicServiceError) as exc_info:
         await library.proxy_season_provider_art(11, None)
     assert exc_info.value.status_code == 404
+
+
+async def test_an_item_record_names_its_copies_and_leaves_out_its_jobs(
+    database: Database,
+) -> None:
+    async with database.write_session() as session:
+        session.add(
+            served_item(
+                id=1, media_type=MediaType.MOVIE, title="Film", server_item_id="m1"
+            )
+        )
+        await session.flush()
+        session.add(
+            DownloadJob(
+                media_item_id=1,
+                job_type=JobType.THEME,
+                target_url="yt",
+                status=JobStatus.DONE,
+                created_at=utc_now(),
+            )
+        )
+
+    record = await _service(database, ArtServer()).item_record(1)
+
+    assert [(row.table, row.title) for row in record.stored] == [
+        ("media_items", "media_items 1"),
+        ("media_item_copies", f"Copy in {TEST_SERVER.title} · 1"),
+    ]
 
 
 async def test_an_item_record_holds_every_row_it_owns_apart_from_what_is_derived(

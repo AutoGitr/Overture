@@ -210,6 +210,9 @@ class CatalogEntryRow(StrictBaseModel):
     #: The library item or collection the entry describes, if there is one.
     library_item_id: int | None = None
     library_collection_id: int | None = None
+    #: The library title's local files of the entry's art, by link, which
+    #: views show in place of fetching the link.
+    local_art: dict[str, str] = Field(default_factory=dict[str, str])
 
 
 class ContributionIssue(StrictBaseModel):
@@ -231,6 +234,8 @@ class CatalogEntryDetail(StrictBaseModel):
     draft_issue: ContributionIssue | None = None
     library_item_id: int | None = None
     library_collection_id: int | None = None
+    #: As :attr:`CatalogEntryRow.local_art`.
+    local_art: dict[str, str] = Field(default_factory=dict[str, str])
 
 
 class CatalogCounts(StrictBaseModel):

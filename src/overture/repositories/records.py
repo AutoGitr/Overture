@@ -1,15 +1,23 @@
 """Read a row and every row that refers to it, from the table metadata alone."""
 
+lazy from collections.abc import Sequence
+
 lazy from pydantic_core import to_jsonable_python
 lazy from sqlalchemy import ColumnElement
-lazy from sqlmodel import SQLModel, Table
+lazy from sqlmodel import SQLModel, Table, col, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
+lazy from ..db.models.download_job import DownloadJob
+lazy from ..db.models.library import Library
+lazy from ..db.models.media_server import MediaServer
 lazy from ..db.tables import table_models, table_of
 lazy from ..utils.types import JsonValue
 
 #: One stored row: its table's name and its values.
 type StoredValues = tuple[str, dict[str, JsonValue]]
+
+#: Tables of work done for a record rather than of what it holds.
+_WORK_TABLES = frozenset({DownloadJob.__tablename__})
 
 
 class RecordRepository:
@@ -21,7 +29,8 @@ class RecordRepository:
     async def rows(self, model: type[SQLModel], key: int) -> list[StoredValues]:
         """The row of *model* with primary key *key*, then the rows referring to it.
 
-        Rows of link tables, which only pair two records, are left out.
+        Rows of link tables, which only pair two records, and of jobs, which
+        are work done for it, are left out.
         """
         table_models()
         table = table_of(model)
@@ -44,9 +53,25 @@ class RecordRepository:
             for child in SQLModel.metadata.sorted_tables:
                 # A link table only pairs two records; each record's own view
                 # shows the pairing, so its rows add nothing here.
-                if len(child.primary_key.columns) > 1:
+                if len(child.primary_key.columns) > 1 or child.name in _WORK_TABLES:
                     continue
                 for foreign in child.foreign_keys:
                     if foreign.column is primary[0]:
                         found.extend(await self._rows(child, foreign.parent == key))
         return found
+
+    async def library_names(self, rows: Sequence[StoredValues]) -> dict[str, str]:
+        """Each library the rows name, by its ID, after its server: "Plex · Movies"."""
+        ids = {
+            str(values["library_id"])
+            for _, values in rows
+            if isinstance(values.get("library_id"), str)
+        }
+        if not ids:
+            return {}
+        found = await self.session.exec(
+            select(Library.id, Library.title, MediaServer.title)
+            .join(MediaServer, col(MediaServer.id) == col(Library.server_id))
+            .where(col(Library.id).in_(ids))
+        )
+        return {library: f"{server} · {title}" for library, title, server in found}

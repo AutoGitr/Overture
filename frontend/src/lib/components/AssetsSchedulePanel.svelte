@@ -8,12 +8,11 @@
   import {
     artTypeSummary,
     collectionSummary,
-    librarySummary,
     sourceSummary,
     workflowSummary,
   } from "../utils/assetsPopup";
   import type { ScheduleController } from "../utils/schedules.svelte";
-  import { settingsState } from "../stores/settingsState.svelte";
+  import { librarySummary } from "../utils/libraries.svelte";
   import Schedules from "./Schedules.svelte";
 
   let {
@@ -52,10 +51,7 @@
   {#snippet details(schedule)}
     {#if schedule.config.library_ids?.length}
       <div>
-        Libraries: {librarySummary(
-          schedule.config.library_ids,
-          libraries.map((library) => ({ id: library.id, title: settingsState.libraryLabel(library) })),
-        )}
+        Libraries: {librarySummary(schedule.config.library_ids, libraries)}
       </div>
     {/if}
     {#if schedule.config.all_collections || schedule.config.collection_groups?.length}

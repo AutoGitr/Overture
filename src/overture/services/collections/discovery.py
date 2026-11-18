@@ -24,6 +24,7 @@ lazy from ...schemas.collections import (
     CollectionPreviewRequest,
     CollectionRuleWrite,
     CollectionSourceRead,
+    FieldChoice,
     KindRecommendation,
     MdblistListRead,
 )
@@ -201,6 +202,11 @@ class CollectionDiscovery:
                     local=bool(local_on),
                     smart=smart,
                     labelled=smart and not tested,
+                    choices=[
+                        FieldChoice(value=value, label=label)
+                        for value, label in spec.choices
+                    ],
+                    free_values=spec.free,
                 )
             )
         return found
@@ -256,7 +262,12 @@ class CollectionDiscovery:
                 not field_available(field, server, media_type, smart=True)
                 or plex is None
             ):
-                raise PublicServiceError(422, "The media server cannot list this field")
+                raise PublicServiceError(
+                    422,
+                    f"{self._access.library_provider(library_id).server.title} "
+                    f"cannot list the {field_label(field, server)} values of its "
+                    f"{media_type.plural}",
+                )
             provider = self._access.library_provider(library_id)
             counts.update(
                 dict.fromkeys(

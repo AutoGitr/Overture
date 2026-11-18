@@ -35,7 +35,8 @@
   import { syncState } from "../../stores/jobStates.svelte";
   import { syncSelection } from "../../stores/syncSelection.svelte";
   import { UNGROUPED_GROUP } from "../../../generated/settings";
-  import { collectionSummary, librarySummary } from "../../utils/assetsPopup";
+  import { collectionSummary } from "../../utils/assetsPopup";
+  import { librarySummary } from "../../utils/libraries.svelte";
   import { collectionGroupNames } from "../../utils/collectionGroups.svelte";
   import { errorMessage } from "../../utils/errors";
   import { createClearResults } from "../../utils/jobSnapshots";
@@ -164,19 +165,7 @@
     run: runScheduleRequest,
   });
 
-  let checklistLibraries = $derived(
-    libraries.map((library) => ({ id: library.key, title: settingsState.libraryLabel(library) })),
-  );
-  let movieChecklistLibraries = $derived(
-    libraries
-      .filter((library) => library.media_type === "movie")
-      .map((library) => ({ id: library.key, title: settingsState.libraryLabel(library) })),
-  );
-  let showChecklistLibraries = $derived(
-    libraries
-      .filter((library) => library.media_type === "show")
-      .map((library) => ({ id: library.key, title: settingsState.libraryLabel(library) })),
-  );
+  let checklistLibraries = $derived(libraries.map((library) => ({ ...library, id: library.key })));
   let hasSelectedLibraries = $derived(
     !loading && !configurationError && selectedLibraryIds.length > 0,
   );
@@ -318,8 +307,7 @@
   <CardColumn>
     <div class="option-card">
       <LibraryChecklist
-        movieLibraries={movieChecklistLibraries}
-        showLibraries={showChecklistLibraries}
+        libraries={checklistLibraries}
         selectedIds={selectedLibraryIds}
         {loading}
         error={configurationError}

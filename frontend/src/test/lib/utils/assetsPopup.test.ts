@@ -9,7 +9,6 @@ import {
   enabledSources,
   libraryIds,
   collectionSummary,
-  librarySummary,
   moveOrderedSource,
   normaliseSelectedSources,
   normaliseSourceOrder,
@@ -177,9 +176,6 @@ describe("summary formatters", () => {
     expect(collectionSummary(false, [])).toBe("None");
     expect(collectionSummary(false, ["Sagas"], ["Alien"])).toBe(
       "Groups: Sagas; Collections: Alien",
-    );
-    expect(librarySummary(["m1", "missing"], [...movieLibraries, ...showLibraries])).toBe(
-      "Movies, missing",
     );
     expect(sourceSummary(["overturedb"], { overturedb: "OvertureDB" })).toBe("OvertureDB");
     expect(artTypeSummary(["poster", "season_poster"])).toBe("Poster, Season poster");

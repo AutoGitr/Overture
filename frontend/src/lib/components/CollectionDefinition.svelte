@@ -9,7 +9,7 @@
   import Notice from "./Notice.svelte";
   import SetDimensionField from "./SetDimensionField.svelte";
   import type { LibrarySectionRead } from "../../generated/rest/types.gen";
-  import { settingsState } from "../stores/settingsState.svelte";
+  import LibraryOptions from "./LibraryOptions.svelte";
 
   let {
     editor,
@@ -29,19 +29,6 @@
   ] as const;
   let draft = $derived(editor instanceof CollectionDraft ? editor : null);
   let creatingSet = $derived(draft?.kind === "set");
-  let libraryGroups = $derived(
-    (
-      [
-        ["movie", "Movie libraries"],
-        ["show", "Show libraries"],
-      ] as const
-    )
-      .map(([mediaType, label]) => ({
-        label,
-        libraries: libraries.filter((library) => library.media_type === mediaType),
-      }))
-      .filter((group) => group.libraries.length > 0),
-  );
 </script>
 
 <DetailForm
@@ -72,20 +59,11 @@
   {/if}
   <fieldset class="libraries" disabled={editor.generated}>
     <legend class="form-label">Libraries</legend>
-    {#each libraryGroups as group (group.label)}
-      <div class="library-group" role="group" aria-label={group.label}>
-        {#each group.libraries as library (library.id)}
-          <label class="form-row">
-            <input
-              type="checkbox"
-              checked={editor.libraryIds.includes(library.id)}
-              onchange={(event) => editor.setLibrary(library.id, event.currentTarget.checked)}
-            />
-            {settingsState.libraryLabel(library)}
-          </label>
-        {/each}
-      </div>
-    {/each}
+    <LibraryOptions
+      {libraries}
+      selected={editor.libraryIds}
+      ontoggle={(id) => editor.setLibrary(id, !editor.libraryIds.includes(id))}
+    />
     {#if editor.libraryIds.length > 1 && !creatingSet}
       <span class="hint"
         >{editor.capabilities.data?.spans_libraries
@@ -187,11 +165,10 @@
 </DetailForm>
 
 <style>
-  .libraries,
-  .library-group {
+  .libraries {
     display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2) var(--space-4);
+    flex-direction: column;
+    gap: var(--space-2);
     min-width: 0;
     margin: 0;
     padding: 0;
@@ -199,11 +176,6 @@
   }
 
   .libraries legend {
-    width: 100%;
     padding: 0;
-  }
-
-  .library-group {
-    width: 100%;
   }
 </style>

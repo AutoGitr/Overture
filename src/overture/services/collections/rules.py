@@ -28,7 +28,11 @@ lazy from ...schemas.collections import (
 lazy from ...schemas.validators import check_group_name
 lazy from ...utils.errors import PublicServiceError
 
-TITLE_TAKEN = "A collection with this title already exists in this library"
+
+def title_taken(title: str) -> str:
+    """Why a collection cannot be titled *title*: a library of it has one so titled."""
+    return f"One of its libraries already has a collection titled {title}"
+
 
 #: Sources whose order is meaningful, which a new rule keeps by default.
 ORDERED_SOURCES = frozenset(

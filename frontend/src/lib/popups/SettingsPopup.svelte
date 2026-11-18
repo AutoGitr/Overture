@@ -140,6 +140,14 @@
               <option value="themes">Themes</option>
             </select>
           </label>
+          <label class="form-row justify-between">
+            <span>Auto-match art on load</span>
+            <input type="checkbox" bind:checked={draft.auto_match_art} />
+          </label>
+          <label class="form-row justify-between">
+            <span>Auto-search themes on load</span>
+            <input type="checkbox" bind:checked={draft.auto_search_themes} />
+          </label>
           <div class="form-row justify-between">
             <span>Auto-advance</span>
             <SegmentedControl
@@ -188,14 +196,6 @@
               <option value="lenient">Lenient (+/-{percent(ASPECT_TOLERANCES.lenient)})</option>
               <option value="off">Off (any ratio)</option>
             </select>
-          </label>
-          <label class="form-row justify-between">
-            <span>Auto-match art on load</span>
-            <input type="checkbox" bind:checked={draft.auto_match_art} />
-          </label>
-          <label class="form-row justify-between">
-            <span>Auto-search themes on load</span>
-            <input type="checkbox" bind:checked={draft.auto_search_themes} />
           </label>
           <label class="form-row justify-between">
             <span>

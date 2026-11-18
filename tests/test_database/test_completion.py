@@ -159,7 +159,14 @@ def test_collection_theme_status(
 ) -> None:
     assert (
         collection_theme_status(
-            server_has_theme=server_has_theme, youtube_id=youtube_id
+            server_has_theme=server_has_theme, youtube_id=youtube_id, needed=True
         )
         == status
+    )
+
+
+def test_a_collection_that_needs_no_theme_is_complete_without_one() -> None:
+    assert (
+        collection_theme_status(server_has_theme=False, youtube_id=None, needed=False)
+        == "complete"
     )

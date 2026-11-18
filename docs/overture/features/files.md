@@ -27,6 +27,24 @@ Files for a collection go to each media server holding it, since a collection
 has no folder; a Jellyfin BoxSet theme goes to the collections directory named
 by that server's `COLLECTIONS_PATH`.
 
+## Where each asset goes, and how each server takes it
+
+After Overture writes or removes an asset, it asks every server holding the
+title or collection to pick the change up, so each server shows the same
+choice.
+
+| Asset                            | Plex                                                                           | Jellyfin                                                                                  | Emby                                        |
+| -------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Title poster and background      | File in the title's folder; Overture unlocks the field and refreshes the title | File in the title's folder; Overture refreshes the title, replacing its images            | As Jellyfin                                 |
+| Season poster                    | `Season01.jpg` in the season folder; unlocked and refreshed with the show      | `poster.jpg` in the season folder; refreshed with the show                                | As Jellyfin                                 |
+| Title theme                      | `theme.mp3` in the title's folder; unlocked and refreshed                      | `theme.mp3` in the title's folder; refreshed                                              | As Jellyfin                                 |
+| Collection poster and background | Uploaded to each library's copy of the collection                              | Uploaded to the one BoxSet                                                                | Uploaded to the one BoxSet                  |
+| Collection theme                 | Uploaded to each library's copy                                                | `theme.mp3` in the BoxSet's folder under `COLLECTIONS_PATH`, then the BoxSet is refreshed | Not stored: Emby keeps no collection themes |
+
+Plex takes an item's local files on a refresh only for fields that are not
+locked; Overture unlocks just the fields it changed, so an asset you locked in
+Plex for another reason stays as it is.
+
 ## Renamer
 
 **Renamer** finds nonstandard asset filenames such as `folder.jpg` and renames

@@ -20,20 +20,20 @@
 
 <div class="list">
   {#each options as option (option.value)}
-    <label class="checkbox-group" title={option.title}>
-      <input
-        type="checkbox"
-        checked={selectedSet.has(option.value)}
-        disabled={option.disabled}
-        onchange={() => ontoggle(option.value)}
-      />
-      <span class="label">
-        {option.label}
-        {#if option.count !== undefined}
-          <span class="count">{option.count}</span>
-        {/if}
-      </span>
-    </label>
+    <span class="option">
+      <label class="checkbox-group" title={option.title}>
+        <input
+          type="checkbox"
+          checked={selectedSet.has(option.value)}
+          disabled={option.disabled}
+          onchange={() => ontoggle(option.value)}
+        />
+        <span class="label">{option.label}</span>
+      </label>
+      {#if option.count !== undefined}
+        <span class="count">{option.count}</span>
+      {/if}
+    </span>
   {/each}
 </div>
 
@@ -46,10 +46,14 @@
     gap: var(--space-2) var(--space-5);
   }
 
-  .label {
-    display: flex;
-    align-items: center;
+  .option {
+    display: inline-flex;
+    align-items: baseline;
     gap: var(--space-2);
+    min-width: 0;
+  }
+
+  .label {
     min-width: 0;
     overflow-wrap: anywhere;
     color: var(--text-secondary);

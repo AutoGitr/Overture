@@ -1,14 +1,14 @@
 <script module lang="ts">
   import type {
     ArtStyle,
-    AutoArt,
+    AutoArtSource,
     CollectionFiltering,
     CollectionMode,
     CollectionOrder,
     SyncMode,
   } from "../../generated/rest/types.gen";
   import type { PolicyData } from "../utils/collectionForms.svelte";
-  import { COLLECTION_POSTER_OPTIONS } from "../utils/collectionPosters";
+  import { COLLECTION_POSTER_LABELS } from "../utils/collectionPosters";
 
   /**
    * Where settings are edited. Global defaults always hold a value; groups and
@@ -35,16 +35,11 @@
     [true, "On"],
     [false, "Off"],
   ] as const;
-  const AUTO_ART: readonly (readonly [AutoArt, string])[] = [
-    ["off", "Off"],
-    ["overturedb", "OvertureDB"],
-    ["tmdb", "TMDB"],
-    ["generate", "Generate"],
-    ["overturedb_tmdb", "OvertureDB, then TMDB"],
-    ["overturedb_generate", "OvertureDB, else generate"],
-    ["overturedb_tmdb_generate", "OvertureDB, then TMDB, else generate"],
-    ["tmdb_generate", "TMDB, else generate"],
-  ];
+  const AUTO_ART: Record<AutoArtSource, string> = {
+    overturedb: "OvertureDB",
+    tmdb: "TMDB",
+    generate: "Generate",
+  };
   const STYLES: readonly (readonly [ArtStyle, string])[] = [
     ["dark", "Dark"],
     ["light", "Light"],
@@ -68,6 +63,7 @@
   import type { Snippet } from "svelte";
   import { ORDER_LABELS, sortedOrders } from "../utils/collectionCriteria";
   import FieldRow from "./FieldRow.svelte";
+  import InheritedOrder from "./InheritedOrder.svelte";
   import InheritedSelect from "./InheritedSelect.svelte";
 
   let {
@@ -148,13 +144,15 @@
     hint="Overture keeps the collection either way, and puts it back once it is large enough."
   />
   <h4 class="caps-label">Automation</h4>
-  <InheritedSelect
+  <InheritedOrder
     label="Automatic art"
     {inherits}
-    bind:value={policy.auto_art}
+    value={policy.auto_art}
+    onchange={(order) => (policy.auto_art = order)}
     inherited={defaults?.auto_art}
-    options={AUTO_ART}
-    hint="After a sync, fills art no one chose with the best art of the first source that has any: OvertureDB's catalog art, or TMDB's art of the franchise or a listed person. Generate makes a poster with the title and a background without."
+    labels={AUTO_ART}
+    none="Off"
+    hint="After a sync, fills art no one chose from the first ticked source, top to bottom, that has any: OvertureDB's catalog art, or TMDB's art of the franchise or a listed person. Generate makes a poster with the title and a background without, so sources below it are never reached."
   />
   <InheritedSelect
     label="Generated colours"
@@ -164,13 +162,15 @@
     options={STYLES}
     hint="The colours of art Automatic art generates, and of a group's separator."
   />
-  <InheritedSelect
+  <InheritedOrder
     label="OvertureDB posters"
     {inherits}
-    bind:value={policy.overturedb_posters}
+    value={policy.overturedb_posters}
+    onchange={(order) => (policy.overturedb_posters = order)}
     inherited={defaults?.overturedb_posters}
-    options={COLLECTION_POSTER_OPTIONS}
-    hint="Individual takes a TMDB collection's own OvertureDB poster. Matte and Overlay take the consistent poster in that layout, so collections look alike; a collection without one gets no OvertureDB poster. A poster you choose is contributed as the style you pick beside it, whatever this says later."
+    labels={COLLECTION_POSTER_LABELS}
+    none="None"
+    hint="A TMDB collection takes the first ticked style, top to bottom, that OvertureDB holds for it. Individual is its own poster; Matte and Overlay are consistent posters in that layout, so collections look alike. The first ticked style is what a poster you choose is contributed as, unless you pick another beside it."
   />
   <InheritedSelect
     label="Background"
@@ -181,13 +181,23 @@
     hint="Not needed: a poster completes a collection's art, and none is filled in automatically."
   />
   <InheritedSelect
-    label="Automatic theme"
+    label="Theme"
     {inherits}
-    bind:value={policy.auto_match_theme}
-    inherited={defaults?.auto_match_theme}
-    options={ON_OFF}
-    hint="Picks the OvertureDB theme after a sync when none is chosen."
+    bind:value={policy.themes}
+    inherited={defaults?.themes}
+    options={WANTED_NOT}
+    hint="Not needed: a collection's theme is complete without one, and none is chosen automatically."
   />
+  {#if (policy.themes ?? defaults?.themes) !== false}
+    <InheritedSelect
+      label="Automatic theme"
+      {inherits}
+      bind:value={policy.auto_match_theme}
+      inherited={defaults?.auto_match_theme}
+      options={ON_OFF}
+      hint="Picks the OvertureDB theme after a sync when none is chosen."
+    />
+  {/if}
   {#if inherits && memberLabels}
     <FieldRow
       label="Member label"

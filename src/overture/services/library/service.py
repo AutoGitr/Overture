@@ -212,9 +212,11 @@ class LibraryService:
         async with self._database.read_session() as db:
             item = await require_item(db, item_id)
             read = (await media_item_reads_with_catalog_status(db, [item]))[0]
-            stored = await RecordRepository(db).rows(MediaItem, item_id)
+            records = RecordRepository(db)
+            stored = await records.rows(MediaItem, item_id)
+            libraries = await records.library_names(stored)
             values = await TermRepository(db).values_of(item_id)
-        return DatabaseRecord.of(stored, read, values)
+        return DatabaseRecord.of(stored, read, values, libraries=libraries)
 
     async def set_monitored(self, item_id: int, monitored: bool) -> MonitoredResponse:
         """Set whether an item is monitored."""

@@ -1857,14 +1857,14 @@ export const matchLibraryFilterMutation = (options?: Partial<Options<MatchLibrar
     return mutationOptions;
 };
 
-export const listSavedFiltersQueryKey = (options: Options<ListSavedFiltersData>) => createQueryKey('listSavedFilters', options, false, ['library-filters']);
+export const listSavedFiltersQueryKey = (options?: Options<ListSavedFiltersData>) => createQueryKey('listSavedFilters', options, false, ['library-filters']);
 
 /**
  * List Saved Filters
  *
- * List the media type's saved filters by name.
+ * List every saved filter by name, with the media types it applies to.
  */
-export const listSavedFiltersOptions = (options: Options<ListSavedFiltersData>) => queryOptions<ListSavedFiltersResponse, ListSavedFiltersError, ListSavedFiltersResponse, ReturnType<typeof listSavedFiltersQueryKey>>({
+export const listSavedFiltersOptions = (options?: Options<ListSavedFiltersData>) => queryOptions<ListSavedFiltersResponse, ListSavedFiltersError, ListSavedFiltersResponse, ReturnType<typeof listSavedFiltersQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {
         const { data } = await listSavedFilters({
             ...options,

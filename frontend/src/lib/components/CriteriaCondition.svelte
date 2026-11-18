@@ -17,6 +17,7 @@
     fieldCondition,
     sourceCondition,
   } from "../utils/collectionCriteria";
+  import { FIELD_LABELS } from "../../generated/settings";
   import { countOf } from "../utils/plural";
   import SourceFields from "./SourceFields.svelte";
   import DataStatus from "./DataStatus.svelte";
@@ -27,6 +28,7 @@
     sources,
     mediaType,
     libraryId,
+    scope,
     label,
     onchange,
     onduplicate,
@@ -38,6 +40,8 @@
     sources: CollectionSourceRead[];
     mediaType: MediaType;
     libraryId: string;
+    /** What the criteria test, as a message names it, such as "Movies on Plex". */
+    scope: string;
     /** Names the condition for assistive technology, such as "Criteria condition 2". */
     label: string;
     /** Replaces the condition when another field or source is chosen. */
@@ -58,8 +62,6 @@
   let subject = $derived(
     condition.kind === "field" ? `field:${condition.field}` : `source:${condition.source.type}`,
   );
-  // Tag and text values are suggested from the library, or from Plex for fields
-  // only Plex knows.
   let suggested = $derived(field?.kind === "tag" || field?.kind === "text");
   let typed = $derived(condition.kind === "field" ? String(condition.value).trim() : "");
   // TMDB knows keywords no title has yet, so a keyword condition asks it about
@@ -86,9 +88,25 @@
   }));
   let known = $derived(
     field?.choices.length
-      ? field.choices.map((value) => ({ value, count: 0 }))
-      : (values.data ?? []),
+      ? field.choices.map((choice) => ({ ...choice, count: 0 }))
+      : (values.data ?? []).map((entry) => ({ ...entry, label: entry.value })),
   );
+  let current = $derived(condition.kind === "field" ? String(condition.value) : "");
+  /** Most values a list offers; a library holding more of them, such as actors, has them typed. */
+  const MAX_LISTED = 500;
+  // A fixed set, or the values a tag field holds in the library, is chosen
+  // from a list; free values (IDs, TMDB keywords, labels) and text are typed,
+  // with what the library holds suggested.
+  let chosen = $derived(
+    !!field &&
+      (field.choices.length > 0 ||
+        (field.kind === "tag" &&
+          !field.free_values &&
+          values.isSuccess &&
+          known.length <= MAX_LISTED)),
+  );
+  /** The condition's field as people know it, whether or not these criteria offer it. */
+  let fieldName = $derived(condition.kind === "field" ? FIELD_LABELS[condition.field] : "");
 
   /** Suggestions shown at once; a library can hold thousands of values. */
   const MAX_SUGGESTIONS = 50;
@@ -118,7 +136,7 @@
     onchange={(e) => choose(e.currentTarget.value)}
   >
     {#if condition.kind === "field" && !field}
-      <option value={subject} disabled>Unavailable field</option>
+      <option value={subject} disabled>{fieldName} (unavailable)</option>
     {/if}
     <optgroup label="Metadata">
       {#each fields as entry (entry.field)}
@@ -176,6 +194,24 @@
         value={String(condition.value)}
         oninput={(event) => (condition.value = event.currentTarget.value)}
       />
+    {:else if chosen}
+      <select
+        aria-label={`${label} value`}
+        required
+        value={current}
+        onchange={(event) => (condition.value = event.currentTarget.value)}
+      >
+        {#if !known.some((entry) => entry.value === current)}
+          <option value={current} disabled
+            >{current ? `${current} (no title has it)` : "Choose a value"}</option
+          >
+        {/if}
+        {#each known as entry (entry.value)}
+          <option value={entry.value}
+            >{entry.count ? `${entry.label} (${entry.count})` : entry.label}</option
+          >
+        {/each}
+      </select>
     {:else if kind === "number" || kind === "date"}
       <input
         type="number"
@@ -208,7 +244,7 @@
       {/if}
     {/if}
   {:else}
-    <span class="hint">The media server cannot test this field here; choose another.</span>
+    <span class="hint">{fieldName} cannot be tested for {scope}; choose another field.</span>
   {/if}
 
   <div class="row-actions">

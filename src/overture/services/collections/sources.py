@@ -14,6 +14,7 @@ lazy from ...schemas.collections import (
     CollectionLibraryCriteria,
     CollectionSource,
     FieldCondition,
+    ListingSource,
     MdblistSource,
     RadarrTagSource,
     SonarrTagSource,
@@ -262,12 +263,7 @@ class SourceResolver:
 
     async def tmdb_ids(
         self,
-        source: TmdbCollectionSource
-        | TmdbItemSource
-        | TmdbListSource
-        | TmdbPersonSource
-        | TmdbChartSource
-        | MdblistSource,
+        source: ListingSource,
         media_type: MediaType,
         *,
         region: str,

@@ -50,7 +50,7 @@ def test_a_collection_poster_is_compared_with_the_style_it_was_selected_as(
         poster_url_matte=_MATTE,
     )
 
-    selections = collection_agreement(row, entry, CollectionPosterStyle.MATTE)
+    selections = collection_agreement(row, entry, [CollectionPosterStyle.MATTE])
 
     assert selections is not None
     assert selections.poster == agreement
@@ -64,8 +64,8 @@ def test_each_collection_slot_is_compared_on_its_own() -> None:
     assert collection_agreement(
         _collection(_MATTE, CollectionPosterStyle.MATTE),
         entry,
-        CollectionPosterStyle.INDIVIDUAL,
+        [CollectionPosterStyle.INDIVIDUAL],
     ) == CatalogSelections(poster="matching", background="matching", theme="different")
     assert (
-        collection_agreement(_collection(), None, CollectionPosterStyle.MATTE) is None
+        collection_agreement(_collection(), None, [CollectionPosterStyle.MATTE]) is None
     )

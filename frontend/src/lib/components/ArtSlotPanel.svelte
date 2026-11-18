@@ -150,10 +150,10 @@
     return { tmdb: available?.tmdb ?? [], overturedb: original };
   });
   // A collection's poster link is contributed to OvertureDB as the style
-  // chosen here, starting from the style of the poster it has.
+  // chosen here, starting from the first its OvertureDB posters setting takes.
   let choosesPosterStyle = $derived(slot.kind === "collection" && artType === "poster");
   let posterStyle = $derived<CollectionPosterStyle>(
-    (slot.kind === "collection" && slot.posterStyle) || "individual",
+    slot.kind === "collection" ? slot.contributedStyle : "individual",
   );
 
   // Typed/pasted URL entry, shown when the clipboard cannot be read directly.

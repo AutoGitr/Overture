@@ -29,7 +29,7 @@ lazy from .criteria import TERM_FIELDS, criteria_terms
 lazy from .display import saved_options
 lazy from .editor import CollectionEditor
 lazy from .membership import Membership
-lazy from .rules import TITLE_TAKEN, franchise_ids, library_criteria, rule_read
+lazy from .rules import franchise_ids, library_criteria, rule_read, title_taken
 lazy from .sets import SetValue, count_values, set_values
 lazy from .sources import SourceResolver
 lazy from .validation import CollectionValidator
@@ -356,7 +356,7 @@ class CollectionSets:
                 await self._refresh(row, rules.get(row.id or 0), collection, rule)
                 return
             if any((library_id, title) in titles for library_id in library_ids):
-                raise PublicServiceError(409, TITLE_TAKEN)
+                raise PublicServiceError(409, title_taken(collection.title))
             detail = await self._editor.create(
                 CollectionCreate(
                     title=collection.title, collection_group=group.name, rule=rule

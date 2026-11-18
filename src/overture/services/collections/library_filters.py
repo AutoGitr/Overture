@@ -10,6 +10,7 @@ lazy from ...repositories.libraries import LibraryRepository
 lazy from ...schemas.collections import (
     CollectionFieldRead,
     CollectionLibraryCriteria,
+    FieldChoice,
     FieldCondition,
     FilterGroup,
 )
@@ -66,7 +67,11 @@ class LibraryFilters:
                 local=True,
                 smart=False,
                 library_status=spec.library_only,
-                choices=list(spec.choices),
+                choices=[
+                    FieldChoice(value=value, label=label)
+                    for value, label in spec.choices
+                ],
+                free_values=spec.free,
             )
             for field, spec in FIELDS.items()
             if (

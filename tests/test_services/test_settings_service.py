@@ -10,7 +10,6 @@ lazy from overture.domain import (
     ArtStyle,
     AspectRatioTolerance,
     AutoAdvance,
-    AutoArt,
     AutoUnmonitor,
     ServerType,
     TmdbLanguageFilter,
@@ -102,8 +101,9 @@ async def test_get_settings_creates_default_row(
         result.collection_auto_art,
         result.collection_generated_style,
         result.collection_backgrounds,
+        result.collection_themes,
         result.collection_delete_when_inactive,
-    ) == (2, True, AutoArt.OFF, ArtStyle.DARK, True, True)
+    ) == (2, True, [], ArtStyle.DARK, True, True, True)
     assert (result.radarr_search, result.sonarr_search) == (False, False)
 
 

@@ -24,6 +24,7 @@
     generated_style: "collection_generated_style",
     overturedb_posters: "collection_overturedb_posters",
     backgrounds: "collection_backgrounds",
+    themes: "collection_themes",
     auto_match_theme: "collection_auto_match_theme",
     request_missing: "collection_request_missing",
     collection_mode: "collection_mode_default",

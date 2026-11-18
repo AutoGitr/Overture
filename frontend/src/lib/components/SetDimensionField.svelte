@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { CollectionDimensionRead, SetDimension } from "../../generated/rest/types.gen";
+  import { DIMENSION_LABELS } from "../../generated/settings";
   import FieldRow from "./FieldRow.svelte";
 
   /** What a set makes one collection per value of. */
@@ -31,7 +32,7 @@
     }}
   >
     {#if !current}
-      <option {value} disabled>Unavailable here</option>
+      <option {value} disabled>{DIMENSION_LABELS[value]} (not offered for these libraries)</option>
     {/if}
     {#each dimensions as entry (entry.dimension)}
       <option value={entry.dimension}>{entry.label}{entry.smart_only ? " (Plex smart)" : ""}</option

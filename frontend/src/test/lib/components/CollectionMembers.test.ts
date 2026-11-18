@@ -1,12 +1,16 @@
 import { fireEvent, screen } from "@testing-library/svelte";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import CollectionMembers from "../../../lib/components/CollectionMembers.svelte";
+import { settingsState } from "../../../lib/stores/settingsState.svelte";
 import type { CollectionEditor } from "../../../lib/utils/collectionForms.svelte";
-import { collectionDetail, mediaItem } from "../../helpers/fixtures";
+import { appSettings, collectionDetail, mediaItem, mediaServers } from "../../helpers/fixtures";
 import { renderWithQueryClient } from "../../helpers/render";
 
 describe("CollectionMembers", () => {
+  afterEach(() => settingsState.reset());
+
   it("groups members by library as the libraries are listed: movies, then shows", async () => {
+    settingsState.load(appSettings());
     // The libraries come movies first, then by title, as the server lists them.
     const libraries = [
       { id: "a", title: "Anime Films", media_type: "movie" as const, server_id: 1, count: 1 },
@@ -39,5 +43,34 @@ describe("CollectionMembers", () => {
         .map((group) => group.getAttribute("aria-label"))
         .filter((label) => label !== "Collection members"),
     ).toEqual(["Anime Films members", "Movies members", "Series members"]);
+  });
+
+  it("heads each server's libraries with its name when several servers are configured", async () => {
+    settingsState.load(appSettings({ media_servers: mediaServers("plex", "jellyfin") }));
+    const libraries = [
+      { id: "p", title: "Movies", media_type: "movie" as const, server_id: 1, count: 1 },
+      { id: "j", title: "Movies", media_type: "movie" as const, server_id: 2, count: 1 },
+    ];
+    const editor = {
+      collection: collectionDetail({ member_ids: [1, 2], library_ids: ["j", "p"], child_count: 2 }),
+      manualMembersAllowed: false,
+      availableMembers: () => [],
+      busy: false,
+    } as unknown as CollectionEditor;
+    const items = [
+      mediaItem({ id: 1, title: "Jelly film", library_id: "j" }),
+      mediaItem({ id: 2, title: "Plex film", library_id: "p" }),
+    ];
+
+    renderWithQueryClient(CollectionMembers, { editor, libraryItems: items, libraries });
+    await fireEvent.click(screen.getByRole("button", { name: /^Members/ }));
+
+    expect(screen.getAllByRole("heading", { level: 4 }).map((h) => h.textContent)).toEqual([
+      "Plex",
+      "Movies",
+      "Jellyfin",
+      "Movies",
+    ]);
+    expect(screen.getByRole("region", { name: "Jellyfin · Movies members" })).toBeInTheDocument();
   });
 });

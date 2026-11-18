@@ -19,7 +19,7 @@
   import { downloadState } from "../stores/downloadState.svelte";
   import { settingsState } from "../stores/settingsState.svelte";
   import { uiState } from "../stores/uiState.svelte";
-  import { itemArtDisplayUrl, remotePosterUrl } from "../utils/artDisplay";
+  import { catalogLocalArtUrl, itemArtDisplayUrl, remotePosterUrl } from "../utils/artDisplay";
   import { MEDIA_ICONS } from "../utils/mediaIcons";
   import { CatalogBrowsing } from "../utils/catalogBrowsing.svelte";
   import { ItemRecordActions } from "../utils/itemRecordActions.svelte";
@@ -112,13 +112,17 @@
   let backgroundUrl = $derived(
     item
       ? (artPreviewState.previewFor(item, "background") ?? itemArtDisplayUrl(item, "background"))
-      : (catalogEntry?.background_url ?? preview?.background_url ?? null),
+      : catalogEntry
+        ? detail &&
+          (catalogLocalArtUrl(detail, catalogEntry.background_url, "background") ??
+            catalogEntry.background_url)
+        : (preview?.background_url ?? null),
   );
   let posterUrl = $derived(
     item
       ? (artPreviewState.previewFor(item, "poster") ?? itemArtDisplayUrl(item, "poster"))
       : catalogEntry
-        ? catalogPoster
+        ? (detail && catalogLocalArtUrl(detail, catalogPoster, "poster")) ?? catalogPoster
         : preview
           ? remotePosterUrl(preview)
           : null,

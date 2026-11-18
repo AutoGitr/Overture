@@ -43,11 +43,20 @@ class SavedFilterWrite(StrictBaseModel):
     """A custom filter to save under a name."""
 
     name: DisplayName
-    media_type: MediaType
     criteria: FilterGroup
+    #: The media type it is made for, which TMDB IDs in it name.
+    media_type: MediaType
 
 
-class SavedFilterRead(SavedFilterWrite):
+class SavedFilterRead(StrictBaseModel):
     """A saved custom filter."""
 
     id: int
+    name: str
+    criteria: FilterGroup
+    #: The media type its TMDB IDs name; null when it names no titles by ID.
+    media_type: MediaType | None
+    #: The media types whose titles every condition can test, where it is offered.
+    media_types: list[MediaType]
+    #: Why it is not offered for each other media type.
+    unavailable: dict[MediaType, str]

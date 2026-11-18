@@ -879,9 +879,9 @@ export const matchLibraryFilter = <ThrowOnError extends boolean = false>(options
 /**
  * List Saved Filters
  *
- * List the media type's saved filters by name.
+ * List every saved filter by name, with the media types it applies to.
  */
-export const listSavedFilters = <ThrowOnError extends boolean = false>(options: Options<ListSavedFiltersData, ThrowOnError>): RequestResult<ListSavedFiltersResponses, ListSavedFiltersErrors, ThrowOnError> => (options.client ?? client).get<ListSavedFiltersResponses, ListSavedFiltersErrors, ThrowOnError>({ url: '/api/library/filters/saved', ...options });
+export const listSavedFilters = <ThrowOnError extends boolean = false>(options?: Options<ListSavedFiltersData, ThrowOnError>): RequestResult<ListSavedFiltersResponses, ListSavedFiltersErrors, ThrowOnError> => (options?.client ?? client).get<ListSavedFiltersResponses, ListSavedFiltersErrors, ThrowOnError>({ url: '/api/library/filters/saved', ...options });
 
 /**
  * Create Saved Filter

@@ -2,6 +2,8 @@
 // Default values are generated from overture.db.models.settings.AppSettingsBase,
 // overture.domain and overture.utils.http_security.
 
+import type { AppSettingsUpdate } from "./rest/types.gen";
+
 export const DEFAULT_APP_SETTINGS = {
   aspect_ratio_tolerance: "strict",
   auto_advance: "slots_and_items",
@@ -9,7 +11,7 @@ export const DEFAULT_APP_SETTINGS = {
   auto_match_art: false,
   auto_search_themes: true,
   auto_unmonitor: "art_and_theme",
-  collection_auto_art: "off",
+  collection_auto_art: [],
   collection_auto_match_theme: false,
   collection_backgrounds: true,
   collection_delete_below_minimum: true,
@@ -20,11 +22,12 @@ export const DEFAULT_APP_SETTINGS = {
   collection_minimum_items: 2,
   collection_mode_default: "default",
   collection_order_default: "release.asc",
-  collection_overturedb_posters: "individual",
+  collection_overturedb_posters: ["individual"],
   collection_request_missing: false,
   collection_sort_title_format: "",
   collection_summary_format: "",
   collection_sync_mode: "sync",
+  collection_themes: true,
   collection_visible_home: false,
   collection_visible_library: false,
   collection_visible_shared: false,
@@ -45,7 +48,7 @@ export const DEFAULT_APP_SETTINGS = {
   tmdb_language_filter: "en_null",
   tmdb_region: "US",
   workflow: "art_and_themes",
-} as const;
+} satisfies Required<AppSettingsUpdate>;
 
 export type AppSettingsDefaults = typeof DEFAULT_APP_SETTINGS;
 
@@ -57,6 +60,8 @@ export const THEME_SOURCE_LABELS = {"overturedb": "OvertureDB", "themerrdb": "Th
 export const CATALOG_SOURCES = ["overturedb", "themerrdb"] as const;
 export const METADATA_ISSUES = {"no_tmdb_id": {"label": "No TMDB ID", "collections": true, "showOnly": false, "needsCatalog": false}, "no_tvdb_id": {"label": "No TVDB ID", "collections": false, "showOnly": true, "needsCatalog": false}, "no_imdb_id": {"label": "No IMDb ID", "collections": false, "showOnly": false, "needsCatalog": false}, "no_local_path": {"label": "No local path", "collections": false, "showOnly": false, "needsCatalog": false}, "no_year": {"label": "No year", "collections": false, "showOnly": false, "needsCatalog": false}, "no_server_id": {"label": "No media server ID", "collections": true, "showOnly": false, "needsCatalog": false}, "id_mismatch": {"label": "ID mismatch", "collections": false, "showOnly": false, "needsCatalog": true}} as const;
 export const LIBRARY_STATUS_FIELDS = ["monitored", "art_status", "poster_status", "background_status", "season_posters_status", "poster_source", "background_source", "poster_width", "background_width", "incorrect_aspect_ratio", "theme_status", "theme_source", "theme_length", "metadata_issue", "overturedb_complete", "themerrdb_theme", "overturedb_poster", "overturedb_background", "overturedb_season_posters", "overturedb_theme"] as const;
+export const FIELD_LABELS = {"title": "Title", "tmdb_id": "TMDB ID", "tvdb_id": "TVDB ID", "imdb_id": "IMDb ID", "studio": "Studio", "edition": "Edition", "genre": "Genre", "actor": "Actor", "director": "Director", "writer": "Writer", "producer": "Producer", "country": "Country", "label": "Label", "collection": "Collection", "in_collection": "In a collection", "content_rating": "Content rating", "network": "Network", "resolution": "Resolution", "audio_language": "Audio language", "subtitle_language": "Subtitle language", "video_codec": "Video codec", "audio_codec": "Audio codec", "subtitle_codec": "Subtitle codec", "file_size": "File size (GB)", "bitrate": "Bitrate (Mbps)", "audio_layout": "Audio channels", "hdr": "HDR", "dolby_vision": "Dolby Vision", "hdr10_plus": "HDR10+", "atmos": "Dolby Atmos", "year": "Year", "decade": "Decade", "critic_rating": "Critic rating", "audience_rating": "Audience rating", "user_rating": "User rating", "age_rating": "Minimum age", "duration": "Duration (minutes)", "plays": "Plays", "added": "Date added", "released": "Release date", "last_played": "Last played", "episode_added": "Episode added", "episode_last_played": "Episode last played", "unplayed_episodes": "Unplayed episodes", "unplayed": "Unplayed", "in_progress": "In progress", "versions": "Versions", "folder": "Folder", "original_language": "Original language", "origin_country": "Origin country", "tmdb_rating": "TMDB rating", "tmdb_votes": "TMDB votes", "tmdb_keyword": "TMDB keyword", "company": "Production company", "streaming": "Streaming on", "show_status": "Show status", "last_aired": "Last aired", "monitored": "Monitored", "art_status": "Art status", "poster_status": "Poster status", "background_status": "Background status", "season_posters_status": "Season posters status", "poster_source": "Poster source", "background_source": "Background source", "poster_width": "Poster width", "background_width": "Background width", "incorrect_aspect_ratio": "Incorrect aspect ratio", "theme_status": "Theme status", "theme_source": "Theme source", "theme_length": "Theme length (seconds)", "metadata_issue": "Metadata issue", "overturedb_complete": "OvertureDB complete", "themerrdb_theme": "ThemerrDB has a theme", "overturedb_poster": "OvertureDB poster", "overturedb_background": "OvertureDB background", "overturedb_season_posters": "OvertureDB season posters", "overturedb_theme": "OvertureDB theme"} as const;
+export const DIMENSION_LABELS = {"decade": "Decades", "year": "Years", "genre": "Genres", "studio": "Studios", "country": "Countries", "content_rating": "Content ratings", "resolution": "Resolutions", "label": "Labels", "actor": "Actors", "director": "Directors", "writer": "Writers", "producer": "Producers", "franchise": "TMDB franchises", "edition": "Editions", "network": "Networks", "original_language": "Original languages", "origin_country": "Origin countries", "streaming": "Streaming services", "audio_language": "Audio languages", "subtitle_language": "Subtitle languages", "video_codec": "Video codecs", "audio_codec": "Audio codecs", "audio_layout": "Audio channels", "company": "Production companies", "tmdb_keyword": "TMDB keywords", "show_status": "Show statuses", "custom": "Custom"} as const;
 export const ITEM_ART_TYPES = ["poster", "background"] as const;
 export const UNMANAGED_GROUP = "Unmanaged";
 export const UNGROUPED_GROUP = "Ungrouped";

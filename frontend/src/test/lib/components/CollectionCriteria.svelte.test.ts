@@ -66,6 +66,7 @@ describe("collection criteria", () => {
       sources: capabilities.sources,
       mediaType: "movie",
       libraryId: "movies",
+      scope: "Movies on Plex",
       label: "Criteria",
     });
 
@@ -73,13 +74,12 @@ describe("collection criteria", () => {
     await fireEvent.change(screen.getByLabelText("Criteria condition 1 field"), {
       target: { value: "field:genre" },
     });
+    // The library's genres are few, so they are chosen from a list.
     await waitFor(() =>
-      expect(document.querySelector('datalist option[value="Action"]')).toHaveTextContent(
-        "3 titles",
-      ),
+      expect(screen.getByRole("option", { name: "Action (3)" })).toBeInTheDocument(),
     );
-    const value = screen.getByRole("combobox", { name: "Criteria condition 1 value" });
-    await fireEvent.input(value, { target: { value: "Action" } });
+    const value = screen.getByLabelText("Criteria condition 1 value");
+    await fireEvent.change(value, { target: { value: "Action" } });
 
     await fireEvent.click(screen.getByRole("button", { name: "Group" }));
     const nested = within(screen.getByRole("group", { name: "Criteria group 1" }));
@@ -131,7 +131,12 @@ describe("collection criteria", () => {
   });
 
   it("duplicates, copies and pastes conditions and groups", async () => {
-    mockFetchRoutes({ "/api/collections/field-values": [] });
+    mockFetchRoutes({
+      "/api/collections/field-values": ["Action", "Comedy", "Drama"].map((value) => ({
+        value,
+        count: 1,
+      })),
+    });
     const genre = { kind: "field" as const, field: "genre" as const, operator: "is" as const };
     const source = $state<FilterGroupInput>({
       ...emptyGroup(),
@@ -144,6 +149,7 @@ describe("collection criteria", () => {
       sources: capabilities.sources,
       mediaType: "movie" as const,
       libraryId: "movies",
+      scope: "Movies on Plex",
     };
     renderWithQueryClient(CriteriaEditor, { ...props, group: source, label: "Source" });
     renderWithQueryClient(CriteriaEditor, { ...props, group: target, label: "Target" });
@@ -157,7 +163,10 @@ describe("collection criteria", () => {
     ]);
     expect(source.groups).toHaveLength(2);
     // A duplicate is its own condition, not a second view of the first.
-    await fireEvent.input(screen.getByLabelText("Source condition 2 value"), {
+    await waitFor(() =>
+      expect(screen.getByLabelText("Source condition 2 value").tagName).toBe("SELECT"),
+    );
+    await fireEvent.change(screen.getByLabelText("Source condition 2 value"), {
       target: { value: "Comedy" },
     });
     expect(source.conditions?.[0]).toMatchObject({ value: "Action" });
@@ -177,7 +186,7 @@ describe("collection criteria", () => {
     ]);
   });
 
-  it("types any tag value, suggesting the library's, and allows text for partial matches", async () => {
+  it("chooses a tag value from the library's, keeps one it lacks, and types text to match part of", async () => {
     mockFetchRoutes({
       "/api/collections/field-values": [{ value: "Action", count: 3 }],
     });
@@ -191,18 +200,20 @@ describe("collection criteria", () => {
       sources: capabilities.sources,
       mediaType: "movie",
       libraryId: "movies",
+      scope: "Movies on Plex",
       label: "Criteria",
     });
-    const value = screen.getByLabelText("Criteria condition 1 value");
-    // A value the library lacks, as a preset fills in, shows as it is.
-    expect(value.tagName).toBe("INPUT");
-    expect(value).toHaveValue("Future genre");
-    await fireEvent.input(value, { target: { value: "" } });
+    // A value no title has, as a saved filter may hold, shows as it is.
     await waitFor(() =>
-      expect(document.querySelector('datalist option[value="Action"]')).not.toBeNull(),
+      expect(screen.getByLabelText("Criteria condition 1 value").tagName).toBe("SELECT"),
     );
-    await fireEvent.input(value, { target: { value: "christmas" } });
-    expect(group.conditions?.[0]).toMatchObject({ value: "christmas" });
+    const value = screen.getByLabelText("Criteria condition 1 value");
+    expect(value).toHaveValue("Future genre");
+    expect(
+      within(value).getByRole("option", { name: "Future genre (no title has it)" }),
+    ).toBeDisabled();
+    await fireEvent.change(value, { target: { value: "Action" } });
+    expect(group.conditions?.[0]).toMatchObject({ value: "Action" });
     await fireEvent.change(screen.getByLabelText("Criteria condition 1 field"), {
       target: { value: "field:title" },
     });
@@ -215,9 +226,9 @@ describe("collection criteria", () => {
     expect(group.conditions?.[0]).toMatchObject({ operator: "contains", value: "Future" });
   });
 
-  it("suggests at most 50 library values, narrowed to what is typed", async () => {
+  it("types a value of a field the library holds too many of to list, suggesting at most 50", async () => {
     mockFetchRoutes({
-      "/api/collections/field-values": Array.from({ length: 300 }, (_, index) => ({
+      "/api/collections/field-values": Array.from({ length: 600 }, (_, index) => ({
         value: `Studio ${index}`,
         count: 1,
       })),
@@ -229,6 +240,7 @@ describe("collection criteria", () => {
       sources: capabilities.sources,
       mediaType: "movie",
       libraryId: "movies",
+      scope: "Movies on Plex",
       label: "Criteria",
     });
     await fireEvent.click(screen.getByRole("button", { name: "Condition" }));
@@ -239,6 +251,7 @@ describe("collection criteria", () => {
     const options = () => document.querySelectorAll(`#${value.getAttribute("list")} option`);
 
     await waitFor(() => expect(options()).toHaveLength(50));
+    expect(value.tagName).toBe("INPUT");
     await fireEvent.input(value, { target: { value: "studio 29" } });
     // Studio 29 and Studio 290 to 299.
     await waitFor(() => expect(options()).toHaveLength(11));
@@ -258,6 +271,7 @@ describe("collection criteria", () => {
         sources: capabilities.sources,
         mediaType: "movie",
         libraryId: "movies",
+        scope: "Movies on Plex",
         label: "Criteria",
       });
       const input = screen.getByLabelText("Criteria condition 1 value");
@@ -287,9 +301,13 @@ describe("collection criteria", () => {
       sources: capabilities.sources,
       mediaType: "movie",
       libraryId: "movies",
+      scope: "Movies on Plex",
       label: "Criteria",
     });
-    expect(screen.getByRole("option", { name: "Unavailable field" })).toBeDisabled();
+    expect(screen.getByRole("option", { name: "Studio (unavailable)" })).toBeDisabled();
+    expect(
+      screen.getByText("Studio cannot be tested for Movies on Plex; choose another field."),
+    ).toBeInTheDocument();
     await fireEvent.change(screen.getByLabelText("Criteria condition 1 field"), {
       target: { value: "field:title" },
     });
@@ -317,17 +335,17 @@ describe("collection criteria", () => {
       sources: capabilities.sources,
       mediaType: "movie",
       libraryId: "movies",
+      scope: "Movies on Plex",
       label: "Criteria",
     });
     const retry = await screen.findByRole("button", { name: "Retry available values" });
     failed = false;
     await fireEvent.click(retry);
-    await waitFor(() => {
-      const option = document.querySelector('datalist option[value="English"]');
-      expect(option).not.toBeNull();
-      expect(option).toHaveTextContent("");
-    });
-    await fireEvent.input(screen.getByLabelText("Criteria condition 1 value"), {
+    // Plex lists its values without counts, so none are shown.
+    await waitFor(() =>
+      expect(screen.getByRole("option", { name: "English" })).toBeInTheDocument(),
+    );
+    await fireEvent.change(screen.getByLabelText("Criteria condition 1 value"), {
       target: { value: "English" },
     });
     expect(group.conditions?.[0]).toMatchObject({ value: "English" });
@@ -608,6 +626,7 @@ describe("collection criteria", () => {
       generated_style: null,
       overturedb_posters: null,
       backgrounds: null,
+      themes: null,
       auto_match_theme: null,
       delete_when_inactive: null,
       collection_mode: null,
@@ -809,6 +828,7 @@ describe("collection criteria", () => {
       sources: capabilities.sources,
       mediaType: "movie",
       libraryId: "movies",
+      scope: "Movies on Plex",
       label: "Criteria",
     });
     await fireEvent.click(screen.getByRole("button", { name: "Condition" }));

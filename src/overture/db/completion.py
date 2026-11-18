@@ -165,13 +165,16 @@ def theme_status(item: MediaItem) -> AssetStatus:
 
 
 def collection_theme_status(
-    *, server_has_theme: bool, youtube_id: str | None
+    *, server_has_theme: bool, youtube_id: str | None, needed: bool
 ) -> AssetStatus:
     """Return a collection theme's status.
 
     The media server holds a collection's theme, so its presence there takes
-    the place of a local file.
+    the place of a local file. A collection that needs no theme, by its policy
+    or because OvertureDB says it has none, is complete as it is.
     """
+    if not needed:
+        return AssetStatus.COMPLETE
     selected = youtube_id is not None
     return _status(
         complete=selected and server_has_theme, started=selected or server_has_theme

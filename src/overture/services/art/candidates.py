@@ -324,8 +324,8 @@ class ArtCandidates:
 
     async def _collection_entry(
         self, collection: MediaCollection
-    ) -> tuple[CatalogCollection | None, CollectionPosterStyle]:
-        """OvertureDB's entry for the collection, if enabled, and its poster style."""
+    ) -> tuple[CatalogCollection | None, tuple[CollectionPosterStyle, ...]]:
+        """OvertureDB's entry for the collection, if enabled, and its poster styles."""
         async with self._database.read_session() as session:
             schedule = await load_schedule(
                 session, CATALOG_SCHEDULE, timezone=self._app_config.TZ
@@ -344,16 +344,22 @@ class ArtCandidates:
 def _catalog_collection_candidates(
     entry: CatalogCollection | None,
     art_type: ArtType,
-    posters: CollectionPosterStyle,
+    posters: tuple[CollectionPosterStyle, ...],
 ) -> list[ArtCandidate]:
-    """OvertureDB's art for a collection slot; posters of style *posters* first."""
+    """OvertureDB's art for a collection slot; posters of the styles it takes first.
+
+    The styles *posters* orders come in its order, then the others.
+    """
     if entry is None:
         return []
     if art_type is not ArtType.POSTER:
         candidate = build_candidate(entry.background_url, art_type)
         return [candidate] if candidate else []
     held = catalog_collection_entry(entry)
-    styles = sorted(CollectionPosterStyle, key=lambda style: style is not posters)
+    styles = [
+        *posters,
+        *(style for style in CollectionPosterStyle if style not in posters),
+    ]
     return [
         candidate.model_copy(update={"poster_style": style})
         for style in styles

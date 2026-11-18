@@ -18,7 +18,7 @@ lazy from ..domain import (
     ArtStyle,
     ArtType,
     AssetStatus,
-    AutoArt,
+    AutoArtSource,
     CollectionFiltering,
     CollectionKind,
     CollectionMode,
@@ -50,7 +50,7 @@ lazy from .base import PublicText, StrictBaseModel
 lazy from .catalog import CatalogSelections
 lazy from .common import StatusResponse
 lazy from .removal import AssetRemoval
-lazy from .validators import GroupName, YouTubeId
+lazy from .validators import GroupName, UniqueList, YouTubeId
 
 type LibraryId = Annotated[str, Field(min_length=1, max_length=200)]
 
@@ -202,15 +202,19 @@ class SonarrTagSource(StrictBaseModel):
     ]
 
 
-type CollectionSource = Annotated[
+#: A source that is a list of titles, which a library may lack some of. A
+#: plain union, so the API's schema of every source stays one flat list.
+ListingSource = (
     TmdbCollectionSource
     | TmdbItemSource
     | TmdbListSource
     | TmdbPersonSource
     | TmdbChartSource
     | MdblistSource
-    | RadarrTagSource
-    | SonarrTagSource,
+)
+
+type CollectionSource = Annotated[
+    ListingSource | RadarrTagSource | SonarrTagSource,
     Field(discriminator="type"),
 ]
 
@@ -263,6 +267,27 @@ class FilterGroup(StrictBaseModel):
                 for group in self.groups
                 for condition in group.source_conditions()
             ),
+        ]
+
+    def names_titles(self) -> bool:
+        """Whether it names titles by TMDB ID, which differ between movies and shows."""
+        return any(
+            isinstance(condition.source, TmdbItemSource)
+            for condition in self.source_conditions()
+        )
+
+    def listing_sources(self) -> list[ListingSource]:
+        """The included lists, which can hold titles the library lacks.
+
+        Radarr and Sonarr tags hold titles the library has or is downloading,
+        and an excluded list adds none, so only included TMDB and MDBList lists
+        count.
+        """
+        return [
+            condition.source
+            for condition in self.source_conditions()
+            if condition.operator is FilterOperator.IS
+            and not isinstance(condition.source, RadarrTagSource | SonarrTagSource)
         ]
 
     def field_conditions(self) -> list[FieldCondition]:
@@ -400,6 +425,10 @@ class CollectionRead(CollectionArtwork):
     has_incorrect_aspect_ratio: bool = False
     #: OvertureDB says the collection has no theme music, so none is missing.
     catalog_no_theme: bool = False
+    #: Its policy wants a theme; without one, its theme is complete as it is.
+    themes: bool = True
+    #: What a poster chosen for it next is contributed to OvertureDB as.
+    contributed_style: CollectionPosterStyle = CollectionPosterStyle.INDIVIDUAL
     #: Where Plex's Home lists it among promoted collections, lowest first.
     home_order: int | None = None
 
@@ -411,6 +440,9 @@ class CollectionDetail(CollectionRead):
     #: The library items it holds, in display order; the library lists them.
     member_ids: list[int]
     rule: CollectionRuleRead | None = None
+    #: Its criteria include TMDB or MDBList lists, so the library can lack
+    #: titles they hold.
+    lists_missing: bool = False
     #: Why a theme cannot be stored on this collection, if it cannot.
     theme_unavailable: str | None = None
     theme_writable: bool = False
@@ -486,15 +518,16 @@ def collection_read(
     copies: Sequence[CollectionLibrary],
     trust_no_theme: bool,
     backgrounds: bool,
+    themes: bool,
 ) -> CollectionRead:
     """Map a stored collection, its catalog entry and its rule to public output.
 
     *copies* holds a part for each server copy on the configured servers, the
     lead first; *trust_no_theme* lets the catalog's No theme flag count as a
-    theme, and *backgrounds* says whether its policy wants a background.
+    theme, and *backgrounds* and *themes* say whether its policy wants them.
     """
     has_theme = _has_theme(row)
-    no_theme = trust_no_theme and catalog is not None and catalog.no_theme
+    no_theme = catalog_says_no_theme(catalog, trust_no_theme=trust_no_theme)
     return CollectionRead(
         **collection_artwork(row, backgrounds=backgrounds).model_dump(),
         id=row.id or 0,
@@ -551,17 +584,25 @@ def collection_read(
         youtube_title=row.youtube_title,
         youtube_duration=row.youtube_duration,
         theme_duration=row.theme_file_duration or row.youtube_duration,
-        theme_status=AssetStatus.COMPLETE
-        if no_theme
-        else collection_theme_status(
-            server_has_theme=has_theme, youtube_id=row.youtube_id
+        theme_status=collection_theme_status(
+            server_has_theme=has_theme,
+            youtube_id=row.youtube_id,
+            needed=themes and not no_theme,
         ),
+        themes=themes,
         catalog_no_theme=no_theme,
         monitored=row.monitored,
         tmdb_collection_id=row.tmdb_collection_id,
         catalog_complete=bool(catalog and (catalog.youtube_id_overturedb or no_theme)),
         catalog_themerrdb=bool(catalog and catalog.youtube_id_themerrdb),
     )
+
+
+def catalog_says_no_theme(
+    catalog: CatalogCollection | None, *, trust_no_theme: bool
+) -> bool:
+    """Whether OvertureDB's No theme flag counts as the collection's theme."""
+    return trust_no_theme and catalog is not None and catalog.no_theme
 
 
 def _has_theme(row: MediaCollection) -> bool:
@@ -607,14 +648,17 @@ class CollectionPolicyBase(StrictBaseModel):
     sync_mode: SyncMode | None = None
     minimum_items: Annotated[int, Field(ge=1, le=100)] | None = None
     delete_below_minimum: bool | None = None
-    #: What a sync chooses for a slot with no art chosen.
-    auto_art: AutoArt | None = None
+    #: The sources a sync tries for a slot with no art chosen, first to last.
+    auto_art: UniqueList[AutoArtSource] | None = None
     #: The colours of art Overture generates for it automatically.
     generated_style: ArtStyle | None = None
-    #: Which of a TMDB collection's OvertureDB posters it takes and contributes.
-    overturedb_posters: CollectionPosterStyle | None = None
+    #: The OvertureDB poster styles it takes, first to last; the first is what
+    #: a poster chosen for it is contributed as unless OvertureDB holds it.
+    overturedb_posters: UniqueList[CollectionPosterStyle] | None = None
     #: Whether it needs a background; without one, a poster makes its art complete.
     backgrounds: bool | None = None
+    #: Whether it needs a theme; without one, its theme is complete as it is.
+    themes: bool | None = None
     auto_match_theme: bool | None = None
     delete_when_inactive: bool | None = None
     collection_mode: CollectionMode | None = None
@@ -1021,6 +1065,13 @@ class CollectionGroupSyncResult(StrictBaseModel):
     errors: dict[str, PublicText] = Field(default_factory=dict[str, PublicText])
 
 
+class FieldChoice(StrictBaseModel):
+    """A value a field can hold and how it is named to people."""
+
+    value: str
+    label: str
+
+
 class CollectionFieldRead(StrictBaseModel):
     """A criteria field as the active server offers it."""
 
@@ -1040,8 +1091,11 @@ class CollectionFieldRead(StrictBaseModel):
     #: The library's own status of a title, which library filters test in
     #: the browser, against the live library list.
     library_status: bool = False
-    #: The values the field can hold, when they are a fixed set.
-    choices: list[str] = Field(default_factory=list[str])
+    #: The values the field can hold, when they are a fixed set; otherwise a
+    #: tag field holds the values the library lists.
+    choices: list[FieldChoice] = Field(default_factory=list[FieldChoice])
+    #: Any value can be named, beyond those the library holds, such as an ID.
+    free_values: bool = False
 
 
 class CollectionSourceRead(StrictBaseModel):

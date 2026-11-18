@@ -6,6 +6,8 @@ lazy from pydantic import BaseModel, Field
 
 lazy from ..db.art_slots import flattened_art_names
 lazy from ..db.models.art import ArtSlot
+lazy from ..db.models.media_collection import CollectionLibrary
+lazy from ..db.models.media_item_copy import MediaItemCopy
 lazy from ..db.models.season import Season
 lazy from ..domain import ArtType, TermKind
 lazy from ..utils.types import JsonValue
@@ -40,8 +42,13 @@ class DatabaseRecord(StrictBaseModel):
         rows: Sequence[tuple[str, dict[str, JsonValue]]],
         read: BaseModel,
         values: Mapping[TermKind, list[str]] | None = None,
+        *,
+        libraries: Mapping[str, str],
     ) -> DatabaseRecord:
-        """The stored rows, and what *read* shows beyond the record's own columns."""
+        """The stored rows, and what *read* shows beyond the record's own columns.
+
+        *libraries* names each library a row is in, by its ID.
+        """
         season_nums = {
             values["id"]: values["season_num"]
             for table, values in rows
@@ -49,7 +56,9 @@ class DatabaseRecord(StrictBaseModel):
         }
         stored = [
             StoredRow(
-                table=table, title=_title(table, values, season_nums), values=values
+                table=table,
+                title=_title(table, values, season_nums, libraries),
+                values=values,
             )
             for table, values in rows
         ]
@@ -69,9 +78,15 @@ class DatabaseRecord(StrictBaseModel):
 
 
 def _title(
-    table: str, values: dict[str, JsonValue], season_nums: dict[JsonValue, JsonValue]
+    table: str,
+    values: dict[str, JsonValue],
+    season_nums: dict[JsonValue, JsonValue],
+    libraries: Mapping[str, str],
 ) -> str:
     """Name a stored row by what it holds, or by its table and key."""
+    if table in {MediaItemCopy.__tablename__, CollectionLibrary.__tablename__}:
+        library = str(values["library_id"])
+        return f"Copy in {libraries.get(library, library)}"
     if table == Season.__tablename__:
         return f"Season {values['season_num']}"
     if table == ArtSlot.__tablename__:

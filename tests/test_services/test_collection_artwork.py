@@ -563,7 +563,7 @@ async def test_generated_art_is_offered_chosen_and_generated_again_for_a_new_tit
     preview = await service.collections.preview(
         1, ArtType.POSTER, ArtGeneration(ArtStyle.DARK)
     )
-    assert Image.open(BytesIO(preview)).size == (1000, 1500)
+    assert Image.open(BytesIO(preview)).size == (2000, 3000)
 
     await service.collections.save(
         1, ArtType.POSTER, SaveCollectionArtRequest(generated=ArtStyle.DARK)
@@ -612,6 +612,23 @@ def test_generated_art_is_the_same_for_the_same_title() -> None:
     # A title without a heading is generated alone, with no rule above it.
     alone = render_art(ArtType.POSTER, ArtStyle.DARK, "Sagas")
     assert alone != render_art(ArtType.POSTER, ArtStyle.DARK, "Sagas", "Sagas")
+
+
+def test_generated_gradients_are_dithered_rather_than_banded() -> None:
+    background = Image.open(BytesIO(render_art(ArtType.BACKGROUND, ArtStyle.DARK)))
+    width, height = background.size
+    # A band is a run of rows of one level; the dark gradient spans about 17
+    # levels over 2160 rows, so undithered bands would be over 100 rows tall.
+    band = 0
+    longest = 0
+    previous = b""
+    for y in range(height):
+        row = background.crop((0, y, 8, y + 1)).tobytes()
+        band = band + 1 if row == previous else 1
+        longest = max(longest, band)
+        previous = row
+    assert longest < 16
+    assert width == 3840
 
 
 @pytest.mark.parametrize(

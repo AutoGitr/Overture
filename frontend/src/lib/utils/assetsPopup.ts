@@ -215,15 +215,6 @@ export function workflowStatusLabel(job: WorkflowStatus): string {
   return job.finished_at ? "Finished" : "Results";
 }
 
-/** Render a comma-separated summary of selected library titles. */
-export function librarySummary(
-  ids: string[],
-  libraries: readonly { id: string; title: string }[],
-): string {
-  const titles = new Map(libraries.map((library) => [library.id, library.title]));
-  return ids.map((id) => titles.get(id) || id).join(", ");
-}
-
 /** Render which collections a run covers: every one, the chosen groups and collections, or none. */
 export function collectionSummary(
   all: boolean,

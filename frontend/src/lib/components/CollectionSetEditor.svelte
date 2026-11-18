@@ -9,7 +9,7 @@
   import { withDimension, type SetGenerator } from "../utils/collectionForms.svelte";
   import { emptyGroup, splitList } from "../utils/collectionCriteria";
   import { errorMessage } from "../utils/errors";
-  import { inLibraryOrder } from "../utils/libraries.svelte";
+  import { inLibraryOrder, libraryScope } from "../utils/libraries.svelte";
   import CriteriaEditor from "./CriteriaEditor.svelte";
   import FieldRow from "./FieldRow.svelte";
   import PendingButton from "./PendingButton.svelte";
@@ -48,6 +48,10 @@
   let dimension = $derived(dimensions.find((entry) => entry.dimension === generator.dimension));
   let custom = $derived(generator.dimension === "custom");
   let libraryId = $derived(inLibraryOrder(libraries, libraryIds, (id) => id)[0] ?? "");
+  let scope = $derived.by(() => {
+    const library = libraries.find((each) => each.id === libraryId);
+    return library ? libraryScope(library) : "these libraries";
+  });
   /** Criteria suggest values from the first library; only shared fields are on offer. */
   let mediaType = $derived(
     libraries.find((library) => library.id === libraryId)?.media_type ?? "movie",
@@ -205,6 +209,7 @@
           sources={capabilities?.sources ?? []}
           {mediaType}
           {libraryId}
+          {scope}
           label={`Collection ${index + 1} criteria`}
         />
       </fieldset>
@@ -261,6 +266,7 @@
     sources={sharedSources}
     {mediaType}
     {libraryId}
+    {scope}
     label="Every collection also needs"
   />
 </div>

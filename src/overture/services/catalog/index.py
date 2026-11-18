@@ -16,7 +16,7 @@ lazy from ...domain import ArtType, CollectionPosterStyle, ThemeBulkSource
 lazy from ...repositories.catalog import CatalogRepository
 lazy from ..collections.policy import resolve_policy
 lazy from ..schedule_store import CATALOG_SCHEDULE, load_schedule
-lazy from .entries import catalog_collection_entry, collection_poster_field
+lazy from .entries import catalog_collection_poster
 
 
 def catalog_art_url(
@@ -35,15 +35,20 @@ def catalog_art_url(
     return None
 
 
-def catalog_collection_art_url(
-    entry: CatalogCollection, art_type: ArtType, posters: CollectionPosterStyle
-) -> str | None:
-    """Return a collection entry's URL for an art slot, its poster as *posters* says."""
+def catalog_collection_art(
+    entry: CatalogCollection,
+    art_type: ArtType,
+    posters: Sequence[CollectionPosterStyle],
+) -> tuple[str | None, CollectionPosterStyle | None]:
+    """Return a collection entry's URL for an art slot and, for a poster, its style.
+
+    The poster is the first of the styles *posters* orders that the entry holds.
+    """
     if art_type is ArtType.POSTER:
-        return catalog_collection_entry(entry)[collection_poster_field(posters)]
+        return catalog_collection_poster(entry, posters) or (None, None)
     if art_type is ArtType.BACKGROUND:
-        return entry.background_url
-    return None
+        return entry.background_url, None
+    return None, None
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +78,9 @@ class CatalogPick:
 #: Why a theme run leaves a title OvertureDB flags as having no theme.
 NO_THEME = "OvertureDB: this title has no theme"
 
+#: Why a theme run leaves a collection whose settings need no theme.
+THEME_NOT_NEEDED = "its collection settings need no theme"
+
 #: Why OvertureDB offers nothing while the user has it switched off.
 CATALOG_DISABLED = "OvertureDB is disabled"
 
@@ -98,10 +106,12 @@ class CatalogIndex:
     )
     #: Whether the user lets OvertureDB's No theme flag count as a theme.
     trust_no_theme: bool = True
-    #: Which of its OvertureDB posters each collection takes, by collection ID.
-    collection_posters: dict[int, CollectionPosterStyle] = field(
-        default_factory=dict[int, CollectionPosterStyle]
+    #: The OvertureDB poster styles each collection takes, by collection ID.
+    collection_posters: dict[int, tuple[CollectionPosterStyle, ...]] = field(
+        default_factory=dict[int, tuple[CollectionPosterStyle, ...]]
     )
+    #: The collections whose settings need no theme, by collection ID.
+    themeless_collections: frozenset[int] = frozenset()
 
     @classmethod
     async def build_collections(
@@ -125,16 +135,22 @@ class CatalogIndex:
             }
         )
         settings = await get_app_settings(session)
+        policies = {
+            row.id: resolve_policy(settings, row.group, row.rule)
+            for row in collections
+            if row.id is not None
+        }
         return cls(
             {},
             {},
             collections=entries,
             trust_no_theme=settings.overturedb_no_theme,
             collection_posters={
-                row.id: resolve_policy(settings, row.group, row.rule).overturedb_posters
-                for row in collections
-                if row.id is not None
+                row_id: policy.overturedb_posters for row_id, policy in policies.items()
             },
+            themeless_collections=frozenset(
+                row_id for row_id, policy in policies.items() if not policy.themes
+            ),
         )
 
     @classmethod
@@ -200,14 +216,7 @@ class CatalogIndex:
 
     def collection_art(self, row: MediaCollection, art_type: ArtType) -> CatalogPick:
         """Return OvertureDB's artwork for one collection slot, or why it has none."""
-        entry = self.collections.get(row.tmdb_collection_id or 0)
-        url = (
-            None
-            if entry is None
-            else catalog_collection_art_url(
-                entry, art_type, self.collection_posters[row.id or 0]
-            )
-        )
+        url, _ = self._collection_art(row, art_type)
         if url:
             return CatalogPick(url, "OvertureDB artwork")
         return CatalogPick(
@@ -220,9 +229,17 @@ class CatalogIndex:
         self, row: MediaCollection, art_type: ArtType
     ) -> CollectionPosterStyle | None:
         """The style of the poster :meth:`collection_art` offers for a slot."""
-        if art_type is not ArtType.POSTER:
-            return None
-        return self.collection_posters[row.id or 0]
+        return self._collection_art(row, art_type)[1]
+
+    def _collection_art(
+        self, row: MediaCollection, art_type: ArtType
+    ) -> tuple[str | None, CollectionPosterStyle | None]:
+        entry = self.collections.get(row.tmdb_collection_id or 0)
+        if entry is None:
+            return None, None
+        return catalog_collection_art(
+            entry, art_type, self.collection_posters[row.id or 0]
+        )
 
     def has_no_theme(self, item: MediaItem | MediaCollection) -> bool:
         """Whether OvertureDB says *item* has no theme music."""

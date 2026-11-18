@@ -20,7 +20,7 @@ lazy from ..bulk_common import (
     queue_and_report,
     queue_download,
 )
-lazy from ..catalog.index import NO_THEME, CatalogIndex
+lazy from ..catalog.index import NO_THEME, THEME_NOT_NEEDED, CatalogIndex
 lazy from ..collections.theme_files import inspect_theme_file
 lazy from ..downloads.collection_theme import (
     collection_themes_unavailable,
@@ -56,6 +56,9 @@ async def plan_collection_themes(
         if not rows:
             return plan
         for row in rows:
+            if row.id in index.themeless_collections:
+                plan.decide((JobOutcome.SKIPPED, THEME_NOT_NEEDED))
+                continue
             if index.has_no_theme(row):
                 plan.decide((JobOutcome.SKIPPED, NO_THEME))
                 continue

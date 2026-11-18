@@ -2,7 +2,6 @@
 
 lazy from pathlib import Path
 
-lazy from ...db.completion import collection_theme_status
 lazy from ...db.models.media_collection import CollectionLibrary, MediaCollection
 lazy from ...db.theme_file import record_theme_file
 lazy from ...domain import AssetScope
@@ -75,6 +74,12 @@ class CollectionThemes:
             raise PublicServiceError(400, reason)
         async with self._access.database.read_session() as session:
             row = await self._access.require_managed(session, collection_id)
+            status = await self._access.theme_status(
+                session,
+                row,
+                server_has_theme=bool(row.server_theme_id or row.theme_file_hash),
+                youtube_id=row.youtube_id,
+            )
         if not row.copies:
             return await self._keep(collection_id, body.youtube_id)
         target = JobTarget.collection_theme(collection_id, row.title, body.youtube_id)
@@ -88,25 +93,21 @@ class CollectionThemes:
                 await self._access.require(session, collection_id)
                 job_id, _ = await self._downloads.queue_job(session, target)
         await self._downloads.committed(session)
-        return SetCollectionThemeResponse(
-            job_id=job_id,
-            theme_status=collection_theme_status(
-                server_has_theme=bool(row.server_theme_id or row.theme_file_hash),
-                youtube_id=row.youtube_id,
-            ),
-        )
+        return SetCollectionThemeResponse(job_id=job_id, theme_status=status)
 
     async def _keep(
         self, collection_id: int, youtube_id: str
     ) -> SetCollectionThemeResponse:
         """Record the theme an inactive collection gets once it is on the server."""
         scope = AssetScope(collection_id=collection_id)
-        status = collection_theme_status(server_has_theme=False, youtube_id=youtube_id)
         async with (
             self._access.asset_locks.acquire(scope.lock_key),
             self._access.database.write_session() as db,
         ):
             row = await self._access.require_managed(db, collection_id)
+            status = await self._access.theme_status(
+                db, row, server_has_theme=False, youtube_id=youtube_id
+            )
             row.sqlmodel_update(
                 {
                     "youtube_id": youtube_id,
@@ -176,9 +177,13 @@ class CollectionThemes:
             await self._downloads.committed(db)
             for provider, part, _ in deleted:
                 await provider.refresh_item(part.server_item_id or "", unlock=())
-        status = collection_theme_status(
-            server_has_theme=response.has_theme, youtube_id=response.youtube_id
-        )
+        async with self._access.database.read_session() as session:
+            status = await self._access.theme_status(
+                session,
+                await self._access.require(session, collection_id),
+                server_has_theme=response.has_theme,
+                youtube_id=response.youtube_id,
+            )
         await self._access.broadcast(
             "collection.theme.updated",
             {

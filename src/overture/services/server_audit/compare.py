@@ -184,7 +184,7 @@ async def _compare_server_art(
         return _finding(
             result,
             AuditStatus.SERVER_MISSING,
-            "Media server has no active image for this art type",
+            f"{server_copy.provider.server.title} has no {art_type.label} for it",
         )
     result.server_image_present = True
     try:
@@ -277,7 +277,7 @@ async def _compare_collection_copy(
         return _finding(
             result,
             AuditStatus.SERVER_MISSING,
-            "Media server has no image for this art type",
+            f"{provider.server.title} has no {art_type.label} for it",
         )
     result.server_image_present = True
     try:

@@ -6,6 +6,7 @@ import {
 import type {
   CollectionCapabilities,
   LibrarySectionRead,
+  MediaServerRead,
   MediaType,
 } from "../../generated/rest/types.gen";
 import { settingsState } from "../stores/settingsState.svelte";
@@ -29,6 +30,46 @@ export function inLibraryOrder<T>(
     return index === -1 ? libraries.length : index;
   };
   return entries.toSorted((a, b) => position(a) - position(b));
+}
+
+/** The libraries of one media server, in the order it lists them. */
+export interface ServerLibraries<T> {
+  server: MediaServerRead;
+  /** What names the group: the server's title when several are configured, else empty. */
+  label: string;
+  libraries: T[];
+}
+
+/** *libraries* grouped by their server, in the order MEDIA_SERVERS lists the servers. */
+export function librariesByServer<T extends { server_id: number }>(
+  libraries: readonly T[],
+): ServerLibraries<T>[] {
+  return settingsState.servers
+    .map((server) => ({
+      server,
+      label: settingsState.multipleServers ? server.title : "",
+      libraries: libraries.filter((library) => library.server_id === server.id),
+    }))
+    .filter((group) => group.libraries.length > 0);
+}
+
+/** Name a library with its server, as a message says what it tests: "Movies on Plex". */
+export function libraryScope(library: { title: string; server_id: number }): string {
+  const server = settingsState.server(library.server_id);
+  return server ? `${library.title} on ${server.title}` : library.title;
+}
+
+/** Name the libraries *ids* picks, as users know them, in a sentence; unknown ones by ID. */
+export function librarySummary(
+  ids: readonly string[],
+  libraries: readonly { id: string; title: string; server_id: number }[],
+): string {
+  return ids
+    .map((id) => {
+      const library = libraries.find((each) => each.id === id);
+      return library ? settingsState.libraryLabel(library) : id;
+    })
+    .join(", ");
 }
 
 /** A library a collection spans, by Overture's ID, and what it holds. */

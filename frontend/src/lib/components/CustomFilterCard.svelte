@@ -9,6 +9,7 @@
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type { FilterGroupInput, MediaType } from "../../generated/rest/types.gen";
   import { invalidateTags } from "../rest/cache";
+  import { settingsState } from "../stores/settingsState.svelte";
   import { emptyGroup } from "../utils/collectionCriteria";
   import { errorMessage } from "../utils/errors";
   import CriteriaEditor from "./CriteriaEditor.svelte";
@@ -35,7 +36,12 @@
   }
 
   let draft = $state<Draft | null>(null);
-  const saved = createQuery(() => listSavedFiltersOptions({ query: { media_type: mediaType } }));
+  const saved = createQuery(() => listSavedFiltersOptions());
+  /** The saved filters every condition of which can test this media type's titles. */
+  let offered = $derived(
+    (saved.data ?? []).filter((entry) => entry.media_types.includes(mediaType)),
+  );
+  let elsewhere = $derived((saved.data?.length ?? 0) - offered.length);
   const capabilities = createQuery(() => ({
     ...getLibraryFilterCapabilitiesOptions({ query: { media_type: mediaType } }),
     enabled: draft !== null,
@@ -46,7 +52,7 @@
 
   let failure = $state("");
   let busy = $derived(create.isPending || update.isPending || remove.isPending);
-  let selected = $derived(saved.data?.find((entry) => entry.id === filterId) ?? null);
+  let selected = $derived(offered.find((entry) => entry.id === filterId) ?? null);
 
   function edit(existing: boolean) {
     failure = "";
@@ -99,7 +105,7 @@
         disabled={busy}
       >
         <option value="">None</option>
-        {#each saved.data ?? [] as entry (entry.id)}
+        {#each offered as entry (entry.id)}
           <option value={entry.id}>{entry.name}</option>
         {/each}
       </select>
@@ -112,6 +118,14 @@
       {/if}
     </div>
   </FieldRow>
+  {#if elsewhere}
+    <p class="hint">
+      {elsewhere === 1 ? "One saved filter tests" : `${elsewhere} saved filters test`} what
+      {mediaType === "movie" ? "movies" : "shows"} lack, so the {mediaType === "movie"
+        ? "Shows"
+        : "Movies"} tab offers {elsewhere === 1 ? "it" : "them"}.
+    </p>
+  {/if}
 
   {#if draft}
     <div class="editor">
@@ -125,6 +139,7 @@
           sources={capabilities.data.sources}
           {mediaType}
           {libraryId}
+          scope={`${mediaType === "movie" ? "movies" : "shows"} on ${settingsState.media_server_name}`}
           label="Custom filter conditions"
         />
       {:else if capabilities.isError}

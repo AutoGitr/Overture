@@ -22,8 +22,8 @@ export type CollectionArtTarget = {
   kind: "collection";
   collectionId: number;
   tmdbId: number | null;
-  /** The OvertureDB poster the selected poster link is contributed as. */
-  posterStyle: CollectionPosterStyle | null;
+  /** What a poster chosen next is contributed to OvertureDB as, by its settings. */
+  contributedStyle: CollectionPosterStyle;
 };
 
 /**

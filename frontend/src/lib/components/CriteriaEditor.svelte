@@ -4,6 +4,8 @@
   import CopyPlus from "@lucide/svelte/icons/copy-plus";
   import Plus from "@lucide/svelte/icons/plus";
   import X from "@lucide/svelte/icons/x";
+  import { createQuery } from "@tanstack/svelte-query";
+  import { listSavedFiltersOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type {
     CollectionFieldRead,
     CollectionSourceRead,
@@ -11,7 +13,7 @@
     MediaType,
   } from "../../generated/rest/types.gen";
   import { criteriaClipboard } from "../stores/criteriaClipboard.svelte";
-  import { emptyGroup, fieldCondition } from "../utils/collectionCriteria";
+  import { emptyGroup, fieldCondition, groupFits } from "../utils/collectionCriteria";
   import CriteriaCondition from "./CriteriaCondition.svelte";
   import CriteriaEditor from "./CriteriaEditor.svelte";
 
@@ -21,6 +23,7 @@
     sources,
     mediaType,
     libraryId,
+    scope,
     label,
     depth = 0,
     onremove = null,
@@ -31,6 +34,8 @@
     sources: CollectionSourceRead[];
     mediaType: MediaType;
     libraryId: string;
+    /** What the criteria test, as a message names it, such as "Movies on Plex". */
+    scope: string;
     /** Names the group for assistive technology, such as "Criteria". */
     label: string;
     depth?: number;
@@ -48,6 +53,24 @@
     if (copied?.kind === "group" && depth >= MAX_DEPTH) return "Groups nest only this deep";
     return null;
   });
+
+  // Saved filters join the top group only, as one of its groups.
+  const saved = createQuery(() => ({ ...listSavedFiltersOptions(), enabled: depth === 0 }));
+  /** The saved filters these criteria can test everything of. */
+  let insertable = $derived(
+    depth === 0
+      ? (saved.data ?? []).filter(
+          (entry) =>
+            entry.media_types.includes(mediaType) &&
+            groupFits(entry.criteria, { fields, sources, mediaType }, entry.media_type ?? mediaType),
+        )
+      : [],
+  );
+
+  function insertSaved(filterId: number) {
+    const entry = insertable.find((candidate) => candidate.id === filterId);
+    if (entry) (group.groups ??= []).push(structuredClone(entry.criteria));
+  }
 
   function paste() {
     if (copied?.kind === "condition")
@@ -105,6 +128,7 @@
       {sources}
       {mediaType}
       {libraryId}
+      {scope}
       label={`${label} condition ${index + 1}`}
       onchange={(replacement) => group.conditions?.splice(index, 1, replacement)}
       onduplicate={() =>
@@ -120,6 +144,7 @@
       {sources}
       {mediaType}
       {libraryId}
+      {scope}
       label={`${label} group ${index + 1}`}
       depth={depth + 1}
       onremove={() => group.groups?.splice(index, 1)}
@@ -144,6 +169,22 @@
         onclick={() => (group.groups ??= []).push(emptyGroup(group.mode === "all" ? "any" : "all"))}
         ><Plus size={14} /> Group</button
       >
+    {/if}
+    {#if insertable.length}
+      <select
+        class="insert"
+        aria-label={`Add a saved filter to ${label}`}
+        value=""
+        onchange={(event) => {
+          insertSaved(Number(event.currentTarget.value));
+          event.currentTarget.value = "";
+        }}
+      >
+        <option value="">Add saved filter...</option>
+        {#each insertable as entry (entry.id)}
+          <option value={entry.id}>{entry.name}</option>
+        {/each}
+      </select>
     {/if}
     {#if copied}
       <button
@@ -183,7 +224,13 @@
   }
 
   .actions {
+    flex-wrap: wrap;
     justify-content: flex-start;
+  }
+
+  .insert {
+    width: auto;
+    max-width: 100%;
   }
 
   .head-actions {

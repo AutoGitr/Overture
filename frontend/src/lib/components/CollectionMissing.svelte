@@ -66,7 +66,7 @@
       <ul class="missing">
         {#each data.titles as title (`${title.media_type}:${title.tmdb_id}`)}
           <li>
-            <span>{title.title}{title.year ? ` (${title.year})` : ""}</span>
+            <span class="title">{title.title}{title.year ? ` (${title.year})` : ""}</span>
             {#if title.requested}
               <span class="badge badge-muted">In {arrOf(title.media_type)}</span>
             {:else if title.requestable}
@@ -104,20 +104,27 @@
 </DetailSection>
 
 <style>
+  /* Each title is as wide as its name and action, so short ones sit close and
+     the row wraps only when it is full. */
   .missing {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
-    gap: var(--space-1) var(--space-4);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-5);
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
   .missing li {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    display: inline-flex;
+    align-items: baseline;
     gap: var(--space-2);
+    min-width: 0;
     font-size: var(--text-sm);
+  }
+
+  .title {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 </style>

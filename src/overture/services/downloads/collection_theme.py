@@ -6,12 +6,11 @@ lazy from pathlib import Path
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ... import protocols
-lazy from ...db.completion import collection_theme_status
 lazy from ...db.models.download_job import DownloadJob
 lazy from ...db.models.media_collection import CollectionLibrary, MediaCollection
 lazy from ...db.session import Database
 lazy from ...db.theme_file import ThemeFileFacts, record_theme_file
-lazy from ...domain import JobStatus, ThemeBulkSource
+lazy from ...domain import AssetStatus, JobStatus, ThemeBulkSource
 lazy from ...media_servers.adapters import (
     FolderThemes,
     NoCollectionThemes,
@@ -260,8 +259,7 @@ async def record_collection_theme(
             "youtube_id": job.target_url,
             "youtube_title": title,
             "youtube_duration": duration,
-            "theme_status": collection_theme_status(
-                server_has_theme=True, youtube_id=job.target_url
-            ),
+            # Downloaded onto the server, the theme is complete.
+            "theme_status": AssetStatus.COMPLETE,
         },
     )

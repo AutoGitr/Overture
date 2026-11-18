@@ -392,7 +392,12 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/collections/12": { ...detail, tmdb_collection_id: 10, poster_style: "overlay" },
+      "/api/collections/12": {
+        ...detail,
+        tmdb_collection_id: 10,
+        poster_style: "individual",
+        contributed_style: "overlay",
+      },
       "/api/collections/12/art/poster/sources": {
         sources: {
           overturedb: [artCandidate({ url: matte, source: "tpdb", poster_style: "matte" })],
@@ -405,7 +410,7 @@ describe("collection management", () => {
     goToCollectionView(detail, "art");
     renderWithQueryClient(CollectionPage);
     const picker = await screen.findByRole("radiogroup", { name: "Contribute to OvertureDB as" });
-    // It starts from the style of the poster the collection has.
+    // It starts from the first style the collection's OvertureDB posters take.
     expect(within(picker).getByRole("radio", { name: "Overlay" })).toBeChecked();
     await fireEvent.click(within(picker).getByRole("radio", { name: "Individual" }));
     const saves = () =>
@@ -848,8 +853,8 @@ describe("collection management", () => {
   });
 
   it.each([
-    ["server", "From the media server only"],
-    ["both", "From Overture and the media server"],
+    ["server", "From Plex only"],
+    ["both", "From Overture and Plex"],
   ] as const)("deletes the collection from the %s target chosen", async (target, label) => {
     const { calls } = mockFetchRoutes({
       "/api/collections/defaults": {},
@@ -1040,7 +1045,7 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/collections/12": { ...detail, rule },
+      "/api/collections/12": { ...detail, rule, lists_missing: true },
       "/api/collections/groups": [],
       "/api/library/libraries": [],
       "/api/library/items": { items: members, total: 2 },
@@ -1100,7 +1105,7 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/collections/12": { ...detail, rule },
+      "/api/collections/12": { ...detail, rule, lists_missing: true },
       "/api/collections/groups": [],
       "/api/library/libraries": [],
       "/api/library/items": { items: members, total: 2 },

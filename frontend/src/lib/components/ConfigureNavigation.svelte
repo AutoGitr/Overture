@@ -45,7 +45,7 @@
       event.preventDefault();
       const target = `${formId}-${section.key}`;
       // The URL already names it, so no navigation follows: jump again directly.
-      if (configuring && route.hash === `#${target}`) revealSection(target);
+      if (configuring && route.hash === `#${target}`) void revealSection(target);
       else goToCollectionView(collection, "configure", "poster", target);
     }}
     aria-current={active === section.key ? "location" : undefined}

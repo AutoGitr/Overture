@@ -89,8 +89,8 @@ describe("Sync tab", () => {
       appSettings({ media_servers: mediaServers("plex"), tmdb_configured: false }),
     );
     libraries.mockReset().mockResolvedValue([
-      { key: "1", title: "Movies", media_type: "movie" },
-      { key: "2", title: "Shows", media_type: "show" },
+      { key: "1", title: "Movies", media_type: "movie", server_id: 1 },
+      { key: "2", title: "Shows", media_type: "show", server_id: 1 },
     ]);
     schedules.mockReset().mockResolvedValue([]);
     run.mockReset().mockResolvedValue({ status: "started" });

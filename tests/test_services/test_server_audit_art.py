@@ -196,7 +196,7 @@ async def test_a_different_image_on_the_server_reports_its_distance(
             "s1",
             None,
             AuditStatus.SERVER_MISSING,
-            "Media server has no active image for this art type",
+            "Plex has no poster for it",
         ),
     ],
 )

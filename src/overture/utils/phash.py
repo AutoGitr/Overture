@@ -1,4 +1,9 @@
-"""8x8 DCT perceptual hash using Pillow and the standard library."""
+"""16x16 DCT perceptual hash using Pillow and the standard library.
+
+The 256 lowest frequencies of a 64x64 greyscale rendition tell apart posters
+that share a layout but differ in detail, such as another scan or grade,
+while the same image at another size or encoding keeps nearly every bit.
+"""
 
 lazy import io
 lazy import math
@@ -7,12 +12,12 @@ lazy from statistics import median
 
 lazy from PIL import Image
 
-PHASH_SIZE = 8
-IMG_SIZE = 32
+PHASH_SIZE = 16
+IMG_SIZE = 64
 MAX_PHASH_PIXELS = 50_000_000
 
-# Precompute the low-frequency rows of the 32-point DCT-II matrix.
-# C[k, n] = 2.0 * cos(pi * k * (2 * n + 1) / (2 * N)) for k in [0..7], n in [0..31]
+# Precompute the low-frequency rows of the 64-point DCT-II matrix.
+# C[k, n] = 2.0 * cos(pi * k * (2 * n + 1) / (2 * N)) for k in [0..15], n in [0..63]
 _C: tuple[tuple[float, ...], ...] = tuple(
     tuple(
         2.0 * math.cos(math.pi * k * (2 * n + 1) / (2.0 * IMG_SIZE))
@@ -23,7 +28,7 @@ _C: tuple[tuple[float, ...], ...] = tuple(
 
 
 def compute_phash(image: Image.Image) -> str:
-    """Compute a 64-bit perceptual hash formatted as a 16-character hex string."""
+    """Compute a 256-bit perceptual hash formatted as a 64-character hex string."""
     width, height = image.size
     if width <= 0 or height <= 0 or width * height > MAX_PHASH_PIXELS:
         raise ValueError("Image dimensions exceed the pHash safety limit")
@@ -37,7 +42,7 @@ def compute_phash(image: Image.Image) -> str:
 
     columns = tuple(raw[column::IMG_SIZE] for column in range(IMG_SIZE))
 
-    # Transform columns, then rows, retaining only the 8x8 low frequencies.
+    # Transform columns, then rows, retaining only the 16x16 low frequencies.
     d_rows = [
         [
             sum(weight * pixel for weight, pixel in zip(weights, column, strict=True))
@@ -61,7 +66,7 @@ def compute_phash(image: Image.Image) -> str:
     for value in coefficients:
         hash_val = (hash_val << 1) | (value > threshold)
 
-    return f"{hash_val:016x}"
+    return f"{hash_val:0{PHASH_SIZE * PHASH_SIZE // 4}x}"
 
 
 def _open_and_compute(source: str | Path | io.BytesIO) -> str:

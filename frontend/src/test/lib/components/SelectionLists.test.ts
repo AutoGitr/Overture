@@ -1,5 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { describe, expect, it, vi } from "vitest";
+import { settingsState } from "../../../lib/stores/settingsState.svelte";
+import { appSettings } from "../../helpers/fixtures";
 import CheckboxList from "../../../lib/components/CheckboxList.svelte";
 import CollectionChecklist from "../../../lib/components/CollectionChecklist.svelte";
 import LibraryChecklist from "../../../lib/components/LibraryChecklist.svelte";
@@ -24,9 +26,12 @@ describe("selection lists", () => {
   });
 
   it("updates libraries and select-all when the selected IDs change", async () => {
+    settingsState.load(appSettings());
     const { rerender } = render(LibraryChecklist, {
-      movieLibraries: [{ id: "movies", title: "Films" }],
-      showLibraries: [{ id: "shows", title: "Series" }],
+      libraries: [
+        { id: "movies", title: "Films", server_id: 1 },
+        { id: "shows", title: "Series", server_id: 1 },
+      ],
       selectedIds: ["movies"],
       ontoggle: vi.fn(),
       ontoggleall: vi.fn(),

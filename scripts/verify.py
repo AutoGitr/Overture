@@ -1,8 +1,8 @@
 """Check Overture end to end against its media servers, read only.
 
-Point it at one or more synced Overture instances, and at their media servers
-themselves (one each of Plex, Jellyfin and Emby). Each server an instance
-names is checked on its own, against the given server of its kind. Overture is
+Point it at a synced Overture, and at the media servers MEDIA_SERVERS names
+(one each of Plex, Jellyfin and Emby). Each server Overture names is checked
+on its own, against the given server of its kind. Overture is
 asked through its own API, so every result comes from the code users run; each
 media server is asked directly, so Overture's answers are compared with the
 server's own:
@@ -66,11 +66,10 @@ sent.
   verify" and deleted at the end, whatever fails; one left by a run that was
   killed is deleted first. No item, library or other collection is changed.
 
-Create an Overture key per instance under API keys in the menu and pass
-them in the order of the addresses; give each media server's address and its
-token or API key:
+Create an Overture key under API keys in the menu, and give each media
+server's address and its token or API key. For Overture with Plex, Jellyfin
+and Emby in MEDIA_SERVERS:
 
-    One Overture instance with Plex, Jellyfin and Emby in MEDIA_SERVERS:
     OVERTURE_API_KEY=key \
         PLEX_TOKEN=... \
         JELLYFIN_API_KEY=... \
@@ -86,21 +85,13 @@ token or API key:
         --sonarr http://localhost:8989 \
         --report verify.md
 
-    Several Overture instances, each with its own key:
-    OVERTURE_API_KEY=first-key,second-key \
-        PLEX_TOKEN=... \
-        uv run python -m scripts.verify \
-        http://localhost:5885 http://localhost:5886 \
-        --plex https://localhost:32400
-
 Set TMDB_API_KEY and MDBLIST_API_KEY to probe those APIs too, and pass
 --radarr and --sonarr with RADARR_API_KEY and SONARR_API_KEY to compare them.
 
-One Overture key without commas is used for every instance. A server that is
-not given, or one of several of its kind in an instance, is checked through
-Overture alone. Pass --sources with a JSON file of source objects (as the API
-takes them) to test TMDB, MDBList and person sources, and --insecure to skip
-TLS certificate verification.
+A server that is not given, or one of several of its kind in MEDIA_SERVERS,
+is checked through Overture alone. Pass --sources with a JSON file of source
+objects (as the API takes them) to test TMDB, MDBList and person sources, and
+--insecure to skip TLS certificate verification.
 """
 
 lazy import argparse
@@ -288,7 +279,7 @@ def named(values: set[str] | list[str]) -> str:
 
 
 class Overture:
-    """A client of one Overture instance, holding a read-only API key."""
+    """A client of Overture, holding a read-only API key."""
 
     def __init__(self, base_url: str, api_key: str, *, verify: bool = True) -> None:
         self.client = httpx2.AsyncClient(
@@ -510,7 +501,7 @@ class Listing:
 
 
 class Library:
-    """The checks of one library on one instance, and on its server."""
+    """The checks of one library in Overture, and on its server."""
 
     def __init__(
         self,
@@ -1929,7 +1920,7 @@ async def check_media_browser_collections(
     return cases, held, shown
 
 
-async def verify_instance(
+async def verify_overture(
     url: str,
     api_key: str,
     extra_sources: list[dict[str, Any]],
@@ -1937,12 +1928,12 @@ async def verify_instance(
     *,
     verify: bool = True,
 ) -> list[Case]:
-    """Run every check against one Overture instance and each of its servers.
+    """Run every check against Overture and each of its servers.
 
-    Each server the instance names is checked on its own, and compared with
-    the server of its kind given in *direct*, read directly. Where the
-    instance names several of one kind, which one is given cannot be told,
-    so those are checked through Overture alone.
+    Each server Overture names is checked on its own, and compared with the
+    server of its kind given in *direct*, read directly. Where it names
+    several of one kind, which one is given cannot be told, so those are
+    checked through Overture alone.
     """
     overture = Overture(url, api_key, verify=verify)
     cases: list[Case] = []
@@ -1961,7 +1952,7 @@ async def verify_instance(
         )
     except (ApiError, httpx2.HTTPError) as exc:
         await overture.client.aclose()
-        return [Case(url, "", "instance", "reach the API", error=failure(exc))]
+        return [Case(url, "", "Overture", "reach the API", error=failure(exc))]
     try:
         for server in servers:
             paired = (
@@ -1999,9 +1990,9 @@ async def verify_server(
     listing: Listing,
     lead: dict[str, Any],
 ) -> list[Case]:
-    """Check the libraries and collections one of an instance's servers holds.
+    """Check the libraries and collections one of Overture's servers holds.
 
-    *lead* is the instance's lead server.
+    *lead* is Overture's lead server.
     """
     title = server["title"]
     cases: list[Case] = []
@@ -2806,16 +2797,12 @@ def report(cases: list[Case]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def api_keys(count: int) -> list[str]:
-    """One key per instance, from OVERTURE_API_KEY."""
-    keys = [key.strip() for key in os.environ.get("OVERTURE_API_KEY", "").split(",")]
-    if not any(keys):
-        raise SystemExit("Set OVERTURE_API_KEY to keys from API keys in the menu")
-    if len(keys) == 1:
-        return keys * count
-    if len(keys) != count:
-        raise SystemExit("Give OVERTURE_API_KEY one key, or one per address")
-    return keys
+def api_key() -> str:
+    """Overture's API key, from OVERTURE_API_KEY."""
+    key = os.environ.get("OVERTURE_API_KEY", "").strip()
+    if not key:
+        raise SystemExit("Set OVERTURE_API_KEY to a key from API keys in the menu")
+    return key
 
 
 def servers(
@@ -2847,9 +2834,8 @@ def servers(
 
 
 async def check_services(args: argparse.Namespace, verify: bool) -> list[Case]:
-    """Probe each service whose credential is set, beside the first instance."""
-    keys = api_keys(len(args.urls))
-    overture = Overture(args.urls[0], keys[0], verify=verify)
+    """Probe each service whose credential is set, beside Overture."""
+    overture = Overture(args.url, api_key(), verify=verify)
     cases: list[Case] = []
     try:
         if key := os.environ.get("TMDB_API_KEY"):
@@ -2882,8 +2868,9 @@ async def run(args: argparse.Namespace) -> int:
     given = servers(args, verify)
     direct = {server.server: server for server, _, _ in given}
     try:
-        for url, key in zip(args.urls, api_keys(len(args.urls)), strict=True):
-            cases.extend(await verify_instance(url, key, extra, direct, verify=verify))
+        cases.extend(
+            await verify_overture(args.url, api_key(), extra, direct, verify=verify)
+        )
         cases.extend(await check_services(args, verify))
         if args.write:
             for server, url, secret in given:
@@ -2903,12 +2890,7 @@ async def run(args: argparse.Namespace) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "urls",
-        nargs="+",
-        metavar="url",
-        help="Each Overture instance's address, such as http://localhost:5885",
-    )
+    parser.add_argument("url", help="Overture's address, such as http://localhost:5885")
     parser.add_argument("--report", type=Path, help="Write the Markdown report here")
     parser.add_argument(
         "--sources", type=Path, help="A JSON list of extra source objects to test"

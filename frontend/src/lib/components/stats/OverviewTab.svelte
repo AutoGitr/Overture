@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { settingsState } from "../../stores/settingsState.svelte";
   import Database from "@lucide/svelte/icons/database";
   import HardDrive from "@lucide/svelte/icons/hard-drive";
   import Image from "@lucide/svelte/icons/image";
@@ -115,7 +116,7 @@
       >{(stats.library.monitored_collections ?? 0).toLocaleString()} monitored</span
     >
   {:else}
-    <span class="text-muted">Unavailable from media server</span>
+    <span class="text-muted">Unavailable from {settingsState.media_server_name}</span>
   {/if}
 {/snippet}
 

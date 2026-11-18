@@ -1,3 +1,4 @@
+import { settingsState } from "../stores/settingsState.svelte";
 import { createMutation, createQuery } from "@tanstack/svelte-query";
 import {
   deleteCollectionGroupMutation,
@@ -94,7 +95,7 @@ export class CollectionGroupActions {
       },
       {
         body: { collections: "both", group: null },
-        label: "Remove them from Overture and the media server",
+        label: `Remove them from Overture and ${settingsState.media_server_name}`,
       },
     ];
     const chosen = await chooseAction({

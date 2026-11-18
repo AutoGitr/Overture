@@ -4,7 +4,7 @@ lazy from collections.abc import Sequence
 lazy from dataclasses import replace
 
 lazy from ...db.models.settings import AppSettings
-lazy from ...domain import ARR_ADDED_TAG, FilterOperator, MediaType
+lazy from ...domain import ARR_ADDED_TAG, MediaType
 lazy from ...integrations.arr import ArrRequest, ArrTitle
 lazy from ...integrations.tmdb import TMDBClient
 lazy from ...repositories.collections import CollectionItem
@@ -13,8 +13,6 @@ lazy from ...schemas.collections import (
     CollectionMissingTitle,
     CollectionRequestResult,
     FilterGroup,
-    RadarrTagSource,
-    SonarrTagSource,
 )
 lazy from ...utils.errors import PublicServiceError
 lazy from .sources import SourceResolver
@@ -38,19 +36,10 @@ class MemberEffects:
         *,
         region: str,
     ) -> list[int]:
-        """TMDB IDs the criteria's lists hold and the library lacks, in list order.
-
-        Radarr and Sonarr tags hold titles the library has or is downloading,
-        so only TMDB and MDBList lists count.
-        """
+        """TMDB IDs the criteria's lists hold and the library lacks, in list order."""
         have = {item.tmdb_id for item in items if item.tmdb_id is not None}
         found: dict[int, None] = {}
-        for condition in criteria.source_conditions():
-            source = condition.source
-            if condition.operator is not FilterOperator.IS or isinstance(
-                source, RadarrTagSource | SonarrTagSource
-            ):
-                continue
+        for source in criteria.listing_sources():
             for tmdb_id in await self._sources.tmdb_ids(
                 source, media_type, region=region
             ):

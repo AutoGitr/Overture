@@ -424,9 +424,9 @@ def requests(monkeypatch: pytest.MonkeyPatch) -> Requests:
     return seen
 
 
-def _args(report: Path | None, *urls: str, **servers: str) -> Any:
+def _args(report: Path | None, url: str, **servers: str) -> Any:
     return module.argparse.Namespace(
-        urls=list(urls),
+        url=url,
         report=report,
         sources=None,
         insecure=False,
@@ -552,10 +552,7 @@ async def test_keys_and_credentials_are_required(
     with pytest.raises(SystemExit, match="OVERTURE_API_KEY"):
         await module.run(_args(None, "http://plex.test"))
 
-    monkeypatch.setenv("OVERTURE_API_KEY", "a,b,c")
-    with pytest.raises(SystemExit, match="one per address"):
-        await module.run(_args(None, "http://plex.test", "http://jellyfin.test"))
-
+    monkeypatch.setenv("OVERTURE_API_KEY", "key")
     monkeypatch.delenv("PLEX_TOKEN", raising=False)
     with pytest.raises(SystemExit, match="PLEX_TOKEN"):
         await module.run(

@@ -17,7 +17,7 @@ lazy from . import COLLECTIONS_LOCK
 lazy from .access import CollectionAccess
 lazy from .editor import CollectionEditor
 lazy from .rule_sync import RuleSync
-lazy from .rules import TITLE_TAKEN, apply_libraries
+lazy from .rules import apply_libraries, title_taken
 
 #: What a separator selects in each library: nothing, as it holds no members.
 _NOTHING = FilterGroup()
@@ -116,7 +116,7 @@ class CollectionSeparators:
             and not libraries.keys().isdisjoint(row.library_ids)
             for row in await repo.list_listed()
         ):
-            raise PublicServiceError(409, TITLE_TAKEN)
+            raise PublicServiceError(409, title_taken(group.name))
 
     async def discard(self, rows: Sequence[MediaCollection]) -> list[MediaCollection]:
         """Delete the separator among a group's *rows*; return the others.

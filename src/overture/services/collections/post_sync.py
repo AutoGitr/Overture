@@ -30,12 +30,11 @@ lazy from ...schemas.collections import SetCollectionThemeRequest
 lazy from ...utils.collection_formats import format_arr_tag, format_member_tag
 lazy from ...utils.errors import PublicServiceError
 lazy from ..art.collection_art import CollectionArtService, chosen_poster_style
-lazy from .access import CollectionAccess
+lazy from .access import CollectionAccess, catalog_collections
 lazy from .arr_requests import CollectionArr
 lazy from .member_effects import MemberEffects
 lazy from .membership import Membership
 lazy from .policy import CollectionPolicy, resolve_policy
-lazy from .reader import catalog_collections
 lazy from .rules import criteria_of
 lazy from .sources import SourceResolver
 lazy from .themes import CollectionThemes
@@ -88,11 +87,12 @@ class AutoAssets:
 
     A slot with no art chosen gets what the policy's Automatic art says: the
     best art of the first source in its order that has any (OvertureDB's
-    catalog art, or TMDB's art of the franchise or a listed person), else art
-    generated in the policy's style, a poster with the title and a background
-    without. A collection that needs no background gets none, and a
-    separator's poster is always generated. Art generated earlier is generated
-    again when the title or group it shows changed.
+    catalog art, or TMDB's art of the franchise or a listed person), or art
+    generated in the policy's style once ``generate`` comes, a poster with the
+    title and a background without. A collection that needs no background gets
+    none, one that needs no theme no automatic theme, and a separator's poster
+    is always generated. Art generated earlier is generated again when the
+    title or group it shows changed.
     """
 
     name = "Automatic assets"
@@ -128,20 +128,32 @@ class AutoAssets:
                 continue
             elif art_type is ArtType.POSTER and row.kind is CollectionKind.SEPARATOR:
                 await self._generate(synced, art_type)
-            elif policy.auto_art.sources and (
-                found := await self._matched(synced, art_type)
-            ):
+            else:
+                await self._automatic(synced, art_type)
+        await self._theme(synced)
+
+    async def _automatic(self, synced: SyncedCollection, art_type: ArtType) -> None:
+        """Fill the slot from the first of the policy's sources that gives art."""
+        order = synced.policy.auto_art
+        found = (
+            (await self._art.found(synced.collection_id, art_type)).sources
+            if any(source.art_source for source in order)
+            else {}
+        )
+        for source in order:
+            if (catalog := source.art_source) is None:
+                await self._generate(synced, art_type)
+                return
+            if candidate := self._taken(synced, catalog, found.get(catalog, [])):
                 await self._art.apply(
-                    collection_id,
+                    synced.collection_id,
                     art_type,
                     SaveCollectionArtRequest(
-                        url=found.url,
-                        poster_style=chosen_poster_style(art_type, found),
+                        url=candidate.url,
+                        poster_style=chosen_poster_style(art_type, candidate),
                     ),
                 )
-            elif policy.auto_art.generates:
-                await self._generate(synced, art_type)
-        await self._theme(synced)
+                return
 
     async def _generate(self, synced: SyncedCollection, art_type: ArtType) -> None:
         """Generate the slot's art in the policy's style."""
@@ -151,22 +163,22 @@ class AutoAssets:
             SaveCollectionArtRequest(generated=synced.policy.generated_style),
         )
 
-    async def _matched(
-        self, synced: SyncedCollection, art_type: ArtType
+    @staticmethod
+    def _taken(
+        synced: SyncedCollection, source: ArtSource, candidates: list[ArtCandidate]
     ) -> ArtCandidate | None:
-        """The best art the first source in the policy's order offers.
+        """The best of a source's art the policy takes.
 
-        OvertureDB offers each of its posters; only the policy's style is taken.
+        OvertureDB offers each of its posters, the policy's styles first in its
+        order; only those styles are taken.
         """
-        found = (await self._art.found(synced.collection_id, art_type)).sources
-        posters = synced.policy.overturedb_posters
         return next(
             (
                 candidate
-                for source in synced.policy.auto_art.sources
-                for candidate in found.get(source, [])
+                for candidate in candidates
                 if source is not ArtSource.OVERTUREDB
-                or candidate.poster_style in {None, posters}
+                or candidate.poster_style is None
+                or candidate.poster_style in synced.policy.overturedb_posters
             ),
             None,
         )
@@ -183,7 +195,7 @@ class AutoAssets:
                     SetCollectionThemeRequest(youtube_id=row.youtube_id),
                 )
             return
-        if not policy.auto_match_theme or not row.tmdb_collection_id:
+        if not (policy.themes and policy.auto_match_theme and row.tmdb_collection_id):
             return
         async with self._access.database.read_session() as session:
             catalog = await catalog_collections(

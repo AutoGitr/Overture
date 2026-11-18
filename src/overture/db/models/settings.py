@@ -10,7 +10,7 @@ lazy from datetime import datetime
 lazy from typing import Any, ClassVar
 
 lazy from pydantic import field_validator
-lazy from sqlmodel import CheckConstraint, Field, SQLModel
+lazy from sqlmodel import JSON, CheckConstraint, Field, SQLModel
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ...domain import (
@@ -18,7 +18,7 @@ lazy from ...domain import (
     ArtStyle,
     AspectRatioTolerance,
     AutoAdvance,
-    AutoArt,
+    AutoArtSource,
     AutoUnmonitor,
     CollectionFiltering,
     CollectionMode,
@@ -66,17 +66,19 @@ class AppSettingsBase(SQLModel):
     collection_visible_library: bool = False
     collection_minimum_items: int = Field(default=2, ge=1, le=100)
     collection_delete_below_minimum: bool = True
-    collection_auto_art: AutoArt = Field(
-        default=AutoArt.OFF, sa_type=enum_type(AutoArt)
-    )
+    #: The sources Automatic art tries, first to last; empty turns it off.
+    collection_auto_art: list[AutoArtSource] = Field(default=[], sa_type=JSON)
     collection_generated_style: ArtStyle = Field(
         default=ArtStyle.DARK, sa_type=enum_type(ArtStyle)
     )
-    collection_overturedb_posters: CollectionPosterStyle = Field(
-        default=CollectionPosterStyle.INDIVIDUAL,
-        sa_type=enum_type(CollectionPosterStyle),
+    #: The OvertureDB poster styles collections take, first to last; empty
+    #: takes none.
+    collection_overturedb_posters: list[CollectionPosterStyle] = Field(
+        default=[CollectionPosterStyle.INDIVIDUAL], sa_type=JSON
     )
     collection_backgrounds: bool = True
+    #: Whether collections need a theme; without one, their themes are complete.
+    collection_themes: bool = True
     collection_auto_match_theme: bool = False
     collection_sort_title_format: str = Field(default="", max_length=200)
     collection_summary_format: str = Field(default="", max_length=2000)
@@ -127,6 +129,14 @@ class AppSettingsBase(SQLModel):
     def valid_collection_sort_title_format(cls, value: str) -> str:
         """Use the same template syntax as generators and bulk operations."""
         return validate_sort_title_format(value)
+
+    @field_validator("collection_auto_art", "collection_overturedb_posters")
+    @classmethod
+    def distinct_entries(cls, value: list[str]) -> list[str]:
+        """An order names each entry once."""
+        if len(set(value)) != len(value):
+            raise ValueError("List each entry once")
+        return value
 
     @field_validator("tmdb_region")
     @classmethod

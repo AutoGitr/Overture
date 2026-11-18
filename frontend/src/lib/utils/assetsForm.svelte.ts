@@ -96,6 +96,11 @@ export class AssetsForm {
     return this.source.showLibraries();
   }
 
+  /** Every library the run can cover, movies first. */
+  get libraries(): LibrarySectionRead[] {
+    return [...this.movieLibraries, ...this.showLibraries];
+  }
+
   /** Catalog sources stay chosen while OvertureDB is off; they are only left out. */
   readonly disabledSources = $derived.by(() => disabledSources(this.source.catalogEnabled()));
 

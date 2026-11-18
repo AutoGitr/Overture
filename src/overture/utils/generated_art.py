@@ -11,12 +11,25 @@ lazy from functools import cache, lru_cache
 lazy from pathlib import Path
 
 lazy from fontTools.ttLib import TTFont
-lazy from PIL import Image, ImageDraw, ImageFont
+lazy from PIL import Image, ImageDraw, ImageFont, ImageMath
 
 lazy from ..domain import ArtStyle, ArtType
 
-#: The size each art type is generated at, as servers display them.
-_SIZES = {ArtType.POSTER: (1000, 1500), ArtType.BACKGROUND: (3840, 2160)}
+#: The size each art type is generated at: that of the largest TMDB posters,
+#: and a 4K background.
+_SIZES = {ArtType.POSTER: (2000, 3000), ArtType.BACKGROUND: (3840, 2160)}
+#: An 8x8 Bayer matrix: the order in which a cell of pixels steps up to the
+#: next level as a gradient passes between two of its 256.
+_BAYER = (
+    (0, 32, 8, 40, 2, 34, 10, 42),
+    (48, 16, 56, 24, 50, 18, 58, 26),
+    (12, 44, 4, 36, 14, 46, 6, 38),
+    (60, 28, 52, 20, 62, 30, 54, 22),
+    (3, 35, 11, 43, 1, 33, 9, 41),
+    (51, 19, 59, 27, 49, 17, 57, 25),
+    (15, 47, 7, 39, 13, 45, 5, 37),
+    (63, 31, 55, 23, 61, 29, 53, 21),
+)
 #: The most lines a title wraps to before its size shrinks instead.
 _MAX_LINES = 4
 _FONT_DIR = Path(__file__).resolve().parent / "fonts"
@@ -72,21 +85,51 @@ _PALETTES = {
 }
 
 
-def _gradient(size: tuple[int, int], palette: _Palette) -> Image.Image:
-    """A vertical gradient from the palette's top colour to its bottom one."""
+def _thresholds(size: tuple[int, int]) -> Image.Image:
+    """The Bayer matrix tiled over *size*, each cell's threshold in 0 to 255."""
+    tile = Image.frombytes(
+        "L",
+        (len(_BAYER), len(_BAYER)),
+        bytes(level * 4 + 2 for row in _BAYER for level in row),
+    )
     width, height = size
-    image = Image.new("RGB", size)
-    draw = ImageDraw.Draw(image)
-    for y in range(height):
-        share = y / max(height - 1, 1)
-        draw.line(
-            ((0, y), (width, y)),
-            fill=tuple(
-                round(top + (bottom - top) * share)
-                for top, bottom in zip(palette.top, palette.bottom, strict=True)
-            ),
+    strip = Image.new("L", (width, tile.height))
+    for x in range(0, width, tile.width):
+        strip.paste(tile, (x, 0))
+    thresholds = Image.new("L", size)
+    for y in range(0, height, tile.height):
+        thresholds.paste(strip, (0, y))
+    return thresholds
+
+
+def _gradient(size: tuple[int, int], palette: _Palette) -> Image.Image:
+    """A vertical gradient from the palette's top colour to its bottom one.
+
+    A dark palette spans few of a channel's 256 levels, so each level would
+    show as a band; ordered dithering steps between neighbouring levels
+    instead, the same way every time, so the same art gives the same bytes.
+    """
+    height = size[1]
+    thresholds = _thresholds(size)
+    channels: list[Image.Image] = []
+    for top, bottom in zip(palette.top, palette.bottom, strict=True):
+        levels = [top + (bottom - top) * y / max(height - 1, 1) for y in range(height)]
+        whole = Image.frombytes("L", (1, height), bytes(int(level) for level in levels))
+        fraction = Image.frombytes(
+            "L",
+            (1, height),
+            bytes(round((level - int(level)) * 255) for level in levels),
         )
-    return image
+        stepped = ImageMath.lambda_eval(
+            lambda image: image["whole"] + (image["fraction"] > image["threshold"]),
+            # Pillow's size annotation includes an optional, untyped NumPy array
+            # alias; these calls pass tuples only.
+            whole=whole.resize(size, Image.Resampling.NEAREST),  # pyright: ignore[reportUnknownMemberType]
+            fraction=fraction.resize(size, Image.Resampling.NEAREST),  # pyright: ignore[reportUnknownMemberType]
+            threshold=thresholds,
+        )
+        channels.append(stepped.convert("L"))
+    return Image.merge("RGB", channels)
 
 
 @cache

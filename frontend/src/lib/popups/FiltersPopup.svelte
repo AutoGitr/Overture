@@ -19,6 +19,7 @@
   import CatalogDraftsCard from "../components/CatalogDraftsCard.svelte";
   import CustomFilterCard from "../components/CustomFilterCard.svelte";
   import CheckboxList from "../components/CheckboxList.svelte";
+  import LibraryOptions from "../components/LibraryOptions.svelte";
   import FieldRow from "../components/FieldRow.svelte";
   import PopupSection from "../components/PopupSection.svelte";
   import PopupShell from "../components/PopupShell.svelte";
@@ -363,7 +364,7 @@
   {/if}
 {/snippet}
 
-<PopupShell title="Filters & operations" onclose={() => uiState.closePopup()}>
+<PopupShell title="Filters & operations" size="wide" onclose={() => uiState.closePopup()}>
   <!-- Names share one column and every control fills the rest of the row,
        with its options at equal widths; where that leaves a control too
        narrow for its options, it moves under its name. -->
@@ -413,13 +414,6 @@
       </PopupSection>
       <CatalogDraftsCard entries={catalogEntries} />
     {:else}
-      {#if uiState.sidebarMode === "items"}
-        <CustomFilterCard
-          bind:filterId={draft.customFilter}
-          mediaType={uiState.sidebarTab}
-          libraryId={libraries[0]?.id ?? ""}
-        />
-      {/if}
       {#each groupedSections as [group, keys] (group)}
         {@const title = sidebarDomain.FILTER_GROUPS[group]}
         {#if title}
@@ -451,12 +445,8 @@
                   ? "All libraries"
                   : `${filters.libraryIds.length} of ${libraries.length} selected`}
               >
-                <CheckboxList
-                  options={libraries.map((library) => ({
-                    value: library.id,
-                    label: settingsState.libraryLabel(library),
-                    count: library.count,
-                  }))}
+                <LibraryOptions
+                  {libraries}
                   selected={filters.libraryIds}
                   ontoggle={(id) =>
                     (draft.libraryIds = toggleSelectedValue(filters.libraryIds, id))}
@@ -464,6 +454,13 @@
               </PopupSection>
             {/if}
           {/each}
+        {/if}
+        {#if group === "libraries" && uiState.sidebarMode === "items"}
+          <CustomFilterCard
+            bind:filterId={draft.customFilter}
+            mediaType={uiState.sidebarTab}
+            libraryId={libraries[0]?.id ?? ""}
+          />
         {/if}
       {/each}
 

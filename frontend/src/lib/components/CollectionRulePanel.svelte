@@ -7,7 +7,7 @@
     type CollectionEditor,
   } from "../utils/collectionForms.svelte";
   import { errorMessage } from "../utils/errors";
-  import { inLibraryOrder } from "../utils/libraries.svelte";
+  import { inLibraryOrder, libraryScope } from "../utils/libraries.svelte";
   import DetailForm from "./DetailForm.svelte";
   import FieldRow from "./FieldRow.svelte";
   import Notice from "./Notice.svelte";
@@ -28,6 +28,11 @@
   let capabilities = $derived(editor.capabilities.data);
   // The editor owns its rule, so its criteria are bound here rather than through `editor`.
   let rule = $derived(editor.rule);
+
+  function scopeOf(id: string) {
+    const library = libraries.find((each) => each.id === id);
+    return library ? libraryScope(library) : id;
+  }
 
   function libraryName(id: string) {
     const library = libraries.find((each) => each.id === id);
@@ -105,6 +110,7 @@
         sources={editor.options.forLibrary(entry.library_id, mediaType)?.sources ?? []}
         {mediaType}
         libraryId={entry.library_id}
+        scope={scopeOf(entry.library_id)}
         label={rule.libraries.length > 1 ? `${name} criteria` : "Criteria"}
       />
       {#if result}
@@ -116,7 +122,7 @@
         {#if result.tmdb_unread}
           {@const one = result.tmdb_unread === 1}
           <p class="hint" role="note">
-            {`${countOf(result.tmdb_unread, "title")} in this library ${one ? "has" : "have"} no TMDB facts yet. The next Full Sync reads them; until then, TMDB conditions cannot match ${one ? "it" : "them"}.`}
+            {`${countOf(result.tmdb_unread, "title")} in ${name} ${one ? "has" : "have"} no TMDB facts yet. The next Full Sync reads them; until then, TMDB conditions cannot match ${one ? "it" : "them"}.`}
           </p>
         {/if}
       {/if}

@@ -53,7 +53,7 @@
 
   // A section link may open this view, so show the section it names once it renders.
   $effect(() => {
-    if (route.hash.startsWith(`#${formId}-`)) revealSection(route.hash.slice(1));
+    if (route.hash.startsWith(`#${formId}-`)) void revealSection(route.hash.slice(1));
   });
 </script>
 
@@ -114,7 +114,7 @@
     {#if collection && editor instanceof CollectionEditor}
       <section id={`${formId}-members`} aria-label="Collection members" tabindex="-1">
         <CollectionMembers {editor} {libraryItems} {libraries} />
-        {#if collection.rule}<CollectionMissing {collection} />{/if}
+        {#if collection.lists_missing}<CollectionMissing {collection} />{/if}
       </section>
     {/if}
 

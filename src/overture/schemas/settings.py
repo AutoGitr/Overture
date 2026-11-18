@@ -11,7 +11,7 @@ lazy from ..domain import (
     ArtStyle,
     AspectRatioTolerance,
     AutoAdvance,
-    AutoArt,
+    AutoArtSource,
     AutoUnmonitor,
     CollectionFiltering,
     CollectionMode,
@@ -81,10 +81,11 @@ class AppSettingsUpdate(StrictBaseModel):
     collection_visible_library: bool | None = None
     collection_minimum_items: int | None = None
     collection_delete_below_minimum: bool | None = None
-    collection_auto_art: AutoArt | None = None
+    collection_auto_art: list[AutoArtSource] | None = None
     collection_generated_style: ArtStyle | None = None
-    collection_overturedb_posters: CollectionPosterStyle | None = None
+    collection_overturedb_posters: list[CollectionPosterStyle] | None = None
     collection_backgrounds: bool | None = None
+    collection_themes: bool | None = None
     collection_auto_match_theme: bool | None = None
     collection_sort_title_format: str | None = None
     collection_summary_format: str | None = None

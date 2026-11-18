@@ -1,16 +1,9 @@
 <script lang="ts">
   import { allValuesSelected } from "../utils/popupSelection";
-  import Checklist, { type ChecklistGroup } from "./Checklist.svelte";
-
-  interface ChecklistLibrary {
-    id: string;
-    title: string;
-    count?: number | null;
-  }
+  import LibraryOptions from "./LibraryOptions.svelte";
 
   let {
-    movieLibraries = [],
-    showLibraries = [],
+    libraries = [],
     selectedIds,
     loading = false,
     error = "",
@@ -19,8 +12,7 @@
     ontoggle,
     ontoggleall,
   }: {
-    movieLibraries?: ChecklistLibrary[];
-    showLibraries?: ChecklistLibrary[];
+    libraries?: readonly { id: string; title: string; server_id: number; count?: number | null }[];
     selectedIds: string[];
     loading?: boolean;
     error?: string;
@@ -30,28 +22,25 @@
     ontoggleall: (checked: boolean) => void;
   } = $props();
 
-  let selectedSet = $derived<ReadonlySet<string>>(new Set(selectedIds));
-  let libraryIds = $derived([...movieLibraries, ...showLibraries].map((library) => library.id));
+  let libraryIds = $derived(libraries.map((library) => library.id));
   let allSelected = $derived(allValuesSelected(selectedIds, libraryIds));
-  let groups = $derived<ChecklistGroup[]>(
-    [
-      { key: "movie", label: "Movies", libraries: movieLibraries },
-      { key: "show", label: "Shows", libraries: showLibraries },
-    ]
-      .map(({ key, label, libraries }): ChecklistGroup => ({
-        key,
-        label,
-        options: libraries.map((library) => ({
-          id: library.id,
-          label: library.title,
-          count: library.count,
-          checked: selectedSet.has(library.id),
-        })),
-      }))
-  );
+  let unavailable = $derived(loading || !!error || libraryIds.length === 0);
 </script>
 
-{#snippet status()}
+<div class="checklist">
+  <div class="heading-row">
+    <span class="form-label">Libraries</span>
+    <label class="checkbox-group">
+      <input
+        type="checkbox"
+        checked={allSelected}
+        disabled={unavailable}
+        aria-label="{allSelected ? 'Deselect' : 'Select'} all libraries"
+        onchange={(event) => ontoggleall(event.currentTarget.checked)}
+      />
+      <span aria-hidden="true">{allSelected ? "Deselect all" : "Select all"}</span>
+    </label>
+  </div>
   {#if loading}
     <span class="hint">Loading libraries...</span>
   {:else if error}
@@ -59,17 +48,17 @@
     {#if onretry}
       <button class="btn btn-ghost btn-sm" onclick={onretry}>Retry</button>
     {/if}
-  {:else}
+  {:else if libraryIds.length === 0}
     <span class="hint">{emptyMessage}</span>
+  {:else}
+    <LibraryOptions {libraries} selected={selectedIds} {ontoggle} />
   {/if}
-{/snippet}
+</div>
 
-<Checklist
-  label="Libraries"
-  {groups}
-  {allSelected}
-  selectAllDisabled={loading || !!error || libraryIds.length === 0}
-  notice={loading || error || libraryIds.length === 0 ? status : undefined}
-  ontoggle={(_group, id) => ontoggle(id)}
-  {ontoggleall}
-/>
+<style>
+  .checklist {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+</style>

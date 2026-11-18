@@ -14,6 +14,7 @@
     collectionPosterOriginalUrl,
     itemArtDisplayUrl,
     itemPosterOriginalUrl,
+    catalogLocalArtUrl,
     remotePosterUrl,
   } from "../utils/artDisplay";
   import { MEDIA_ICONS, type MediaIcon } from "../utils/mediaIcons";
@@ -81,7 +82,9 @@
         meta: catalogEntry.year,
         unmonitored: false,
         icon: MEDIA_ICONS[catalogEntry.media_type],
-        src: remotePosterUrl(catalogEntry),
+        src:
+          catalogLocalArtUrl(catalogEntry, catalogEntry.poster_url, "poster") ??
+          remotePosterUrl(catalogEntry),
         link: posterLink(catalogEntry.title, catalogEntry.poster_url),
       };
     }

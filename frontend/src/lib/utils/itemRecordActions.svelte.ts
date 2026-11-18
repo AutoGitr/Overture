@@ -1,3 +1,4 @@
+import { settingsState } from "../stores/settingsState.svelte";
 import { createMutation } from "@tanstack/svelte-query";
 import {
   deleteItemMutation,
@@ -117,8 +118,7 @@ export class ItemRecordActions {
     if (!item) return;
     const confirmed = await confirmAction({
       title: `Remove ${item.title ?? "this item"} from Overture?`,
-      message:
-        "Its saved record will be removed. Local files and the media server item are kept, so it may return after a sync.",
+      message: `Its saved record will be removed. Local files and ${settingsState.serverNames(item.copies.map((copy) => copy.server_id))}'s copy are kept, so it may return after a sync.`,
       confirmLabel: "Remove",
       destructive: true,
     });

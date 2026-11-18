@@ -4,6 +4,10 @@
 
 ### Added
 
+- **Collections:** **Theme** (global, per group or per collection) can be **Not needed**, so a collection's theme counts as complete without one, in its status, filters and statistics, and none is chosen for it automatically.
+- **Collections:** the configure view's **Missing** section is shown only for collections whose criteria include TMDB or MDBList lists.
+- **Interface:** **Add saved filter...** adds a saved filter to any criteria, a collection's included, as a group.
+- **OvertureDB:** the catalog view shows a poster or background from your library's file when the linked title or collection has the same one chosen, instead of fetching it.
 - **Interface:** **Custom filter** in the movie and show filters saves named filters with conditions on any metadata collection criteria test (actor, director, resolution, codecs, ratings, keywords and more), TMDB and MDBList sources, and each title's library status (art, theme and OvertureDB status, sources, widths, metadata issues), matched together or apart in nested groups.
 - **API:** library items and collections list their `metadata_issues`, and `/api/library/filters` lists what custom filters can test, matches their conditions and keeps saved ones.
 - **Interface:** the sidebar's TMDB search also finds the titles of a person, a company, a keyword or a public list, by name, TMDB ID or link.
@@ -12,6 +16,17 @@
 
 ### Changed
 
+- **Collections:** **Automatic art** and **OvertureDB posters** are ordered lists you tick and drag: Automatic art tries OvertureDB, TMDB and Generate in your order, and a collection takes the first OvertureDB poster style it holds, such as Matte, then Individual. Saved choices keep what they did.
+- **Collections:** **Contribute to OvertureDB as** starts from the first style the collection's **OvertureDB posters** takes.
+- **Interface:** library lists are grouped under their media server, in `MEDIA_SERVERS` order, instead of naming the server on every library.
+- **Interface:** saved filters are shared between movies and shows, offered wherever all their conditions apply; same-named filters of both kinds become one when their conditions agree.
+- **Interface:** criteria offer a field's fixed values and the values your library holds in a list; IDs, TMDB keywords and labels stay typed.
+- **Interface:** the filters popup is wider, and **Custom filter** sits under Libraries; **Auto-match art on load** and **Auto-search themes on load** are under Workflow in Settings.
+- **Interface:** an item's link to its OvertureDB collection uses the collection icon.
+- **Interface:** the database record leaves out jobs and names each server copy after its server and library.
+- **Interface:** messages name the field, media type and media server they are about, such as "Unplayed is not available for shows on Jellyfin".
+- **Art:** perceptual hashes compare 256 points of detail instead of 64, so near-identical posters of another scan or grade no longer match at distance 0; existing fingerprints are computed again on the next refresh.
+- **Collections:** generated posters are 2000×3000 and generated gradients are dithered against banding; collections get them again on their next sync.
 - **Storage:** uploaded images are kept for good in `uploads/` in the config folder, apart from the image cache, which moves from `cache/images` to `cache/`; they were the only copy, yet kept in a cache the docs called safe to delete. Uploads already in the cache move there when Overture starts. Generated collection art stays in the cache and is drawn again when the cache lost it. **Statistics** show uploads as their own part of the footprint.
 - **API:** library IDs name their server (`1:2`); titles and collections list their `copies` on each server, the lead first, instead of one `server_item_id`; settings list `media_servers`, and collection capabilities, server links and server audit results are per server.
 - **Collections:** a smart collection tests a show's **Network** as TMDB names it, through a label, as a regular one does, rather than by Plex's own network names.
@@ -23,6 +38,8 @@
 
 ### Fixed
 
+- **Collections:** **Jump to** in the configure view puts the section's header at the top, also for the last sections and while content above it is still loading.
+- **Collections:** a collection whose settings or OvertureDB say it needs no theme reports its theme as complete after a theme is chosen or removed.
 - **Collections:** Jellyfin 12 creates and edits collections; it refuses the way Overture read a single item with an API key.
 - **Collections:** Overture lists and syncs Jellyfin 12 collections, whose members Jellyfin shows only to a user; it asks for them as an administrator.
 - **Libraries:** a Jellyfin or Emby library set to group movies into collections no longer lists a collection as a title in place of its movies; syncing collections then deleted the collection, finding none of its movies on the server.

@@ -5,6 +5,8 @@ import StatsPopup from "../../../lib/popups/StatsPopup.svelte";
 import { queryClient } from "../../../lib/rest/queryClient";
 import { ApiError } from "../../../lib/rest/transport";
 import { uiState } from "../../../lib/stores/uiState.svelte";
+import { settingsState } from "../../../lib/stores/settingsState.svelte";
+import { appSettings } from "../../helpers/fixtures";
 import { renderWithQueryClient } from "../../helpers/render";
 
 const { getStats } = vi.hoisted(() => ({
@@ -145,7 +147,7 @@ describe("StatsPopup", () => {
     expect(screen.getByText("60 / 120")).toBeInTheDocument(); // movie themes configured
   });
 
-  it("marks collections unavailable when the media server could not list them", async () => {
+  it("marks collections unavailable, naming the media server that could not list them", async () => {
     getStats.mockResolvedValue({
       data: {
         ...mockStats,
@@ -153,15 +155,16 @@ describe("StatsPopup", () => {
         themes: { ...mockStats.themes, collections: null },
       },
     });
+    settingsState.load(appSettings());
     renderWithQueryClient(StatsPopup);
 
-    expect(await screen.findByText("Unavailable from media server")).toBeInTheDocument();
+    expect(await screen.findByText("Unavailable from Plex")).toBeInTheDocument();
 
     await fireEvent.click(screen.getByRole("tab", { name: "Themes" }));
 
     expect(screen.getByRole("heading", { name: "Collection themes" })).toBeInTheDocument();
     expect(
-      screen.getByText("Unavailable: the media server could not list its collections."),
+      screen.getByText("Unavailable: Plex could not list its collections."),
     ).toBeInTheDocument();
   });
 

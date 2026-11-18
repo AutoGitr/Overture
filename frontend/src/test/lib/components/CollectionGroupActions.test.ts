@@ -55,7 +55,7 @@ it("renames the group", async () => {
 it.each([
   ["keep", "Move them to Ungrouped"],
   ["orphan", "Orphan them"],
-  ["both", "Remove them from Overture and the media server"],
+  ["both", "Remove them from Overture and Plex"],
 ])("asks for and submits the %s deletion scope", async (scope, choice) => {
   const { calls } = renderActions();
   await fireEvent.click(await screen.findByRole("button", { name: "Rename or delete" }));

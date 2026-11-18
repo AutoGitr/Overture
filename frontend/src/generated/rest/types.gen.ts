@@ -92,7 +92,10 @@ export type AppSettingsRead = {
      */
     auto_search_themes: boolean;
     auto_unmonitor: AutoUnmonitor;
-    collection_auto_art: AutoArt;
+    /**
+     * Collection Auto Art
+     */
+    collection_auto_art: Array<AutoArtSource>;
     /**
      * Collection Auto Match Theme
      */
@@ -121,7 +124,10 @@ export type AppSettingsRead = {
     collection_minimum_items: number;
     collection_mode_default: CollectionMode;
     collection_order_default: CollectionOrder;
-    collection_overturedb_posters: CollectionPosterStyle;
+    /**
+     * Collection Overturedb Posters
+     */
+    collection_overturedb_posters: Array<CollectionPosterStyle>;
     /**
      * Collection Request Missing
      */
@@ -135,6 +141,10 @@ export type AppSettingsRead = {
      */
     collection_summary_format: string;
     collection_sync_mode: SyncMode;
+    /**
+     * Collection Themes
+     */
+    collection_themes: boolean;
     /**
      * Collection Themes Unavailable
      */
@@ -274,7 +284,10 @@ export type AppSettingsUpdate = {
      */
     auto_search_themes?: boolean | null;
     auto_unmonitor?: AutoUnmonitor | null;
-    collection_auto_art?: AutoArt | null;
+    /**
+     * Collection Auto Art
+     */
+    collection_auto_art?: Array<AutoArtSource> | null;
     /**
      * Collection Auto Match Theme
      */
@@ -303,7 +316,10 @@ export type AppSettingsUpdate = {
     collection_minimum_items?: number | null;
     collection_mode_default?: CollectionMode | null;
     collection_order_default?: CollectionOrder | null;
-    collection_overturedb_posters?: CollectionPosterStyle | null;
+    /**
+     * Collection Overturedb Posters
+     */
+    collection_overturedb_posters?: Array<CollectionPosterStyle> | null;
     /**
      * Collection Request Missing
      */
@@ -317,6 +333,10 @@ export type AppSettingsUpdate = {
      */
     collection_summary_format?: string | null;
     collection_sync_mode?: SyncMode | null;
+    /**
+     * Collection Themes
+     */
+    collection_themes?: boolean | null;
     /**
      * Collection Visible Home
      */
@@ -684,15 +704,14 @@ export type AuthConfig = {
 export type AutoAdvance = 'off' | 'slots' | 'slots_and_items';
 
 /**
- * AutoArt
+ * AutoArtSource
  *
- * What a sync does for a collection's art slot that has none chosen.
+ * Where Automatic art takes a collection slot's art from, in a policy's order.
  *
- * The value names what it tries, first to last: the catalog sources whose
- * best art it takes, then, with ``generate``, art generated from the title.
- * OvertureDB's curated art always comes before TMDB's.
+ * A sync tries each in turn and stops at the first that gives art: the best
+ * art of a catalog source, or, with ``generate``, art generated from the title.
  */
-export type AutoArt = 'off' | 'overturedb' | 'tmdb' | 'overturedb_tmdb' | 'overturedb_generate' | 'tmdb_generate' | 'overturedb_tmdb_generate' | 'generate';
+export type AutoArtSource = 'overturedb' | 'tmdb' | 'generate';
 
 /**
  * AutoUnmonitor
@@ -1423,6 +1442,12 @@ export type CatalogEntryDetail = {
      * Library Item Id
      */
     library_item_id: number | null;
+    /**
+     * Local Art
+     */
+    local_art: {
+        [key: string]: string;
+    };
 };
 
 /**
@@ -1455,6 +1480,12 @@ export type CatalogEntryRow = {
      * Library Item Id
      */
     library_item_id: number | null;
+    /**
+     * Local Art
+     */
+    local_art: {
+        [key: string]: string;
+    };
     media_type: CatalogMediaType;
     /**
      * No Theme
@@ -2015,7 +2046,7 @@ export type CollectionDefaults = {
     active_end_mmdd: SeasonalDate | null;
     active_start_mmdd: SeasonalDate | null;
     arr_tag: MemberTagFormat | null;
-    auto_art: AutoArt | null;
+    auto_art: UniqueListAutoArtSource | null;
     /**
      * Auto Match Theme
      */
@@ -2045,7 +2076,7 @@ export type CollectionDefaults = {
      */
     minimum_items: number | null;
     order_type: CollectionOrder | null;
-    overturedb_posters: CollectionPosterStyle | null;
+    overturedb_posters: UniqueListCollectionPosterStyle | null;
     /**
      * Request Missing
      */
@@ -2053,6 +2084,10 @@ export type CollectionDefaults = {
     sort_title_format: SortTitleFormat | null;
     summary_format: SummaryFormat | null;
     sync_mode: SyncMode | null;
+    /**
+     * Themes
+     */
+    themes: boolean | null;
     /**
      * Visible Home
      */
@@ -2145,6 +2180,7 @@ export type CollectionDetail = {
      */
     collection_group: string | null;
     collection_mode: CollectionMode | null;
+    contributed_style: CollectionPosterStyle;
     /**
      * Copies
      */
@@ -2183,6 +2219,10 @@ export type CollectionDetail = {
      * Library Ids
      */
     library_ids: Array<string>;
+    /**
+     * Lists Missing
+     */
+    lists_missing: boolean;
     /**
      * Managed
      */
@@ -2274,6 +2314,10 @@ export type CollectionDetail = {
      */
     theme_writable: boolean;
     /**
+     * Themes
+     */
+    themes: boolean;
+    /**
      * Title
      */
     title: string;
@@ -2362,8 +2406,12 @@ export type CollectionFieldRead = {
     /**
      * Choices
      */
-    choices: Array<string>;
+    choices: Array<FieldChoice>;
     field: FilterField;
+    /**
+     * Free Values
+     */
+    free_values: boolean;
     kind: FieldKind;
     /**
      * Label
@@ -2538,7 +2586,7 @@ export type CollectionGroupPolicyInput = {
     active_end_mmdd?: SeasonalDate | null;
     active_start_mmdd?: SeasonalDate | null;
     arr_tag?: MemberTagFormat | null;
-    auto_art?: AutoArt | null;
+    auto_art?: UniqueListAutoArtSource | null;
     /**
      * Auto Match Theme
      */
@@ -2569,7 +2617,7 @@ export type CollectionGroupPolicyInput = {
      */
     minimum_items?: number | null;
     order_type?: CollectionOrder | null;
-    overturedb_posters?: CollectionPosterStyle | null;
+    overturedb_posters?: UniqueListCollectionPosterStyle | null;
     /**
      * Request Missing
      */
@@ -2581,6 +2629,10 @@ export type CollectionGroupPolicyInput = {
     sort_title_format?: SortTitleFormat | null;
     summary_format?: SummaryFormat | null;
     sync_mode?: SyncMode | null;
+    /**
+     * Themes
+     */
+    themes?: boolean | null;
     /**
      * Visible Home
      */
@@ -2604,7 +2656,7 @@ export type CollectionGroupPolicyOutput = {
     active_end_mmdd: SeasonalDate | null;
     active_start_mmdd: SeasonalDate | null;
     arr_tag: MemberTagFormat | null;
-    auto_art: AutoArt | null;
+    auto_art: UniqueListAutoArtSource | null;
     /**
      * Auto Match Theme
      */
@@ -2635,7 +2687,7 @@ export type CollectionGroupPolicyOutput = {
      */
     minimum_items: number | null;
     order_type: CollectionOrder | null;
-    overturedb_posters: CollectionPosterStyle | null;
+    overturedb_posters: UniqueListCollectionPosterStyle | null;
     /**
      * Request Missing
      */
@@ -2647,6 +2699,10 @@ export type CollectionGroupPolicyOutput = {
     sort_title_format: SortTitleFormat | null;
     summary_format: SummaryFormat | null;
     sync_mode: SyncMode | null;
+    /**
+     * Themes
+     */
+    themes: boolean | null;
     /**
      * Visible Home
      */
@@ -2967,6 +3023,7 @@ export type CollectionRead = {
      */
     collection_group: string | null;
     collection_mode: CollectionMode | null;
+    contributed_style: CollectionPosterStyle;
     /**
      * Copies
      */
@@ -3082,6 +3139,10 @@ export type CollectionRead = {
     theme_duration: number | null;
     theme_status: AssetStatus;
     /**
+     * Themes
+     */
+    themes: boolean;
+    /**
      * Title
      */
     title: string;
@@ -3177,7 +3238,7 @@ export type CollectionRuleRead = {
     active_end_mmdd: SeasonalDate | null;
     active_start_mmdd: SeasonalDate | null;
     arr_tag: MemberTagFormat | null;
-    auto_art: AutoArt | null;
+    auto_art: UniqueListAutoArtSource | null;
     /**
      * Auto Match Theme
      */
@@ -3220,7 +3281,7 @@ export type CollectionRuleRead = {
      */
     minimum_items: number | null;
     order_type: CollectionOrder | null;
-    overturedb_posters: CollectionPosterStyle | null;
+    overturedb_posters: UniqueListCollectionPosterStyle | null;
     /**
      * Request Missing
      */
@@ -3236,6 +3297,10 @@ export type CollectionRuleRead = {
     source_summary: string | null;
     summary_format: SummaryFormat | null;
     sync_mode: SyncMode | null;
+    /**
+     * Themes
+     */
+    themes: boolean | null;
     /**
      * Visible Home
      */
@@ -3259,7 +3324,7 @@ export type CollectionRuleWriteInput = {
     active_end_mmdd?: SeasonalDate | null;
     active_start_mmdd?: SeasonalDate | null;
     arr_tag?: MemberTagFormat | null;
-    auto_art?: AutoArt | null;
+    auto_art?: UniqueListAutoArtSource | null;
     /**
      * Auto Match Theme
      */
@@ -3297,7 +3362,7 @@ export type CollectionRuleWriteInput = {
      */
     minimum_items?: number | null;
     order_type?: CollectionOrder | null;
-    overturedb_posters?: CollectionPosterStyle | null;
+    overturedb_posters?: UniqueListCollectionPosterStyle | null;
     /**
      * Request Missing
      */
@@ -3309,6 +3374,10 @@ export type CollectionRuleWriteInput = {
     sort_title_format?: SortTitleFormat | null;
     summary_format?: SummaryFormat | null;
     sync_mode?: SyncMode | null;
+    /**
+     * Themes
+     */
+    themes?: boolean | null;
     /**
      * Visible Home
      */
@@ -3332,7 +3401,7 @@ export type CollectionRuleWriteOutput = {
     active_end_mmdd: SeasonalDate | null;
     active_start_mmdd: SeasonalDate | null;
     arr_tag: MemberTagFormat | null;
-    auto_art: AutoArt | null;
+    auto_art: UniqueListAutoArtSource | null;
     /**
      * Auto Match Theme
      */
@@ -3370,7 +3439,7 @@ export type CollectionRuleWriteOutput = {
      */
     minimum_items: number | null;
     order_type: CollectionOrder | null;
-    overturedb_posters: CollectionPosterStyle | null;
+    overturedb_posters: UniqueListCollectionPosterStyle | null;
     /**
      * Request Missing
      */
@@ -3382,6 +3451,10 @@ export type CollectionRuleWriteOutput = {
     sort_title_format: SortTitleFormat | null;
     summary_format: SummaryFormat | null;
     sync_mode: SyncMode | null;
+    /**
+     * Themes
+     */
+    themes: boolean | null;
     /**
      * Visible Home
      */
@@ -3847,6 +3920,22 @@ export type DownloadJobMetadata = {
  * One step of a queued download, as its events name it.
  */
 export type DownloadStatus = 'pending' | 'started' | 'progress' | 'completed' | 'failed' | 'cancelled';
+
+/**
+ * FieldChoice
+ *
+ * A value a field can hold and how it is named to people.
+ */
+export type FieldChoice = {
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Value
+     */
+    value: string;
+};
 
 /**
  * FieldCondition
@@ -5170,8 +5259,21 @@ export type SavedFilterRead = {
      * Id
      */
     id: number;
-    media_type: MediaType;
-    name: DisplayName;
+    media_type: MediaType | null;
+    /**
+     * Media Types
+     */
+    media_types: Array<MediaType>;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Unavailable
+     */
+    unavailable: {
+        [key in MediaType]?: string;
+    };
 };
 
 /**
@@ -6393,6 +6495,10 @@ export type UniqueListArtBulkSourceMinLenMinLength1 = Array<ArtBulkSource>;
 
 export type UniqueListArtType = Array<ArtType>;
 
+export type UniqueListAutoArtSource = Array<AutoArtSource>;
+
+export type UniqueListCollectionPosterStyle = Array<CollectionPosterStyle>;
+
 export type UniqueListServerAsset = Array<ServerAsset>;
 
 export type UniqueListThemeBulkSourceMinLenMinLength1 = Array<ThemeBulkSource>;
@@ -6535,6 +6641,10 @@ export type ThemeStatsWritable = {
 export type UniqueListArtBulkSourceMinLenMinLength1Writable = Array<ArtBulkSource>;
 
 export type UniqueListArtTypeWritable = Array<ArtType>;
+
+export type UniqueListAutoArtSourceWritable = Array<AutoArtSource>;
+
+export type UniqueListCollectionPosterStyleWritable = Array<CollectionPosterStyle>;
 
 export type UniqueListServerAssetWritable = Array<ServerAsset>;
 
@@ -9964,12 +10074,7 @@ export type ListSavedFiltersData = {
         'X-Api-Key'?: string | null;
     };
     path?: never;
-    query: {
-        /**
-         * Media type ('movie' or 'show')
-         */
-        media_type: MediaType;
-    };
+    query?: never;
     url: '/api/library/filters/saved';
 };
 

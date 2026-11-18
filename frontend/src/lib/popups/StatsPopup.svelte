@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { settingsState } from "../stores/settingsState.svelte";
   import ChartColumn from "@lucide/svelte/icons/chart-column";
   import Database from "@lucide/svelte/icons/database";
   import Film from "@lucide/svelte/icons/film";
@@ -135,7 +136,9 @@
         {:else}
           <section class="option-card">
             <h3 class="form-label">Collection themes</h3>
-            <p class="text-muted">Unavailable: the media server could not list its collections.</p>
+            <p class="text-muted">
+              Unavailable: {settingsState.media_server_name} could not list its collections.
+            </p>
           </section>
         {/if}
       {:else if activeTab === "database"}

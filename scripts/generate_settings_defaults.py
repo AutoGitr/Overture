@@ -25,7 +25,7 @@ lazy from overture.domain import (
     ServerType,
     ThemeBulkSource,
 )
-lazy from overture.utils.collection_fields import FIELDS
+lazy from overture.utils.collection_fields import DIMENSIONS, FIELDS
 lazy from overture.utils.http_security import (
     CSRF_COOKIE,
     CSRF_HEADER,
@@ -44,9 +44,17 @@ SETTINGS_HEADER = """\
 def render_settings_defaults() -> str:
     """Render the AppSettingsBase defaults as a typed TypeScript contract."""
     defaults = AppSettingsBase.defaults()
-    lines = [SETTINGS_HEADER.rstrip(), "", "export const DEFAULT_APP_SETTINGS = {"]
+    lines = [
+        SETTINGS_HEADER.rstrip(),
+        "",
+        'import type { AppSettingsUpdate } from "./rest/types.gen";',
+        "",
+        "export const DEFAULT_APP_SETTINGS = {",
+    ]
     lines.extend(f"  {key}: {json.dumps(defaults[key])}," for key in sorted(defaults))
-    lines.append("} as const;")
+    # Checked against the settings contract rather than frozen, so a list
+    # default is the list type the settings hold.
+    lines.append("} satisfies Required<AppSettingsUpdate>;")
     lines.append("")
     lines.append("export type AppSettingsDefaults = typeof DEFAULT_APP_SETTINGS;")
     lines.append("")
@@ -93,6 +101,11 @@ def render_settings_defaults() -> str:
         (
             "LIBRARY_STATUS_FIELDS",
             [field.value for field, spec in FIELDS.items() if spec.library_only],
+        ),
+        ("FIELD_LABELS", {field.value: spec.label for field, spec in FIELDS.items()}),
+        (
+            "DIMENSION_LABELS",
+            {dimension.value: spec.label for dimension, spec in DIMENSIONS.items()},
         ),
         ("ITEM_ART_TYPES", list(ITEM_ART_TYPES)),
         ("UNMANAGED_GROUP", UNMANAGED_GROUP),

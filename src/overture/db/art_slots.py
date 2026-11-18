@@ -10,6 +10,8 @@ lazy from dataclasses import asdict, dataclass, fields
 lazy from functools import cache
 lazy from operator import attrgetter
 
+lazy from sqlmodel import col, or_
+
 lazy from ..domain import ArtGeneration, ArtSource, ArtType, CollectionPosterStyle
 lazy from ..utils.art_urls import PublicArtUrl, selected_art_source
 lazy from .models.art import ArtSlot
@@ -142,6 +144,13 @@ def record_selected_art_file(
 ) -> None:
     """Record the slot's local file as the one holding its selection."""
     _write_art_slot(owner, art_type, selection_hash=facts.file_hash, **asdict(facts))
+
+
+#: SQL form of :func:`file_holds_selection`, for a slot with a recorded file.
+FILE_HOLDS_SELECTION = or_(
+    col(ArtSlot.selection_hash).is_(None),
+    col(ArtSlot.selection_hash) == col(ArtSlot.file_hash),
+)
 
 
 def file_holds_selection(slot: ArtSlot) -> bool:

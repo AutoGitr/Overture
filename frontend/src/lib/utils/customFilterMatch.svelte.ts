@@ -42,7 +42,7 @@ export class CustomFilterMatch {
     this.#saved = createQuery(() => {
       const current = this.#target();
       return {
-        ...listSavedFiltersOptions({ query: { media_type: current?.mediaType ?? "movie" } }),
+        ...listSavedFiltersOptions(),
         enabled: current?.filterId != null,
       };
     });

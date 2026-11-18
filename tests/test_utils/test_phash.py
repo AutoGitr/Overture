@@ -20,7 +20,7 @@ def _hamming_distance(h1: str, h2: str) -> int:
 def test_compute_phash_format_and_length() -> None:
     img = Image.new("RGB", (100, 100), color=(100, 150, 200))
     h = compute_phash(img)
-    assert len(h) == 16
+    assert len(h) == 64
     assert all(c in "0123456789abcdef" for c in h)
 
 
@@ -35,7 +35,7 @@ def test_compute_phash_resize_invariance() -> None:
 
     h_large = compute_phash(img_large)
     h_small = compute_phash(img_small)
-    assert _hamming_distance(h_large, h_small) <= 3
+    assert _hamming_distance(h_large, h_small) <= 12
 
 
 def test_compute_phash_compression_invariance() -> None:
@@ -53,7 +53,7 @@ def test_compute_phash_compression_invariance() -> None:
     img.save(buf_jpg, format="JPEG", quality=75)
     h_jpg = compute_phash_from_bytes(buf_jpg.getvalue())
 
-    assert _hamming_distance(h_png, h_jpg) <= 3
+    assert _hamming_distance(h_png, h_jpg) <= 12
 
 
 def test_compute_phash_dissimilar_images() -> None:
@@ -66,7 +66,7 @@ def test_compute_phash_dissimilar_images() -> None:
 
     h1 = compute_phash(img1)
     h2 = compute_phash(img2)
-    assert _hamming_distance(h1, h2) >= 15
+    assert _hamming_distance(h1, h2) >= 60
 
 
 def test_compute_phash_file_matches_bytes(tmp_path: Path) -> None:
@@ -91,7 +91,29 @@ def test_compute_phash_rejects_excessive_pixels(
 @pytest.mark.parametrize("level", [0, 1, 127, 255])
 def test_flat_images_have_no_spurious_ac_bits(level: int) -> None:
     image = Image.new("L", (32, 32), color=level)
-    assert compute_phash(image) == ("8000000000000000" if level else "0" * 16)
+    assert compute_phash(image) == ("8" + "0" * 63 if level else "0" * 64)
+
+
+def test_compute_phash_tells_apart_posters_that_differ_only_in_detail() -> None:
+    def poster(detail: bool) -> Image.Image:
+        image = Image.new("L", (400, 600), color=40)
+        draw = ImageDraw.Draw(image)
+        draw.rectangle((60, 80, 340, 420), fill=200)
+        if detail:
+            # A credit block and a fine border, as another print of a poster has.
+            for row in range(470, 560, 12):
+                draw.line((80, row, 320, row), fill=230, width=4)
+        return image
+
+    plain, detailed = compute_phash(poster(False)), compute_phash(poster(True))
+    resized = compute_phash(
+        poster(True).resize(  # pyright: ignore[reportUnknownMemberType] -- NumPy-typed overload
+            (267, 400), Image.Resampling.LANCZOS
+        )
+    )
+
+    assert _hamming_distance(plain, detailed) > 8
+    assert _hamming_distance(detailed, resized) <= 8
 
 
 def test_compute_phash_rejects_invalid_encoding() -> None:

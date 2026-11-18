@@ -46,11 +46,9 @@ async def match_library_filter(
 
 
 @router.get("/saved")
-async def list_saved_filters(
-    saved: SavedFiltersDep, media_type: MediaTypeQuery
-) -> list[SavedFilterRead]:
-    """List the media type's saved filters by name."""
-    return await saved.list(media_type)
+async def list_saved_filters(saved: SavedFiltersDep) -> list[SavedFilterRead]:
+    """List every saved filter by name, with the media types it applies to."""
+    return await saved.list()
 
 
 @router.post("/saved")

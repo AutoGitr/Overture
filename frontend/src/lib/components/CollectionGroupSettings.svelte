@@ -28,6 +28,8 @@
   import DataStatus from "./DataStatus.svelte";
   import DetailForm from "./DetailForm.svelte";
   import FieldRow from "./FieldRow.svelte";
+  import LibraryOptions from "./LibraryOptions.svelte";
+  import { toggleSelectedValue } from "../utils/popupSelection";
 
   let {
     group,
@@ -104,23 +106,22 @@
    */
   async function save(sync = false) {
     if (!draft || busy) return;
-    const variables = {
-      query: { name: group },
-      body: $state.snapshot(draft),
-    };
+    // The popup may close or show another group once told of the save, which
+    // ends this component, so what follows reads nothing of it.
+    const saving = group;
+    const saved = hasMembers
+      ? "Saved. Its collections get it on the server with their next sync."
+      : "Saved. Its collections use it once they are made.";
+    const variables = { query: { name: saving }, body: $state.snapshot(draft) };
     try {
-      const saved = await request.mutateAsync(variables);
+      const policy = await request.mutateAsync(variables);
       client.setQueryData(
         getCollectionGroupPolicyOptions({ query: variables.query }).queryKey,
-        saved,
+        policy,
       );
       onsave?.();
-      if (sync) return await openSync({ groups: [group] });
-      feedback.success(
-        hasMembers
-          ? "Saved. Its collections get it on the server with their next sync."
-          : "Saved. Its collections use it once they are made.",
-      );
+      if (sync) return await openSync({ groups: [saving] });
+      feedback.success(saved);
     } catch (error) {
       feedback.error(errorMessage(error, "Could not save the group"));
     }
@@ -165,19 +166,11 @@
       {@const generator = form.generator}
       <fieldset class="libraries">
         <legend class="form-label">Libraries</legend>
-        {#each libraries as library (library.id)}
-          <label class="form-row">
-            <input
-              type="checkbox"
-              checked={generator.library_ids.includes(library.id)}
-              onchange={(event) =>
-                (generator.library_ids = event.currentTarget.checked
-                  ? [...generator.library_ids, library.id]
-                  : generator.library_ids.filter((id) => id !== library.id))}
-            />
-            {settingsState.libraryLabel(library)}
-          </label>
-        {/each}
+        <LibraryOptions
+          {libraries}
+          selected={generator.library_ids}
+          ontoggle={(id) => (generator.library_ids = toggleSelectedValue(generator.library_ids, id))}
+        />
       </fieldset>
       <CollectionSetEditor
         bind:generator={draft.generator!}
@@ -250,8 +243,8 @@
 <style>
   .libraries {
     display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2) var(--space-4);
+    flex-direction: column;
+    gap: var(--space-2);
     min-width: 0;
     margin: 0;
     padding: 0;
@@ -259,7 +252,6 @@
   }
 
   .libraries legend {
-    width: 100%;
     padding: 0;
   }
 </style>

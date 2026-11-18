@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { settingsState } from "../stores/settingsState.svelte";
   import { createQuery } from "@tanstack/svelte-query";
   import {
     getCollectionCapabilitiesOptions,
@@ -172,7 +173,7 @@
         const confirmed = await confirmAction({
           title: `Delete ${target}?`,
           message:
-            "Their saved records will be removed from Overture. Local files and media server items will be kept. Items still on the media server may return after a sync.",
+            `Their saved records will be removed from Overture. Local files and ${settingsState.media_server_name}'s items are kept, so titles still there may return after a sync.`,
           confirmLabel: "Delete",
           destructive: true,
         });
@@ -332,10 +333,10 @@
         choices: [
           {
             value: "server",
-            label: "From the media server only",
+            label: `From ${settingsState.media_server_name} only`,
             description: "Overture keeps their configuration, so a later sync can recreate them.",
           },
-          { value: "both", label: "From Overture and the media server" },
+          { value: "both", label: `From Overture and ${settingsState.media_server_name}` },
         ],
       });
       return target ? { delete_target: target } : null;

@@ -35,10 +35,18 @@ def test_hamming_distance_counts_hex_bit_differences() -> None:
         )
         == 1
     )
+    # Each step is eight differing bits, any part of one counting as a step.
     assert (
         PhashService.hamming_distance(
             "0" * PHASH_HEX_LENGTH,
-            f"{'0' * (PHASH_HEX_LENGTH - 1)}f",
+            f"{'0' * (PHASH_HEX_LENGTH - 2)}ff",
+        )
+        == 1
+    )
+    assert (
+        PhashService.hamming_distance(
+            "0" * PHASH_HEX_LENGTH,
+            f"{'0' * (PHASH_HEX_LENGTH - 3)}1ff",
         )
         == 2
     )
@@ -64,8 +72,10 @@ def test_hamming_distance_rejects_non_detailed_fingerprints() -> None:
 
 
 def test_is_valid_fingerprint_accepts_valid_hex_and_rejects_invalid() -> None:
-    assert PhashService.is_valid_fingerprint("0123456789abcdef") is True
-    assert PhashService.is_valid_fingerprint("ABCDEF0123456789") is True
+    assert PhashService.is_valid_fingerprint("0123456789abcdef" * 4) is True
+    assert PhashService.is_valid_fingerprint("ABCDEF0123456789" * 4) is True
+    # A fingerprint of an earlier, smaller shape is computed again.
+    assert PhashService.is_valid_fingerprint("0123456789abcdef") is False
     assert PhashService.is_valid_fingerprint("a" * PHASH_HEX_LENGTH) is True
 
     assert PhashService.is_valid_fingerprint(None) is False
@@ -103,7 +113,9 @@ def test_computed_fingerprint_stabilizes_zero_dct_coefficients() -> None:
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
 
-    assert compute_phash_from_bytes(buffer.getvalue()) == "c1c136c136363636"
+    assert compute_phash_from_bytes(buffer.getvalue()) == (
+        "c1b6c1b63641c1b636413641c1b63641364136413641c1b636413641c1b63641"
+    )
 
 
 async def test_service_status_reports_the_media_server_and_tmdb_apart() -> None:

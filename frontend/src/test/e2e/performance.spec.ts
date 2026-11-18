@@ -81,3 +81,13 @@ test("a burst of live updates keeps a large library responsive", async ({ page, 
   await settle(page);
   expect(await longestTask(page)).toBeLessThan(INTERACTION_BUDGET_MS);
 });
+
+test("choosing from a dropdown keeps a large library responsive", async ({ page }) => {
+  await resetLongestTask(page);
+  await page.getByRole("button", { name: "Choose sort order" }).click();
+  await page.getByRole("menuitemradio").nth(1).click();
+  await page.getByRole("button", { name: "Choose search field" }).click();
+  await page.getByRole("menuitemradio").nth(1).click();
+  await settle(page);
+  expect(await longestTask(page)).toBeLessThan(INTERACTION_BUDGET_MS);
+});

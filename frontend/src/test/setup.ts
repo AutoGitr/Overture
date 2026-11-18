@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, setup } from "@testing-library/svelte";
-import { afterEach, beforeEach, vi } from "vitest";
+import { afterEach, beforeEach, expect, vi } from "vitest";
 import NotificationHost from "../lib/components/NotificationHost.svelte";
 import { notificationState } from "../lib/stores/notificationState.svelte";
 import { criteriaClipboard } from "../lib/stores/criteriaClipboard.svelte";
@@ -87,8 +87,22 @@ beforeEach(() => {
   );
 });
 
+// Svelte's runtime warns on the console of what is likely a bug, such as
+// reading a derived of an ended component; a test that causes one fails.
+const svelteWarnings: string[] = [];
+const warn = console.warn.bind(console);
+beforeEach(() => {
+  svelteWarnings.length = 0;
+  vi.spyOn(console, "warn").mockImplementation((...args: unknown[]) => {
+    const message = args.map(String).join(" ");
+    if (message.includes("[svelte]")) svelteWarnings.push(message);
+    else warn(...args);
+  });
+});
+
 afterEach(() => {
   cleanup();
+  expect(svelteWarnings, "Svelte warned").toEqual([]);
   notificationState.settleConfirm(null);
   sectionState.reset();
   // Auto-advance keeps its walk between selections, never between tests.

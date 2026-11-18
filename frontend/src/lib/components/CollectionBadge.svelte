@@ -5,8 +5,8 @@
   import { goToCatalogEntry, goToCollection } from "../router/routes";
   import IdBadge from "./IdBadge.svelte";
 
-  // One link at most, and its icon names where it goes: the sidebar's
-  // collection icon for the library's collection, OvertureDB's for its entry.
+  // One link at most, always with the collection icon: the icon says what it
+  // opens, the title where. The OvertureDB logo names only the subject itself.
 
   let {
     tmdbId,
@@ -36,8 +36,8 @@
   {@const entryKey = entry.entry_key}
   <IdBadge
     title={`Open its collection, ${entry.entry.title}, in OvertureDB`}
-    icon="/brand/overturedb-tab.svg"
-    alt="OvertureDB collection"
     onselect={() => goToCatalogEntry({ media_type: "collection", entry_key: entryKey })}
-  />
+  >
+    <MEDIA_ICONS.collection size={30} aria-hidden="true" />
+  </IdBadge>
 {/if}

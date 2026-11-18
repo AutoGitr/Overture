@@ -53,7 +53,6 @@ lazy from .plex_query import (
 lazy from .reader import CollectionReader
 lazy from .rules import (
     ORDERED_SOURCES,
-    TITLE_TAKEN,
     apply_libraries,
     criteria_of,
     franchise_ids,
@@ -62,6 +61,7 @@ lazy from .rules import (
     rule_read,
     rule_row,
     shared_franchise,
+    title_taken,
 )
 lazy from .validation import CollectionValidator
 
@@ -165,7 +165,7 @@ class CollectionEditor:
                 and not types.keys().isdisjoint(row.library_ids)
                 for row in existing
             ):
-                raise PublicServiceError(409, TITLE_TAKEN)
+                raise PublicServiceError(409, title_taken(body.title))
             now = utc_now()
             row = MediaCollection(
                 kind=CollectionKind.SMART if smart else CollectionKind.REGULAR,

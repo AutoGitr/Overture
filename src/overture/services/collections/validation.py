@@ -33,6 +33,7 @@ lazy from ...utils.collection_fields import (
     smart_only_dimension,
 )
 lazy from ...utils.errors import PublicServiceError
+lazy from ...utils.text import spoken_list
 lazy from .access import CollectionAccess
 lazy from .policy import CollectionPolicy
 lazy from .sources import SourceResolver
@@ -113,7 +114,8 @@ class CollectionValidator:
                     422,
                     f"{label} is only available in Plex smart collections"
                     if field_available(condition.field, server, media_type, smart=True)
-                    else f"{label} is not available for this library",
+                    else f"{label} is not available for "
+                    f"{self._library_scope(library_id, media_type)}",
                 )
             if condition.operator not in field_operators(condition.field, smart=smart):
                 raise PublicServiceError(
@@ -145,7 +147,9 @@ class CollectionValidator:
             label = field_label(condition.field, next(iter(available or servers)))
             if not available:
                 raise PublicServiceError(
-                    422, f"{label} is not available for this library"
+                    422,
+                    f"{label} is not available for {media_type.plural} on "
+                    f"{spoken_list(server.display_name for server in sorted(servers))}",
                 )
             if condition.operator not in field_operators(condition.field, smart=False):
                 raise PublicServiceError(
@@ -162,8 +166,15 @@ class CollectionValidator:
                 media_type, condition.source.chart
             ):
                 raise PublicServiceError(
-                    422, "TMDB has no such chart for this library's titles"
+                    422,
+                    f"TMDB has no {condition.source.chart.value.replace('_', ' ')} "
+                    f"chart of {media_type.plural}",
                 )
+
+    def _library_scope(self, library_id: str, media_type: MediaType) -> str:
+        """Name a library's titles as a message does: "movies on Plex"."""
+        title = self._access.library_provider(library_id).server.title
+        return f"{media_type.plural} on {title}"
 
     def smart_set(self, library_ids: Iterable[str], *, smart: bool) -> None:
         """Require a smart set to span a Plex library, which alone keeps it smart."""
@@ -213,7 +224,8 @@ class CollectionValidator:
                 if dimension_available(
                     generator.dimension, server, media_type, smart=True
                 )
-                else f"{dimension.label} are not available for this library",
+                else f"{dimension.label} are not available for "
+                f"{self._library_scope(library_id, media_type)}",
             )
         if generator.dimension is SetDimension.FRANCHISE:
             self._sources.require(SourceType.TMDB_COLLECTION, media_type)

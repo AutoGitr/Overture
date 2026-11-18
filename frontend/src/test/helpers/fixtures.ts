@@ -154,6 +154,8 @@ export function collection(overrides: Partial<CollectionRead> = {}): CollectionR
     active_end_mmdd: null,
     active_start_mmdd: null,
     backgrounds: true,
+    themes: true,
+    contributed_style: "individual",
     generated_value: null,
     // Overture manages what it creates; only server imports start unmanaged.
     managed: true,
@@ -226,6 +228,7 @@ export function collectionRule(overrides: Partial<CollectionRuleRead> = {}): Col
     auto_art: null,
     auto_match_theme: null,
     backgrounds: null,
+    themes: null,
     generated_style: null,
     overturedb_posters: null,
     libraries: [
@@ -315,6 +318,7 @@ export function collectionCapabilities(
         labelled: false,
         library_status: false,
         choices: [],
+        free_values: false,
       },
       {
         field: "genre",
@@ -327,6 +331,7 @@ export function collectionCapabilities(
         labelled: false,
         library_status: false,
         choices: [],
+        free_values: false,
       },
       {
         field: "year",
@@ -339,6 +344,7 @@ export function collectionCapabilities(
         labelled: false,
         library_status: false,
         choices: [],
+        free_values: false,
       },
       {
         field: "added",
@@ -351,6 +357,7 @@ export function collectionCapabilities(
         labelled: false,
         library_status: false,
         choices: [],
+        free_values: false,
       },
       {
         field: "unplayed",
@@ -363,6 +370,7 @@ export function collectionCapabilities(
         labelled: false,
         library_status: false,
         choices: [],
+        free_values: false,
       },
       {
         field: "hdr",
@@ -375,6 +383,7 @@ export function collectionCapabilities(
         labelled: false,
         library_status: false,
         choices: [],
+        free_values: false,
       },
     ],
     sources: [
@@ -417,6 +426,7 @@ export function collectionDetail(overrides: Partial<CollectionDetail> = {}): Col
     theme_duration: null,
     catalog_entry_key: null,
     theme_writable: true,
+    lists_missing: false,
     member_ids: [],
     catalog_title: null,
     theme_unavailable: null,
@@ -454,6 +464,7 @@ export function catalogDetail(overrides: Partial<CatalogEntryDetail> = {}): Cata
     draft_issue: null,
     library_item_id: null,
     library_collection_id: null,
+    local_art: {},
     ...overrides,
   };
 }
@@ -467,6 +478,7 @@ export function catalogRow(overrides: Partial<CatalogEntryRow> = {}): CatalogEnt
     has_draft: false,
     library_item_id: null,
     library_collection_id: null,
+    local_art: {},
     ...overrides,
   };
 }

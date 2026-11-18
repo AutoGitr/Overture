@@ -25,9 +25,9 @@ MATTE = "https://theposterdb.com/api/assets/668235"
 OVERLAY = "https://theposterdb.com/api/assets/2503"
 
 
-async def _choose(session: AsyncSession, posters: CollectionPosterStyle) -> None:
+async def _choose(session: AsyncSession, *posters: CollectionPosterStyle) -> None:
     await session.merge(
-        AppSettings(id=SETTINGS_ROW_ID, collection_overturedb_posters=posters)
+        AppSettings(id=SETTINGS_ROW_ID, collection_overturedb_posters=list(posters))
     )
     await session.commit()
 
@@ -69,6 +69,40 @@ async def test_a_collection_takes_the_poster_the_setting_chooses(
     assert index.collection_art(row, ArtType.POSTER).value == expected
 
 
+@pytest.mark.parametrize(
+    ("posters", "expected"),
+    [
+        ((CollectionPosterStyle.MATTE, CollectionPosterStyle.INDIVIDUAL), INDIVIDUAL),
+        ((CollectionPosterStyle.OVERLAY, CollectionPosterStyle.MATTE), None),
+        ((), None),
+    ],
+)
+async def test_a_collection_takes_the_first_style_in_order_that_overturedb_holds(
+    db_session: AsyncSession,
+    app_config: Settings,
+    posters: tuple[CollectionPosterStyle, ...],
+    expected: str | None,
+) -> None:
+    await enable_catalog(db_session)
+    await _choose(db_session, *posters)
+    db_session.add(
+        CatalogCollection(tmdb_id=10, title="Saga", poster_url_individual=INDIVIDUAL)
+    )
+    row = stored_collection(title="Saga", tmdb_collection_id=10)
+    db_session.add(row)
+    await db_session.commit()
+    await db_session.refresh(row, ["group", "rule"])
+
+    index = await CatalogIndex.build_collections(
+        db_session, [row], app_config=app_config
+    )
+
+    assert index.collection_art(row, ArtType.POSTER).value == expected
+    assert index.collection_poster_style(row, ArtType.POSTER) == (
+        CollectionPosterStyle.INDIVIDUAL if expected else None
+    )
+
+
 async def test_a_group_chooses_its_collections_posters_over_the_global_choice(
     db_session: AsyncSession, app_config: Settings
 ) -> None:
@@ -85,7 +119,7 @@ async def test_a_group_chooses_its_collections_posters_over_the_global_choice(
     )
     row = stored_collection(title="Saga", tmdb_collection_id=10, group="Franchises")
     assert row.group is not None
-    row.group.overturedb_posters = CollectionPosterStyle.MATTE
+    row.group.overturedb_posters = [CollectionPosterStyle.MATTE]
     db_session.add(row)
     await db_session.commit()
     await db_session.refresh(row, ["group", "rule"])

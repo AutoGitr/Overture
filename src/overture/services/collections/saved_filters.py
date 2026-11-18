@@ -14,17 +14,13 @@ lazy from .validation import CollectionValidator
 _NOT_FOUND = "Saved filter not found"
 
 
-def _read(row: SavedFilter) -> SavedFilterRead:
-    return SavedFilterRead(
-        id=row.id or 0,
-        name=row.name,
-        media_type=row.media_type,
-        criteria=FilterGroup.model_validate(row.criteria),
-    )
+def _named_type(body: SavedFilterWrite) -> MediaType | None:
+    """The media type the filter's TMDB IDs name, if it names titles by ID."""
+    return body.media_type if body.criteria.names_titles() else None
 
 
 class SavedFilters:
-    """Keep custom filters by name, each for one media type's titles."""
+    """Keep custom filters by name, each offered where its conditions apply."""
 
     def __init__(
         self, *, access: CollectionAccess, validator: CollectionValidator
@@ -32,36 +28,34 @@ class SavedFilters:
         self._access = access
         self._validator = validator
 
-    async def list(self, media_type: MediaType) -> list[SavedFilterRead]:
-        """The media type's saved filters, by name."""
+    async def list(self) -> list[SavedFilterRead]:
+        """Every saved filter by name, with the media types it applies to."""
         async with self._access.database.read_session() as session:
-            rows = await SavedFilterRepository(session).of_media_type(media_type)
-        return [_read(row) for row in rows]
+            rows = await SavedFilterRepository(session).by_name()
+        return [self._read(row) for row in rows]
 
     async def create(self, body: SavedFilterWrite) -> SavedFilterRead:
         """Save a custom filter.
 
         Raises:
-            PublicServiceError: 409 when the media type has a filter of the
-                name; 422 for a condition the library cannot test.
+            PublicServiceError: 409 when a filter has the name; 422 when no
+                media type's titles can be tested by all its conditions.
         """
-        self._validator.library_criteria(
-            body.media_type, body.criteria, self._access.configured_types()
-        )
+        self._require_applicable(body)
         now = utc_now()
         async with self._access.database.write_session() as session:
             repo = SavedFilterRepository(session)
             await self._require_free_name(repo, body)
             row = SavedFilter(
-                media_type=body.media_type,
                 name=body.name,
+                media_type=_named_type(body),
                 criteria=body.criteria.model_dump(mode="json"),
                 created_at=now,
                 updated_at=now,
             )
             session.add(row)
             await session.flush()
-            return _read(row)
+            return self._read(row)
 
     async def update(self, filter_id: int, body: SavedFilterWrite) -> SavedFilterRead:
         """Rename a saved filter or change its criteria.
@@ -70,21 +64,19 @@ class SavedFilters:
             PublicServiceError: 404 when there is no such filter; 409 and 422
                 as :meth:`create` raises them.
         """
-        self._validator.library_criteria(
-            body.media_type, body.criteria, self._access.configured_types()
-        )
+        self._require_applicable(body)
         async with self._access.database.write_session() as session:
             repo = SavedFilterRepository(session)
             row = await repo.get(filter_id)
             if row is None:
                 raise PublicServiceError(404, _NOT_FOUND)
             await self._require_free_name(repo, body, exclude_id=filter_id)
-            row.media_type = body.media_type
             row.name = body.name
+            row.media_type = _named_type(body)
             row.criteria = body.criteria.model_dump(mode="json")
             row.updated_at = utc_now()
             session.add(row)
-            return _read(row)
+            return self._read(row)
 
     async def delete(self, filter_id: int) -> StatusResponse:
         """Forget a saved filter.
@@ -99,6 +91,41 @@ class SavedFilters:
             await session.delete(row)
         return StatusResponse(status=Status.OK)
 
+    def _unavailable(
+        self, criteria: FilterGroup, named: MediaType | None
+    ) -> dict[MediaType, str]:
+        """Why each media type's titles cannot be tested by the criteria."""
+        servers = self._access.configured_types()
+        unavailable: dict[MediaType, str] = {}
+        for media_type in MediaType:
+            if named is not None and named is not media_type:
+                unavailable[media_type] = f"Its TMDB IDs name {named.plural}"
+                continue
+            try:
+                self._validator.library_criteria(media_type, criteria, servers)
+            except PublicServiceError as error:
+                unavailable[media_type] = error.message
+        return unavailable
+
+    def _require_applicable(self, body: SavedFilterWrite) -> None:
+        unavailable = self._unavailable(body.criteria, _named_type(body))
+        if len(unavailable) == len(MediaType):
+            raise PublicServiceError(422, "; ".join(unavailable.values()))
+
+    def _read(self, row: SavedFilter) -> SavedFilterRead:
+        criteria = FilterGroup.model_validate(row.criteria)
+        unavailable = self._unavailable(criteria, row.media_type)
+        return SavedFilterRead(
+            id=row.id or 0,
+            name=row.name,
+            criteria=criteria,
+            media_type=row.media_type,
+            media_types=[
+                media_type for media_type in MediaType if media_type not in unavailable
+            ],
+            unavailable=unavailable,
+        )
+
     @staticmethod
     async def _require_free_name(
         repo: SavedFilterRepository,
@@ -106,7 +133,7 @@ class SavedFilters:
         *,
         exclude_id: int | None = None,
     ) -> None:
-        if await repo.name_exists(body.media_type, body.name, exclude_id=exclude_id):
+        if await repo.name_exists(body.name, exclude_id=exclude_id):
             raise PublicServiceError(
                 409, f"A saved filter is already named {body.name}"
             )

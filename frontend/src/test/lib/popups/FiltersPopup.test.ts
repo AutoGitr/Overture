@@ -32,8 +32,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     await navigate("/movies", { replace: true });
     queryClient.clear();
     // No saved custom filters, without asking.
-    for (const media_type of ["movie", "show"] as const)
-      queryClient.setQueryData(listSavedFiltersOptions({ query: { media_type } }).queryKey, []);
+    queryClient.setQueryData(listSavedFiltersOptions().queryKey, []);
     mockFetch([]);
     uiState.setFilters(defaultFilters());
     uiState.searchQuery = "";
@@ -472,10 +471,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
       await fireEvent.click(view.getByLabelText("Visible on home"));
     }
     await fireEvent.click(view.getByRole("button", { name: "Apply to 1 collections" }));
-    await answerConfirmation(
-      true,
-      operation === "delete" ? "From the media server only" : undefined,
-    );
+    await answerConfirmation(true, operation === "delete" ? "From Plex only" : undefined);
     await waitFor(() => expect(calls.some((call) => call.init.method === "POST")).toBe(true));
     expect(
       JSON.parse(String(calls.find((call) => call.init.method === "POST")?.init.body)),

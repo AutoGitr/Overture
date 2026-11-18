@@ -1,6 +1,6 @@
 """Whether a library title's selections agree with what OvertureDB holds for it."""
 
-lazy from collections.abc import Iterable
+lazy from collections.abc import Iterable, Sequence
 
 lazy from ...catalog_contract.contract import catalog_art_url
 lazy from ...db.art_slots import find_art_slot
@@ -11,7 +11,11 @@ lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...domain import ArtType, CollectionPosterStyle, MediaType
 lazy from ...schemas.catalog import Agreement, CatalogSelections
-lazy from .entries import catalog_collection_entry, collection_poster_field
+lazy from .entries import (
+    catalog_collection_entry,
+    catalog_collection_poster,
+    collection_poster_field,
+)
 
 #: A local selection beside OvertureDB's, either of them ``None`` when absent.
 type Pair = tuple[str | None, str | None]
@@ -75,19 +79,24 @@ def item_agreement(
 def collection_agreement(
     row: MediaCollection,
     entry: CatalogCollection | None,
-    posters: CollectionPosterStyle,
+    posters: Sequence[CollectionPosterStyle],
 ) -> CatalogSelections | None:
     """How each of a collection's selections compares with its catalog entry.
 
     A chosen poster link is compared with the catalog poster of the style it
-    was chosen as; any other poster, or none, with the poster of the style
-    *posters* takes.
+    was chosen as; any other poster, or none, with the first poster of the
+    styles *posters* orders.
     """
     if entry is None:
         return None
     poster = find_art_slot(row, ArtType.POSTER)
-    style = (poster and poster.poster_style) or posters
-    held = catalog_collection_entry(entry)[collection_poster_field(style)]
+    if poster and poster.poster_style:
+        held = catalog_collection_entry(entry)[
+            collection_poster_field(poster.poster_style)
+        ]
+    else:
+        taken = catalog_collection_poster(entry, posters)
+        held = taken[0] if taken else None
     return CatalogSelections(
         poster=agreement((_art(poster), held)),
         background=agreement(

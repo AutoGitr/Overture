@@ -43,8 +43,10 @@ style** in the filters chooses which of them the collections list shows and
 the poster tab edits.
 
 Item, collection, season and member images in the OvertureDB view always use
-the catalog, with drafts overriding it everywhere. Missing images show a
-placeholder, even when TMDB or your library has artwork. TMDB still supplies
+the catalog, with drafts overriding it everywhere. Where the title or
+collection in your library has the same poster or background chosen and its
+file on disk, the sidebar and the detail page show that file instead of
+fetching the link. Missing images show a placeholder, even when TMDB or your library has artwork. TMDB still supplies
 editing candidates, season details and collection membership. The Overture
 icon opens a linked item or collection in your library.
 

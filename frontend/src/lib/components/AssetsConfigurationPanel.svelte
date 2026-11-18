@@ -31,8 +31,7 @@
 <div class="option-card">
   <div class={{ muted: config.useSidebarItems }}>
     <LibraryChecklist
-      movieLibraries={form.movieLibraries}
-      showLibraries={form.showLibraries}
+      libraries={form.libraries}
       selectedIds={config.useSidebarItems ? [] : config.selectedLibraries}
       loading={librariesLoading}
       error={librariesError}

@@ -15,6 +15,7 @@
   import { itemArtDisplayUrl, remotePosterUrl } from "../utils/artDisplay";
   import { MEDIA_ICONS } from "../utils/mediaIcons";
   import type { CollectionEditor } from "../utils/collectionForms.svelte";
+  import { librariesByServer } from "../utils/libraries.svelte";
   import ImageGrid from "./ImageGrid.svelte";
   import PosterCard from "./PosterCard.svelte";
 
@@ -59,14 +60,20 @@
     );
   }
   /**
-   * Members by library, in the libraries' order: movies first, then by title.
+   * Members by library, grouped by server in MEDIA_SERVERS order, then by title.
    * A title on several servers is listed once, under the first that holds it.
    */
   let memberGroups = $derived(
-    [...collectionLibraries, { id: "", title: "Other libraries", server_id: 0 }]
+    [
+      ...librariesByServer(collectionLibraries).flatMap((group) =>
+        group.libraries.map((library) => ({ ...library, server: group.label })),
+      ),
+      { id: "", title: "Other libraries", server: "" },
+    ]
       .map((library) => ({
         id: library.id,
-        title: library.id ? settingsState.libraryLabel(library) : library.title,
+        title: library.title,
+        server: library.server,
         members: held.filter((member) => libraryOf(member) === library.id),
       }))
       .filter((group) => group.members.length > 0),
@@ -139,8 +146,14 @@
       {/if}
 
       {#if currentMembers.length}
-        {#each memberGroups as group (group.id)}
-          <section class="member-group" aria-label={`${group.title} members`}>
+        {#each memberGroups as group, index (group.id)}
+          {#if group.server && group.server !== memberGroups[index - 1]?.server}
+            <h4 class="caps-label">{group.server}</h4>
+          {/if}
+          <section
+            class="member-group"
+            aria-label={`${group.server ? `${group.server} · ` : ""}${group.title} members`}
+          >
             {#if memberGroups.length > 1 || editor.collection.library_ids.length > 1}
               <h4 class="form-label">{group.title}</h4>
             {/if}

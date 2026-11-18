@@ -347,6 +347,7 @@ class TestCollectionResponseMappers:
             copies=row.copies,
             trust_no_theme=True,
             backgrounds=True,
+            themes=True,
         )
 
         assert read.server_poster_version is not None
@@ -362,13 +363,20 @@ class TestCollectionResponseMappers:
             copies=replaced.copies,
             trust_no_theme=True,
             backgrounds=True,
+            themes=True,
         )
         assert renamed.server_poster_version is not None
         assert renamed.server_poster_version != read.server_poster_version
         assert renamed.server_background_version == read.server_background_version
         # A collection no server holds has no server image to show.
         withheld = collection_read(
-            row, None, None, copies=[], trust_no_theme=True, backgrounds=True
+            row,
+            None,
+            None,
+            copies=[],
+            trust_no_theme=True,
+            backgrounds=True,
+            themes=True,
         )
         assert (withheld.server_poster_version, withheld.server_background_version) == (
             None,

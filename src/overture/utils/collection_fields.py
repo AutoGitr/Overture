@@ -77,15 +77,41 @@ def _media(
     )
 
 
-_STATUSES = tuple(status.value for status in AssetStatus)
-_AGREEMENTS = ("matching", "different")
-_ART_SOURCES = tuple(
-    source.value for source in ArtSource if source is not ArtSource.OVERTUREDB
+#: A value a field can hold and how it is named to people.
+type Choice = tuple[str, str]
+
+_STATUSES: tuple[Choice, ...] = tuple(
+    (status.value, status.value.capitalize()) for status in AssetStatus
+)
+_AGREEMENTS: tuple[Choice, ...] = (("matching", "Matching"), ("different", "Different"))
+_ART_SOURCES: tuple[Choice, ...] = tuple(
+    (source.value, source.label)
+    for source in ArtSource
+    if source is not ArtSource.OVERTUREDB
+)
+_THEME_SOURCES: dict[ThemeIdSource, str] = {
+    ThemeIdSource.DOWNLOAD: "Downloaded",
+    ThemeIdSource.EMBEDDED_ID: "ID in the file",
+    ThemeIdSource.SOURCE_URL: "Source link",
+    ThemeIdSource.METADATA_URL: "Metadata link",
+    ThemeIdSource.SELECTION: "Chosen without a file",
+}
+#: The statuses TMDB gives shows.
+_SHOW_STATUSES: tuple[Choice, ...] = tuple(
+    (status, status)
+    for status in (
+        "Returning Series",
+        "In Production",
+        "Planned",
+        "Pilot",
+        "Ended",
+        "Canceled",
+    )
 )
 
 #: Each library status field: its label, value kind, media types and choices.
 _LIBRARY_STATUS: dict[
-    FilterField, tuple[str, FieldKind, frozenset[MediaType], tuple[str, ...]]
+    FilterField, tuple[str, FieldKind, frozenset[MediaType], tuple[Choice, ...]]
 ] = {
     FilterField.MONITORED: ("Monitored", FieldKind.BOOLEAN, _ALL_MEDIA, ()),
     FilterField.ART_STATUS: ("Art status", FieldKind.TAG, _ALL_MEDIA, _STATUSES),
@@ -132,7 +158,7 @@ _LIBRARY_STATUS: dict[
         "Theme source",
         FieldKind.TAG,
         _ALL_MEDIA,
-        tuple(source.value for source in ThemeIdSource),
+        tuple(_THEME_SOURCES.items()),
     ),
     FilterField.THEME_LENGTH: (
         "Theme length (seconds)",
@@ -144,7 +170,7 @@ _LIBRARY_STATUS: dict[
         "Metadata issue",
         FieldKind.TAG,
         _ALL_MEDIA,
-        tuple(issue.value for issue in MetadataIssue),
+        tuple((issue.value, issue.label) for issue in MetadataIssue),
     ),
     FilterField.OVERTUREDB_COMPLETE: (
         "OvertureDB complete",
@@ -203,7 +229,10 @@ class FieldSpec:
     #: collections never do.
     library_only: bool = False
     #: The values the field can hold, when they are a fixed set.
-    choices: tuple[str, ...] = ()
+    choices: tuple[Choice, ...] = ()
+    #: Any value can be named, beyond those the library holds: an ID, a TMDB
+    #: keyword no title has yet, or a label to give titles later.
+    free: bool = False
 
 
 FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
@@ -216,13 +245,13 @@ FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
             PlexField("title", "string"),
         ),
         FilterField.TMDB_ID: FieldSpec(
-            "TMDB ID", FieldKind.TAG, _ALL_MEDIA, _EVERY_SERVER, None
+            "TMDB ID", FieldKind.TAG, _ALL_MEDIA, _EVERY_SERVER, None, free=True
         ),
         FilterField.TVDB_ID: FieldSpec(
-            "TVDB ID", FieldKind.TAG, _ALL_MEDIA, _EVERY_SERVER, None
+            "TVDB ID", FieldKind.TAG, _ALL_MEDIA, _EVERY_SERVER, None, free=True
         ),
         FilterField.IMDB_ID: FieldSpec(
-            "IMDb ID", FieldKind.TAG, _ALL_MEDIA, _EVERY_SERVER, None
+            "IMDb ID", FieldKind.TAG, _ALL_MEDIA, _EVERY_SERVER, None, free=True
         ),
         FilterField.STUDIO: FieldSpec(
             "Studio",
@@ -269,7 +298,12 @@ FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
             PlexField("country", "tag"),
         ),
         FilterField.LABEL: FieldSpec(
-            "Label", FieldKind.TAG, _ALL_MEDIA, _EVERY_SERVER, PlexField("label", "tag")
+            "Label",
+            FieldKind.TAG,
+            _ALL_MEDIA,
+            _EVERY_SERVER,
+            PlexField("label", "tag"),
+            free=True,
         ),
         FilterField.COLLECTION: FieldSpec(
             "Collection",
@@ -542,7 +576,13 @@ FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
             tmdb=True,
         ),
         FilterField.TMDB_KEYWORD: FieldSpec(
-            "TMDB keyword", FieldKind.TAG, _ALL_MEDIA, _EVERY_SERVER, None, tmdb=True
+            "TMDB keyword",
+            FieldKind.TAG,
+            _ALL_MEDIA,
+            _EVERY_SERVER,
+            None,
+            tmdb=True,
+            free=True,
         ),
         FilterField.COMPANY: FieldSpec(
             "Production company",
@@ -556,7 +596,13 @@ FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
             "Streaming on", FieldKind.TAG, _ALL_MEDIA, _EVERY_SERVER, None, tmdb=True
         ),
         FilterField.SHOW_STATUS: FieldSpec(
-            "Show status", FieldKind.TAG, _SHOWS, _EVERY_SERVER, None, tmdb=True
+            "Show status",
+            FieldKind.TAG,
+            _SHOWS,
+            _EVERY_SERVER,
+            None,
+            tmdb=True,
+            choices=_SHOW_STATUSES,
         ),
         FilterField.LAST_AIRED: FieldSpec(
             "Last aired", FieldKind.DATE, _SHOWS, _EVERY_SERVER, None, tmdb=True

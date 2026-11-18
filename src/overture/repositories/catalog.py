@@ -7,7 +7,9 @@ lazy from typing import Literal
 lazy from sqlmodel import and_, col, delete, or_, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ..catalog_contract.contract import IDENTITY_FIELDS
+lazy from ..catalog_contract.contract import IDENTITY_FIELDS, catalog_art_url
+lazy from ..db.art_slots import FILE_HOLDS_SELECTION
+lazy from ..db.models.art import ArtSlot
 lazy from ..db.models.catalog import (
     CatalogCollection,
     CatalogItem,
@@ -184,3 +186,33 @@ class CatalogRepository:
             if public_item_id is not None and poster_url is not None:
                 posters.setdefault(public_item_id, {})[season_num] = poster_url
         return posters
+
+    async def local_art(
+        self, *, collections: bool, owner_ids: Collection[int]
+    ) -> dict[int, dict[str, str]]:
+        """The local files of the library's selected catalog art, by owner.
+
+        Each item's (or, with *collections*, collection's) art whose file
+        holds its selected catalog link, as the file's hash by the link's
+        canonical form.
+        """
+        owner = col(ArtSlot.collection_id if collections else ArtSlot.media_item_id)
+        found: dict[int, dict[str, str]] = {}
+        for chunk in batched(owner_ids, CHUNK_SIZE, strict=False):
+            result = await self.session.exec(
+                select(owner, ArtSlot.url, ArtSlot.file_hash).where(
+                    owner.in_(chunk),
+                    col(ArtSlot.url).is_not(None),
+                    col(ArtSlot.file_hash).is_not(None),
+                    FILE_HOLDS_SELECTION,
+                )
+            )
+            for owner_id, url, file_hash in result.all():
+                if owner_id is None or url is None or file_hash is None:
+                    continue
+                try:
+                    canonical = catalog_art_url(url)
+                except ValueError:
+                    continue
+                found.setdefault(owner_id, {})[canonical] = file_hash
+        return found

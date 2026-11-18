@@ -28,7 +28,7 @@ lazy from overture.domain import (
     ArtStyle,
     ArtType,
     AssetStatus,
-    AutoArt,
+    AutoArtSource,
     CollectionFiltering,
     CollectionKind,
     CollectionMode,
@@ -1052,7 +1052,7 @@ async def test_sets_skip_titles_other_collections_hold(manager: Manager) -> None
     result = await manager.service.groups.sync("Genres")
     assert result.created == []
     assert result.errors == {
-        "Action": "A collection with this title already exists in this library"
+        "Action": "One of its libraries already has a collection titled Action"
     }
 
 
@@ -1072,7 +1072,7 @@ async def test_inherited_placeholders_resolve_group_before_global(
         global_defaults.auto_art,
         global_defaults.generated_style,
         global_defaults.backgrounds,
-    ) == (AutoArt.OFF, ArtStyle.DARK, True)
+    ) == ([], ArtStyle.DARK, True)
 
 
 def make_jellyfin_service(
@@ -1185,7 +1185,7 @@ async def test_create_validates_library_and_duplicate_titles(manager: Manager) -
             ),
         )
     await create(manager)
-    with pytest.raises(PublicServiceError, match="already exists"):
+    with pytest.raises(PublicServiceError, match="already has a collection titled"):
         await create(manager)
     assert manager.provider.created == ["Saga"]
 
@@ -1338,7 +1338,7 @@ async def test_rule_sync_uses_shared_automatic_art_and_theme_pipelines(
     async with database.write_session() as session:
         await session.merge(
             settings_row(
-                collection_auto_art=AutoArt.OVERTUREDB_TMDB,
+                collection_auto_art=[AutoArtSource.OVERTUREDB, AutoArtSource.TMDB],
                 collection_auto_match_theme=True,
             )
         )
@@ -1361,7 +1361,11 @@ async def test_auto_asset_failure_keeps_synced_members_and_records_the_failure(
 ) -> None:
     identity = await create(manager)
     async with database.write_session() as session:
-        await session.merge(settings_row(collection_auto_art=AutoArt.OVERTUREDB_TMDB))
+        await session.merge(
+            settings_row(
+                collection_auto_art=[AutoArtSource.OVERTUREDB, AutoArtSource.TMDB]
+            )
+        )
     await manager.service.editor.save_rule(
         identity,
         library_rule(criteria=sources(TmdbCollectionSource(collection_id=10))),
@@ -1497,14 +1501,14 @@ async def test_group_defaults_and_explicit_rule_choices_resolve_in_order(
             settings_row(
                 collection_minimum_items=3,
                 collection_delete_below_minimum=True,
-                collection_auto_art=AutoArt.OVERTUREDB_TMDB,
+                collection_auto_art=[AutoArtSource.OVERTUREDB, AutoArtSource.TMDB],
             )
         )
     policy = CollectionGroupPolicy(
         sync_mode=SyncMode.SYNC,
         minimum_items=2,
         delete_below_minimum=False,
-        auto_art=AutoArt.OFF,
+        auto_art=[],
         collection_mode=CollectionMode.HIDE,
         sort_title_format="+{group} - {title}",
     )
@@ -1941,7 +1945,7 @@ async def test_rules_accept_only_what_the_server_and_library_offer(
             movies,
             library_rule(criteria=where(FilterField.HDR, FilterOperator.IS, True)),
         )
-    with pytest.raises(PublicServiceError, match="not available for this library"):
+    with pytest.raises(PublicServiceError, match="is not available for shows on Plex"):
         await manager.service.editor.save_rule(
             shows,
             library_rule(
@@ -1968,7 +1972,9 @@ async def test_rules_accept_only_what_the_server_and_library_offer(
                 criteria=genre, smart=True, order_type=CollectionOrder.TITLE_ASC
             ),
         )
-    with pytest.raises(PublicServiceError, match="not available for this library"):
+    with pytest.raises(
+        PublicServiceError, match="Unplayed is not available for movies on Jelly"
+    ):
         await jellyfin.editor.save_rule(
             box_set,
             library_rule(criteria=where(FilterField.UNPLAYED, FilterOperator.IS, True)),
@@ -2729,6 +2735,7 @@ async def test_missing_titles_list_and_request_what_the_library_lacks(
             rule=library_rule(criteria=_chart()),
         ),
     )
+    assert (await manager.service.reader.get(collection.id)).lists_missing
     missing = await manager.service.arr.missing(collection.id)
     assert [
         (title.tmdb_id, title.title, title.requested) for title in missing.titles
@@ -3860,7 +3867,13 @@ async def test_automatic_art_keeps_an_upload_and_generates_a_missing_poster(
     identity = await create(manager)
     async with database.write_session() as session:
         await session.merge(
-            settings_row(collection_auto_art=AutoArt.OVERTUREDB_TMDB_GENERATE)
+            settings_row(
+                collection_auto_art=[
+                    AutoArtSource.OVERTUREDB,
+                    AutoArtSource.TMDB,
+                    AutoArtSource.GENERATE,
+                ]
+            )
         )
         row = await CollectionRepository(session).get(identity)
         assert row is not None
@@ -3875,7 +3888,7 @@ async def test_automatic_art_keeps_an_upload_and_generates_a_missing_poster(
     manager.art.fail = True
     manager.art.selections.clear()
     await manager.service.groups.save_policy(
-        "Ungrouped", CollectionGroupPolicy(auto_art=AutoArt.GENERATE)
+        "Ungrouped", CollectionGroupPolicy(auto_art=[AutoArtSource.GENERATE])
     )
     async with database.write_session() as session:
         row = await CollectionRepository(session).get(identity)
@@ -3891,13 +3904,26 @@ async def test_automatic_art_keeps_an_upload_and_generates_a_missing_poster(
 @pytest.mark.parametrize(
     ("auto_art", "urls"),
     [
-        (AutoArt.OVERTUREDB_TMDB, ["https://overturedb.test/a.jpg"]),
-        (AutoArt.TMDB, ["https://example.test/poster.jpg"]),
-        (AutoArt.OVERTUREDB, ["https://overturedb.test/a.jpg"]),
+        (
+            [AutoArtSource.OVERTUREDB, AutoArtSource.TMDB],
+            ["https://overturedb.test/a.jpg"],
+        ),
+        ([AutoArtSource.TMDB], ["https://example.test/poster.jpg"]),
+        ([AutoArtSource.OVERTUREDB], ["https://overturedb.test/a.jpg"]),
+        (
+            [AutoArtSource.TMDB, AutoArtSource.OVERTUREDB],
+            ["https://example.test/poster.jpg"],
+        ),
+        # Generating stops the order, so a source after it is never asked.
+        ([AutoArtSource.GENERATE, AutoArtSource.OVERTUREDB], [None]),
+        ([], []),
     ],
 )
 async def test_automatic_art_takes_the_first_source_in_its_order(
-    manager: Manager, database: Database, auto_art: AutoArt, urls: list[str]
+    manager: Manager,
+    database: Database,
+    auto_art: list[AutoArtSource],
+    urls: list[str | None],
 ) -> None:
     identity = await create(manager)
     async with database.write_session() as session:
@@ -3922,7 +3948,7 @@ async def test_automatic_art_never_takes_the_servers_own_art_and_generates_witho
     async with database.write_session() as session:
         await session.merge(
             settings_row(
-                collection_auto_art=AutoArt.OVERTUREDB_GENERATE,
+                collection_auto_art=[AutoArtSource.OVERTUREDB, AutoArtSource.GENERATE],
                 collection_backgrounds=False,
             )
         )
@@ -4001,7 +4027,7 @@ async def test_separator_apply_raises_title_taken_on_collision(
         ),
     )
     with pytest.raises(
-        PublicServiceError, match="A collection with this title already exists"
+        PublicServiceError, match="already has a collection titled Sagas"
     ):
         await manager.service.groups.save_policy(
             "Sagas", CollectionGroupPolicy(separator=True)
@@ -4029,7 +4055,7 @@ async def test_renaming_a_separated_group_to_a_taken_title_changes_nothing(
         "Parts", CollectionGroupPolicy(separator=True)
     )
     with pytest.raises(
-        PublicServiceError, match="A collection with this title already exists"
+        PublicServiceError, match="already has a collection titled Sagas"
     ):
         await manager.service.groups.rename("Parts", "Sagas")
     async with manager.database.read_session() as session:
@@ -4085,7 +4111,8 @@ async def test_automatic_generation_titles_posters_and_generates_backgrounds_it_
     async with database.write_session() as session:
         await session.merge(
             settings_row(
-                collection_auto_art=AutoArt.GENERATE, collection_backgrounds=backgrounds
+                collection_auto_art=[AutoArtSource.GENERATE],
+                collection_backgrounds=backgrounds,
             )
         )
     manager.art.selections.clear()
@@ -4282,7 +4309,11 @@ async def test_library_status_fields_are_library_filters_only(manager: Manager) 
     capabilities = manager.service.library_filters.capabilities(MediaType.MOVIE)
     offered = {entry.field: entry for entry in capabilities.fields}
     assert offered[FilterField.ART_STATUS].library_status
-    assert offered[FilterField.ART_STATUS].choices == ["complete", "partial", "missing"]
+    assert [choice.value for choice in offered[FilterField.ART_STATUS].choices] == [
+        "complete",
+        "partial",
+        "missing",
+    ]
     assert not offered[FilterField.GENRE].library_status
     assert FilterField.OVERTUREDB_POSTER in offered
     # Movies have no seasons.
@@ -4300,44 +4331,62 @@ async def test_library_status_fields_are_library_filters_only(manager: Manager) 
         )
 
 
-async def test_saved_filters_are_kept_by_name_per_media_type(manager: Manager) -> None:
+async def test_saved_filters_are_kept_by_name_for_every_media_type_they_suit(
+    manager: Manager,
+) -> None:
     saved = manager.service.saved_filters
     horror = where(FilterField.GENRE, FilterOperator.IS, "Horror")
 
     created = await saved.create(
         SavedFilterWrite(
-            name="  Late   night ", media_type=MediaType.MOVIE, criteria=horror
+            name="  Late   night ", criteria=horror, media_type=MediaType.MOVIE
         )
     )
-    assert created.name == "Late night"
-    await saved.create(
-        SavedFilterWrite(name="Late night", media_type=MediaType.SHOW, criteria=horror)
+    assert (created.name, created.media_types) == (
+        "Late night",
+        [MediaType.MOVIE, MediaType.SHOW],
     )
     with pytest.raises(PublicServiceError, match="already named"):
         await saved.create(
             SavedFilterWrite(
-                name="LATE NIGHT", media_type=MediaType.MOVIE, criteria=horror
+                name="LATE NIGHT", criteria=horror, media_type=MediaType.SHOW
             )
         )
-    with pytest.raises(PublicServiceError, match="not available"):
-        await saved.create(
-            SavedFilterWrite(
-                name="Seasons",
-                media_type=MediaType.MOVIE,
-                criteria=where(
-                    FilterField.SEASON_POSTERS_STATUS, FilterOperator.IS, "missing"
-                ),
-            )
+    # Only shows have seasons, so the filter is offered for shows alone.
+    seasons = await saved.create(
+        SavedFilterWrite(
+            name="Seasons",
+            media_type=MediaType.SHOW,
+            criteria=where(
+                FilterField.SEASON_POSTERS_STATUS, FilterOperator.IS, "missing"
+            ),
         )
+    )
+    assert seasons.media_types == [MediaType.SHOW]
+    assert seasons.unavailable[MediaType.MOVIE].endswith(
+        "is not available for movies on Plex"
+    )
 
     renamed = await saved.update(
         created.id,
-        SavedFilterWrite(name="Horror", media_type=MediaType.MOVIE, criteria=horror),
+        SavedFilterWrite(name="Horror", criteria=horror, media_type=MediaType.SHOW),
     )
-    assert [entry.name for entry in await saved.list(MediaType.MOVIE)] == ["Horror"]
+    assert [entry.name for entry in await saved.list()] == ["Horror", "Seasons"]
     assert renamed.criteria == horror
 
+    # TMDB IDs name the titles of the media type the filter is made for.
+    picks = await saved.create(
+        SavedFilterWrite(
+            name="Picks",
+            media_type=MediaType.MOVIE,
+            criteria=sources(TmdbItemSource(tmdb_ids=[1])),
+        )
+    )
+    assert (picks.media_type, picks.media_types) == (MediaType.MOVIE, [MediaType.MOVIE])
+    assert picks.unavailable == {MediaType.SHOW: "Its TMDB IDs name movies"}
+    assert renamed.media_type is None
+
     await saved.delete(created.id)
-    assert await saved.list(MediaType.MOVIE) == []
+    assert [entry.name for entry in await saved.list()] == ["Picks", "Seasons"]
     with pytest.raises(PublicServiceError, match="not found"):
         await saved.delete(created.id)

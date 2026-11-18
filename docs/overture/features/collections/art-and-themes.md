@@ -13,6 +13,10 @@ use OvertureDB and ThemerrDB in the configured order.
 
 ## Art generated from the title
 
+Posters are drawn at 2000×3000 and backgrounds at 3840×2160. Their colour
+gradients are dithered, so they show no bands even after the media server
+re-encodes them as 8-bit JPEG.
+
 Every collection's poster and background candidates end with a **Generated**
 row, one image per style (dark, light and accent) showing its title under its
 group's name. Choosing one keeps it in the image cache and uploads it like any
@@ -26,14 +30,16 @@ when the collection's title or group changes.
 ## Automatic art
 
 **Automatic art** in Settings (global, per group or per collection) decides
-what a sync does for a slot no one chose:
+what a sync does for a slot no one chose. Tick the sources it may use and drag
+them into order; a sync takes the best art of the first ticked source, top to
+bottom, that has any:
 
-- **Off**
-- The best art of **OvertureDB**, **TMDB** (the franchise's art, or a listed
-  person's photo), or **OvertureDB, then TMDB**, each optionally **else generate**
-- **Generate**
+- **OvertureDB**, its catalog art, in the styles **OvertureDB posters** takes
+- **TMDB**, the franchise's art, or a listed person's photo
+- **Generate**, art drawn from the title; a source below it is never reached
 
-The media server's own art is never taken. Generating makes a poster with the
+With nothing ticked, Automatic art is off. A group or collection can follow
+**Default** or set its own order. The media server's own art is never taken. Generating makes a poster with the
 title and a background without text, in the **Generated colours** (dark, light or
 accent). A collection whose **Background** is **Not needed** gets no
 background: its poster completes its art, as OvertureDB's No theme completes a
@@ -45,7 +51,10 @@ poster candidates.
 ## OvertureDB posters
 
 **OvertureDB posters**, a collection setting (global, per group or per
-collection), chooses which poster OvertureDB gives a TMDB collection:
+collection), chooses which posters OvertureDB gives a TMDB collection. Tick the
+styles to take and drag them into order; a collection takes the first ticked
+style OvertureDB holds for it, so **Matte**, then **Individual** gives every
+collection a matte poster where one exists and its own poster otherwise:
 
 - **Individual**, its own.
 - **Matte**, one in the [DarkMatte layout](https://theposterdb.com/poster/668235)
@@ -57,8 +66,9 @@ collection), chooses which poster OvertureDB gives a TMDB collection:
   [Coverlabs Silva designer](https://www.coverlabs.studio/designer/silva) and
   hosted on TMDB or ThePosterDB.
 
-With **Matte** or **Overlay**, a collection without that poster gets no
-OvertureDB poster. Automatic art follows each collection's choice.
+A collection holding none of the ticked styles, or one with no style ticked,
+gets no OvertureDB poster; its OvertureDB background is still taken.
+Automatic art follows each collection's choice.
 
 ### Which style a chosen poster is
 
@@ -67,14 +77,14 @@ and exports and **Contribute issue** contribute it as that, whatever
 **OvertureDB posters** says later:
 
 - On a collection's **Poster** tab, **Contribute to OvertureDB as** picks the
-  style of the poster you choose next, starting from the style of the one the
-  collection has. Pick it before choosing a TMDB poster or pasting a link.
+  style of the poster you choose next, starting from the first style the
+  collection's **OvertureDB posters** ticks (**Individual** when none is).
+  Pick it before choosing a TMDB poster or pasting a link.
 - A poster OvertureDB already holds keeps its own style, and its card says
   which (**Individual**, **Matte** or **Overlay**). OvertureDB's section offers
-  all three of a collection's posters, the setting's style first.
-- Posters Automatic art or Assets choose take the setting's style from
-  OvertureDB, the style OvertureDB holds them as otherwise, and **Individual**
-  for any other poster.
+  all three of a collection's posters, the setting's styles first, in its order.
+- Posters Automatic art or Assets choose from OvertureDB keep the style
+  OvertureDB holds them as, and any other poster is **Individual**.
 
 A **Matte** or **Overlay** poster from any source other than TMDB or
 ThePosterDB is left out of contributions, which say so. The catalog view shows
@@ -89,6 +99,12 @@ in the sidebar and on the collection's page, and **Audit** can compare them
 with the server's and upload them again.
 
 ## Themes
+
+**Theme** (global, per group or per collection) says whether collections need
+one. With **Not needed**, a collection's theme counts as complete without one,
+in its status, the filters and the statistics, as OvertureDB's No theme does;
+no theme is chosen for it automatically and Assets runs leave it out. A theme
+you choose for it is still kept and sent.
 
 A collection's automatic theme follows the **Automatic theme** setting, in the
 same order of OvertureDB and ThemerrDB the Assets run uses. New collection IDs

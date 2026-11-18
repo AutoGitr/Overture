@@ -45,7 +45,7 @@ listed by neither.
 
 ### Custom filters
 
-**Custom filter**, at the top of the movie and show filters, keeps saved
+**Custom filter**, under Libraries in the movie and show filters, keeps saved
 filters of your own, like smart collections that only filter the list. Choose
 **New**, name it, and add conditions on anything Overture knows about a title:
 the same metadata collection criteria test (genre, actor, director, studio,
@@ -54,13 +54,19 @@ more), TMDB lists, people, charts and MDBList lists, and each title's status
 in the library: monitored, art, poster, background, season poster and theme
 status, art and theme source, poster and background width, aspect ratio,
 theme length, metadata issues, OvertureDB coverage and how each choice
-compares with OvertureDB's. Conditions match together (**all**) or apart
+compares with OvertureDB's. A condition on a field with a fixed set of values,
+or with values your library holds, offers them in a list; IDs, TMDB keywords
+and labels, which can name values no title has yet, are typed, with what the
+library holds suggested. Conditions match together (**all**) or apart
 (**any**), and groups nest for anything in between; **is not** and **does not
 contain** exclude.
 
 Pick a saved filter to apply it with the other filters; **Edit**, **Save as
-new** and **Delete** manage them. Saved filters are kept on the server, for
-each media type, so every browser sees them. Status conditions follow every
+new** and **Delete** manage them. Saved filters are kept on the server, so
+every browser sees them, and each is offered for movies, shows or both,
+wherever all its conditions apply; one naming titles by TMDB ID stays with the
+media type it was made for. **Add saved filter...** in any criteria, a
+collection's included, adds a saved filter that fits them as a group. Status conditions follow every
 download and choice at once; metadata conditions update after each sync.
 
 ## Install as an app
@@ -84,7 +90,8 @@ posters, backgrounds and themes, so the numbers show what still needs attention.
 
 Every item and collection has a database record view that lists every stored
 column of the record and of the rows that belong to it, such as seasons, art
-slots and collection libraries, apart from what Overture derives from them.
-Each row is named by what it holds, such as **Background** or **Season 2
-poster**.
+slots and each server's copy, apart from what Overture derives from them.
+Each row is named by what it holds, such as **Background**, **Season 2
+poster** or **Copy in Plex · Movies**. Downloads and other jobs are work done
+for a record rather than part of it, so they are left out.
 The same data is available through the [REST API](api.md).

@@ -30,6 +30,34 @@ export function remotePosterUrl(art: {
   return art.poster_preview_url ?? art.poster_url ?? null;
 }
 
+/**
+ * The library's local file of a catalog entry's art, when the title or
+ * collection the entry describes has it selected; the link is fetched otherwise.
+ */
+export function catalogLocalArtUrl(
+  entry: {
+    local_art: Record<string, string>;
+    library_item_id: number | null;
+    library_collection_id: number | null;
+  },
+  url: string | null | undefined,
+  artType: "poster" | "background",
+): string | null {
+  const hash = url ? entry.local_art[url] : undefined;
+  if (!hash) return null;
+  if (entry.library_item_id !== null)
+    return localItemImageUrl(
+      { item_id: entry.library_item_id, art_type: artType },
+      { t: hash, size: "display" },
+    );
+  if (entry.library_collection_id !== null)
+    return localCollectionImageUrl(
+      { collection_id: entry.library_collection_id, art_type: artType },
+      { t: hash, size: "display" },
+    );
+  return null;
+}
+
 function itemVersion(item: MediaItemRead, primaryHash?: string | null): string {
   return String(primaryHash || item.last_matched_at || item.last_synced_at || 0);
 }

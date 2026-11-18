@@ -1,10 +1,10 @@
 """Columns several tables declare alike, declared once here."""
 
-lazy from sqlmodel import Field, SQLModel
+lazy from sqlmodel import JSON, Field, SQLModel
 
 lazy from ...domain import (
     ArtStyle,
-    AutoArt,
+    AutoArtSource,
     CollectionFiltering,
     CollectionMode,
     CollectionOrder,
@@ -37,12 +37,15 @@ class PolicyOverrides(SQLModel):
     active_start_mmdd: str | None = None
     active_end_mmdd: str | None = None
     delete_when_inactive: bool | None = None
-    auto_art: AutoArt | None = Field(default=None, sa_type=enum_type(AutoArt))
+    #: The sources Automatic art tries, first to last; empty turns it off.
+    auto_art: list[AutoArtSource] | None = Field(default=None, sa_type=JSON)
     generated_style: ArtStyle | None = Field(default=None, sa_type=enum_type(ArtStyle))
-    overturedb_posters: CollectionPosterStyle | None = Field(
-        default=None, sa_type=enum_type(CollectionPosterStyle)
+    #: The OvertureDB poster styles taken, first to last; empty takes none.
+    overturedb_posters: list[CollectionPosterStyle] | None = Field(
+        default=None, sa_type=JSON
     )
     backgrounds: bool | None = None
+    themes: bool | None = None
     auto_match_theme: bool | None = None
     request_missing: bool | None = None
     member_label: str | None = None

@@ -94,7 +94,7 @@ describe("AssetsPopup", () => {
     deleteBulkAssetsSchedule.mockResolvedValue({ status: "deleted" });
     runBulkAssetsSchedule.mockResolvedValue({ status: "queued" });
     schedules.value = [];
-    settingsState.reset();
+    settingsState.load(appSettings());
   });
 
   it("runs art and themes over chosen collection groups", async () => {

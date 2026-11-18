@@ -1,5 +1,6 @@
 """Stored catalog rows spelled as the contract spells their entries."""
 
+lazy from collections.abc import Sequence
 lazy from typing import Any
 
 lazy from ...catalog_contract.contract import catalog_art_url, entry_fields
@@ -12,6 +13,21 @@ type Entry = dict[str, Any]
 def collection_poster_field(posters: CollectionPosterStyle) -> str:
     """The entry field that is a collection's poster, as *posters* chooses."""
     return f"poster_url_{posters.value}"
+
+
+def catalog_collection_poster(
+    entry: CatalogCollection, posters: Sequence[CollectionPosterStyle]
+) -> tuple[str, CollectionPosterStyle] | None:
+    """The first poster of the styles *posters* orders that the entry holds."""
+    held = catalog_collection_entry(entry)
+    return next(
+        (
+            (url, style)
+            for style in posters
+            if (url := held[collection_poster_field(style)])
+        ),
+        None,
+    )
 
 
 def held_poster_style(

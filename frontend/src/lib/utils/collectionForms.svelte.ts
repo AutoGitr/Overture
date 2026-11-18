@@ -18,7 +18,7 @@ import {
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type {
   ArtStyle,
-  AutoArt,
+  AutoArtSource,
   CollectionDetail,
   CollectionDimensionRead,
   CollectionLibraryCriteriaInput,
@@ -58,10 +58,11 @@ export type PolicyData = {
   sync_mode?: SyncMode | null;
   minimum_items?: number | null;
   delete_below_minimum?: boolean | null;
-  auto_art?: AutoArt | null;
+  auto_art?: AutoArtSource[] | null;
   generated_style?: ArtStyle | null;
-  overturedb_posters?: CollectionPosterStyle | null;
+  overturedb_posters?: CollectionPosterStyle[] | null;
   backgrounds?: boolean | null;
+  themes?: boolean | null;
   auto_match_theme?: boolean | null;
   request_missing?: boolean | null;
   member_label?: string | null;
@@ -105,6 +106,7 @@ export function defaultRule(): CollectionRuleWriteInput {
     generated_style: null,
     overturedb_posters: null,
     backgrounds: null,
+    themes: null,
     auto_match_theme: null,
     collection_mode: null,
     collection_filtering: null,
@@ -499,9 +501,18 @@ export class CollectionEditor {
     return this.generated ? "Its group's set made it; remove its value from the set" : null;
   }
 
+  /** The servers holding a copy of it, or that a sync puts it on, as users know them. */
+  get holders(): string {
+    const { copies } = this.collection;
+    return copies.length
+      ? settingsState.serverNames(copies.map((copy) => copy.server_id))
+      : settingsState.media_server_name;
+  }
+
   /** Why Overture cannot stop managing it, or null when it can. */
   get orphanBlocker(): string | null {
-    if (this.collection.withheld) return "It is not on the media server; delete it instead";
+    if (this.collection.withheld)
+      return `It is not on ${settingsState.media_server_name}; delete it instead`;
     return this.deleteBlocker;
   }
 
@@ -511,7 +522,7 @@ export class CollectionEditor {
       this.orphanBlocker ||
       !(await confirmAction({
         title: "Orphan collection?",
-        message: `Overture forgets the criteria, group and schedule of ${this.collection.title} and lists it under Unmanaged. The media server keeps it as it is; adopt it again to manage it.`,
+        message: `Overture forgets the criteria, group and schedule of ${this.collection.title} and lists it under Unmanaged. ${this.holders} keeps it as it is; adopt it again to manage it.`,
         confirmLabel: "Orphan",
       }))
     )
@@ -536,12 +547,14 @@ export class CollectionEditor {
       choices: [
         {
           value: "server",
-          label: "From the media server only",
+          label: `From ${this.holders} only`,
           description:
             "Overture keeps its configuration, so a later manual or scheduled sync can recreate it.",
-          unavailable: this.collection.withheld ? "It is not on the media server." : undefined,
+          unavailable: this.collection.withheld
+            ? `It is not on ${settingsState.media_server_name}.`
+            : undefined,
         },
-        { value: "both", label: "From Overture and the media server" },
+        { value: "both", label: `From Overture and ${this.holders}` },
       ],
     });
     if (!target) return;
@@ -899,6 +912,7 @@ const RULE_POLICY = [
   "generated_style",
   "overturedb_posters",
   "backgrounds",
+  "themes",
   "auto_match_theme",
   "request_missing",
   "member_label",

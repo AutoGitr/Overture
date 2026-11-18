@@ -65,9 +65,16 @@ class SettingsState {
 
   /** The configured media servers as users know them, such as "Plex and Jellyfin". */
   get media_server_name() {
-    const titles = this.servers.map((server) => server.title);
+    return this.serverNames(this.servers.map((server) => server.id));
+  }
+
+  /** The servers *ids* number, as users know them, in MEDIA_SERVERS order. */
+  serverNames(ids: readonly number[]): string {
+    const titles = this.servers
+      .filter((server) => ids.includes(server.id))
+      .map((server) => server.title);
     if (titles.length === 0) return "media server";
-    if (titles.length === 1) return titles[0];
+    if (titles.length === 1) return titles[0]!;
     return `${titles.slice(0, -1).join(", ")} and ${titles[titles.length - 1]}`;
   }
 

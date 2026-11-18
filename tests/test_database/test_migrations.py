@@ -1619,3 +1619,114 @@ def test_show_orders_are_admitted_and_fall_back_to_older_ones_on_downgrade() -> 
             ).all() == [("added.desc",), (None,)]
     finally:
         engine.dispose()
+
+
+def test_automatic_art_and_overturedb_posters_become_ordered_lists() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "c9e4f1b7a2d3")
+            conn.exec_driver_sql(
+                f"INSERT INTO app_settings ({', '.join(_SETTINGS_BEFORE_AUTO_ART)}) "  # noqa: S608 -- literal test values
+                f"VALUES ({', '.join(map(str, _SETTINGS_BEFORE_AUTO_ART.values()))})"
+            )
+            command.upgrade(config, "3ae7fb38a1bb")
+            conn.exec_driver_sql(
+                "UPDATE app_settings SET collection_auto_art = "
+                "'overturedb_tmdb_generate', collection_overturedb_posters = 'matte'"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO collection_groups (id, name, separator, auto_art, "
+                "overturedb_posters) VALUES (1, 'Sagas', 0, 'off', NULL), "
+                "(2, 'Decades', 0, NULL, 'overlay')"
+            )
+
+            command.upgrade(config, "d5a2f8c3e916")
+
+            assert conn.exec_driver_sql(
+                "SELECT collection_auto_art, collection_overturedb_posters, "
+                "collection_themes FROM app_settings"
+            ).all() == [('["overturedb", "tmdb", "generate"]', '["matte"]', 1)]
+            assert conn.exec_driver_sql(
+                "SELECT auto_art, overturedb_posters, themes FROM collection_groups "
+                "ORDER BY id"
+            ).all() == [("[]", None, None), (None, '["overlay"]', None)]
+            with pytest.raises(IntegrityError):
+                conn.exec_driver_sql(
+                    "UPDATE collection_groups SET auto_art = 'off' WHERE id = 1"
+                )
+
+            conn.exec_driver_sql(
+                "UPDATE app_settings SET collection_auto_art = "
+                "'[\"generate\", \"tmdb\"]', collection_overturedb_posters = '[]'"
+            )
+            command.downgrade(config, "3ae7fb38a1bb")
+            assert conn.exec_driver_sql(
+                "SELECT collection_auto_art, collection_overturedb_posters "
+                "FROM app_settings"
+            ).all() == [("tmdb_generate", "individual")]
+            assert conn.exec_driver_sql(
+                "SELECT auto_art, overturedb_posters FROM collection_groups ORDER BY id"
+            ).all() == [("off", None), (None, "overlay")]
+    finally:
+        engine.dispose()
+
+
+def test_saved_filters_become_one_per_name_for_movies_and_shows() -> None:
+    ids = (
+        '{"mode": "all", "conditions": [{"kind": "source", "operator": "is", '
+        '"source": {"type": "tmdb_item", "tmdb_ids": [1]}}]}'
+    )
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "d5a2f8c3e916")
+            for row_id, media_type, name, criteria in (
+                (1, "movie", "Horror", '{"mode": "all"}'),
+                (2, "show", "horror", '{"mode": "all"}'),
+                (3, "movie", "New", '{"mode": "all"}'),
+                (4, "show", "New", '{"mode": "any"}'),
+                (5, "movie", "Picks", ids),
+                (6, "show", "Picks", ids),
+            ):
+                conn.exec_driver_sql(
+                    "INSERT INTO saved_filters (id, media_type, name, criteria, "
+                    "created_at, updated_at) VALUES (?, ?, ?, ?, '2026-11-16', "
+                    "'2026-11-16')",
+                    (row_id, media_type, name, criteria),
+                )
+
+            command.upgrade(config, "f1b8d4e6a273")
+
+            # The same IDs name a movie and a show, so those stay apart.
+            assert conn.exec_driver_sql(
+                "SELECT id, name, media_type FROM saved_filters ORDER BY id"
+            ).all() == [
+                (1, "Horror", None),
+                (3, "New", None),
+                (4, "New (shows)", None),
+                (5, "Picks", "movie"),
+                (6, "Picks (shows)", "show"),
+            ]
+            with pytest.raises(IntegrityError):
+                conn.exec_driver_sql(
+                    "INSERT INTO saved_filters (name, criteria, created_at, "
+                    "updated_at) VALUES ('New', '{}', '2026-11-18', '2026-11-18')"
+                )
+
+            command.downgrade(config, "d5a2f8c3e916")
+            assert conn.exec_driver_sql(
+                "SELECT id, media_type FROM saved_filters ORDER BY id"
+            ).all() == [
+                (1, "movie"),
+                (3, "movie"),
+                (4, "movie"),
+                (5, "movie"),
+                (6, "show"),
+            ]
+    finally:
+        engine.dispose()

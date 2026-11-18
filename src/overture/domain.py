@@ -26,6 +26,11 @@ class MediaType(StrEnum):
     MOVIE = "movie"
     SHOW = "show"
 
+    @property
+    def plural(self) -> str:
+        """Return how its titles are named together, such as "movies"."""
+        return f"{self.value}s"
+
 
 class TermKind(StrEnum):
     """A kind of metadata a title holds several values of, such as its genres."""
@@ -497,36 +502,21 @@ class CollectionPosterStyle(StrEnum):
     OVERLAY = "overlay"
 
 
-class AutoArt(StrEnum):
-    """What a sync does for a collection's art slot that has none chosen.
+class AutoArtSource(StrEnum):
+    """Where Automatic art takes a collection slot's art from, in a policy's order.
 
-    The value names what it tries, first to last: the catalog sources whose
-    best art it takes, then, with ``generate``, art generated from the title.
-    OvertureDB's curated art always comes before TMDB's.
+    A sync tries each in turn and stops at the first that gives art: the best
+    art of a catalog source, or, with ``generate``, art generated from the title.
     """
 
-    OFF = "off"
     OVERTUREDB = "overturedb"
     TMDB = "tmdb"
-    OVERTUREDB_TMDB = "overturedb_tmdb"
-    OVERTUREDB_GENERATE = "overturedb_generate"
-    TMDB_GENERATE = "tmdb_generate"
-    OVERTUREDB_TMDB_GENERATE = "overturedb_tmdb_generate"
     GENERATE = "generate"
 
     @property
-    def sources(self) -> tuple[ArtSource, ...]:
-        """Return the sources whose best art it takes, first to last."""
-        return tuple(
-            ArtSource(name)
-            for name in self.value.split("_")
-            if name not in {"off", "generate"}
-        )
-
-    @property
-    def generates(self) -> bool:
-        """Whether it generates art when no source has any."""
-        return self.value.endswith("generate")
+    def art_source(self) -> ArtSource | None:
+        """Return the catalog source it takes art from; ``None`` for ``generate``."""
+        return None if self is AutoArtSource.GENERATE else ArtSource(self.value)
 
 
 class MetadataIssue(StrEnum):

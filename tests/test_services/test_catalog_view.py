@@ -10,6 +10,7 @@ lazy from sqlmodel import select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
+lazy from overture.db.models.art import ArtSlot
 lazy from overture.db.models.catalog import (
     CatalogCollection,
     CatalogDraft,
@@ -17,6 +18,7 @@ lazy from overture.db.models.catalog import (
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
 lazy from overture.domain import (
+    ArtType,
     AssetStatus,
     CatalogMediaType,
     CollectionPosterStyle,
@@ -41,6 +43,7 @@ lazy from overture.services.schedule_store import (
     save_schedule,
 )
 lazy from overture.services.themes.collection_bulk import plan_collection_themes
+lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_catalog
@@ -147,6 +150,36 @@ async def test_rows_link_to_what_the_library_holds(
     )
     assert show.poster_preview_url == "https://image.tmdb.org/t/p/w342/poster.jpg"
     assert (saga.entry_key, saga.library_collection_id) == ("tmdb-10", 1)
+
+
+async def test_rows_name_the_librarys_local_files_of_the_same_art(
+    db_session: AsyncSession, browser: CatalogBrowser
+) -> None:
+    movie = MediaItem(media_type=MediaType.MOVIE, title="Heat", imdb_id="tt0113277")
+    db_session.add(movie)
+    await db_session.flush()
+    for art_type, url, selection in (
+        # A TMDB link of another size names the same image.
+        (ArtType.POSTER, "https://image.tmdb.org/t/p/w500/heat.jpg", None),
+        # A file replaced outside Overture no longer holds the selection.
+        (ArtType.BACKGROUND, "https://image.tmdb.org/t/p/original/b.jpg", "c" * 64),
+    ):
+        db_session.add(
+            ArtSlot(
+                media_item_id=movie.id,
+                art_type=art_type,
+                url=PublicArtUrl(url),
+                file_hash="a" * 64,
+                selection_hash=selection,
+            )
+        )
+    await db_session.commit()
+
+    (heat,) = await browser.list_entries(CatalogMediaType.MOVIE)
+    detail = await browser.get_entry(CatalogMediaType.MOVIE, "tmdb-949")
+
+    assert heat.local_art == {"https://image.tmdb.org/t/p/original/heat.jpg": "a" * 64}
+    assert detail.local_art == heat.local_art
 
 
 async def test_any_identity_finds_an_entry_under_its_canonical_name(
@@ -458,6 +491,7 @@ def test_a_collection_flagged_without_a_theme_counts_as_complete() -> None:
         copies=row.copies,
         trust_no_theme=True,
         backgrounds=True,
+        themes=True,
     )
     assert flagged.theme_status is AssetStatus.COMPLETE
     assert flagged.catalog_no_theme
@@ -470,5 +504,26 @@ def test_a_collection_flagged_without_a_theme_counts_as_complete() -> None:
             copies=row.copies,
             trust_no_theme=True,
             backgrounds=True,
+            themes=True,
         )
     ).theme_status is AssetStatus.MISSING
+
+
+def test_a_collection_whose_settings_need_no_theme_counts_as_complete() -> None:
+    row = stored_collection(
+        id=1, server_item_id="saga", media_type=MediaType.MOVIE, title="Saga"
+    )
+
+    read = collection_read(
+        row,
+        None,
+        None,
+        copies=row.copies,
+        trust_no_theme=True,
+        backgrounds=True,
+        themes=False,
+    )
+
+    assert read.theme_status is AssetStatus.COMPLETE
+    assert read.themes is False
+    assert not read.catalog_no_theme

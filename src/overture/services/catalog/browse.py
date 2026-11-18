@@ -172,9 +172,13 @@ class CatalogBrowser:
                 ]
             drafts = await CatalogDraftRepository(session).list_all()
             links = await self._library_links(session, media_type)
+            local = await catalog.local_art(
+                collections=media_type is CatalogMediaType.COLLECTION,
+                owner_ids=set(links.values()),
+            )
         drafted = _draft_entries(drafts, media_type)
         return sorted(
-            (self._row(entry, links, drafted, posters) for entry in entries),
+            (self._row(entry, links, drafted, posters, local) for entry in entries),
             key=lambda row: (row.title.casefold(), row.year or 0, row.entry_key),
         )
 
@@ -193,6 +197,7 @@ class CatalogBrowser:
                 {},
                 drafted,
                 CollectionPosterStyle.INDIVIDUAL,
+                {},
             )
             for item in items
             if item.tmdb_id is not None
@@ -204,6 +209,7 @@ class CatalogBrowser:
         links: dict[tuple[str, int | str], int],
         drafted: dict[tuple[str, int | str], Entry],
         posters: CollectionPosterStyle,
+        local: dict[int, dict[str, str]],
     ) -> CatalogEntryRow:
         identities = _identities(entry)
         link = next((links[key] for key in identities if key in links), None)
@@ -232,6 +238,7 @@ class CatalogBrowser:
             library_collection_id=link
             if entry["media_type"] == CatalogMediaType.COLLECTION
             else None,
+            local_art=local.get(link, {}) if link is not None else {},
         )
 
     @staticmethod
@@ -294,7 +301,11 @@ class CatalogBrowser:
             media_type, _identities(entry)
         )
         links = await self._library_links(session, media_type, entry)
-        row = self._row(entry, links, {}, CollectionPosterStyle.INDIVIDUAL)
+        local = await CatalogRepository(session).local_art(
+            collections=media_type is CatalogMediaType.COLLECTION,
+            owner_ids=set(links.values()),
+        )
+        row = self._row(entry, links, {}, CollectionPosterStyle.INDIVIDUAL, local)
         return CatalogEntryDetail(
             entry_key=row.entry_key,
             entry=CatalogEntry.model_validate(entry),
@@ -304,6 +315,7 @@ class CatalogBrowser:
             else None,
             library_item_id=row.library_item_id,
             library_collection_id=row.library_collection_id,
+            local_art=row.local_art,
         )
 
     async def get_entry(

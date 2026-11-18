@@ -9,7 +9,7 @@ lazy from ...domain import (
     DEFAULT_COLLECTION_ORDER,
     SEPARATED_SORT_TITLE,
     ArtStyle,
-    AutoArt,
+    AutoArtSource,
     CollectionFiltering,
     CollectionMode,
     CollectionOrder,
@@ -44,10 +44,13 @@ class CollectionPolicy:
     sync_mode: SyncMode
     minimum_items: int
     delete_below_minimum: bool
-    auto_art: AutoArt
+    #: The sources Automatic art tries, first to last.
+    auto_art: tuple[AutoArtSource, ...]
     generated_style: ArtStyle
-    overturedb_posters: CollectionPosterStyle
+    #: The OvertureDB poster styles taken, first to last.
+    overturedb_posters: tuple[CollectionPosterStyle, ...]
     backgrounds: bool
+    themes: bool
     auto_match_theme: bool
     collection_mode: CollectionMode
     order_type: CollectionOrder
@@ -64,6 +67,14 @@ class CollectionPolicy:
     member_label: str | None = None
     arr_tag: str | None = None
     home_order: int | None = None
+
+    @property
+    def contributed_style(self) -> CollectionPosterStyle:
+        """What a poster chosen for the collection is contributed to OvertureDB as.
+
+        The first style it takes; Individual when it takes no OvertureDB poster.
+        """
+        return next(iter(self.overturedb_posters), CollectionPosterStyle.INDIVIDUAL)
 
 
 def resolve_policy(
@@ -88,25 +99,37 @@ def resolve_policy(
             group.delete_below_minimum if group else None,
             defaults.collection_delete_below_minimum,
         ),
-        auto_art=inherit(
-            rule.auto_art if rule else None,
-            group.auto_art if group else None,
-            defaults.collection_auto_art,
+        # JSON columns load their values as plain strings.
+        auto_art=tuple(
+            AutoArtSource(source)
+            for source in inherit(
+                rule.auto_art if rule else None,
+                group.auto_art if group else None,
+                defaults.collection_auto_art,
+            )
         ),
         generated_style=inherit(
             rule.generated_style if rule else None,
             group.generated_style if group else None,
             defaults.collection_generated_style,
         ),
-        overturedb_posters=inherit(
-            rule.overturedb_posters if rule else None,
-            group.overturedb_posters if group else None,
-            defaults.collection_overturedb_posters,
+        overturedb_posters=tuple(
+            CollectionPosterStyle(style)
+            for style in inherit(
+                rule.overturedb_posters if rule else None,
+                group.overturedb_posters if group else None,
+                defaults.collection_overturedb_posters,
+            )
         ),
         backgrounds=inherit(
             rule.backgrounds if rule else None,
             group.backgrounds if group else None,
             defaults.collection_backgrounds,
+        ),
+        themes=inherit(
+            rule.themes if rule else None,
+            group.themes if group else None,
+            defaults.collection_themes,
         ),
         auto_match_theme=inherit(
             rule.auto_match_theme if rule else None,
