@@ -355,19 +355,36 @@ class CollectionArtService:
             )
 
     async def reupload(self, collection_id: int, art_type: ArtType) -> None:
-        """Send the server the image Overture last uploaded to it, again.
+        """Send every server copy the slot's image again, and record it as shown.
+
+        The image is the upload the slot selects, else the one Overture last
+        uploaded, else its link fetched again: a sync forgets what Overture
+        uploaded when the server shows another image, but not the selection.
 
         Raises:
-            PublicServiceError: 409 when Overture uploaded none, or the cache
-                does not keep it.
+            PublicServiceError: 409 when the slot holds no image to send, or
+                the cache does not keep it.
         """
         async with self._database.read_session() as db:
             row = await self._require(db, collection_id, art_type)
-        file_hash = read_art_slot(row, art_type).file_hash
-        if file_hash is None:
-            raise PublicServiceError(409, "Overture has uploaded no image to it")
-        data, media_type = await self._uploads.read(file_hash)
-        await self._send(collection_id, art_type, data, media_type, lambda _: None)
+        slot = read_art_slot(row, art_type)
+        kept = slot.upload_hash or slot.file_hash
+        if kept is None:
+            if slot.url is None:
+                raise PublicServiceError(409, "Overture has uploaded no image to it")
+            await self._choose(
+                collection_id,
+                art_type,
+                SaveCollectionArtRequest(url=slot.url, poster_style=slot.poster_style),
+            )
+            return
+        facts = await self._uploads.facts(kept)
+        data, media_type = await self._uploads.read(kept)
+
+        def record(saved: MediaCollection) -> None:
+            record_art_file(saved, art_type, facts)
+
+        await self._send(collection_id, art_type, data, media_type, record)
 
     async def _send(
         self,

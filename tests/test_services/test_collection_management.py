@@ -470,6 +470,10 @@ class Art(CollectionArtService):
             self.generated.append(art_type)
         return StatusResponse(status=Status.OK)
 
+    @override
+    async def reupload(self, collection_id: int, art_type: ArtType) -> None:
+        self.selections.append(art_type)
+
 
 class FakeArrClient(ArrClient):
     def __init__(self, tag_id: int, label: str) -> None:

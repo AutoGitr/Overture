@@ -19,6 +19,7 @@ lazy from overture.db.art_slots import (
 lazy from overture.db.models.catalog import CatalogCollection
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.models.media_collection import (
+    CollectionLibrary,
     MediaCollection,
     MediaCollectionMember,
 )
@@ -47,7 +48,11 @@ lazy from overture.services.collections.theme_files import (
     collection_folder,
     inspect_theme_file,
 )
-lazy from overture.services.sync.collection_sync import CollectionSync
+lazy from overture.services.sync.collection_sync import (
+    CollectionSync,
+    ListedCopy,
+    by_row,
+)
 lazy from overture.services.sync.tmdb_enrichment import REFRESH_AFTER, TmdbEnrichment
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_catalog, make_bulk_downloads
@@ -778,3 +783,30 @@ async def test_a_library_sync_keeps_a_separator_a_separator(
     await _run(server, database, app_config)
 
     assert (await _rows(database))["sep"].kind is CollectionKind.SEPARATOR
+
+
+def test_the_copy_on_the_lead_server_leads_whatever_order_libraries_were_saved_in() -> (
+    None
+):
+    row = stored_collection(id=1, title="Requests")
+    plex = row.libraries[0]
+    plex.server_item_id = "p1"
+    jellyfin = CollectionLibrary(
+        server_id=2,
+        collection_id=1,
+        library_id="2:movies",
+        media_type=MediaType.MOVIE,
+        server_item_id="j1",
+    )
+    # Its Jellyfin library was saved first.
+    row.libraries = [jellyfin, plex]
+    listed = [
+        ListedCopy(2, ServerCollection(id="j1", title="Requests", member_ids=())),
+        ListedCopy(1, ServerCollection(id="p1", title="Requests", member_ids=())),
+    ]
+
+    [(owner, copies)] = by_row(listed, [row], [1, 2])
+
+    # Plex leads, so its copy says the collection's images, kind and theme.
+    assert owner is row
+    assert [copy.key for copy in copies] == [(1, "p1"), (2, "j1")]

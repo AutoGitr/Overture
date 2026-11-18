@@ -122,15 +122,7 @@ class AutoAssets:
                     collection_id, art_type, resend=synced.new_copies
                 )
             elif saved is not None:
-                if synced.new_copies and saved.url:
-                    await self._art.apply(
-                        collection_id,
-                        art_type,
-                        SaveCollectionArtRequest(
-                            url=saved.url, poster_style=slot.poster_style
-                        ),
-                    )
-                elif synced.new_copies:
+                if synced.new_copies:
                     await self._art.reupload(collection_id, art_type)
             elif art_type is ArtType.BACKGROUND and not policy.backgrounds:
                 continue

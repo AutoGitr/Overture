@@ -75,6 +75,13 @@ def _collection(identity: int, title: str, *, managed: bool) -> dict[str, Any]:
         "poster_hash": None,
         "background_hash": None,
         "has_theme": False,
+        "youtube_id": None,
+        "backgrounds": True,
+        # Overture chose a poster but keeps no record of sending it.
+        "poster_source": "tmdb" if managed else None,
+        "poster_status": "partial",
+        "background_source": None,
+        "background_status": "missing",
     }
 
 
@@ -115,6 +122,7 @@ _MOVIES: dict[str, Any] = {
             ],
             "last_synced_at": None,
             "source_summary": None,
+            "last_error": "Members synced; Automatic assets failed: Boom",
         },
         "server_poster_version": "1",
         "server_background_version": None,
@@ -447,6 +455,16 @@ async def test_a_run_checks_overture_against_plex_and_names_each_problem(
     assert "| image | Scary poster from the server |" in text
     # A collection whose count differs names the conditions it previewed.
     assert "regular: genre is 'Horror'" in text
+    # A collection's failed sync is reported with what failed.
+    assert (
+        "| last sync | Scary |  |  |  |  | Members synced; Automatic assets "
+        "failed: Boom |"
+    ) in text
+    # A chosen poster Overture no longer records as sent is a problem.
+    assert (
+        "| assets | Scary |  |  |  |  | Overture chose a poster but holds no "
+        "record of sending it |"
+    ) in text
     assert "HTTP 502" in text
     assert "Overture lacks items m3" in text
     assert "Overture lacks collections Elsewhere (c9, 1 members)" in text
@@ -709,7 +727,14 @@ async def test_writes_touch_only_their_own_collections_and_delete_them_whatever_
         "/Collections/zz Overture verify regular/Items answered 'Bad ids'"
     )
     assert problems == {
-        **({"replace a member": refused} if fail_at else {}),
+        **(
+            {
+                "replace a member": refused,
+                "keep the images' names through an edit": refused,
+            }
+            if fail_at
+            else {}
+        ),
         "upload a poster and a background": "the server names the same background",
     }
 

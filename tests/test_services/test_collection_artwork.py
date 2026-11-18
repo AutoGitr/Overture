@@ -10,7 +10,7 @@ lazy from PIL import Image
 lazy from pydantic import SecretStr
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import ArtFileFacts, read_art_slot
+lazy from overture.db.art_slots import ArtFileFacts, read_art_slot, record_art_file
 lazy from overture.db.models.catalog import CatalogCollection
 lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.settings import AppSettings
@@ -343,6 +343,22 @@ async def test_an_uploaded_collection_image_is_shown_from_the_cache_and_sent_aga
 
     await service.collections.reupload(1, ArtType.POSTER)
     assert provider.uploads[-1] == (ArtType.POSTER, image_bytes, "image/png")
+
+    # A sync saw another image on the server and forgot the one uploaded;
+    # the selection still names it, so it is sent and recorded again.
+    async with database.write_session() as session:
+        row = await CollectionRepository(session).get(1)
+        assert row is not None
+        record_art_file(row, ArtType.POSTER, None)
+        session.add(row)
+    await service.collections.reupload(1, ArtType.POSTER)
+    assert len(provider.uploads) == 3
+    async with database.read_session() as session:
+        row = await CollectionRepository(session).get(1)
+        assert row is not None
+        assert collection_artwork(row, backgrounds=True).poster_hash == (
+            upload.upload_hash
+        )
 
 
 async def test_an_inactive_collection_records_its_art_for_the_sync_that_restores_it(

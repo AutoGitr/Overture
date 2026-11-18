@@ -35,6 +35,7 @@ lazy from ...utils.threads import owned_thread
 lazy from ...utils.time import utc_now
 lazy from ..catalog.downloads import queue_catalog_themes_for_collections
 lazy from ..collections import COLLECTIONS_LOCK
+lazy from ..collections.copies import held_copies, lead_part
 lazy from ..collections.theme_files import collection_folder, inspect_theme_file
 lazy from ..downloads.service import DownloadService
 
@@ -46,7 +47,7 @@ type CopyKey = tuple[int, str]
 
 
 @dataclass(slots=True, frozen=True)
-class _Listed:
+class ListedCopy:
     """One collection a server lists."""
 
     server_id: int
@@ -68,14 +69,17 @@ class _Placed:
     server_path: str | None
 
 
-def _by_row(
-    listed: Sequence[_Listed], rows: Sequence[MediaCollection]
-) -> list[tuple[MediaCollection | None, list[_Listed]]]:
+def by_row(
+    listed: Sequence[ListedCopy],
+    rows: Sequence[MediaCollection],
+    server_order: Sequence[int],
+) -> list[tuple[MediaCollection | None, list[ListedCopy]]]:
     """Group server collections by the row that owns them, lead copy first.
 
     A collection across libraries or servers has a copy in each Plex library
     and on each server, so a row's copies are stored together; one unknown to
-    Overture stands alone.
+    Overture stands alone. The lead copy is the one on the earliest server in
+    *server_order*, as everywhere else.
     """
     owners = {
         (part.server_id, part.server_item_id): row
@@ -83,8 +87,8 @@ def _by_row(
         for part in row.libraries
         if part.server_item_id
     }
-    grouped: dict[int, tuple[MediaCollection, list[_Listed]]] = {}
-    alone: list[tuple[MediaCollection | None, list[_Listed]]] = []
+    grouped: dict[int, tuple[MediaCollection, list[ListedCopy]]] = {}
+    alone: list[tuple[MediaCollection | None, list[ListedCopy]]] = []
     for copy in listed:
         owner = owners.get(copy.key)
         if owner is None:
@@ -92,13 +96,18 @@ def _by_row(
         else:
             grouped.setdefault(owner.id or 0, (owner, []))[1].append(copy)
     for row, copies in grouped.values():
-        order = [(part.server_id, part.server_item_id) for part in row.copies]
-        copies.sort(key=lambda copy: order.index(copy.key))
+        order = [
+            (part.server_id, part.server_item_id)
+            for part in held_copies(row, server_order)
+        ]
+        copies.sort(
+            key=lambda copy: order.index(copy.key) if copy.key in order else len(order)
+        )
     return [*grouped.values(), *alone]
 
 
 def _placement(
-    copies: Sequence[_Listed],
+    copies: Sequence[ListedCopy],
     items: Mapping[CopyKey, ServerItemFacts],
     previous: MediaCollection | None,
 ) -> list[_Placed]:
@@ -210,7 +219,7 @@ class CollectionSync:
         )
         async with self._downloads.asset_locks.acquire(COLLECTIONS_LOCK):
             listed = [
-                _Listed(provider.server_id, collection)
+                ListedCopy(provider.server_id, collection)
                 for provider in providers
                 for collection in await provider.list_collections()
             ]
@@ -247,10 +256,17 @@ class CollectionSync:
             seen = {copy.key for copy in listed}
             newly_identified: list[int] = []
             identified = 0
-            for previous, copies in _by_row(listed, rows):
+            server_order = self._downloads.provider_registry.server_ids()
+            for previous, copies in by_row(listed, rows, server_order):
                 if job.stop_requested():
                     return
                 lead = copies[0]
+                # The lead copy's images, kind and theme stand for the
+                # collection; a sync without the lead's server leaves them.
+                leads = previous is None or (
+                    (part := lead_part(previous, server_order)) is not None
+                    and (part.server_id, part.server_item_id) == lead.key
+                )
                 if (
                     previous is None
                     and not import_unmanaged
@@ -291,8 +307,12 @@ class CollectionSync:
                             *lead.key
                         )
                     provider = by_server[lead.server_id]
-                    facts, checked = await self._inspect_theme(
-                        provider, lead.collection, current, previous
+                    facts, checked = (
+                        await self._inspect_theme(
+                            provider, lead.collection, current, previous
+                        )
+                        if leads
+                        else (None, False)
                     )
                     async with self._database.write_session() as session:
                         row = await self._store(
@@ -306,6 +326,7 @@ class CollectionSync:
                             ),
                             facts=facts,
                             theme_checked=checked,
+                            leads=leads,
                             managed=previous is not None and previous.id in managed_ids,
                             now=utc_now(),
                         )
@@ -451,7 +472,7 @@ class CollectionSync:
     @staticmethod
     async def _store(
         repository: CollectionRepository,
-        listed: Sequence[_Listed],
+        listed: Sequence[ListedCopy],
         *,
         placement: Sequence[_Placed],
         members: list[ServerItemFacts],
@@ -459,10 +480,14 @@ class CollectionSync:
         folder_themes: bool,
         facts: ThemeFileFacts | None,
         theme_checked: bool,
+        leads: bool,
         managed: bool,
         now: datetime,
     ) -> MediaCollection:
-        """Store a collection from its server copies, the lead copy first."""
+        """Store a collection from its server copies, the lead copy first.
+
+        Only the lead copy, when *leads*, says the collection's images and kind.
+        """
         collection = listed[0].collection
         row = await repository.find_server(*listed[0].key) or MediaCollection(
             created_at=now,
@@ -470,23 +495,10 @@ class CollectionSync:
             if any(placed.media_type is MediaType.MOVIE for placed in placement)
             else None,
         )
-        for art_type, server_url in (
-            (ArtType.POSTER, collection.thumb_url),
-            (ArtType.BACKGROUND, collection.art_url),
-        ):
-            if row.id is not None and server_url != row.server_image_url(art_type):
-                # The server shows another image than the one Overture uploaded.
-                record_art_file(row, art_type, None)
+        if leads:
+            _store_lead(row, collection)
         row.sqlmodel_update(
             {
-                # A separator is Overture's, an empty collection to the server.
-                "kind": row.kind
-                if row.kind is CollectionKind.SEPARATOR
-                else CollectionKind.SMART
-                if collection.smart
-                else CollectionKind.REGULAR,
-                "thumb_url": collection.thumb_url,
-                "art_url": collection.art_url,
                 "server_added_at": collection.added_at,
                 "provider_tmdb_id": collection.tmdb_id,
                 "last_synced_at": now,
@@ -537,6 +549,29 @@ class CollectionSync:
         if not keep_members:
             await repository.replace_members(row.id, [member.id for member in members])
         return row
+
+
+def _store_lead(row: MediaCollection, collection: ServerCollection) -> None:
+    """Take the images and kind the collection's lead copy shows."""
+    for art_type, server_url in (
+        (ArtType.POSTER, collection.thumb_url),
+        (ArtType.BACKGROUND, collection.art_url),
+    ):
+        if row.id is not None and server_url != row.server_image_url(art_type):
+            # The server shows another image than the one Overture uploaded.
+            record_art_file(row, art_type, None)
+    row.sqlmodel_update(
+        {
+            # A separator is Overture's, an empty collection to the server.
+            "kind": row.kind
+            if row.kind is CollectionKind.SEPARATOR
+            else CollectionKind.SMART
+            if collection.smart
+            else CollectionKind.REGULAR,
+            "thumb_url": collection.thumb_url,
+            "art_url": collection.art_url,
+        }
+    )
 
 
 def _store_choices(row: MediaCollection, collection: ServerCollection) -> None:

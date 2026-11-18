@@ -109,7 +109,10 @@ Jellyfin and Emby with the server's own item filters, where only labels are
 compared on a server that does not lead, since the lead server gives the
 other details of the titles it holds. A value Plex lists that no title holds
 any longer is noted rather than reported. Where Plex refuses a
-text value it asks Plex directly which character it refuses. It reports
+text value it asks Plex directly which character it refuses. For every managed collection
+it reports a failed last sync, a chosen poster or background Overture no
+longer records as sent, and a server copy missing the art or theme Overture
+holds, asking each server what its copy shows. It reports
 every Plex filter, field, sort and operator, and every Jellyfin and Emby
 filter, Overture cannot use. A check that fails is reported and the others
 still run. With `TMDB_API_KEY` and `MDBLIST_API_KEY` set,
@@ -128,7 +131,8 @@ people and MDBList lists. With `--write` it also makes, changes and deletes
 temporary "zz Overture verify" collections with Overture's own media server
 clients, to show how each server takes them: members and their order, title,
 sort title, summary, display order and Home visibility, poster and
-background, and on Plex a smart collection's filter, each read back from the
+background, whether the server keeps the images' names through an edit as a
+sync makes it, and on Plex a smart collection's filter, each read back from the
 server itself and reported on its own with the request a server refused. Run it before each release and
 after changing `src/overture/services/collections/` or
 `src/overture/media_servers/`, and turn each problem it reports into a test.

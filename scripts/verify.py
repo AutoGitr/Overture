@@ -477,6 +477,16 @@ class Members:
 
 
 @dataclass(slots=True, frozen=True)
+class ServerArt:
+    """What one server collection shows."""
+
+    poster: bool
+    background: bool
+    #: Whether it holds a theme; ``None`` where the server keeps none.
+    theme: bool | None
+
+
+@dataclass(slots=True, frozen=True)
 class Listing:
     """Why Overture leaves out a collection the server holds."""
 
@@ -535,6 +545,8 @@ class Library:
         self.lead = lead
         #: The members the server counts in each of its collections, by its ID.
         self.held: dict[str, int] = {}
+        #: What the server shows of each of its collections, by its ID.
+        self.shown: dict[str, ServerArt] = {}
         self._values: dict[str, list[dict[str, Any]] | ApiError] = {}
         self.cases: list[Case] = []
 
@@ -918,6 +930,11 @@ class Library:
                 saved = (await self.overture.get(path, media_type=self.media_type))[
                     "rule"
                 ]
+                if saved and saved.get("last_error"):
+                    self.case("last sync", collection["title"]).error = saved[
+                        "last_error"
+                    ]
+                self.check_assets(collection, str(copy["server_item_id"]))
                 rule = saved and {
                     key: value
                     for key, value in saved.items()
@@ -967,6 +984,37 @@ class Library:
                 + described(part["criteria"])
                 for part in parts
             )
+
+    def check_assets(self, collection: dict[str, Any], server_id: str) -> None:
+        """Overture holds what it chose as sent, and the server shows it.
+
+        A choice whose status is not complete is one Overture no longer
+        records as on the server, such as one a sync forgot.
+        """
+        case = self.case("assets", collection["title"])
+        problems: list[str] = []
+        notes: list[str] = []
+        shown = self.shown.get(server_id)
+        for art, needed in (
+            ("poster", True),
+            ("background", collection["backgrounds"]),
+        ):
+            if not needed or not collection[f"{art}_source"]:
+                continue
+            if collection[f"{art}_status"] != "complete":
+                problems.append(
+                    f"Overture chose a {art} but holds no record of sending it"
+                )
+            elif shown is not None and not getattr(shown, art):
+                problems.append(f"the server shows no {art} Overture sent")
+        theme = bool(collection["youtube_id"] or collection["has_theme"])
+        if shown is not None and shown.theme is not None:
+            if theme and not shown.theme:
+                problems.append("the server holds none of the theme Overture holds")
+            elif shown.theme and not theme:
+                notes.append("the server holds a theme Overture does not know")
+        case.error = "; ".join(problems)
+        case.note = "; ".join(notes)
 
     async def check_images(self, collection: dict[str, Any]) -> None:
         """Every image Overture links a collection to must load."""
@@ -1260,6 +1308,13 @@ class PlexServer(Server):
             if (ours := mine.get(key)) is None:
                 continue
             library.held[key] = int(row.get("childCount", 0))
+            thumb = str(row.get("thumb") or "")
+            # Plex composes a poster from the members of a collection without one.
+            library.shown[key] = ServerArt(
+                poster=bool(thumb) and "/composite/" not in thumb,
+                background=bool(row.get("art")),
+                theme=bool(row.get("theme")),
+            )
             case = library.case("inventory", f"{row['title']} members")
             case.held = library.held[key]
             # Overture counts the members on every server holding a copy.
@@ -1628,6 +1683,16 @@ class MediaBrowserServer(Server):
             )
         return self._administrator or None
 
+    async def has_theme(self, collection_id: str) -> bool:
+        """Whether the server plays a theme for the collection, asked as a user."""
+        admin = await self.administrator()
+        found = await self.get(
+            f"/Items/{collection_id}/ThemeSongs",
+            InheritFromParent="false",
+            **({"UserId": admin["Id"]} if admin else {}),
+        )
+        return bool(found["TotalRecordCount"])
+
     async def member_count(self, collection_id: str) -> int:
         """The members of a collection, as Overture lists them.
 
@@ -1761,11 +1826,11 @@ async def check_media_browser_collections(
     server_id: int,
     collections: list[dict[str, Any]],
     listing: Listing,
-) -> tuple[list[Case], dict[str, int]]:
+) -> tuple[list[Case], dict[str, int], dict[str, ServerArt]]:
     """BoxSets live outside libraries, so they are compared once per server.
 
-    Returns the cases and the members the server counts in each BoxSet
-    Overture lists.
+    Returns the cases, and the members the server counts in and the art it
+    shows of each BoxSet Overture lists.
     """
     listed = await direct.collection_ids()
     mine = {
@@ -1811,10 +1876,17 @@ async def check_media_browser_collections(
             )
     cases = [case]
     held: dict[str, int] = {}
+    shown: dict[str, ServerArt] = {}
     for key, row in listed.items():
         if (ours := mine.get(key)) is None:
             continue
         held[key] = await direct.member_count(key)
+        tags: dict[str, Any] = row.get("ImageTags") or {}
+        shown[key] = ServerArt(
+            poster="Primary" in tags,
+            background=bool(row.get("BackdropImageTags")),
+            theme=await direct.has_theme(key) if direct.server == "jellyfin" else None,
+        )
         found = Case(direct.server, "", "inventory", f"{row['Name']} members")
         found.held = held[key]
         if len(ours["copies"]) == 1:
@@ -1822,7 +1894,7 @@ async def check_media_browser_collections(
         if row["Name"] != ours["title"]:
             found.error = f"{direct.server} names it {row['Name']!r}"
         cases.append(found)
-    return cases, held
+    return cases, held, shown
 
 
 async def verify_instance(
@@ -1966,13 +2038,14 @@ async def verify_server(
             await library.check(extra_sources)
         checked.append((libraries, collections))
     if isinstance(direct, MediaBrowserServer):
-        found_cases, counts = await check_media_browser_collections(
+        found_cases, counts, shown = await check_media_browser_collections(
             direct, server["id"], held, listing
         )
         cases.extend(found_cases)
         for libraries, _ in checked:
             for library in libraries.values():
                 library.held = counts
+                library.shown = shown
     for libraries, collections in checked:
         for collection in collections:
             await check_collection(libraries, collection)
@@ -2348,6 +2421,10 @@ class WriteCheck:
                         "upload a poster and a background",
                         lambda case: self.artwork(case, made),
                     )
+                    await self.step(
+                        "keep the images' names through an edit",
+                        lambda case: self.steady(case, library, made),
+                    )
                 if isinstance(self.direct, PlexServer):
                     smart = await self.step(
                         "create a smart collection Plex fills itself",
@@ -2517,6 +2594,36 @@ class WriteCheck:
         ]
         if unchanged:
             check.error = f"the server names the same {' and '.join(unchanged)}"
+
+    async def steady(self, check: Case, library: str, collection_id: str) -> None:
+        """Edit the collection as a sync does; the images must keep their names.
+
+        A sync takes an image named otherwise than when Overture sent it for
+        one Overture did not send, and forgets it sent one.
+        """
+        plex = isinstance(self.direct, PlexServer)
+        before = await self.art(collection_id)
+        await self.provider.update_collection_details(
+            collection_id,
+            library_id=library,
+            title=f"{WRITE_PREFIX} edited",
+            summary="Made by Overture's verify script",
+            sort_title=f"{WRITE_PREFIX} sort",
+            mode=CollectionMode.DEFAULT,
+            order=CollectionOrder.CUSTOM if plex else CollectionOrder.TITLE_ASC,
+            smart=False,
+            visible_home=True,
+        )
+        members = await self.provider.get_collection_member_ids(collection_id)
+        await self.provider.set_collection_members(
+            collection_id, members[::-1], order=CollectionOrder.CUSTOM
+        )
+        after = await self.art(collection_id)
+        if after != before:
+            check.error = (
+                f"the server names its poster and background {after}, not "
+                f"{before}, after an edit"
+            )
 
     def everything_since(self, year: int) -> str:
         """Overture's Plex query for the movies released after *year*."""

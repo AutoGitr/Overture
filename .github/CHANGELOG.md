@@ -28,6 +28,8 @@
 - **Collections:** Plex smart collections select the members of a regular collection renamed since it was made, which Plex's list of collections still names by its first title.
 - **Collections:** syncing one collection makes again the server collection deleted on its server, instead of failing to write to it.
 - **Collections:** a collection no server holds shows no server poster or background, rather than one that fails to load.
+- **Collections:** a new server copy of a collection gets its chosen art again, instead of the sync failing with "Overture has uploaded no image to it" once a sync forgot what Overture had sent; Audit's fix sends the chosen image the same way and records it as sent again.
+- **Collections:** a collection's images, kind and theme come from its copy on the first server in `MEDIA_SERVERS`, as everywhere else; a collection whose Jellyfin library was saved first took them from Jellyfin, so a sync forgot the art Overture sent to Plex, its theme, and that a Plex smart collection is smart.
 - **Collections:** a managed Jellyfin collection whose BoxSet folder has no theme gets its theme on its next sync, such as one made before `MEDIA_SERVER_<NAME>_COLLECTIONS_PATH` was set.
 - **Collections:** Plex smart collections select actors and other values Plex leaves off its list of a library's values, which holds only some of its actors.
 - **Collections:** Plex smart collections whose title or other text condition holds an apostrophe sync instead of failing; Plex cannot match such text exactly, so **is** matches a text starting and ending with it, and **is not** leaves out every text containing it.
