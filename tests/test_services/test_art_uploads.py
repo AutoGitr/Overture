@@ -14,7 +14,14 @@ lazy from overture.db.models.art import ArtSlot
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtSource, ArtType, AssetStatus, JobType, MediaType
+lazy from overture.domain import (
+    ArtSource,
+    ArtStyle,
+    ArtType,
+    AssetStatus,
+    JobType,
+    MediaType,
+)
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.schemas.art import SaveArtRequest
@@ -121,7 +128,9 @@ async def test_an_upload_must_be_a_jpeg_or_png(
     tmp_path: Path, *, app_config: Settings, database: Database
 ) -> None:
     service = _service(
-        ImageCache(tmp_path / "images"), app_config=app_config, database=database
+        ImageCache(tmp_path / "images", tmp_path / "uploads"),
+        app_config=app_config,
+        database=database,
     )
 
     with pytest.raises(PublicServiceError) as refused:
@@ -130,7 +139,7 @@ async def test_an_upload_must_be_a_jpeg_or_png(
 
     assert refused.value.status_code == 415
     assert (kept.width, kept.height) == (200, 300)
-    cache = ImageCache(tmp_path / "images")
+    cache = ImageCache(tmp_path / "images", tmp_path / "uploads")
     assert cache.has_original(kept.upload_hash)
     assert cache.has_thumb(kept.upload_hash)
 
@@ -140,7 +149,7 @@ async def test_an_upload_is_selected_then_written_beside_the_media(
 ) -> None:
     folder = tmp_path / "Alien (1979)"
     folder.mkdir()
-    cache = ImageCache(tmp_path / "images")
+    cache = ImageCache(tmp_path / "images", tmp_path / "uploads")
     downloads = _downloads(cache, app_config=app_config, database=database)
     service = _service(
         cache, app_config=app_config, database=database, downloads=downloads
@@ -184,7 +193,9 @@ async def test_an_item_without_a_folder_keeps_its_upload_as_its_file(
     tmp_path: Path, *, app_config: Settings, database: Database
 ) -> None:
     service = _service(
-        ImageCache(tmp_path / "images"), app_config=app_config, database=database
+        ImageCache(tmp_path / "images", tmp_path / "uploads"),
+        app_config=app_config,
+        database=database,
     )
     item_id = await _item(database, None)
     upload = await service.uploads.store(_poster())
@@ -204,7 +215,9 @@ async def test_an_upload_the_cache_no_longer_keeps_is_refused(
     tmp_path: Path, *, app_config: Settings, database: Database
 ) -> None:
     service = _service(
-        ImageCache(tmp_path / "images"), app_config=app_config, database=database
+        ImageCache(tmp_path / "images", tmp_path / "uploads"),
+        app_config=app_config,
+        database=database,
     )
     item_id = await _item(database, None)
 
@@ -216,7 +229,7 @@ async def test_an_upload_the_cache_no_longer_keeps_is_refused(
     assert refused.value.status_code == 409
 
 
-async def test_retention_keeps_uploads_a_slot_or_queued_job_names(
+async def test_retention_never_deletes_an_upload(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     *,
@@ -225,10 +238,30 @@ async def test_retention_keeps_uploads_a_slot_or_queued_job_names(
 ) -> None:
     # Every cached file is old enough to go unless something names it.
     monkeypatch.setattr(retention, "UNUSED_IMAGE_RETENTION", timedelta(days=-1))
-    cache = ImageCache(tmp_path / "images")
-    selected = await cache.store_original(_poster("red"))
-    queued = await cache.store_original(_poster("blue"))
+    cache = ImageCache(tmp_path / "cache", tmp_path / "uploads")
+    service = _service(cache, app_config=app_config, database=database)
+    unselected = await service.uploads.store(_poster("red"))
     stray = await cache.store_original(_poster("green"))
+    interrupted = tmp_path / "uploads" / ".staging" / "write.tmp"
+    interrupted.parent.mkdir(parents=True, exist_ok=True)
+    interrupted.write_bytes(b"half")
+
+    await prune_image_cache(database=database, image_cache=cache)
+
+    assert cache.has_original(unselected.upload_hash)
+    assert not cache.has_original(stray.file_hash)
+    assert not interrupted.exists()
+
+
+async def test_uploads_in_the_cache_move_to_the_uploads_folder(
+    tmp_path: Path, *, app_config: Settings, database: Database
+) -> None:
+    # Overture 0.3 kept the cache, uploads included, in cache/images.
+    legacy = ImageCache(tmp_path / "cache" / "images", tmp_path / "unused")
+    selected = await legacy.store_original(_poster("red"))
+    queued = await legacy.store_original(_poster("blue"))
+    generated = await legacy.store_original(_poster("green"))
+    await legacy.thumb(generated)
     item_id = await _item(database, None)
     async with database.write_session() as session:
         session.add(
@@ -236,6 +269,14 @@ async def test_retention_keeps_uploads_a_slot_or_queued_job_names(
                 media_item_id=item_id,
                 art_type=ArtType.POSTER,
                 upload_hash=selected.file_hash,
+            )
+        )
+        session.add(
+            ArtSlot(
+                media_item_id=item_id,
+                art_type=ArtType.BACKGROUND,
+                upload_hash=generated.file_hash,
+                generated_style=ArtStyle.DARK,
             )
         )
         session.add(
@@ -247,10 +288,19 @@ async def test_retention_keeps_uploads_a_slot_or_queued_job_names(
                 created_at=utc_now(),
             )
         )
+    cache = ImageCache(tmp_path / "cache", tmp_path / "uploads")
+    service = _service(cache, app_config=app_config, database=database)
 
-    removed = await prune_image_cache(database=database, image_cache=cache)
+    await service.uploads.adopt_from_cache()
+    await service.uploads.adopt_from_cache()
 
-    assert removed == 1
-    assert cache.has_original(selected.file_hash)
-    assert cache.has_original(queued.file_hash)
-    assert not cache.has_original(stray.file_hash)
+    for upload in (selected, queued):
+        original = await cache.original(upload.file_hash)
+        assert original is not None
+        assert original.path.is_relative_to(tmp_path / "uploads")
+    # Generated art can be drawn again, so it stays in the cache.
+    original = await cache.original(generated.file_hash)
+    assert original is not None
+    assert original.path.is_relative_to(tmp_path / "cache" / "originals")
+    assert cache.has_thumb(generated.file_hash)
+    assert not (tmp_path / "cache" / "images").exists()

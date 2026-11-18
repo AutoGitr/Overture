@@ -686,7 +686,7 @@ async def test_deleting_a_media_item_takes_its_seasons_and_artwork_with_it(
 async def test_image_cache_rejects_paths_outside_root_and_invalid_hashes(
     tmp_path: Path,
 ) -> None:
-    cache = ImageCache(tmp_path / "cache" / "images")
+    cache = ImageCache(tmp_path / "cache", tmp_path / "uploads")
     root = tmp_path / "library"
     sibling = tmp_path / "library-other"
     root.mkdir()
@@ -767,7 +767,7 @@ async def test_local_image_display_is_downscaled_to_avif_and_served_from_cache(
     assert isinstance(response, FileResponse)
     assert response.media_type == "image/avif"
     assert Path(response.path) == (
-        tmp_path / "cache" / "images" / "thumbs" / file_hash[:2] / f"{file_hash}.avif"
+        tmp_path / "cache" / "thumbs" / file_hash[:2] / f"{file_hash}.avif"
     )
     assert _response_image(response) == ("AVIF", (400, 600))
     assert response.headers["Cache-Control"] == "private, max-age=31536000, immutable"
@@ -782,7 +782,7 @@ async def test_local_image_display_is_downscaled_to_avif_and_served_from_cache(
     )
     assert isinstance(cached_original, FileResponse)
     assert Path(cached_original.path) == (
-        tmp_path / "cache" / "images" / "originals" / file_hash[:2] / f"{file_hash}.jpg"
+        tmp_path / "cache" / "originals" / file_hash[:2] / f"{file_hash}.jpg"
     )
 
 
@@ -848,14 +848,12 @@ async def test_local_image_serves_cached_original_without_size_and_avif_thumb_wi
 
     assert isinstance(original, FileResponse)
     assert original.media_type == "image/jpeg"
-    assert Path(original.path).is_relative_to(
-        tmp_path / "cache" / "images" / "originals"
-    )
+    assert Path(original.path).is_relative_to(tmp_path / "cache" / "originals")
     assert original.headers["Cache-Control"] == "private, max-age=31536000, immutable"
 
     assert isinstance(display, FileResponse)
     assert display.media_type == "image/avif"
-    assert Path(display.path).is_relative_to(tmp_path / "cache" / "images" / "thumbs")
+    assert Path(display.path).is_relative_to(tmp_path / "cache" / "thumbs")
     assert display.headers["Cache-Control"] == "private, max-age=31536000, immutable"
 
 
@@ -898,7 +896,7 @@ async def test_local_image_rejects_an_unreadable_file_when_sized(
     folder = tmp_path / "Movie"
     file_hash = await _poster_movie(db_session, folder)
     cached_original = (
-        tmp_path / "cache" / "images" / "originals" / file_hash[:2] / f"{file_hash}.jpg"
+        tmp_path / "cache" / "originals" / file_hash[:2] / f"{file_hash}.jpg"
     )
     cached_original.parent.mkdir(parents=True, exist_ok=True)
     cached_original.write_bytes(b"not an image")
@@ -984,7 +982,7 @@ async def test_refresh_imports_unchanged_recorded_file_when_cache_is_cold(
         )
         session.add(item)
 
-    image_cache = ImageCache(tmp_path / "cache" / "images")
+    image_cache = ImageCache(tmp_path / "cache", tmp_path / "uploads")
     local_assets = make_local_assets(
         app_config=app_config, database=database, image_cache=image_cache
     )

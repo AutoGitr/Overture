@@ -17,4 +17,9 @@ def database_url(config_dir: Path) -> str:
 
 def image_cache_path(config_dir: Path) -> Path:
     """Return the folder of the image cache kept in ``config_dir``."""
-    return config_dir / "cache" / "images"
+    return config_dir / "cache"
+
+
+def uploads_path(config_dir: Path) -> Path:
+    """Return the folder of the images people uploaded, kept in ``config_dir``."""
+    return config_dir / "uploads"

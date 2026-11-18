@@ -1,22 +1,25 @@
-"""The cache of the images Overture shows, kept in the config directory.
+"""The images Overture shows, kept in the config directory.
 
-Local artwork is never shown from the media folders. Each image Overture reads
-from one is kept here under the BLAKE3 hash of its bytes, the hash its art slot
-records, so the cache is content-addressed:
+Local artwork is never shown from the media folders. Each image is kept under
+the BLAKE3 hash of its bytes, the hash its art slot records, in one of two
+content-addressed folders, where ``xx`` is the hash's first byte:
 
-* ``originals/xx/<hash>.jpg`` or ``.png`` holds the file exactly as it was
-  read, for opening an image at full size and as the source of its thumbnail.
-* ``thumbs/xx/<hash>.avif`` is the thumbnail every view shows, rendered from
-  the original the first time it is asked for.
+* The cache holds ``originals/xx/<hash>.jpg`` or ``.png``, each file exactly
+  as it was read, and ``thumbs/xx/<hash>.avif``, the thumbnail every view
+  shows, rendered from the original the first time it is asked for. It can be
+  deleted whenever: a media folder's image is read again on demand, a link
+  fetched again and generated art drawn again.
+* The uploads hold ``xx/<hash>.jpg`` or ``.png``, the images people uploaded.
+  Overture holds their only copy, so it never deletes one.
 
-``xx`` is the hash's first byte. Entries never change once written, so a URL
-that names a hash can be cached for good, and the cache can be deleted
-whenever: what a slot records is read from its media folder again on demand.
+Entries never change once written, so a URL that names a hash can be cached
+for good. Reading an original looks in the uploads first.
 """
 
 lazy import asyncio
 lazy import os
 lazy import re
+lazy import shutil
 lazy import stat
 lazy import tempfile
 lazy from collections.abc import Callable, Collection
@@ -42,8 +45,12 @@ lazy from .assets import PathTraversalError
 _ORIGINALS = "originals"
 _THUMBS = "thumbs"
 #: Where an entry is written before it is moved into place, so a reader never
-#: finds half of one. Only entries are ever named by a hash.
+#: finds half of one. Each folder stages its own, so placing an entry is a
+#: rename within one filesystem. Only entries are ever named by a hash.
 _STAGING = "staging"
+_UPLOAD_STAGING = ".staging"
+#: The cache's own folder in Overture 0.3 and earlier, which held the uploads.
+_LEGACY = "images"
 _HASH = re.compile(r"[0-9a-f]{64}")
 #: Thumbnails rendered at once. Rendering is CPU-bound: a sidebar full of new
 #: thumbnails queues here instead of occupying every worker thread.
@@ -89,17 +96,19 @@ class CacheUsage:
 
 @dataclass(frozen=True, slots=True)
 class ImageCacheUsage:
-    """What the cache holds on disk: the originals and their thumbnails."""
+    """What the cache and the uploads hold on disk."""
 
     originals: CacheUsage
     thumbs: CacheUsage
+    uploads: CacheUsage
 
 
 class ImageCache:
     """Keep, find and prune the images shown for local artwork."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, uploads: Path) -> None:
         self._root = root
+        self._uploads = uploads
         self._renders = asyncio.Semaphore(_CONCURRENT_RENDERS)
         self._thumb_locks = KeyedLock[str]()
 
@@ -108,9 +117,14 @@ class ImageCache:
             raise ValueError("An image is named by the BLAKE3 hash of its bytes")
         return self._root / kind / file_hash[:2] / f"{file_hash}{extension}"
 
-    def _stage[T](self, write: Callable[[BinaryIO], T]) -> tuple[Path, T]:
+    def _upload_entry(self, file_hash: str, extension: str) -> Path:
+        if not _HASH.fullmatch(file_hash):
+            raise ValueError("An image is named by the BLAKE3 hash of its bytes")
+        return self._uploads / file_hash[:2] / f"{file_hash}{extension}"
+
+    @staticmethod
+    def _stage[T](staging: Path, write: Callable[[BinaryIO], T]) -> tuple[Path, T]:
         """Write a new entry into a file of its own before moving it into place."""
-        staging = self._root / _STAGING
         staging.mkdir(parents=True, exist_ok=True)
         descriptor, name = tempfile.mkstemp(dir=staging, suffix=".tmp")
         staged = Path(name)
@@ -131,9 +145,12 @@ class ImageCache:
         if not _HASH.fullmatch(file_hash):
             return None
         for extension in SAVED_EXTENSIONS:
-            path = self._entry(_ORIGINALS, file_hash, extension)
-            if (file_stat := _regular_stat(path)) is not None:
-                return CachedOriginal(file_hash, path, stat=file_stat)
+            for path in (
+                self._upload_entry(file_hash, extension),
+                self._entry(_ORIGINALS, file_hash, extension),
+            ):
+                if (file_stat := _regular_stat(path)) is not None:
+                    return CachedOriginal(file_hash, path, stat=file_stat)
         return None
 
     def has_original(self, file_hash: str) -> bool:
@@ -180,7 +197,9 @@ class ImageCache:
             raise FileNotFoundError(path)
         if not is_within_roots(path, [real_path(root)]):
             raise PathTraversalError(f"Image {path} is outside {root}")
-        staged, file_hash = self._stage(lambda stream: copy_with_hash(path, stream))
+        staged, file_hash = self._stage(
+            self._root / _STAGING, lambda stream: copy_with_hash(path, stream)
+        )
         try:
             extension, width, height = inspect_saved_image(staged)
             return self._keep(staged, file_hash, extension, width, height)
@@ -199,30 +218,89 @@ class ImageCache:
         """
         return await owned_thread(self._import_original, path, root)
 
-    def _store_original(self, data: bytes) -> CachedOriginal:
+    def _store(self, data: bytes, *, upload: bool) -> CachedOriginal:
         extension, width, height = inspect_saved_image(data)
         file_hash = compute_bytes_hash(data)
-        destination = self._entry(_ORIGINALS, file_hash, extension)
-        if destination.is_file():
-            return CachedOriginal(file_hash, destination, width=width, height=height)
-        staged, _ = self._stage(lambda stream: stream.write(data))
-        try:
-            return self._keep(staged, file_hash, extension, width, height)
-        finally:
-            staged.unlink(missing_ok=True)
+        if upload:
+            destination = self._upload_entry(file_hash, extension)
+            staging = self._uploads / _UPLOAD_STAGING
+        else:
+            destination = self._entry(_ORIGINALS, file_hash, extension)
+            staging = self._root / _STAGING
+        if not destination.is_file():
+            staged, _ = self._stage(staging, lambda stream: stream.write(data))
+            try:
+                self._place(staged, destination)
+            finally:
+                staged.unlink(missing_ok=True)
+        return CachedOriginal(file_hash, destination, width=width, height=height)
 
     async def store_original(self, data: bytes) -> CachedOriginal:
-        """Keep the JPEG or PNG *data*.
+        """Keep the JPEG or PNG *data* in the cache.
 
         Raises:
             UnsupportedImageFormatError: When *data* is not a readable JPEG or
                 PNG within the pixel limit; nothing is kept.
             OSError: When the image cannot be kept.
         """
-        return await owned_thread(self._store_original, data)
+        return await owned_thread(self._store, data, upload=False)
+
+    async def store_upload(self, data: bytes) -> CachedOriginal:
+        """Keep the uploaded JPEG or PNG *data* for good.
+
+        Raises:
+            UnsupportedImageFormatError: When *data* is not a readable JPEG or
+                PNG within the pixel limit; nothing is kept.
+            OSError: When the image cannot be kept.
+        """
+        return await owned_thread(self._store, data, upload=True)
+
+    def _adopt_uploads(self, hashes: Collection[str]) -> int:
+        legacy = self._root / _LEGACY
+        moved = 0
+        for file_hash in hashes:
+            if not _HASH.fullmatch(file_hash):
+                continue
+            for extension in SAVED_EXTENSIONS:
+                destination = self._upload_entry(file_hash, extension)
+                for cached in (
+                    legacy / _ORIGINALS / file_hash[:2] / f"{file_hash}{extension}",
+                    self._entry(_ORIGINALS, file_hash, extension),
+                ):
+                    if _regular_stat(cached) is None:
+                        continue
+                    if not destination.is_file():
+                        staged, _ = self._stage(
+                            self._uploads / _UPLOAD_STAGING,
+                            lambda stream, source=cached: stream.write(
+                                source.read_bytes()
+                            ),
+                        )
+                        try:
+                            self._place(staged, destination)
+                        finally:
+                            staged.unlink(missing_ok=True)
+                        moved += 1
+                    cached.unlink()
+        if legacy.is_dir():
+            for kind in (_ORIGINALS, _THUMBS):
+                if (legacy / kind).is_dir() and not (self._root / kind).exists():
+                    (legacy / kind).rename(self._root / kind)
+            shutil.rmtree(legacy)
+        return moved
+
+    async def adopt_uploads(self, hashes: Collection[str]) -> int:
+        """Move the uploads *hashes* names out of the cache; return how many moved.
+
+        Overture 0.3 and earlier kept uploads in the cache, in its own
+        ``images`` folder, which this also takes the rest of the cache out of.
+        """
+        return await owned_thread(self._adopt_uploads, hashes)
 
     def _keep_thumb(self, destination: Path, data: bytes) -> None:
-        staged, _ = self._stage(lambda stream: stream.write(data))
+        staged, _ = self._stage(
+            self._root / _STAGING, lambda stream: stream.write(data)
+        )
         try:
             self._place(staged, destination)
         finally:
@@ -262,34 +340,42 @@ class ImageCache:
                         continue
                 with suppress(OSError):
                     shard.rmdir()
-        for path in (self._root / _STAGING).glob("*"):
-            try:
-                if path.stat().st_mtime < older_than:
-                    path.unlink()
-                    removed += 1
-            except FileNotFoundError:
-                continue
+        # A staged file is a write that was interrupted, never an entry.
+        for staging in (self._root / _STAGING, self._uploads / _UPLOAD_STAGING):
+            for path in staging.glob("*"):
+                try:
+                    if path.stat().st_mtime < older_than:
+                        path.unlink()
+                        removed += 1
+                except FileNotFoundError:
+                    continue
         return removed
 
-    def _usage_of(self, kind: str) -> CacheUsage:
+    @staticmethod
+    def _usage_of(folder: Path) -> CacheUsage:
         sizes = [
             file_stat.st_size
-            for path in (self._root / kind).glob("*/*")
-            if (file_stat := _regular_stat(path)) is not None
+            for path in folder.glob("*/*")
+            if _HASH.fullmatch(path.stem)
+            and (file_stat := _regular_stat(path)) is not None
         ]
         return CacheUsage(files=len(sizes), size_bytes=sum(sizes))
 
     def _usage(self) -> ImageCacheUsage:
         return ImageCacheUsage(
-            originals=self._usage_of(_ORIGINALS), thumbs=self._usage_of(_THUMBS)
+            originals=self._usage_of(self._root / _ORIGINALS),
+            thumbs=self._usage_of(self._root / _THUMBS),
+            uploads=self._usage_of(self._uploads),
         )
 
     async def usage(self) -> ImageCacheUsage:
-        """Count the cached originals and thumbnails, and their bytes."""
+        """Count the cached originals and thumbnails, the uploads, and their bytes."""
         return await owned_thread(self._usage)
 
     async def prune(self, keep: Collection[str], *, older_than: float) -> int:
         """Delete unkept cached image files last written before *older_than*.
+
+        The uploads are never deleted.
 
         *older_than* is a time in seconds since the epoch. The age spares an
         image being kept for a slot that is not recorded yet, and a leftover

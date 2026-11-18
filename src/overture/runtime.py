@@ -25,7 +25,12 @@ lazy from .jobs.results import interrupt_unfinished, latest_runs
 lazy from .jobs.slot import ManagedBackgroundJob
 lazy from .media_servers.health import MediaServerHealth
 lazy from .media_servers.registry import ProviderRegistry
-lazy from .runtime_paths import database_path, database_url, image_cache_path
+lazy from .runtime_paths import (
+    database_path,
+    database_url,
+    image_cache_path,
+    uploads_path,
+)
 lazy from .schemas.media_server import media_server_status
 lazy from .schemas.settings import ConnectivityStatusResponse
 lazy from .services.art.candidates import ArtCandidates
@@ -215,6 +220,7 @@ class RuntimeServices:
         await owned_thread(clean_abandoned_operations, self.config_dir)
         faulthandler.enable()
         await self.database.initialize(self.backups.backup_before_upgrade)
+        await self.art.uploads.adopt_from_cache()
         await MediaServerRoster(
             database=self.database, provider_registry=self.provider_registry
         ).reconcile()
@@ -433,7 +439,7 @@ def build_runtime(
     )
     phash = PhashService(app_config=app_config)
     asset_storage = AssetStorage(app_config=app_config)
-    image_cache = ImageCache(image_cache_path(config_dir))
+    image_cache = ImageCache(image_cache_path(config_dir), uploads_path(config_dir))
     local_assets = LocalAssets(
         asset_storage=asset_storage,
         phash=phash,

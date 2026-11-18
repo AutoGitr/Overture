@@ -12,6 +12,7 @@
 
 ### Changed
 
+- **Storage:** uploaded images are kept for good in `uploads/` in the config folder, apart from the image cache, which moves from `cache/images` to `cache/`; they were the only copy, yet kept in a cache the docs called safe to delete. Uploads already in the cache move there when Overture starts. Generated collection art stays in the cache and is drawn again when the cache lost it. **Statistics** show uploads as their own part of the footprint.
 - **API:** library IDs name their server (`1:2`); titles and collections list their `copies` on each server, the lead first, instead of one `server_item_id`; settings list `media_servers`, and collection capabilities, server links and server audit results are per server.
 - **Collections:** a smart collection tests a show's **Network** as TMDB names it, through a label, as a regular one does, rather than by Plex's own network names.
 - **Collections:** **In the last** and **not in the last** count days back from the moment they are tested, as Plex does, rather than whole days.

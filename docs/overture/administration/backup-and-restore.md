@@ -9,8 +9,10 @@ description: Scheduled and manual database backups, retention, and how to restor
 Backups go to `backups` in the config folder (`config/backups` for Docker,
 `/var/lib/overture/backups` for the service), by schedule or from the
 **Backup** menu. Overture also makes one before every database upgrade. They
-hold your library and choices; your media folders hold the files. Copy
-backups off the host now and then.
+hold your library and choices; your media folders hold the files, and
+`uploads/` in the config folder the images you uploaded. Overture never
+deletes an upload, so a restored backup finds its own. Copy backups off the
+host now and then, together with `uploads/`.
 
 ## Retention
 

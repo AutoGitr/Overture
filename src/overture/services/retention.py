@@ -4,7 +4,7 @@ Download jobs and items the media server has dropped both accumulate for as
 long as Overture runs. Deleting a media item takes its seasons, artwork, values
 and download jobs with it through the cascading foreign keys; the values no
 title holds any more go after it. Cached images that no artwork slot records
-any more go with them.
+any more go with them; uploads are never deleted.
 """
 
 lazy import logging
@@ -76,8 +76,8 @@ async def prune(session: AsyncSession) -> RetentionResult:
 async def prune_image_cache(*, database: Database, image_cache: ImageCache) -> int:
     """Delete the cached images nothing records, once they are old enough.
 
-    A slot records its file and its uploaded selection; a queued download, the
-    upload it will write.
+    A slot records its file and its upload or generated image; a queued
+    download, the upload it will write.
 
     Returns:
         How many cached files were deleted.

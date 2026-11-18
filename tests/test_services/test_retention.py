@@ -156,7 +156,7 @@ async def test_retention_pass_prunes_unreferenced_cached_images_after_grace_wind
     tmp_path: Path,
     database: Database,
 ) -> None:
-    image_cache = ImageCache(tmp_path / "cache" / "images")
+    image_cache = ImageCache(tmp_path / "cache", tmp_path / "uploads")
     referenced = await image_cache.store_original(_jpeg_bytes("red"))
     stale_unused = await image_cache.store_original(_jpeg_bytes("blue"))
     fresh_unused = await image_cache.store_original(_jpeg_bytes("green"))
@@ -197,7 +197,7 @@ async def test_retention_pass_prunes_unreferenced_cached_images_after_grace_wind
 async def test_image_cache_usage_counts_originals_and_thumbnails(
     tmp_path: Path,
 ) -> None:
-    image_cache = ImageCache(tmp_path / "cache" / "images")
+    image_cache = ImageCache(tmp_path / "cache", tmp_path / "uploads")
     assert (await image_cache.usage()).originals.files == 0
     original = await image_cache.store_original(_jpeg_bytes("red"))
     await image_cache.store_original(_jpeg_bytes("blue"))
@@ -207,7 +207,6 @@ async def test_image_cache_usage_counts_originals_and_thumbnails(
 
     assert usage.originals.files == 2
     assert usage.originals.size_bytes == sum(
-        path.stat().st_size
-        for path in (tmp_path / "cache" / "images" / "originals").rglob("*.*")
+        path.stat().st_size for path in (tmp_path / "cache" / "originals").rglob("*.*")
     )
     assert (usage.thumbs.files, usage.thumbs.size_bytes) == (1, thumb.stat().st_size)

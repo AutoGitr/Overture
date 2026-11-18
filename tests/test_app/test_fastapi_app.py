@@ -303,7 +303,7 @@ async def test_local_image_returns_its_connection_before_rendering_thumbnail(
         checked_out.append(pool.checkedout())
         return b""
 
-    original = tmp_path / "cache" / "images" / "originals" / "aa" / f"{'a' * 64}.jpg"
+    original = tmp_path / "cache" / "originals" / "aa" / f"{'a' * 64}.jpg"
     original.parent.mkdir(parents=True)
     original.write_bytes(b"")
     monkeypatch.setattr(

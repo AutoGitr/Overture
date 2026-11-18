@@ -18,6 +18,7 @@
       { label: "Artwork", bytes: stats.storage.artwork_size_bytes, tone: "seg-art" },
       { label: "Themes", bytes: stats.storage.themes_size_bytes, tone: "seg-theme" },
       { label: "Image cache", bytes: stats.storage.image_cache_size_bytes, tone: "seg-cache" },
+      { label: "Uploads", bytes: stats.storage.uploads_size_bytes, tone: "seg-upload" },
       { label: "Database", bytes: stats.storage.database_size_bytes, tone: "seg-db" },
       { label: "Backups", bytes: stats.storage.backups_size_bytes, tone: "seg-backup" },
     ].map((segment) => ({ ...segment, percent: ((segment.bytes / total) * 100).toFixed(1) }));
@@ -46,11 +47,11 @@
 {/snippet}
 
 {#snippet footprintSub()}
-  Artwork, themes, image cache, database, and backups
+  Artwork, themes, image cache, uploads, database, and backups
 {/snippet}
 
 {#snippet imageCacheSub()}
-  {stats.image_cache.original_files.toLocaleString()} originals and uploads &middot; {stats.image_cache.thumb_files.toLocaleString()}
+  {stats.image_cache.original_files.toLocaleString()} originals &middot; {stats.image_cache.thumb_files.toLocaleString()}
   thumbnails
 {/snippet}
 
@@ -256,6 +257,10 @@
 
   .seg-cache {
     background: var(--info);
+  }
+
+  .seg-upload {
+    background: var(--accent);
   }
 
   .seg-db {

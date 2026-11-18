@@ -1,5 +1,6 @@
 """Collection artwork uses shared validation, storage, candidates, and matching."""
 
+lazy import shutil
 lazy from io import BytesIO
 lazy from pathlib import Path
 lazy from typing import override
@@ -186,7 +187,7 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
         )
         await session.flush()
         session.add(managing_rule(1))
-    image_cache = ImageCache(tmp_path / "images")
+    image_cache = ImageCache(tmp_path / "images", tmp_path / "uploads")
     service = ArtService(
         app_config=app_config,
         database=database,
@@ -311,7 +312,7 @@ async def test_an_uploaded_collection_image_is_shown_from_the_cache_and_sent_aga
         provider_registry=NoopProviderRegistry(provider),
         candidates=Candidates(),
         image_clients=unused(ProxyClientManager),
-        image_cache=ImageCache(tmp_path / "images"),
+        image_cache=ImageCache(tmp_path / "images", tmp_path / "uploads"),
         remover=AssetRemover(
             asset_storage=AssetStorage(app_config=app_config),
             provider_registry=NoopProviderRegistry(provider),
@@ -388,7 +389,7 @@ async def test_an_inactive_collection_records_its_art_for_the_sync_that_restores
         provider_registry=NoopProviderRegistry(provider),
         candidates=Candidates(),
         image_clients=unused(ProxyClientManager),
-        image_cache=ImageCache(tmp_path / "images"),
+        image_cache=ImageCache(tmp_path / "images", tmp_path / "uploads"),
         remover=AssetRemover(
             asset_storage=AssetStorage(app_config=app_config),
             provider_registry=NoopProviderRegistry(provider),
@@ -529,7 +530,7 @@ async def test_generated_art_is_offered_chosen_and_generated_again_for_a_new_tit
         provider_registry=NoopProviderRegistry(provider),
         candidates=Candidates(),
         image_clients=unused(ProxyClientManager),
-        image_cache=ImageCache(tmp_path / "images"),
+        image_cache=ImageCache(tmp_path / "images", tmp_path / "uploads"),
         remover=AssetRemover(
             asset_storage=AssetStorage(app_config=app_config),
             provider_registry=NoopProviderRegistry(provider),
@@ -575,6 +576,16 @@ async def test_generated_art_is_offered_chosen_and_generated_again_for_a_new_tit
             collection_artwork(row, backgrounds=True).poster_source
             == ArtSource.GENERATED
         )
+
+    # Generated art is kept in the cache, which can be deleted: it is drawn again.
+    assert not (tmp_path / "uploads").exists()
+    shutil.rmtree(tmp_path / "images")
+    shown = await service.collections.local_image(1, ArtType.POSTER, None, None)
+    assert Path(shown.path).is_relative_to(tmp_path / "images" / "originals")
+    shutil.rmtree(tmp_path / "images")
+    await service.collections.reupload(1, ArtType.POSTER)
+    assert provider.uploads[-1] == (ArtType.POSTER, preview, "image/png")
+    del provider.uploads[1:]
 
     # The same title generates the same image, which stays on the server as it is.
     await service.collections.regenerate(1, ArtType.POSTER, resend=False)
@@ -649,7 +660,7 @@ async def test_generated_backgrounds_never_show_text_and_title_only_posters_stay
         provider_registry=NoopProviderRegistry(provider),
         candidates=Candidates(),
         image_clients=unused(ProxyClientManager),
-        image_cache=ImageCache(tmp_path / "images"),
+        image_cache=ImageCache(tmp_path / "images", tmp_path / "uploads"),
         remover=AssetRemover(
             asset_storage=AssetStorage(app_config=app_config),
             provider_registry=NoopProviderRegistry(provider),

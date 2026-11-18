@@ -4021,7 +4021,7 @@ export type HealthResponse = {
 /**
  * ImageCacheStats
  *
- * The cache of shown images: originals, uploads among them, and thumbnails.
+ * The cache of shown images: originals and thumbnails.
  */
 export type ImageCacheStats = {
     /**
@@ -5637,6 +5637,10 @@ export type StorageSummary = {
      * Total Footprint Bytes
      */
     total_footprint_bytes: number;
+    /**
+     * Uploads Size Bytes
+     */
+    uploads_size_bytes: number;
 };
 
 /**

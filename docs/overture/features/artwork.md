@@ -22,9 +22,9 @@ Besides choosing a candidate or pasting a link, **Upload image** beside
 **Paste URL** saves a JPEG or PNG from your device into any art slot, of an
 item, a season or a collection; pasting an image on the art tab does the same.
 
-An upload is kept in the image cache (`cache/images` in the config directory,
-by the hash of its bytes, like every image Overture shows) and written beside
-the media like any other artwork; a collection's goes to the media server.
+An upload is kept in `uploads/` in the config directory, by the hash of its
+bytes, for good, and written beside the media like any other artwork; a
+collection's goes to the media server.
 Uploads count as saved choices, show as the **Upload** art source in the
 filters, and cannot be contributed to OvertureDB, which takes public links
 only.

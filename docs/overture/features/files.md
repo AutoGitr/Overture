@@ -38,10 +38,14 @@ See [Operations](operations.md).
 Beside the media, Overture keeps its own state in the config directory
 (`/config` in Docker, `/var/lib/overture` for the service):
 
-| Path           | Contents                                                                               |
-| -------------- | -------------------------------------------------------------------------------------- |
-| `overture.db`  | The database: library, choices, collections, schedules and settings                    |
-| `backups/`     | Database backups; see [Backup and restore](../administration/backup-and-restore.md)    |
-| `cache/images` | Every image Overture shows, by the hash of its bytes, including uploads and thumbnails |
+| Path          | Contents                                                                            |
+| ------------- | ----------------------------------------------------------------------------------- |
+| `overture.db` | The database: library, choices, collections, schedules and settings                 |
+| `backups/`    | Database backups; see [Backup and restore](../administration/backup-and-restore.md) |
+| `uploads/`    | The images you uploaded, by the hash of their bytes; Overture never deletes them    |
+| `cache/`      | A copy of every other image Overture shows, and the thumbnails; safe to delete      |
 
-Your media folders hold the files; the database holds what was chosen and why.
+Your media folders hold the files; the database holds what was chosen and why;
+`uploads/` holds the images nothing else has. Keep `uploads/` with the
+database: deleting the cache only costs fetching, drawing generated art and
+rendering thumbnails again, but a lost upload has to be uploaded again.

@@ -255,8 +255,8 @@ class CollectionArtService:
         """Upload validated bytes and record their art slot.
 
         Art to generate is generated from the collection's title and group, kept
-        like an upload, and recorded as generated so a new title generates it
-        again.
+        in the image cache, and recorded as generated so a new title, or a
+        cache that lost it, generates it again.
 
         Raises:
             PublicServiceError: 422 when a poster link has no poster style, or
@@ -278,11 +278,11 @@ class CollectionArtService:
         async with self._database.read_session() as db:
             row = await self._require(db, collection_id, art_type, managed=True)
         if generation is not None:
-            upload_hash = await self._generate(row, art_type, generation)
+            generated = await self._generate(row, art_type, generation)
             await self._choose(
                 collection_id,
                 art_type,
-                SaveCollectionArtRequest(upload_hash=upload_hash),
+                SaveCollectionArtRequest(upload_hash=generated.file_hash),
                 generated=generation,
             )
         else:
@@ -293,12 +293,13 @@ class CollectionArtService:
 
     async def _generate(
         self, row: MediaCollection, art_type: ArtType, generation: ArtGeneration
-    ) -> str:
-        """Generate the collection's art as *generation* says; return its kept hash."""
-        stored = await self._uploads.store(
+    ) -> CachedOriginal:
+        """Generate the collection's art as *generation* says, into the cache."""
+        original = await self._image_cache.store_original(
             await owned_thread(_render, row, art_type, generation)
         )
-        return stored.upload_hash
+        await self._image_cache.thumb(original)
+        return original
 
     async def _choose(
         self,
@@ -342,31 +343,50 @@ class CollectionArtService:
         """Generate art again if what it shows changed, or *resend* it."""
         async with self._database.read_session() as db:
             row = await self._require(db, collection_id, art_type, managed=True)
+        await self._redraw(collection_id, row, art_type, resend=resend)
+
+    async def _redraw(
+        self,
+        collection_id: int,
+        row: MediaCollection,
+        art_type: ArtType,
+        *,
+        resend: bool,
+    ) -> bool:
+        """Generate the slot's art again, and send it if it changed or *resend*.
+
+        Returns:
+            Whether the slot holds generated art.
+        """
         generation = art_generation(read_art_slot(row, art_type))
         if generation is None:
-            return
-        upload_hash = await self._generate(row, art_type, generation)
-        if resend or upload_hash != read_art_slot(row, art_type).upload_hash:
+            return False
+        generated = await self._generate(row, art_type, generation)
+        if resend or generated.file_hash != read_art_slot(row, art_type).upload_hash:
             await self._choose(
                 collection_id,
                 art_type,
-                SaveCollectionArtRequest(upload_hash=upload_hash),
+                SaveCollectionArtRequest(upload_hash=generated.file_hash),
                 generated=generation,
             )
+        return True
 
     async def reupload(self, collection_id: int, art_type: ArtType) -> None:
         """Send every server copy the slot's image again, and record it as shown.
 
-        The image is the upload the slot selects, else the one Overture last
-        uploaded, else its link fetched again: a sync forgets what Overture
-        uploaded when the server shows another image, but not the selection.
+        The image is the art the slot generates, drawn again, else the upload
+        it selects, else the one Overture last uploaded, else its link fetched
+        again: a sync forgets what Overture uploaded when the server shows
+        another image, but not the selection.
 
         Raises:
             PublicServiceError: 409 when the slot holds no image to send, or
-                the cache does not keep it.
+                Overture does not hold it.
         """
         async with self._database.read_session() as db:
             row = await self._require(db, collection_id, art_type)
+        if await self._redraw(collection_id, row, art_type, resend=True):
+            return
         slot = read_art_slot(row, art_type)
         kept = slot.upload_hash or slot.file_hash
         if kept is None:
@@ -477,27 +497,32 @@ class CollectionArtService:
         size: ImageSize | None,
         version: str | None,
     ) -> FileResponse:
-        """Serve the image Overture last uploaded to a collection, from the cache.
+        """Serve the image Overture last uploaded to a collection, as it keeps it.
 
-        The cache is its only copy: the server keeps its own encoding, so a
-        lost image is not found until the next upload.
+        The server keeps its own encoding, so a fetched image the cache lost is
+        not found until the next upload; generated art is drawn again.
 
         Raises:
             PublicServiceError: 404 when the collection records no such image.
         """
         async with self._database.read_session() as db:
             row = await self._require(db, collection_id, art_type)
-        file_hash = read_art_slot(row, art_type).file_hash
+        slot = read_art_slot(row, art_type)
+        file_hash = slot.file_hash
         if file_hash is None:
             raise PublicServiceError(404, "Collection image not found")
 
-        async def lost() -> CachedOriginal:
+        async def restore() -> CachedOriginal:
+            if (generation := art_generation(slot)) is not None:
+                generated = await self._generate(row, art_type, generation)
+                if generated.file_hash == file_hash:
+                    return generated
             raise PublicServiceError(404, "Collection image not found")
 
         return await cached_image_response(
             self._image_cache,
             file_hash,
-            restore=lost,
+            restore=restore,
             size=size,
             current=version == file_hash,
         )

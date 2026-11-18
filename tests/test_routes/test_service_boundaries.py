@@ -24,7 +24,7 @@ lazy from overture.jobs.gate import LibraryGate
 lazy from overture.main import create_app
 lazy from overture.protocols import CollectionGroups
 lazy from overture.routers import art as art_router
-lazy from overture.runtime_paths import image_cache_path
+lazy from overture.runtime_paths import image_cache_path, uploads_path
 lazy from overture.schemas.art import ArtCandidate
 lazy from overture.schemas.common import MonitoredResponse
 lazy from overture.services.art.phash import PhashService
@@ -360,7 +360,7 @@ async def test_art_uploads_take_the_image_file_as_the_body(
 
     assert kept.status_code == 200
     assert kept.json()["width"] == 20
-    assert ImageCache(image_cache_path(tmp_path)).has_original(
+    assert ImageCache(image_cache_path(tmp_path), uploads_path(tmp_path)).has_original(
         kept.json()["upload_hash"]
     )
     assert refused.status_code == 415

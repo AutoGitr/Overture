@@ -95,9 +95,10 @@ const mockStats: StatsResponse = {
     artwork_size_bytes: 514000000,
     themes_size_bytes: 180000000,
     image_cache_size_bytes: 69000000,
+    uploads_size_bytes: 4000000,
     database_size_bytes: 19922944,
     backups_size_bytes: 35000000,
-    total_footprint_bytes: 817922944,
+    total_footprint_bytes: 821922944,
   },
   generated_at: "2026-09-15T12:00:00Z",
 };

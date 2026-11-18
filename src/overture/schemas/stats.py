@@ -125,7 +125,7 @@ class BackupStats(StrictBaseModel):
 
 
 class ImageCacheStats(StrictBaseModel):
-    """The cache of shown images: originals, uploads among them, and thumbnails."""
+    """The cache of shown images: originals and thumbnails."""
 
     original_files: int = 0
     original_size_bytes: int = 0
@@ -140,6 +140,7 @@ class StorageSummary(StrictBaseModel):
     artwork_size_bytes: int = 0
     themes_size_bytes: int = 0
     image_cache_size_bytes: int = 0
+    uploads_size_bytes: int = 0
     database_size_bytes: int = 0
     backups_size_bytes: int = 0
     total_footprint_bytes: int = 0

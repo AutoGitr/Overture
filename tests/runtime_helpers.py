@@ -43,7 +43,11 @@ lazy from overture.media_servers.health import (
 )
 lazy from overture.media_servers.registry import ProviderRegistry
 lazy from overture.runtime import RuntimeServices
-lazy from overture.runtime_paths import database_path, image_cache_path
+lazy from overture.runtime_paths import (
+    database_path,
+    image_cache_path,
+    uploads_path,
+)
 lazy from overture.schemas.art import ArtCandidate
 lazy from overture.schemas.catalog import (
     CatalogRecord,
@@ -539,7 +543,7 @@ def make_runtime(
         provider_registry = attached_registry(app_config)
     downloads = NoopDownloads() if downloads is None else downloads
     sync = NoopSync(app_config=app_config) if sync is None else sync
-    image_cache = ImageCache(image_cache_path(config_dir))
+    image_cache = ImageCache(image_cache_path(config_dir), uploads_path(config_dir))
     backups = (
         BackupService(
             scheduler=scheduler,
@@ -852,7 +856,7 @@ def make_image_cache(app_config: Settings | None = None) -> ImageCache:
     del app_config
     root = Path(mkdtemp(prefix="overture-image-cache-"))
     TEMP_IMAGE_CACHES.append(root)
-    return ImageCache(root)
+    return ImageCache(root / "cache", root / "uploads")
 
 
 def make_download_service(

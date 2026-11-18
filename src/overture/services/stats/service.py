@@ -367,11 +367,13 @@ class StatsService:
                 artwork_size_bytes=art.overall.total_size_bytes,
                 themes_size_bytes=themes.overall.total_size_bytes,
                 image_cache_size_bytes=image_cache.total_size_bytes,
+                uploads_size_bytes=cached.uploads.size_bytes,
                 database_size_bytes=database.total_size_bytes,
                 backups_size_bytes=backup_bytes,
                 total_footprint_bytes=art.overall.total_size_bytes
                 + themes.overall.total_size_bytes
                 + image_cache.total_size_bytes
+                + cached.uploads.size_bytes
                 + database.total_size_bytes
                 + backup_bytes,
             ),

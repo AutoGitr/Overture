@@ -139,7 +139,9 @@ class ArtService:
         self._downloads = downloads
         self._publisher = publisher
         self._candidates = candidates
-        self.uploads = ArtUploads(image_cache=image_cache, phash=phash)
+        self.uploads = ArtUploads(
+            database=database, image_cache=image_cache, phash=phash
+        )
         self.selector = ArtSelector(
             app_config=app_config,
             database=database,

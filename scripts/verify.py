@@ -147,6 +147,8 @@ DAYS_VALUE = 365
 DATE_VALUE = "2000-01-01"
 #: A condition every dated item meets, to preview orders over a whole library.
 EVERYTHING = {"kind": "field", "field": "year", "operator": "gt", "value": 0}
+#: Art sources whose image Overture keeps itself, not in a media folder or a link.
+KEPT_SOURCES = frozenset({"upload", "generated"})
 #: Members compared between Overture's and Plex's order.
 ORDER_DEPTH = 5
 #: Values each set dimension enumerates.
@@ -598,6 +600,7 @@ class Library:
             ("sources", lambda: self.check_sources(extra_sources)),
             ("sets", self.check_sets),
             ("issues", self.check_issues),
+            ("kept art", self.check_kept_art),
         ]
         if (direct := self.direct) is not None:
             stages.append((direct.server, lambda: direct.check_library(self)))
@@ -882,6 +885,35 @@ class Library:
         ][:ORDER_DEPTH]
         if not entries:
             case.note = "no collections"
+
+    async def check_kept_art(self) -> None:
+        """Every uploaded or generated image a title or collection chose loads.
+
+        Overture holds the only copy of an upload, and draws generated art
+        again when the cache lost it.
+        """
+        targets = [
+            (f"/api/library/items/{item['id']}", item) for item in self.items
+        ] + [(f"/api/collections/{row['id']}", row) for row in self.collections]
+        checked = 0
+        lost: list[str] = []
+        for base, owner in targets:
+            for art in ("poster", "background"):
+                if owner.get(f"{art}_source") not in KEPT_SOURCES:
+                    continue
+                checked += 1
+                digest = owner.get(f"{art}_hash")
+                status, kind = (
+                    await self.overture.status(f"{base}/local-image/{art}?t={digest}")
+                    if digest
+                    else (0, "no image recorded")
+                )
+                if status != 200 or not kind.startswith("image/"):
+                    lost.append(f"{owner['title']} {art} ({kind or status})")
+        case = self.case("kept art", "uploaded and generated art")
+        case.count = checked
+        if lost:
+            case.error = f"Overture lost {named(lost)}"
 
     async def check_issues(self) -> None:
         """A sample of contribution issues open the form of their media type."""

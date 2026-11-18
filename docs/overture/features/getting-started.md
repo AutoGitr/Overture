@@ -76,9 +76,9 @@ Browsers offer this only over HTTPS, so serve Overture through a
 
 ## Statistics
 
-The storage footprint includes the image cache, with its originals, uploads
-and thumbnails. Artwork coverage and sizes include collection posters,
-backgrounds and themes, so the numbers show what still needs attention.
+The storage footprint includes the image cache, with its originals and
+thumbnails, and your uploads. Artwork coverage and sizes include collection
+posters, backgrounds and themes, so the numbers show what still needs attention.
 
 ## Database record
 

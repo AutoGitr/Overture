@@ -182,7 +182,11 @@ def _issue(template: str, title: str) -> dict[str, Any]:
 #: What an instance answers whatever the media type.
 _FIXED: dict[str, Any] = {
     "/api/library/items": {
-        "items": [_item(1, "Alien"), _item(2, "Aliens")],
+        # Alien's poster was uploaded, and Overture does not hold the image.
+        "items": [
+            {**_item(1, "Alien"), "poster_source": "upload", "poster_hash": "h1"},
+            _item(2, "Aliens"),
+        ],
         "total": 2,
     },
     # A field both evaluate is recommended to the wrong kind.
@@ -455,6 +459,8 @@ async def test_a_run_checks_overture_against_plex_and_names_each_problem(
     assert "| image | Scary poster from the server |" in text
     # A collection whose count differs names the conditions it previewed.
     assert "regular: genre is 'Horror'" in text
+    assert "| kept art | uploaded and generated art | 1 |" in text
+    assert "Overture lost Alien poster" in text
     # A collection's failed sync is reported with what failed.
     assert (
         "| last sync | Scary |  |  |  |  | Members synced; Automatic assets "
