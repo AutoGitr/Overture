@@ -58,6 +58,30 @@ def add_security_headers(response: Response, *, app_config: Settings) -> Respons
     return response
 
 
+#: The build's files, named by their contents, so a new build never reuses a name.
+BUILD_ASSETS_PATH = "/assets"
+
+
+def is_backend_path(path: str) -> bool:
+    """Whether *path* belongs to the API or the WebSocket, not the frontend."""
+    first_segment = path.strip("/").split("/", 1)[0].lower()
+    return first_segment in {API_PREFIX.strip("/").lower(), "ws"}
+
+
+def frontend_cache_policy(path: str, status_code: int) -> str | None:
+    """How long a browser may keep a frontend file at *path*; ``None`` for the API.
+
+    A build's own files are kept for good. Everything else the frontend
+    serves, the page above all, is checked on every load: a page kept from
+    before an update would ask for files the update removed.
+    """
+    if is_backend_path(path):
+        return None
+    if path.startswith(f"{BUILD_ASSETS_PATH}/") and status_code == 200:
+        return "public, max-age=31536000, immutable"
+    return "no-cache"
+
+
 def websocket_origin_allowed(
     *, origin: str, host: str, scheme: str, app_config: Settings
 ) -> bool:
@@ -105,6 +129,10 @@ async def security_middleware(
         None if app_config.AUTH_MODE == "none" else validate_mutating_request(request)
     )
     response = rejection if rejection is not None else await call_next(request)
+    if (
+        cache := frontend_cache_policy(request.url.path, response.status_code)
+    ) is not None:
+        response.headers.setdefault("Cache-Control", cache)
     if request.url.path.startswith(f"{API_PREFIX}/auth/"):
         response.headers["Cache-Control"] = "no-store"
         if request.url.path.startswith(f"{API_PREFIX}/auth/oidc/"):

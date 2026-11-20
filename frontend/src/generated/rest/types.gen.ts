@@ -5125,6 +5125,10 @@ export type RealtimeJobSnapshot = {
  * Process-local realtime state at one event-stream watermark.
  */
 export type RealtimeSnapshot = {
+    /**
+     * App Version
+     */
+    app_version: string;
     catalog_status: CatalogStatus;
     /**
      * Downloads

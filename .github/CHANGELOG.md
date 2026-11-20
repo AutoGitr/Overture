@@ -58,6 +58,7 @@
 - **Collections:** a collection that needs no theme reports its theme complete after one is chosen or removed.
 - **Collections:** a collection no server holds shows no server art instead of a broken image.
 - **Collections:** **Jump to** in the configure view puts the section's header at the top, also for the last sections and while content above is loading.
+- **Interface:** a tab left open while Overture is updated shows **Overture was updated** with **Reload** instead of becoming unresponsive, and over HTTPS keeps working until then; a page that cannot be loaded says so.
 - **Media servers:** Jellyfin and Emby show the background Overture writes; the backgrounds they downloaded are removed first.
 - **Media servers:** Emby keeps a collection's sort title through refreshes.
 - **Operations:** a busy Assets run no longer fails with "QueuePool limit of size 5 overflow 0 reached".

@@ -1,6 +1,7 @@
 import { createRouter, searchParams } from "sv-router";
 import type { ArtType } from "../../generated/rest/types.gen";
 import type { CatalogTarget } from "../rest/cache";
+import { notify } from "../stores/notificationState.svelte";
 import { settingsState } from "../stores/settingsState.svelte";
 import type { SidebarMode, SidebarSource, SidebarTab } from "../utils/sidebarDomain";
 import { buildIdSlug, parseCatalogSlug, parseItemSlug, type ItemSlug } from "../utils/slug";
@@ -92,6 +93,16 @@ function catalogTypeRoutes<T>(entryRoutes: T) {
 }
 
 export const { navigate, route } = createRouter({
+  hooks: {
+    // A page whose code cannot be loaded leaves the one shown in place, so say
+    // so rather than leaving a click without an answer.
+    onError() {
+      notify.error("The page could not be loaded. Check the connection to Overture.", {
+        title: "Could not open this page",
+        action: { label: "Reload", run: () => location.reload() },
+      });
+    },
+  },
   "/movies": mediaTypeRoutes,
   "/shows": mediaTypeRoutes,
   "/collections": collectionSubroutes,

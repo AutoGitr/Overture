@@ -15,6 +15,7 @@ lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.media_servers.registry import ProviderRegistry
 lazy from overture.runtime import build_runtime
 lazy from overture.schemas.settings import ConnectivityStatusResponse
+lazy from overture.version import APP_VERSION
 lazy from tests.runtime_helpers import make_runtime
 
 
@@ -106,10 +107,11 @@ async def test_runtime_starts_and_stops_managers_in_order(
     monkeypatch.setattr(runtime.websockets, "start_ping_loop", ping)
 
     with caplog.at_level(logging.INFO, logger="overture.runtime"):
-        await runtime.start(app_version="test")
+        await runtime.start()
     # The formatted startup line names the user the server runs as.
     assert re.search(
-        r"^Overture test starting \(Python .+, UID=\d+ GID=\d+, timezone ",
+        rf"^Overture {re.escape(APP_VERSION)} starting \(Python .+, "
+        r"UID=\d+ GID=\d+, timezone ",
         caplog.messages[0],
     )
     assert events[:6] == [
@@ -156,7 +158,7 @@ async def test_runtime_rejects_a_config_path_that_is_not_a_directory(
     with pytest.raises(
         RuntimeError, match="Could not create persistent config directory"
     ):
-        await runtime.start(app_version="test")
+        await runtime.start()
 
 
 async def test_runtime_disposes_engine_when_database_initialization_fails(
@@ -178,7 +180,7 @@ async def test_runtime_disposes_engine_when_database_initialization_fails(
     _record_shutdown(runtime, monkeypatch, events)
 
     with pytest.raises(RuntimeError, match="database unavailable"):
-        await runtime.start(app_version="test")
+        await runtime.start()
     await runtime.stop()
 
     assert events == [

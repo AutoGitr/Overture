@@ -27,5 +27,7 @@ class RealtimeSnapshot(StrictBaseModel):
     #: Every queued and running download, in the order they were queued.
     downloads: list[DownloadJobEvent] = Field(default_factory=list[DownloadJobEvent])
     catalog_status: CatalogStatus
+    #: The running server's version; a tab built for another reloads into it.
+    app_version: str
     #: Each configured media server's state, the lead first.
     media_servers: list[MediaServerStatus]

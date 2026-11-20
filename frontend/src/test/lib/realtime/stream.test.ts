@@ -4,6 +4,7 @@ import { client } from "../../../generated/rest/client.gen";
 import { realtimeStream } from "../../../lib/realtime/stream";
 import { queryClient } from "../../../lib/rest/queryClient";
 import { downloadState } from "../../../lib/stores/downloadState.svelte";
+import { appUpdate } from "../../../lib/stores/appUpdate.svelte";
 import { mediaServerState } from "../../../lib/stores/mediaServerState.svelte";
 import { syncState } from "../../../lib/stores/jobStates.svelte";
 import {
@@ -67,14 +68,20 @@ describe("realtime stream reconciliation", () => {
     expect(syncState.done).toBe(2);
   });
 
-  it("forgets job state when the server starts a new epoch", () => {
+  it("forgets job state and tells the app update when the server starts a new epoch", () => {
+    const observeServer = vi.spyOn(appUpdate, "observeServer").mockImplementation(() => {});
+    const version = snapshot(1).app_version;
     realtimeStream.applySnapshot(snapshot(1));
     syncState.handleProgress({ done: 1, log: logEntry("Added", "Alien", "new") });
+    expect(observeServer).toHaveBeenLastCalledWith(version, false);
 
+    // A disconnect clears the connection watermark before the restarted server answers.
+    realtimeStream.reset();
     realtimeStream.applySnapshot({ ...snapshot(0), epoch: "epoch-2" });
 
     expect(syncState.log.total).toBe(0);
     expect(syncState.status).toBe("idle");
+    expect(observeServer).toHaveBeenLastCalledWith(version, true);
   });
 
   it("keeps projecting events after the REST cache has been collected", () => {

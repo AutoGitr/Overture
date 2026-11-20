@@ -114,6 +114,7 @@ async def test_service_status_reports_the_media_server_and_tmdb_apart() -> None:
     ) == ConnectivityStatusResponse(media_server=True, tmdb=False)
 
 
+@pytest.mark.real_process_pool
 async def test_phash_pool_hashes_bytes_and_files(
     tmp_path: Path, *, app_config: Settings
 ) -> None:

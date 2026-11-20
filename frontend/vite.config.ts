@@ -2,6 +2,7 @@
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
+import packageJson from "./package.json" with { type: "json" };
 
 /** The backend the dev server proxies to (its container port). */
 const BACKEND_URL = "http://localhost:5885";
@@ -10,10 +11,15 @@ const BACKEND_URL = "http://localhost:5885";
 const BACKEND_PATHS = "^/(?:api|ws)(?:[/?]|$)";
 
 export default defineConfig(({ mode }) => ({
+  // The release this build is, which the server's version is compared with.
+  define: { __APP_VERSION__: JSON.stringify(packageJson.version) },
   plugins: [
     svelte(),
     VitePWA({
-      registerType: "autoUpdate",
+      // An update waits for the user to reload: taking over open tabs would
+      // remove the files their page still loads.
+      registerType: "prompt",
+      injectRegister: false,
       includeAssets: [
         "brand/overture-logo-inline.svg",
         "brand/overture-logo.svg",
@@ -71,8 +77,9 @@ export default defineConfig(({ mode }) => ({
       },
       workbox: {
         cleanupOutdatedCaches: true,
+        // A first install serves the page at once, so it works offline; an
+        // update activates only when the user reloads into it.
         clientsClaim: true,
-        skipWaiting: true,
         navigateFallback: "/index.html",
         // Workbox matches pathname + search; reserve query-bearing roots too.
         navigateFallbackDenylist: [new RegExp(BACKEND_PATHS, "i")],

@@ -1,3 +1,4 @@
+import packageJson from "../../../package.json" with { type: "json" };
 import { DEFAULT_APP_SETTINGS } from "../../generated/settings";
 import type { JobLogFeed } from "../../lib/stores/jobLogFeed.svelte";
 import type {
@@ -586,6 +587,8 @@ export function realtimeSnapshot(overrides: Partial<RealtimeSnapshot> = {}): Rea
     downloads: [],
     catalog_status: catalogStatus(),
     media_servers: [{ server_id: 1, title: "Plex", state: "reachable", message: "" }],
+    // The version this build is, as Vite's define and Playwright both read it.
+    app_version: packageJson.version,
     ...overrides,
   };
 }

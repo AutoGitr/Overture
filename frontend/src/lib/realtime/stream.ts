@@ -7,6 +7,7 @@ import type {
 import { applyRestCachePolicy, refreshRemovedDownloadTargets, storeCatalogStatus } from "./cache";
 import { projectRealtimeMessage, projectRealtimeSnapshot } from "./projector";
 import { serverClock } from "./serverClock";
+import { appUpdate } from "../stores/appUpdate.svelte";
 
 const ACTIVE_DOWNLOAD_STATUSES = new Set(["pending", "running", "started", "progress"]);
 
@@ -28,6 +29,7 @@ function snapshotDownloads(snapshot: RealtimeSnapshot): DownloadJobEvent[] {
  */
 class RealtimeStream {
   private epoch: string | null = null;
+  private lastSeenEpoch: string | null = null;
   private sequence = -1;
   private downloads: DownloadJobEvent[] = [];
 
@@ -49,13 +51,16 @@ class RealtimeStream {
     serverClock.sync(snapshot.server_time);
     const previous = this.downloads;
     const continuing = this.epoch === snapshot.epoch;
+    const serverRestarted = this.lastSeenEpoch !== null && this.lastSeenEpoch !== snapshot.epoch;
     this.epoch = snapshot.epoch;
+    this.lastSeenEpoch = snapshot.epoch;
     this.sequence = snapshot.sequence;
     this.downloads = snapshotDownloads(snapshot);
     projectRealtimeSnapshot(snapshot, continuing);
     refreshRemovedDownloadTargets(previous, this.downloads);
     storeCatalogStatus(snapshot.catalog_status);
     mediaServerState.storeAll(snapshot.media_servers);
+    appUpdate.observeServer(snapshot.app_version, serverRestarted);
     return true;
   }
 

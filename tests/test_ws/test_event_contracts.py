@@ -171,6 +171,7 @@ _EXACT_SAMPLE_PAYLOADS: frozendict[str, dict[str, Any]] = frozendict(
             "media_servers": [
                 {"server_id": 1, "title": "Plex", "state": "reachable", "message": ""}
             ],
+            "app_version": "1.0.0",
         },
         "collection.theme.updated": {
             "collection_id": 1,

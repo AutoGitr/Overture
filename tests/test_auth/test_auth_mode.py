@@ -200,7 +200,7 @@ async def test_none_mode_logs_startup_warning(
     monkeypatch.setattr(runtime.websockets, "start_ping_loop", _async_noop)
 
     with caplog.at_level(logging.WARNING):
-        await runtime.start(app_version="1.0.0")
+        await runtime.start()
         try:
             warning_messages = [
                 record.getMessage()
@@ -229,7 +229,7 @@ async def test_password_mode_does_not_log_none_warning(
     monkeypatch.setattr(runtime.websockets, "start_ping_loop", _async_noop)
 
     with caplog.at_level(logging.WARNING):
-        await runtime.start(app_version="1.0.0")
+        await runtime.start()
         try:
             warning_messages = [
                 record.getMessage()
@@ -259,7 +259,7 @@ async def test_startup_warning_not_logged_for_oidc_or_both(
     monkeypatch.setattr(runtime.websockets, "start_ping_loop", _async_noop)
 
     with caplog.at_level(logging.WARNING):
-        await runtime.start(app_version="1.0.0")
+        await runtime.start()
         try:
             warning_messages = [
                 record.getMessage()

@@ -29,6 +29,7 @@
     "playwright.config.ts",
     "playwright.oidc.config.ts",
     "openapi-ts.config.ts",
+    "package.json",
     "scripts/**/*"
   ]
 }

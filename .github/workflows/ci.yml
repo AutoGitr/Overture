@@ -162,26 +162,37 @@ jobs:
       - name: Install backend dependencies
         run: uv sync --locked --group dev
 
-      - name: Audit locked backend dependencies
-        run: uv audit --locked --preview-features audit-command
-
-      - name: Validate release metadata and required operator documents
-        run: uv run --locked python -m scripts.release_metadata
-
-      - name: Prepare pinned provider specifications
-        run: uv run --locked python -m scripts.provider_specs
+      - name: Ruff format check
+        run: uv run --locked ruff format --check
 
       - name: Ruff check
         run: uv run --locked ruff check
 
-      - name: Ruff format check
-        run: uv run --locked ruff format --check
+      - name: Validate release metadata and required operator documents
+        run: uv run --locked python -m scripts.release_metadata
 
       - name: Pyright
         run: uv run --locked python -m pyright
 
+      - name: Audit locked backend dependencies
+        run: uv audit --locked --preview-features audit-command
+
+      - name: Cache pinned provider specifications
+        uses: actions/cache@1bc1e56434610d710037d31481105e94b30485b2 # v4.2.0
+        with:
+          path: |
+            openapi/jellyfin-openapi.json
+            openapi/emby-openapi.json
+            openapi/plex-openapi.json
+          key: provider-specs-${{ hashFiles('scripts/provider_specs.py') }}
+
+      - name: Prepare pinned provider specifications
+        run: uv run --locked python -m scripts.provider_specs
+
       - name: Run tests with coverage
-        run: uv run --locked python -m pytest --cov --cov-report=term-missing --cov-report=html
+        run: |
+          uv run --locked python -m pytest -n auto --dist=worksteal -m "not serial" --cov --cov-report= --cov-fail-under=0
+          uv run --locked python -m pytest -m serial --cov --cov-append --cov-report=term-missing --cov-report=html
 
       - name: Upload coverage report
         if: ${{ !cancelled() }}

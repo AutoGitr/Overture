@@ -31,7 +31,7 @@
     "verify": "bun run typecheck && bun run test:unit && bun run build",
     "lint:deps": "depcruise src --config .dependency-cruiser.mjs",
     "check:bundle": "bun scripts/check-bundle.ts",
-    "ci": "bun run typecheck && bun run lint && bun run lint:deps && bun run format:check && bun run test:coverage && bun run build && bun run check:bundle",
+    "ci": "bun run format:check && bun run lint:deps && bun run lint && bun run typecheck && bun run test:coverage && bun run build && bun run check:bundle",
     "ci:e2e": "bun run test:e2e"
   },
   "dependencies": {
