@@ -8,7 +8,7 @@ lazy from typing import Any, cast
 
 lazy import httpx2
 lazy import pytest
-lazy from jsonschema import ValidationError, validate
+lazy from jsonschema import Draft202012Validator, ValidationError
 
 
 def _nullable(value: Any) -> Any:
@@ -44,6 +44,7 @@ class ProviderSpec:
         self.provider = provider
         self.prefix = prefix
         self.document = _document(provider)
+        self._validators: dict[str, Any] = {}
 
     def resolve(self, schema: dict[str, Any]) -> dict[str, Any]:
         while "$ref" in schema:
@@ -54,8 +55,15 @@ class ProviderSpec:
         return schema
 
     def validate(self, value: object, schema: dict[str, Any]) -> None:
+        key = json.dumps(schema, sort_keys=True)
+        validator: Any = self._validators.get(key)
+        if validator is None:
+            validator = Draft202012Validator(
+                {**schema, "components": self.document["components"]}
+            )
+            self._validators[key] = validator
         try:
-            validate(value, {**schema, "components": self.document["components"]})
+            validator.validate(value)
         except ValidationError as exc:
             raise AssertionError(f"{list(exc.absolute_path)}: {exc.message}") from None
 

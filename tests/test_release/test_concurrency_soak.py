@@ -30,6 +30,8 @@ lazy from overture.ws.connection_manager import ConnectionManager
 lazy from tests.media_servers import seed_test_server, served_item
 lazy from tests.runtime_helpers import RecordingPublisher, database_for
 
+pytestmark = pytest.mark.serial
+
 
 def _rounds(default: int) -> int:
     rounds = int(os.environ.get("OVERTURE_SOAK_ROUNDS", default))

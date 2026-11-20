@@ -98,6 +98,57 @@ def test_direct_navigation_and_head_requests_return_frontend_shell(
     assert head_response.text == ""
 
 
+def test_a_page_is_checked_on_every_load_and_build_files_are_kept_for_good(
+    client: TestClient,
+) -> None:
+    # A page kept from before an update would ask for files the update removed.
+    page = client.get("/movies/42-the-matrix", headers={"Accept": HTML_ACCEPT})
+    assert page.headers["cache-control"] == "no-cache"
+
+    asset = client.get("/assets/bundle.js")
+    assert asset.status_code == 200
+    assert asset.headers["cache-control"] == "public, max-age=31536000, immutable"
+
+    # A file outside the build's hashed ones keeps its name across updates.
+    assert client.get("/favicon.ico").headers["cache-control"] == "no-cache"
+    # The API decides its own caching.
+    assert "cache-control" not in client.get("/api/health").headers
+
+
+@pytest.mark.parametrize("accept", [HTML_ACCEPT, "*/*"])
+def test_a_build_file_an_update_removed_is_not_found_never_the_page(
+    client: TestClient, accept: str
+) -> None:
+    response = client.get("/assets/ItemPage-CJMnWq8t.js", headers={"Accept": accept})
+
+    assert response.status_code == 404
+    assert "text/html" not in response.headers["content-type"]
+    assert response.headers["cache-control"] == "no-cache"
+
+
+def test_frontend_without_assets_directory_starts_and_returns_404_for_assets(
+    tmp_path: Path,
+    app_config: Settings,
+    database: Database,
+) -> None:
+    dist = tmp_path / "dist_no_assets"
+    dist.mkdir()
+    (dist / "index.html").write_text("<html><body>Shell</body></html>")
+    runtime = build_runtime(
+        app_settings=app_config,
+        database=database,
+        config_dir=tmp_path / "app_config",
+    )
+    app = create_app(runtime, frontend_dir=dist)
+    test_client = TestClient(app)
+    try:
+        response = test_client.get("/assets/bundle.js", headers={"Accept": HTML_ACCEPT})
+        assert response.status_code == 404
+        assert "text/html" not in response.headers["content-type"]
+    finally:
+        test_client.close()
+
+
 @pytest.mark.parametrize(
     "path",
     [

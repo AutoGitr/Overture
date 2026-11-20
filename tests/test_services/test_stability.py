@@ -97,6 +97,7 @@ async def test_cancelled_hash_retains_admission_until_executor_finishes(
         await service.close()
 
 
+@pytest.mark.real_process_pool
 @pytest.mark.parametrize("failure", ["death", "timeout"])
 async def test_phash_pool_failure_retires_pool_and_allows_subsequent_work(
     failure: str,
@@ -133,6 +134,7 @@ async def test_phash_pool_failure_retires_pool_and_allows_subsequent_work(
         await service.close()
 
 
+@pytest.mark.real_process_pool
 @pytest.mark.parametrize("tasks_per_worker", [None, 2])
 async def test_phash_pool_recycles_workers(
     monkeypatch: pytest.MonkeyPatch,
@@ -236,7 +238,7 @@ async def test_slow_websocket_cannot_block_publish_and_overflow_disconnects(
 async def test_process_timeout_reaps_child_tree(tmp_path: Path) -> None:
     marker = tmp_path / "child-survived"
     child = (
-        "import pathlib,time; time.sleep(1); "
+        "import pathlib,time; time.sleep(0.6); "
         f"pathlib.Path({str(marker)!r}).touch(); time.sleep(20)"
     )
     parent = (
@@ -245,14 +247,16 @@ async def test_process_timeout_reaps_child_tree(tmp_path: Path) -> None:
         "print('ready',flush=True); time.sleep(20)"
     )
     with pytest.raises(TimeoutError):
-        await run_process([sys.executable, "-c", parent], deadline=0.4)
-    await asyncio.sleep(1)
+        await run_process([sys.executable, "-c", parent], deadline=0.25)
+    await asyncio.sleep(0.5)
     assert not marker.exists()
 
 
 async def test_process_reaps_descendant_after_parent_exits(tmp_path: Path) -> None:
     marker = tmp_path / "orphan-survived"
-    child = f"import pathlib,time; time.sleep(1); pathlib.Path({str(marker)!r}).touch()"
+    child = (
+        f"import pathlib,time; time.sleep(0.2); pathlib.Path({str(marker)!r}).touch()"
+    )
     parent = (
         "import subprocess,sys; "
         f"subprocess.Popen([sys.executable,'-c',{child!r}], "
@@ -260,7 +264,7 @@ async def test_process_reaps_descendant_after_parent_exits(tmp_path: Path) -> No
     )
     result = await run_process([sys.executable, "-c", parent], deadline=3)
     assert result.returncode == 0
-    await asyncio.sleep(1.1)
+    await asyncio.sleep(0.35)
     assert not marker.exists()
 
 

@@ -51,6 +51,7 @@ dev = [
     "pytest==9.2.0",
     "pytest-asyncio==1.5.0",
     "pytest-cov==7.1.0",
+    "pytest-xdist==3.8.0",
     # The release tests read the GitHub workflow files.
     "pyyaml==6.0.3",
     "ruff==0.17.5",
@@ -74,6 +75,10 @@ testpaths = ["tests"]
 pythonpath = ["."]
 addopts = ["-q", "-ra", "--tb=short"]
 strict = true
+markers = [
+    "real_process_pool: exercise PhashService with a real spawned ProcessPoolExecutor",
+    "serial: timing- or resource-sensitive tests that run outside parallel xdist workers",
+]
 filterwarnings = [
     "error",
     # Starlette's TestClient still annotates with the alias AnyIO deprecated.

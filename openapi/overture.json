@@ -11463,6 +11463,10 @@
         "additionalProperties": false,
         "description": "Process-local realtime state at one event-stream watermark.",
         "properties": {
+          "app_version": {
+            "title": "App Version",
+            "type": "string"
+          },
           "catalog_status": {
             "$ref": "#/components/schemas/CatalogStatus"
           },
@@ -11507,6 +11511,7 @@
           "jobs",
           "downloads",
           "catalog_status",
+          "app_version",
           "media_servers"
         ],
         "title": "RealtimeSnapshot",

@@ -39,12 +39,14 @@ class RealtimeSnapshotBuilder:
 
     jobs: Collection[ManagedBackgroundJob]
     provider_registry: ProviderRegistry
+    app_version: str
     downloads: DownloadService
     catalog: CatalogService
 
     def capture(self) -> Mapping[str, Any]:
         """Read process-local projections at the snapshot watermark."""
         return {
+            "app_version": self.app_version,
             "jobs": [
                 snapshot
                 for job in self.jobs

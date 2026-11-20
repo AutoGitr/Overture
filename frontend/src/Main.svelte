@@ -11,6 +11,7 @@
   import { realtimeTransport } from "./lib/realtime/transport";
   import type { NoticeTone } from "./lib/stores/notificationState.svelte";
   import { mediaServerState } from "./lib/stores/mediaServerState.svelte";
+  import { appUpdate } from "./lib/stores/appUpdate.svelte";
   import { realtimeConnectionState } from "./lib/stores/realtimeConnectionState.svelte";
   import { uiState } from "./lib/stores/uiState.svelte";
   import { delayedFlag } from "./lib/utils/delayedFlag.svelte";
@@ -160,6 +161,14 @@
         }}
       />
     {/each}
+    {#if appUpdate.available}
+      <Notice
+        tone="info"
+        title="Overture was updated"
+        message="Reload to use the new version; this page runs the one it opened with."
+        action={{ label: "Reload", run: () => appUpdate.apply() }}
+      />
+    {/if}
     {#if liveNotice && showLiveNotice.current}
       <Notice
         {...liveNotice}

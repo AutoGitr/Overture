@@ -11,6 +11,7 @@ lazy import shutil
 lazy import socket
 lazy import traceback
 lazy from collections import deque
+lazy from concurrent.futures import ThreadPoolExecutor
 lazy from contextlib import asynccontextmanager
 lazy from contextvars import ContextVar
 lazy from datetime import UTC, datetime
@@ -96,17 +97,23 @@ def app_config() -> Settings:
 
 
 @pytest.fixture(autouse=True)
-def _terminate_phash_pools(monkeypatch: pytest.MonkeyPatch) -> Generator[None]:
-    """Terminate the worker processes of every pHash service a test built.
+def _terminate_phash_pools(
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Generator[None]:
+    """Use a thread pool for pHash by default and shut down every pool at teardown.
 
-    Tests build services inline and rarely close them. A process pool left to
-    the garbage collector and interpreter exit can keep pytest waiting on a
-    spawned worker after the last test.
+    Spawning a fresh Python interpreter per test dominates service tests that
+    only need real Pillow/DCT hashing. Tests marked ``real_process_pool`` keep
+    the production ``ProcessPoolExecutor`` to exercise process isolation.
     """
+    real_pool = request.node.get_closest_marker("real_process_pool") is not None
     services: list[PhashService] = []
     initialise = PhashService.__init__
 
     def tracked(self: PhashService, **kwargs: Any) -> None:
+        if not real_pool and kwargs.get("executor") is None:
+            kwargs["executor"] = ThreadPoolExecutor(max_workers=2)
         initialise(self, **kwargs)
         services.append(self)
 
@@ -332,11 +339,40 @@ TEST_LIBRARIES = (
 )
 
 
+@pytest.fixture(scope="session")
+def _seeded_database_template(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Build the seeded schema once per worker so each test copies it cleanly."""
+    template = tmp_path_factory.mktemp("db-template") / "overture-template.db"
+
+    async def build() -> None:
+        engine = configure_sqlite(
+            create_async_engine(
+                f"sqlite+aiosqlite:///{template}",
+                echo=False,
+                connect_args={"check_same_thread": False},
+            )
+        )
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(metadata.create_all)
+                await seed_test_server(conn, TEST_LIBRARIES)
+            # Flush WAL pages into the main file so copying it is self-contained.
+            async with engine.connect() as conn:
+                await conn.exec_driver_sql("PRAGMA journal_mode=DELETE")
+        finally:
+            await engine.dispose()
+
+    asyncio.run(build())
+    return template
+
+
 @pytest.fixture
 async def isolated_engine(
     tmp_path: Path,
+    _seeded_database_template: Path,
 ) -> AsyncGenerator[AsyncEngine]:
     db_path = tmp_path / "overture-test.db"
+    shutil.copyfile(_seeded_database_template, db_path)
     # Pooled like production: a fresh aiosqlite connection per session costs a
     # thread, the pragmas and a schema read, which dominates many tests.
     engine = configure_sqlite(
@@ -346,10 +382,6 @@ async def isolated_engine(
             connect_args={"check_same_thread": False},
         )
     )
-
-    async with engine.begin() as conn:
-        await conn.run_sync(metadata.create_all)
-        await seed_test_server(conn, TEST_LIBRARIES)
 
     try:
         yield engine

@@ -79,6 +79,7 @@ lazy from .utils.file import process_owner
 lazy from .utils.security import Redactor
 lazy from .utils.temporary import clean_abandoned_operations
 lazy from .utils.threads import owned_thread
+lazy from .version import APP_VERSION
 lazy from .ws.connection_manager import ConnectionManager
 lazy from .ws.emitter import WebSocketEventEmitter
 
@@ -166,6 +167,7 @@ class RuntimeServices:
         return RealtimeSnapshotBuilder(
             jobs=tuple(self.job_slots.values()),
             provider_registry=self.provider_registry,
+            app_version=APP_VERSION,
             downloads=self.downloads,
             catalog=self.catalog,
         )
@@ -189,12 +191,12 @@ class RuntimeServices:
             LifecycleService("scheduler", self.scheduler.start, self.scheduler.stop),
         )
 
-    async def start(self, *, app_version: str) -> None:
+    async def start(self) -> None:
         """Start runtime services in dependency order."""
         config = self.app_settings
         logger.info(
             "Overture %s starting (Python %s, %s, timezone %s)",
-            app_version,
+            APP_VERSION,
             sys.version.split()[0],
             process_owner(),
             config.TZ,

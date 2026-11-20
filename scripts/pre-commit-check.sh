@@ -72,23 +72,16 @@ else
 fi
 
 if [ "$BACKEND_CHANGED" = true ]; then
-    echo "=== Running Backend Checks & Tests ==="
+    echo "=== Running Backend Static Checks ==="
     if [ "$FIX" = true ]; then
         # Formatting first, so the check sees the lines the formatter wraps.
         uv run ruff format
         uv run ruff check --fix
     else
-        uv run ruff check
         uv run ruff format --check
+        uv run ruff check
     fi
     uv run python -m pyright
-    if [ "$QUICK" = false ]; then
-        if [ ! -f "openapi/jellyfin-openapi.json" ] || [ ! -f "openapi/emby-openapi.json" ] || [ ! -f "openapi/plex-openapi.json" ]; then
-            echo "=== Preparing Missing Media Server OpenAPI Specifications ==="
-            uv run python -m scripts.provider_specs
-        fi
-        uv run python -m pytest --cov
-    fi
 fi
 
 if [ "$FRONTEND_CHANGED" = true ] || [ "$CONTRACTS_CHANGED" = true ]; then
@@ -115,22 +108,40 @@ if [ "$CONTRACTS_CHANGED" = true ]; then
 fi
 
 if [ "$FRONTEND_CHANGED" = true ]; then
-    echo "=== Running Frontend Checks & Tests ==="
+    echo "=== Running Frontend Static Checks ==="
     cd "$ROOT_DIR/frontend"
     if [ "$FIX" = true ]; then
         bun run format:fix
     fi
-    if [ "$QUICK" = true ]; then
-        bun run format:check
-        bun run typecheck
-        bun run lint
-    else
-        bun run ci
-    fi
+    bun run format:check
+    bun run lint:deps
+    bun run lint
+    bun run typecheck
+    cd "$ROOT_DIR"
 fi
 
 if [ "$QUICK" = true ]; then
     echo "Quick checks passed. Run scripts/pre-commit-check.sh for the tests and build."
-else
-    echo "All checks passed successfully."
+    exit 0
 fi
+
+if [ "$BACKEND_CHANGED" = true ]; then
+    echo "=== Running Backend Tests ==="
+    if [ ! -f "openapi/jellyfin-openapi.json" ] || [ ! -f "openapi/emby-openapi.json" ] || [ ! -f "openapi/plex-openapi.json" ]; then
+        echo "=== Preparing Missing Media Server OpenAPI Specifications ==="
+        uv run python -m scripts.provider_specs
+    fi
+    uv run python -m pytest -n auto --dist=worksteal -m "not serial" --cov --cov-report= --cov-fail-under=0
+    uv run python -m pytest -m serial --cov --cov-append
+fi
+
+if [ "$FRONTEND_CHANGED" = true ]; then
+    echo "=== Running Frontend Tests & Build ==="
+    cd "$ROOT_DIR/frontend"
+    bun run test:coverage
+    bun run build
+    bun run check:bundle
+    cd "$ROOT_DIR"
+fi
+
+echo "All checks passed successfully."

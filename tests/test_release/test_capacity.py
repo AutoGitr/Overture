@@ -59,6 +59,8 @@ lazy from tests.test_services.test_catalog_edges import (
 )
 lazy from tests.workload import watching_the_event_loop
 
+pytestmark = pytest.mark.serial
+
 
 def _count(name: str, default: int) -> int:
     value = int(os.environ.get(name, default))

@@ -21,6 +21,7 @@ lazy from fastapi import (
 lazy from fastapi.exceptions import RequestValidationError
 lazy from fastapi.openapi.docs import get_swagger_ui_html
 lazy from fastapi.routing import APIRoute
+lazy from fastapi.staticfiles import StaticFiles
 lazy from pydantic import SecretStr
 lazy from starlette.exceptions import HTTPException as StarletteHTTPException
 lazy from starlette.responses import HTMLResponse, JSONResponse
@@ -58,7 +59,9 @@ lazy from .schemas.common import (
 )
 lazy from .utils.errors import PublicServiceError
 lazy from .utils.http_security import (
+    BUILD_ASSETS_PATH,
     SESSION_COOKIE,
+    is_backend_path,
     security_middleware,
     websocket_origin_allowed,
 )
@@ -84,7 +87,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """Start and stop the configured runtime services."""
     runtime: RuntimeServices = app.state.runtime
     try:
-        await runtime.start(app_version=APP_VERSION)
+        await runtime.start()
         yield
     finally:
         await runtime.stop()
@@ -325,10 +328,11 @@ async def websocket_endpoint(websocket: WebSocket, runtime: RuntimeDep) -> None:
         runtime.websockets.disconnect(websocket)
 
 
-def _exclude_api_and_ws(request: Request) -> None:
-    """Reject requests targeting api or ws namespaces before frontend fallback."""
-    first_segment = request.url.path.strip("/").split("/", 1)[0].lower()
-    if first_segment in {API_PREFIX.strip("/"), "ws"}:
+def _exclude_non_page_paths(request: Request) -> None:
+    """Reject api, ws and missing build-asset paths before frontend fallback."""
+    if is_backend_path(request.url.path) or request.url.path.startswith(
+        f"{BUILD_ASSETS_PATH}/"
+    ):
         raise StarletteHTTPException(status_code=404, detail="Not Found")
 
 
@@ -336,6 +340,15 @@ def _mount_static_frontend(app: FastAPI, frontend_dir: Path | None = None) -> No
     """Serve the built frontend when present in the runtime image."""
     static_dir = frontend_dir if frontend_dir is not None else FRONTEND_DIR
     if static_dir.is_dir():
-        frontend_router = APIRouter(dependencies=[Depends(_exclude_api_and_ws)])
+        assets_dir = static_dir / BUILD_ASSETS_PATH.strip("/")
+        if assets_dir.is_dir():
+            # A file a build lacks is not found, never answered with the page,
+            # which a browser cannot load as the script or style it asked for.
+            app.mount(
+                BUILD_ASSETS_PATH,
+                StaticFiles(directory=assets_dir),
+                name="assets",
+            )
+        frontend_router = APIRouter(dependencies=[Depends(_exclude_non_page_paths)])
         frontend_router.frontend("/", directory=static_dir, fallback="index.html")
         app.include_router(frontend_router)
