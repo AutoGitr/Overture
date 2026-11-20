@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.0 - 2026-11-20
+
 ### Added
 
 - **API:** library items and collections list their `metadata_issues`; `/api/library/filters` lists, matches and saves custom filters.
