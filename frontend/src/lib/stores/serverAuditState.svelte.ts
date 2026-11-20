@@ -3,8 +3,19 @@ import type { ServerAuditProgressEvent, ServerAuditResult } from "../../generate
 import { ASSET_LABELS } from "../utils/artTypes";
 import { AUDIT_STATUS_LABELS, auditRowKey } from "../utils/serverAuditPopup";
 import { CollectingJobState, type Selectable } from "./collectingJobState.svelte";
+import { settingsState } from "./settingsState.svelte";
 
 export type SelectableServerAuditResult = Selectable<ServerAuditResult>;
+
+/** The group of the results about one media server, named as it is configured now. */
+function serverGroup(serverId: number, name: string | null | undefined) {
+  const server = settingsState.server(serverId);
+  return [
+    `server:${serverId}`,
+    server?.title ?? name ?? `Server ${serverId}`,
+    server?.type,
+  ] as const;
+}
 
 class ServerAuditState extends CollectingJobState<ServerAuditProgressEvent, ServerAuditResult> {
   constructor() {
@@ -14,7 +25,7 @@ class ServerAuditState extends CollectingJobState<ServerAuditProgressEvent, Serv
       groupsOf: (result) => [
         [`type:${result.art_type}`, ASSET_LABELS[result.art_type]],
         [`status:${result.status}`, AUDIT_STATUS_LABELS[result.status]],
-        ...(result.server ? [[`server:${result.server}`, result.server] as const] : []),
+        ...(result.server_id != null ? [serverGroup(result.server_id, result.server)] : []),
       ],
       groupOrder: [
         ...Object.keys(ASSET_LABELS).map((type) => `type:${type}`),

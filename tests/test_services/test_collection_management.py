@@ -69,6 +69,7 @@ lazy from overture.media_servers.plex.provider import PlexProvider
 lazy from overture.media_servers.registry import ProviderRegistry
 lazy from overture.repositories.collections import CollectionRepository, TermSelection
 lazy from overture.repositories.libraries import LibraryRepository
+lazy from overture.repositories.saved_schedules import SavedScheduleRepository
 lazy from overture.schemas.art import (
     ArtCandidate,
     ArtSourcesResponse,
@@ -879,6 +880,37 @@ async def test_group_rename_preserves_defaults_and_rejects_collisions(
         await manager.service.groups.rename("Evenings", "Other")
     with pytest.raises(PublicServiceError, match="not found"):
         await manager.service.groups.rename("Nothing", "Shows")
+
+
+async def test_schedules_keep_running_a_renamed_group(
+    manager: Manager, database: Database
+) -> None:
+    await manager.service.groups.save_policy("Weekend", CollectionGroupPolicy())
+    async with database.write_session() as session:
+        for kind, groups in (
+            (ScheduleKind.SYNC, ["Weekend", "Other"]),
+            (ScheduleKind.ASSETS, ["Weekend"]),
+        ):
+            session.add(
+                SavedSchedule(
+                    kind=kind,
+                    name="Nightly",
+                    cron_expression="0 3 * * *",
+                    payload={"collection_groups": groups},
+                    created_at=utc_now(),
+                    updated_at=utc_now(),
+                )
+            )
+
+    await manager.service.groups.rename("Weekend", "Evenings")
+
+    async with database.read_session() as session:
+        repository = SavedScheduleRepository(session)
+        assert [
+            record.payload["collection_groups"]
+            for kind in (ScheduleKind.SYNC, ScheduleKind.ASSETS)
+            for record in await repository.of_kind(kind)
+        ] == [["Evenings", "Other"], ["Evenings"]]
 
 
 async def test_a_new_set_never_replaces_another_and_names_taken_titles(
@@ -2034,11 +2066,14 @@ async def test_field_values_count_library_metadata_or_ask_plex(
         MediaType.MOVIE, "1:movies", FilterField.AUDIO_LANGUAGE
     )
     assert [entry.value for entry in languages] == ["English"]
-    await create(manager)
+    saga = await create(manager)
     collections = await manager.service.discovery.field_values(
         MediaType.MOVIE, "1:movies", FilterField.COLLECTION
     )
-    assert [(entry.value, entry.count) for entry in collections] == [("Saga", 3)]
+    # Criteria hold a collection's ID, which people choose by its title.
+    assert [(entry.value, entry.label, entry.count) for entry in collections] == [
+        (str(saga), "Saga", 3)
+    ]
 
 
 async def test_keyword_values_list_the_common_first_and_add_tmdb_matches(
@@ -2924,6 +2959,24 @@ async def test_plex_counts_a_dimension_only_it_knows(manager: Manager) -> None:
         )
 
 
+async def test_a_smart_collection_tests_a_collection_by_the_index_plex_keys_it_by(
+    manager: Manager,
+) -> None:
+    held = await create(manager, [manager.ids[0]])
+    rating_key = (await manager.service.reader.get(held)).copies[0].server_item_id
+    # Plex lists its collections by index, with a rating key Overture records.
+    manager.provider.choices = {"collection": [("3", rating_key), ("4", "unknown")]}
+    await manager.service.discovery.preview(
+        CollectionPreviewRequest(
+            rule=library_rule(
+                criteria=where(FilterField.COLLECTION, FilterOperator.IS, str(held)),
+                smart=True,
+            ),
+        )
+    )
+    assert "collection=3" in manager.provider.queries[-1]
+
+
 async def test_a_value_plex_leaves_off_its_list_is_found_through_an_item_holding_it(
     manager: Manager,
 ) -> None:
@@ -3803,6 +3856,32 @@ async def test_a_catch_all_collection_holds_what_no_other_collection_does(
     await manager.service.rules.sync(catch_all.id)
     detail = await manager.service.reader.get(catch_all.id)
     assert detail.member_ids == manager.ids[1:]
+
+
+async def test_a_collection_condition_follows_the_collection_through_a_rename(
+    manager: Manager,
+) -> None:
+    held = await create(manager, [manager.ids[0]])
+    in_saga = FilterGroup(
+        conditions=[
+            FieldCondition(
+                field=FilterField.COLLECTION,
+                operator=FilterOperator.IS,
+                value=str(held),
+            )
+        ]
+    )
+    following = await created(
+        manager.service,
+        CollectionCreate(title="Saga picks", rule=library_rule(criteria=in_saga)),
+    )
+    assert following.member_ids == [manager.ids[0]]
+
+    await manager.service.editor.update(held, CollectionOptions(title="Renamed"))
+    await manager.service.rules.sync(following.id)
+
+    detail = await manager.service.reader.get(following.id)
+    assert detail.member_ids == [manager.ids[0]]
 
 
 async def test_a_plex_group_separator_heads_its_collections_while_it_is_on(

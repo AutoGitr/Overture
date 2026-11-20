@@ -9,11 +9,11 @@ lazy from pathlib import Path
 
 lazy from ... import protocols
 lazy from ...domain import MediaType, library_parts
-lazy from ...jobs.progress_log import JobLogEntry, JobOutcome, log_entry
+lazy from ...jobs.progress_log import JobLogEntry, JobOutcome, LogServer, log_entry
 lazy from ...jobs.runner import JobContext, ManagedJob, run_managed_job
 lazy from ...jobs.tally import SyncTally
 lazy from ...media_servers.errors import MediaServerError
-lazy from ...media_servers.registry import Provider, ProviderRegistry
+lazy from ...media_servers.registry import Provider, ProviderRegistry, log_server
 lazy from ...schemas.collections import CollectionGroupSyncResult
 lazy from ...utils.temporary import operation_directory
 lazy from .collection_sync import CollectionSync
@@ -185,7 +185,7 @@ async def _reachable(
                 provider.server.title,
                 exc.message,
                 finished=False,
-                server=provider.server.title,
+                server=log_server(provider),
             )
             continue
         reachable.append(provider)
@@ -195,10 +195,10 @@ async def _reachable(
 
 
 async def _on_server(
-    job: ManagedJob[SyncTally], server: str, entry: JobLogEntry
+    job: ManagedJob[SyncTally], server: LogServer, entry: JobLogEntry
 ) -> None:
     """Log one line of a server's reconcile as about that server."""
-    await job.progress(log=entry.model_copy(update={"server": server}))
+    await job.progress(log=server.on(entry))
 
 
 async def _sync_with_providers(
@@ -227,7 +227,7 @@ async def _sync_with_providers(
                         JobOutcome.STARTED,
                         "Sync",
                         f"reading libraries from {provider.server.title}",
-                        server=provider.server.title,
+                        server=log_server(provider),
                     ),
                 )
                 await reconciler.record_libraries(
@@ -251,7 +251,7 @@ async def _sync_with_providers(
                     ServerTurn(provider.server_id, frozenset(server_order[:position])),
                     library_ids=library_ids,
                     tally=job.tally,
-                    progress_cb=partial(_on_server, job, provider.server.title),
+                    progress_cb=partial(_on_server, job, log_server(provider)),
                     stop_check=job.stop_requested,
                 )
                 moves += result.library_moves

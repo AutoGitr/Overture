@@ -28,6 +28,7 @@ import {
 } from "./assetsPopup";
 import { DEFAULT_CRON_EXPRESSION } from "./cronPresets";
 import { persistedState } from "./persistedState.svelte";
+import { renameInStoredList } from "./storage";
 import {
   chosenApart,
   toggleSelectedValue,
@@ -50,8 +51,15 @@ export interface AssetsFormSource {
  * The Assets run the user is setting up: its remembered options, what they
  * select, and the request they make. Create it during component initialisation.
  */
+const STORAGE_PREFIX = "assetsPopup";
+
+/** Keep a renamed group chosen for the next Assets run. */
+export function renameAssetsGroup(name: string, replacement: string): void {
+  renameInStoredList(`${STORAGE_PREFIX}_collectionGroups`, name, replacement);
+}
+
 export class AssetsForm {
-  readonly config: AssetsConfig = persistedState("assetsPopup", {
+  readonly config: AssetsConfig = persistedState(STORAGE_PREFIX, {
     selectedLibraries: [] as string[],
     useSidebarItems: false,
     allCollections: false,

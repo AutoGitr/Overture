@@ -21,6 +21,7 @@ lazy from ...domain import (
 lazy from ...integrations.http import LazyClient, create_client
 lazy from ...schemas.art import ArtCandidate
 lazy from ...utils.art_urls import art_preview_url, art_source_label, public_art_url
+lazy from ...utils.collection_fields import PLEX_COLLECTION_KEY
 lazy from ...utils.image import sniff_image_size
 lazy from ...utils.ssrf import LOOPBACK_HOSTS
 lazy from ...version import APP_VERSION
@@ -831,16 +832,16 @@ class PlexClient(MediaServerHttpClient):
         """List the keys and names of a field's values in a section.
 
         Show sections list the values of an ``episode.`` field among episodes.
-        Plex's list of collections keeps each under the title it was made with,
-        so collections are named by their current title, keyed by their index,
-        which is the key the list holds them under. Smart collections hold no
-        titles of their own to filter by.
+        Plex filters by a collection's index and keeps each under the title it
+        was made with, so collections are given by their rating key, which
+        names them for good. Plex cannot filter by a smart collection.
         """
-        if field == "collection":
+        if field == PLEX_COLLECTION_KEY:
             return [
-                (str(row["index"]), str(row.get("title") or ""))
+                (str(row["index"]), str(row["ratingKey"]))
                 for row in map(wire_object, await self.get_collections(section_key))
                 if row.get("index") is not None
+                and row.get("ratingKey") is not None
                 and str(row.get("smart", "0")) not in {"1", "true", "True"}
             ]
         episode_field = field.removeprefix("episode.")

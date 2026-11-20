@@ -25,7 +25,7 @@ lazy from ...jobs.progress_log import JobOutcome, log_entry
 lazy from ...jobs.runner import ManagedJob
 lazy from ...jobs.tally import SyncTally
 lazy from ...media_servers.adapters import FolderThemes, ServerCollection
-lazy from ...media_servers.registry import CollectionProvider, Provider
+lazy from ...media_servers.registry import CollectionProvider, Provider, log_server
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.copies import CopyRepository, ServerItemFacts
 lazy from ...repositories.saved_schedules import SavedScheduleRepository
@@ -212,17 +212,21 @@ class CollectionSync:
         providers = [provider for provider in providers if provider.collections]
         if job.stop_requested() or not providers:
             return
-        await job.progress(
-            log=log_entry(
-                JobOutcome.STARTED, "Collections", "reading server collections"
-            )
-        )
         async with self._downloads.asset_locks.acquire(COLLECTIONS_LOCK):
-            listed = [
-                ListedCopy(provider.server_id, collection)
-                for provider in providers
-                for collection in await provider.list_collections()
-            ]
+            listed: list[ListedCopy] = []
+            for provider in providers:
+                await job.progress(
+                    log=log_entry(
+                        JobOutcome.STARTED,
+                        "Collections",
+                        f"reading collections from {provider.server.title}",
+                        server=log_server(provider),
+                    )
+                )
+                listed += [
+                    ListedCopy(provider.server_id, collection)
+                    for collection in await provider.list_collections()
+                ]
             by_server = {provider.server_id: provider for provider in providers}
             async with self._database.read_session() as session:
                 import_unmanaged = (

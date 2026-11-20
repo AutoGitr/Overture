@@ -113,6 +113,10 @@ export type AppSettingsRead = {
      */
     collection_delete_when_inactive: boolean;
     collection_filtering_default: CollectionFiltering;
+    /**
+     * Collection Generated Heading
+     */
+    collection_generated_heading: boolean;
     collection_generated_style: ArtStyle;
     /**
      * Collection Import Unmanaged
@@ -305,6 +309,10 @@ export type AppSettingsUpdate = {
      */
     collection_delete_when_inactive?: boolean | null;
     collection_filtering_default?: CollectionFiltering | null;
+    /**
+     * Collection Generated Heading
+     */
+    collection_generated_heading?: boolean | null;
     collection_generated_style?: ArtStyle | null;
     /**
      * Collection Import Unmanaged
@@ -2077,6 +2085,10 @@ export type CollectionDefaults = {
      * Delete When Inactive
      */
     delete_when_inactive: boolean | null;
+    /**
+     * Generated Heading
+     */
+    generated_heading: boolean | null;
     generated_style: ArtStyle | null;
     /**
      * Home Order
@@ -2445,6 +2457,10 @@ export type CollectionDownloadTarget = {
  */
 export type CollectionFieldRead = {
     /**
+     * By Id
+     */
+    by_id: boolean;
+    /**
      * Choices
      */
     choices: Array<FieldChoice>;
@@ -2494,6 +2510,10 @@ export type CollectionFieldValue = {
      * Count
      */
     count: number;
+    /**
+     * Label
+     */
+    label: string;
     /**
      * Value
      */
@@ -2646,6 +2666,10 @@ export type CollectionGroupPolicyInput = {
      * Delete When Inactive
      */
     delete_when_inactive?: boolean | null;
+    /**
+     * Generated Heading
+     */
+    generated_heading?: boolean | null;
     generated_style?: ArtStyle | null;
     generator?: CollectionGeneratorInput | null;
     /**
@@ -2716,6 +2740,10 @@ export type CollectionGroupPolicyOutput = {
      * Delete When Inactive
      */
     delete_when_inactive: boolean | null;
+    /**
+     * Generated Heading
+     */
+    generated_heading: boolean | null;
     generated_style: ArtStyle | null;
     generator: CollectionGeneratorOutput | null;
     /**
@@ -3298,6 +3326,10 @@ export type CollectionRuleRead = {
      * Delete When Inactive
      */
     delete_when_inactive: boolean | null;
+    /**
+     * Generated Heading
+     */
+    generated_heading: boolean | null;
     generated_style: ArtStyle | null;
     /**
      * Home Order
@@ -3384,6 +3416,10 @@ export type CollectionRuleWriteInput = {
      * Delete When Inactive
      */
     delete_when_inactive?: boolean | null;
+    /**
+     * Generated Heading
+     */
+    generated_heading?: boolean | null;
     generated_style?: ArtStyle | null;
     /**
      * Home Order
@@ -3461,6 +3497,10 @@ export type CollectionRuleWriteOutput = {
      * Delete When Inactive
      */
     delete_when_inactive: boolean | null;
+    /**
+     * Generated Heading
+     */
+    generated_heading: boolean | null;
     generated_style: ArtStyle | null;
     /**
      * Home Order
@@ -4271,9 +4311,15 @@ export type JobLogEntry = {
     /**
      * Server
      *
-     * The media server the entry is about, by its MEDIA_SERVERS name; none for an entry about no single server.
+     * The MEDIA_SERVERS name of that server when the entry was written.
      */
     server: string | null;
+    /**
+     * Server Id
+     *
+     * The database's number of the media server the entry is about; none for an entry about no single server.
+     */
+    server_id: number | null;
     /**
      * Target
      */
@@ -9915,9 +9961,9 @@ export type GetJobLogData = {
         /**
          * Hide Server
          *
-         * No lines about these media servers, by name.
+         * No lines about these media servers, by number.
          */
-        hide_server?: Array<string> | null;
+        hide_server?: Array<number> | null;
     };
     url: '/api/job-snapshots/log/{run_id}';
 };

@@ -10,6 +10,7 @@ lazy from ...domain import (
     MediaType,
 )
 lazy from ...repositories.collections import CollectionRepository
+lazy from ...repositories.saved_schedules import SavedScheduleRepository
 lazy from ...schemas.collections import (
     BulkCollectionOperationResult,
     CollectionGroupDelete,
@@ -77,6 +78,8 @@ class CollectionGroups:
                 raise PublicServiceError(
                     409, "A collection group with this name already exists"
                 )
+            # Schedules name the groups they run, and keep running this one.
+            await SavedScheduleRepository(session).rename_group(group.name, replacement)
             group.name = replacement
             session.add(group)
             await self._separators.refuse_taken(session, group)

@@ -29,6 +29,7 @@ lazy from ...schemas.server_audit import (
 )
 lazy from ...utils.audio import audio_hash, downloaded_audio, ffprobe_duration
 lazy from ...utils.concurrency import in_order
+lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.image import fetch_image
 lazy from ...utils.threads import owned_thread
 lazy from ..art.collection_art import CollectionArtService
@@ -224,17 +225,22 @@ async def _audit_collection_art(
     if row is None:
         return [result.model_copy(update={"reason": "Collection not found"})]
     result.title = row.title
-    slot = find_art_slot(row, art_type)
-    if slot is None or slot.file_hash is None:
+    try:
+        uploaded = await context.collection_art.uploaded(row, art_type)
+    except PublicServiceError as exc:
+        return [result.model_copy(update={"reason": exc.message})]
+    except (OSError, ValueError) as exc:
+        return [result.model_copy(update={"reason": str(exc)})]
+    if uploaded is None:
         return [
             _finding(
                 result, AuditStatus.LOCAL_MISSING, "Overture has uploaded no image"
             )
         ]
-    if slot.phash is None:
+    if uploaded.phash is None:
         return [
             result.model_copy(
-                update={"reason": "The uploaded image has no fingerprint"}
+                update={"reason": "The uploaded image could not be decoded"}
             )
         ]
     copies = [
@@ -255,7 +261,11 @@ async def _audit_collection_art(
         ]
     return [
         await _compare_collection_copy(
-            _on(result, provider), provider, server_item_id, slot.phash, context=context
+            _on(result, provider),
+            provider,
+            server_item_id,
+            uploaded.phash,
+            context=context,
         )
         for provider, server_item_id in copies
     ]
@@ -597,7 +607,7 @@ async def run_server_audit(
                         f"{result.title or _owner(target)} ({target.asset})",
                         result.reason or result.status,
                         finished=index == len(results),
-                        server=result.server,
+                        server=result.log_server,
                         results=tally.collect(*differences([result])),
                     )
 

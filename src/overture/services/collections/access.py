@@ -36,6 +36,7 @@ lazy from ...schemas.collections import (
     FilterGroup,
     catalog_says_no_theme,
 )
+lazy from ...utils.collection_fields import PLEX_COLLECTION_KEY
 lazy from ...utils.collection_formats import is_within_active_window
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.locks import KeyedLock
@@ -370,13 +371,42 @@ class CollectionAccess:
                 for entry in libraries
             ]
 
-    async def collection_titles(
+    async def memberships(
         self, library_id: str, excluding: int | None
     ) -> dict[int, list[str]]:
+        """The IDs of the collections each item of a library belongs to."""
         async with self.database.read_session() as session:
-            return await CollectionRepository(session).titles_by_item(
+            return await CollectionRepository(session).memberships_by_item(
                 library_id, excluding
             )
+
+    async def collection_titles(self, collection_ids: Iterable[int]) -> dict[int, str]:
+        """The titles of the collections *collection_ids* names that exist."""
+        async with self.database.read_session() as session:
+            return await CollectionRepository(session).titles_of(collection_ids)
+
+    async def filter_choices(
+        self, library_id: str, media_type: MediaType, key: str
+    ) -> list[tuple[str, str]]:
+        """List the keys a library's server gives a field's values, with the values.
+
+        Criteria name a collection by its ID, so Plex's collections, which it
+        lists by their rating key, are given as the collections Overture
+        knows them by; one Overture does not know is left out.
+        """
+        provider = self.library_provider(library_id)
+        choices = await provider.filter_choices(library_id, media_type, key)
+        if key != PLEX_COLLECTION_KEY:
+            return choices
+        async with self.database.read_session() as session:
+            copies = await CollectionRepository(session).server_copies(
+                provider.server_id
+            )
+        return [
+            (choice, str(copies[rating_key]))
+            for choice, rating_key in choices
+            if rating_key in copies
+        ]
 
     async def region(self) -> str:
         """The region TMDB charts and streaming services are read for."""

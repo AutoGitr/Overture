@@ -68,6 +68,10 @@ class PlexField:
         )
 
 
+#: The field Plex tests a title's collections by, which it lists by rating key.
+PLEX_COLLECTION_KEY = "collection"
+
+
 def _media(
     key: str, kind: PlexFieldType, *, negatable: bool = True, keyed: bool = False
 ) -> PlexField:
@@ -233,6 +237,8 @@ class FieldSpec:
     #: Any value can be named, beyond those the library holds: an ID, a TMDB
     #: keyword no title has yet, or a label to give titles later.
     free: bool = False
+    #: Its values are IDs, which criteria keep while what they name is renamed.
+    by_id: bool = False
 
 
 FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
@@ -310,7 +316,8 @@ FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
             FieldKind.TAG,
             _ALL_MEDIA,
             _EVERY_SERVER,
-            PlexField("collection", "tag"),
+            PlexField(PLEX_COLLECTION_KEY, "tag"),
+            by_id=True,
         ),
         # Overture knows every collection's members, so Plex tests it by label.
         FilterField.IN_COLLECTION: FieldSpec(

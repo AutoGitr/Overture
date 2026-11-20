@@ -83,6 +83,7 @@ class AppSettingsUpdate(StrictBaseModel):
     collection_delete_below_minimum: bool | None = None
     collection_auto_art: list[AutoArtSource] | None = None
     collection_generated_style: ArtStyle | None = None
+    collection_generated_heading: bool | None = None
     collection_overturedb_posters: list[CollectionPosterStyle] | None = None
     collection_backgrounds: bool | None = None
     collection_themes: bool | None = None

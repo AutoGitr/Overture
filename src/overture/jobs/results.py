@@ -54,7 +54,7 @@ async def persist(
                     run_id=run_id,
                     ordinal=run.log_total,
                     outcome=entry["outcome"],
-                    server=entry.get("server"),
+                    server_id=entry.get("server_id"),
                     entry=entry,
                 )
             )
@@ -106,7 +106,7 @@ async def log_page(
     offset: int,
     limit: int,
     outcomes: frozenset[JobOutcome] = frozenset(),
-    hidden_servers: frozenset[str] = frozenset(),
+    hidden_servers: frozenset[int] = frozenset(),
 ) -> JobLogPage:
     """Read a stable page of a run's progress log, filtered when asked.
 
@@ -121,7 +121,7 @@ async def log_page(
         if outcomes:
             filters.append(col(JobLogLine.outcome).in_(outcomes))
         if hidden_servers:
-            server = col(JobLogLine.server)
+            server = col(JobLogLine.server_id)
             filters.append(server.is_(None) | server.not_in(hidden_servers))
         if filters:
             query = query.where(*filters).offset(offset)

@@ -20,10 +20,11 @@ lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.session import Database
 lazy from ...domain import ArtType, ServerAsset
-lazy from ...jobs.progress_log import JobOutcome
+lazy from ...jobs.progress_log import JobOutcome, LogServer
 lazy from ...jobs.runner import JobContext, ManagedJob, run_managed_job
 lazy from ...jobs.tally import ServerAuditFixTally
 lazy from ...media_servers.errors import MediaServerError
+lazy from ...media_servers.registry import log_server
 lazy from ...schemas.server_audit import (
     ServerAuditRefreshTarget,
     ServerAuditThemeDeleteTarget,
@@ -148,8 +149,8 @@ class _Fix:
     theme_ids: list[str] = field(default_factory=list[str])
     rows: list[AuditRowKey] = field(default_factory=list[AuditRowKey])
     label: str = ""
-    #: The server's MEDIA_SERVERS name, while it is configured.
-    server_name: str | None = None
+    #: The server as the log names it, while it is configured.
+    log_server: LogServer | None = None
     error: str | None = None
     #: How the latest audit found the server to differ.
     difference: str = ""
@@ -369,7 +370,7 @@ async def _verify(
                         JobOutcome.MATCHED,
                         fix.label,
                         "media server now shows the local file",
-                        server=fix.server_name,
+                        server=fix.log_server,
                     )
                 else:
                     fix.difference = difference
@@ -385,7 +386,7 @@ async def _verify(
         fix: f"Still differs after refresh: {fix.difference}" for fix in pending
     }
     for fix, reason in unchanged.items():
-        await job.report(JobOutcome.MISMATCH, fix.label, reason, server=fix.server_name)
+        await job.report(JobOutcome.MISMATCH, fix.label, reason, server=fix.log_server)
     await mark(
         {
             row: RowFix(error=reason)
@@ -428,14 +429,14 @@ async def run_audit_fix(
         registry = audit_context.provider_registry
         for fix in fixes:
             if registry.configured_server_id(fix.server):
-                fix.server_name = registry.get(fix.server).server.title
+                fix.log_server = log_server(registry.get(fix.server))
         await job.planned(len(fixes))
         await mark({row: PENDING for fix in fixes for row in fix.rows})
         await _apply(fixes, audit_context)
 
         failed = {fix: fix.error for fix in fixes if fix.error is not None}
         for fix, error in failed.items():
-            await job.report(JobOutcome.ERROR, fix.label, error, server=fix.server_name)
+            await job.report(JobOutcome.ERROR, fix.label, error, server=fix.log_server)
         await mark(
             {
                 row: RowFix(error=error)

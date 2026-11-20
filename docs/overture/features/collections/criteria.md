@@ -51,7 +51,12 @@ long as they offer its field and operator or its list. TMDB title IDs and
 charts paste only into criteria of the same media type, since a movie's ID
 names another show.
 
-## In a collection
+## Collection and In a collection
+
+**Collection** tests whether a chosen collection holds a title. You choose the
+collection by its title, and the condition keeps following it when it is
+renamed. A collection that holds none of the library's titles is shown as
+**Collection #ID (holds no title)**; choose another or remove the condition.
 
 **In a collection** tests whether another collection Overture lists holds a
 title, so **In a collection is false** makes a catch-all collection of

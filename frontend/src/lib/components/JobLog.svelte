@@ -2,6 +2,7 @@
   import type { JobLogFeed } from "../stores/jobLogFeed.svelte";
   import { OUTCOME_TONES, logEntryTime } from "../utils/jobLog";
   import ResultFilters from "./ResultFilters.svelte";
+  import ServerBadge from "./ServerBadge.svelte";
   import VirtualList from "./VirtualList.svelte";
 
   let { feed }: { feed: JobLogFeed } = $props();
@@ -20,7 +21,7 @@
 <ResultFilters
   label="Show log lines by media server"
   groups={feed.serverGroups}
-  ontoggle={(server) => feed.toggleServer(server)}
+  ontoggle={(server) => feed.toggleServer(Number(server))}
 />
 <div
   class="job-log"
@@ -42,8 +43,8 @@
           <div class="job-log-row" {style} title="{entry.server ? `${entry.server}: ` : ""}{entry.target} - {entry.reason}">
             <time class="log-time" datetime={entry.at}>{logEntryTime(entry)}</time>
             <span class="log-outcome {OUTCOME_TONES[entry.outcome]}">{entry.outcome}</span>
-            {#if entry.server}
-              <span class="log-server">{entry.server}</span>
+            {#if entry.server_id != null}
+              <ServerBadge serverId={entry.server_id} name={entry.server} />
             {/if}
             <span class="log-target">{entry.target}</span>
             <span class="log-reason">{entry.reason}</span>
@@ -147,15 +148,6 @@
   .log-outcome.muted {
     color: var(--text-tertiary);
     background: var(--badge-muted-bg);
-  }
-
-  .log-server {
-    flex: none;
-    padding: 0 var(--space-1);
-    border: var(--border-subtle);
-    border-radius: var(--radius-sm);
-    color: var(--text-secondary);
-    line-height: 16px;
   }
 
   .log-target,

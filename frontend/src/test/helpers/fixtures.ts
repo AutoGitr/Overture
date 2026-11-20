@@ -44,9 +44,16 @@ export function logEntry(
   target: string,
   reason: string,
   at = "2026-01-01T12:00:00Z",
-  server: string | null = null,
+  server: MediaServerRead | null = null,
 ): JobLogEntry {
-  return { outcome, target, reason, at, server };
+  return {
+    outcome,
+    target,
+    reason,
+    at,
+    server_id: server?.id ?? null,
+    server: server?.title ?? null,
+  };
 }
 
 /** The configured media servers, numbered from 1 and named after their kind, lead first. */
@@ -231,6 +238,7 @@ export function collectionRule(overrides: Partial<CollectionRuleRead> = {}): Col
     backgrounds: null,
     themes: null,
     generated_style: null,
+    generated_heading: null,
     overturedb_posters: null,
     libraries: [
       {
@@ -320,6 +328,7 @@ export function collectionCapabilities(
         library_status: false,
         choices: [],
         free_values: false,
+        by_id: false,
       },
       {
         field: "genre",
@@ -333,6 +342,7 @@ export function collectionCapabilities(
         library_status: false,
         choices: [],
         free_values: false,
+        by_id: false,
       },
       {
         field: "year",
@@ -346,6 +356,7 @@ export function collectionCapabilities(
         library_status: false,
         choices: [],
         free_values: false,
+        by_id: false,
       },
       {
         field: "added",
@@ -359,6 +370,7 @@ export function collectionCapabilities(
         library_status: false,
         choices: [],
         free_values: false,
+        by_id: false,
       },
       {
         field: "unplayed",
@@ -372,6 +384,7 @@ export function collectionCapabilities(
         library_status: false,
         choices: [],
         free_values: false,
+        by_id: false,
       },
       {
         field: "hdr",
@@ -385,6 +398,7 @@ export function collectionCapabilities(
         library_status: false,
         choices: [],
         free_values: false,
+        by_id: false,
       },
     ],
     sources: [

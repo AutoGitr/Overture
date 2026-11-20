@@ -57,7 +57,7 @@ describe("collection criteria", () => {
 
   it("builds field and source conditions in nested any and all groups", async () => {
     mockFetchRoutes({
-      "/api/collections/field-values": [{ value: "Action", count: 3 }],
+      "/api/collections/field-values": [{ value: "Action", label: "Action", count: 3 }],
     });
     const group = $state<FilterGroupInput>(emptyGroup());
     renderWithQueryClient(CriteriaEditor, {
@@ -134,6 +134,7 @@ describe("collection criteria", () => {
     mockFetchRoutes({
       "/api/collections/field-values": ["Action", "Comedy", "Drama"].map((value) => ({
         value,
+        label: value,
         count: 1,
       })),
     });
@@ -188,7 +189,7 @@ describe("collection criteria", () => {
 
   it("chooses a tag value from the library's, keeps one it lacks, and types text to match part of", async () => {
     mockFetchRoutes({
-      "/api/collections/field-values": [{ value: "Action", count: 3 }],
+      "/api/collections/field-values": [{ value: "Action", label: "Action", count: 3 }],
     });
     const group = $state<FilterGroupInput>({
       ...emptyGroup(),
@@ -230,6 +231,7 @@ describe("collection criteria", () => {
     mockFetchRoutes({
       "/api/collections/field-values": Array.from({ length: 600 }, (_, index) => ({
         value: `Studio ${index}`,
+        label: `Studio ${index}`,
         count: 1,
       })),
     });
@@ -255,6 +257,32 @@ describe("collection criteria", () => {
     await fireEvent.input(value, { target: { value: "studio 29" } });
     // Studio 29 and Studio 290 to 299.
     await waitFor(() => expect(options()).toHaveLength(11));
+  });
+
+  it("chooses a collection by its title and keeps its ID, naming one that holds no title", async () => {
+    mockFetchRoutes({
+      "/api/collections/field-values": [{ value: "7", label: "Letterboxd Top 250", count: 238 }],
+    });
+    const collection = capabilities.fields.find((field) => field.field === "genre")!;
+    const group = $state<FilterGroupInput>({
+      ...emptyGroup(),
+      conditions: [{ kind: "field", field: "genre", operator: "is", value: "12" }],
+    });
+    renderWithQueryClient(CriteriaEditor, {
+      group,
+      fields: [{ ...collection, label: "Collection", by_id: true }],
+      sources: capabilities.sources,
+      mediaType: "movie",
+      libraryId: "movies",
+      scope: "Movies on Plex",
+      label: "Criteria",
+    });
+    const value = screen.getByLabelText("Criteria condition 1 value");
+
+    expect(await screen.findByRole("option", { name: "Letterboxd Top 250 (238)" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "Genre #12 (holds no title)" })).toBeTruthy();
+    await fireEvent.change(value, { target: { value: "7" } });
+    expect(group.conditions?.[0]).toMatchObject({ value: "7" });
   });
 
   it.each([
@@ -323,7 +351,7 @@ describe("collection criteria", () => {
       "/api/collections/field-values": () =>
         failed
           ? Response.json({ detail: "Unavailable" }, { status: 422 })
-          : Response.json([{ value: "English", count: 0 }]),
+          : Response.json([{ value: "English", label: "English", count: 0 }]),
     });
     const group = $state<FilterGroupInput>({
       ...emptyGroup(),
@@ -634,6 +662,7 @@ describe("collection criteria", () => {
       delete_below_minimum: null,
       auto_art: null,
       generated_style: null,
+      generated_heading: null,
       overturedb_posters: null,
       backgrounds: null,
       themes: null,

@@ -49,14 +49,19 @@ class SavedScheduleRepository:
 
     async def move_library(self, library_id: str, replacement: str) -> None:
         """Make every schedule that names a library name its replacement instead."""
+        await self._replace("library_ids", library_id, replacement)
+
+    async def rename_group(self, name: str, replacement: str) -> None:
+        """Make every schedule that runs a collection group name it as renamed."""
+        await self._replace("collection_groups", name, replacement)
+
+    async def _replace(self, key: str, value: str, replacement: str) -> None:
+        """Replace *value* in each schedule's list under *key*."""
         for record in (await self.session.exec(select(SavedSchedule))).all():
-            ids: list[str] = record.payload.get("library_ids") or []
-            if library_id in ids:
-                moved = [replacement if each == library_id else each for each in ids]
-                record.payload = {
-                    **record.payload,
-                    "library_ids": list(dict.fromkeys(moved)),
-                }
+            values: list[str] = record.payload.get(key) or []
+            if value in values:
+                moved = [replacement if each == value else each for each in values]
+                record.payload = {**record.payload, key: list(dict.fromkeys(moved))}
                 self.session.add(record)
 
     def add(self, record: SavedSchedule) -> None:

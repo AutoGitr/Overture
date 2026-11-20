@@ -57,14 +57,14 @@ class JobLogLine(SQLModel, table=True):
     # Pages a run's log filtered by outcome or by media server.
     __table_args__ = (
         Index("ix_job_log_lines_run_outcome", "run_id", "outcome", "ordinal"),
-        Index("ix_job_log_lines_run_server", "run_id", "server", "ordinal"),
+        Index("ix_job_log_lines_run_server", "run_id", "server_id", "ordinal"),
     )
 
     run_id: str = Field(primary_key=True, foreign_key="job_runs.id", ondelete="CASCADE")
     ordinal: int = Field(primary_key=True)
     outcome: str
-    #: The media server the line is about, as the entry names it.
-    server: str | None = None
+    #: The database's number of the media server the line is about.
+    server_id: int | None = None
     entry: dict[str, Any] = Field(sa_type=JSON)
 
     run: "JobRun" = Relationship(

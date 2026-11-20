@@ -11,6 +11,7 @@ lazy from overture.schemas.art import ArtCandidate
 lazy from overture.services.art import matcher_cache
 lazy from overture.services.art import perfect_match as module
 lazy from overture.services.art.matcher_cache import ArtMatcherCache
+lazy from overture.services.art.phash import PHASH_HEX_LENGTH
 lazy from overture.utils.file import compute_bytes_hash
 lazy from overture.utils.image import FetchedImage
 lazy from tests.media_servers import configure, server_of
@@ -22,7 +23,7 @@ LOCAL_BYTES = b"identical-bytes"
 def _local_facts(data: bytes = LOCAL_BYTES) -> ArtFileFacts:
     return ArtFileFacts(
         file_hash=compute_bytes_hash(data),
-        phash="0" * 16,
+        phash="0" * PHASH_HEX_LENGTH,
         width=1000,
         height=1500,
         file_mtime_ns=1,

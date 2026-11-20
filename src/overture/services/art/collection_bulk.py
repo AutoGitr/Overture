@@ -37,11 +37,7 @@ lazy from ..catalog.index import CatalogIndex, CatalogPick
 lazy from ..downloads.queue import JobTarget
 lazy from ..downloads.service import DownloadService
 lazy from ..downloads.watch import DownloadWatch
-lazy from .collection_art import (
-    CollectionArtService,
-    chosen_poster_style,
-    uploaded_image,
-)
+lazy from .collection_art import CollectionArtService, chosen_poster_style
 lazy from .perfect_match import accepted_matches, comparison_threshold
 
 _ERRORS = (PublicServiceError, httpx2.HTTPError, OSError, ValueError)
@@ -55,7 +51,7 @@ def _unmatchable(row: MediaCollection, art_type: ArtType) -> str | None:
     """
     if row.tmdb_collection_id is None:
         return "Local art matching: the collection has no TMDB collection ID"
-    if uploaded_image(row, art_type) is None and (
+    if read_art_slot(row, art_type).file_hash is None and (
         not row.copies or row.server_image_url(art_type) is None
     ):
         return "Local art matching: the collection has no image to compare"

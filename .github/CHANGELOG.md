@@ -4,8 +4,9 @@
 
 ### Added
 
+- **Collections:** **Generated poster group** (global, per group or per collection) chooses whether posters Automatic art generates show the collection's group above its title or the title alone.
 - **Collections:** a collection's **Background** tab also offers its members' TMDB backgrounds, the largest 10 of each and 100 in all, fetched only when the tab opens.
-- **Operations:** job logs and Server audit results can be filtered by media server, and each line about one names its server by its `MEDIA_SERVERS` name.
+- **Operations:** job logs and Server audit results can be filtered by media server, and each line about one names its server by its `MEDIA_SERVERS` name, coloured by its kind and following a renamed server; Sync also names the server it reads collections from.
 - **Operations:** Assets can run collections chosen one by one under **Specific collections**, beside groups and libraries, now or on a schedule.
 - **Collections:** **Theme** (global, per group or per collection) can be **Not needed**, so a collection's theme counts as complete without one, in its status, filters and statistics, and none is chosen for it automatically.
 - **Collections:** the configure view's **Missing** section is shown only for collections whose criteria include TMDB or MDBList lists.
@@ -19,6 +20,8 @@
 
 ### Changed
 
+- **Collections:** a **Collection** condition names the collection by its ID, so it keeps matching when the collection is renamed; saved criteria, saved filters and sets are converted, and a title several collections shared becomes a group testing each of them.
+- **API:** collection field values carry a `label` beside their `value`, and fields a `by_id` flag; job log lines carry `server_id`, `log_servers` is keyed by server number and `hide_server` takes server numbers.
 - **Operations:** an Assets run queues collection posters and backgrounds in the art download lane, as it does a title's, so its log shows them **Queued** and then **Downloaded**.
 - **Operations:** Server audit logs one line per media server compared, rather than one per file.
 - **Collections:** **Automatic theme** stays shown, and off, while **Theme** is **Not needed**.
@@ -34,7 +37,7 @@
 - **OvertureDB:** the **Contribute issue** link leaves **Reason for modification** empty for you to write, and its tooltip names what the issue replaces; GitHub writes a link's values back over the form as you edit other fields, so a prefilled reason undid what you typed.
 - **Interface:** the database record leaves out jobs and names each server copy after its server and library.
 - **Interface:** messages name the field, media type and media server they are about, such as "Unplayed is not available for shows on Jellyfin".
-- **Art:** perceptual hashes compare 256 points of detail instead of 64, so near-identical posters of another scan or grade no longer match at distance 0; existing fingerprints are computed again on the next refresh.
+- **Art:** perceptual hashes compare 256 points of detail instead of 64, so near-identical posters of another scan or grade no longer match at distance 0; existing fingerprints are cleared and taken again: a title's on the next refresh, a collection's from the image Overture keeps when it is next compared.
 - **Collections:** generated posters are 2000×3000 and generated gradients are dithered against banding; collections get them again on their next sync.
 - **Storage:** uploaded images are kept for good in `uploads/` in the config folder, apart from the image cache, which moves from `cache/images` to `cache/`; they were the only copy, yet kept in a cache the docs called safe to delete. Uploads already in the cache move there when Overture starts. Generated collection art stays in the cache and is drawn again when the cache lost it. **Statistics** show uploads as their own part of the footprint.
 - **API:** library IDs name their server (`1:2`); titles and collections list their `copies` on each server, the lead first, instead of one `server_item_id`; settings list `media_servers`, and collection capabilities, server links and server audit results are per server.
@@ -48,6 +51,7 @@
 
 ### Fixed
 
+- **Collections:** renaming a group keeps it in the Sync and Assets schedules and remembered selections that run it.
 - **OvertureDB:** a collection's **Contribute issue** link includes the theme, art and other choices made since the collection was opened.
 - **Operations:** a busy Assets run no longer fails with "QueuePool limit of size 5 overflow 0 reached"; Overture keeps more database connections and waits for one instead of failing.
 - **Themes:** a theme that failed to download is tried again by later runs once a download of it for that title has succeeded, as choosing it by hand does.

@@ -25,7 +25,8 @@ the group needs a collection or a set first.
 
 Rename or delete a custom group in **Collection groups**. Ungrouped cannot be
 renamed, deleted or made a collection set, and `Unmanaged` cannot name a
-custom group.
+custom group. Sync and Assets schedules, and the groups the Sync and Assets
+tabs remember, keep a renamed group chosen.
 
 ## Defaults
 

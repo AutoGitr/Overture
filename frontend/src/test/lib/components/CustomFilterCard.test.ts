@@ -26,6 +26,7 @@ const unarted: CollectionFieldRead = {
     { value: "missing", label: "Missing" },
   ],
   free_values: false,
+  by_id: false,
 };
 
 describe("CustomFilterCard", () => {

@@ -32,3 +32,11 @@ export function writeJson<T>(key: string, value: T, kind: StorageKind = "local")
     // Preferences remain usable when storage is blocked or full.
   }
 }
+
+/** Replace *value* with *replacement* in the list of names stored under *key*. */
+export function renameInStoredList(key: string, value: string, replacement: string): void {
+  const stored = readJson<unknown[]>(key, []);
+  if (stored.includes(value)) {
+    writeJson(key, [...new Set(stored.map((entry) => (entry === value ? replacement : entry)))]);
+  }
+}

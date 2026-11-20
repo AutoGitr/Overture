@@ -89,22 +89,31 @@
   let known = $derived(
     field?.choices.length
       ? field.choices.map((choice) => ({ ...choice, count: 0 }))
-      : (values.data ?? []).map((entry) => ({ ...entry, label: entry.value })),
+      : (values.data ?? []),
   );
   let current = $derived(condition.kind === "field" ? String(condition.value) : "");
   /** Most values a list offers; a library holding more of them, such as actors, has them typed. */
   const MAX_LISTED = 500;
   // A fixed set, or the values a tag field holds in the library, is chosen
-  // from a list; free values (IDs, TMDB keywords, labels) and text are typed,
-  // with what the library holds suggested.
+  // from a list, and so is a field holding IDs however many there are; free
+  // values (IDs, TMDB keywords, labels) and text are typed, with what the
+  // library holds suggested.
   let chosen = $derived(
     !!field &&
       (field.choices.length > 0 ||
+        field.by_id ||
         (field.kind === "tag" &&
           !field.free_values &&
           values.isSuccess &&
           known.length <= MAX_LISTED)),
   );
+  /** Names what the condition holds when the list does not offer it. */
+  let missing = $derived.by(() => {
+    if (!current) return "Choose a value";
+    if (!field?.by_id) return `${current} (no title has it)`;
+    // An ID is named by the list, which may still be on its way.
+    return values.isLoading ? "Loading…" : `${fieldName} #${current} (holds no title)`;
+  });
   /** The condition's field as people know it, whether or not these criteria offer it. */
   let fieldName = $derived(condition.kind === "field" ? FIELD_LABELS[condition.field] : "");
 
@@ -203,7 +212,7 @@
       >
         {#if !known.some((entry) => entry.value === current)}
           <option value={current} disabled
-            >{current ? `${current} (no title has it)` : "Choose a value"}</option
+            >{missing}</option
           >
         {/if}
         {#each known as entry (entry.value)}

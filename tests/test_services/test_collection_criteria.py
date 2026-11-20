@@ -201,7 +201,7 @@ def test_groups_combine_conditions_sources_and_collections() -> None:
         groups=[
             FilterGroup(
                 conditions=[
-                    _field(FilterField.COLLECTION, FilterOperator.IS, "Favourites"),
+                    _field(FilterField.COLLECTION, FilterOperator.IS, "4"),
                     excluded,
                 ]
             )
@@ -209,7 +209,7 @@ def test_groups_combine_conditions_sources_and_collections() -> None:
     )
     context = _context(
         sources={franchise.key: frozenset({1}), excluded.key: frozenset({1})},
-        collections={2: ["Favourites"]},
+        collections={2: ["4"]},
     )
     assert evaluate([first, second], criteria, context) == [first, second]
     assert criteria.source_conditions() == [franchise, excluded]

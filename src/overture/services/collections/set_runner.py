@@ -287,7 +287,7 @@ class CollectionSets:
         titles = sorted(
             {
                 plex.value_of(key, title)
-                for key, title in await provider.filter_choices(
+                for key, title in await self._access.filter_choices(
                     library_id, media_type, plex.key_for(media_type)
                 )
             },

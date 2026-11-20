@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { readJson, writeJson } from "../../../lib/utils/storage";
+import { readJson, renameInStoredList, writeJson } from "../../../lib/utils/storage";
 
 describe("JSON storage", () => {
   it("isolates local and session preferences", () => {
@@ -55,5 +55,15 @@ describe("JSON storage", () => {
     const value: Record<string, unknown> = {};
     value.self = value;
     expect(() => writeJson("circular", value)).not.toThrow();
+  });
+
+  it("renames a stored name once, leaving lists without it alone", () => {
+    writeJson("groups", ["Weekend", "Evenings", "Other"]);
+    renameInStoredList("groups", "Weekend", "Evenings");
+    expect(readJson("groups", [])).toEqual(["Evenings", "Other"]);
+
+    writeJson("others", ["Other"]);
+    renameInStoredList("others", "Weekend", "Evenings");
+    expect(readJson("others", [])).toEqual(["Other"]);
   });
 });

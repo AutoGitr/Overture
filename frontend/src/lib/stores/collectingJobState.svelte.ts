@@ -1,4 +1,5 @@
 import { SvelteSet } from "svelte/reactivity";
+import type { ServerType } from "../../generated/rest/types.gen";
 import { getJobResults } from "../../generated/rest/sdk.gen";
 import { sdkData } from "../rest/sdk";
 import { errorMessage } from "../utils/errors";
@@ -12,8 +13,13 @@ import {
 /** An item collected by a job, marked selected for follow-up actions. */
 export type Selectable<TItem> = TItem & { selected: boolean };
 
-/** The groups a finding belongs to, as `[key, label]` pairs. */
-export type ResultGroupsOf<TItem> = (item: TItem) => (readonly [string, string])[];
+/**
+ * The groups a finding belongs to, as `[key, label]` pairs, with the kind of
+ * media server a server's group is about.
+ */
+export type ResultGroupsOf<TItem> = (
+  item: TItem,
+) => (readonly [key: string, label: string, server?: ServerType])[];
 
 /** How one collecting job names and selects its findings. */
 export interface CollectingJobConfig<TEvent, TItem> extends JobLifecycleConfig<never> {
@@ -76,8 +82,8 @@ export class CollectingJobState<
   readonly groups = $derived.by(() => {
     const groups: Record<string, ResultGroup> = {};
     for (const item of this.items) {
-      for (const [key, label] of this.collecting.groupsOf(item)) {
-        (groups[key] ??= { key, label, count: 0, shown: !this.hidden.has(key) }).count++;
+      for (const [key, label, server] of this.collecting.groupsOf(item)) {
+        (groups[key] ??= { key, label, count: 0, shown: !this.hidden.has(key), server }).count++;
       }
     }
     return orderGroups(Object.values(groups), this.collecting.groupOrder);

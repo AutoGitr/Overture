@@ -37,7 +37,12 @@ lazy from ..domain import (
     TmdbPersonRole,
 )
 lazy from ..integrations.mdblist import mdblist_identifier
-lazy from ..utils.collection_fields import FIELDS, OPERATORS
+lazy from ..utils.collection_fields import (
+    FIELDS,
+    OPERATORS,
+    field_label,
+    field_operators,
+)
 lazy from ..utils.collection_formats import (
     MAX_COLLECTION_SUMMARY_LENGTH,
     MemberTagFormat,
@@ -81,6 +86,12 @@ class FieldCondition(StrictBaseModel):
                 f"{FIELDS[self.field].label} cannot use the {self.operator} operator"
             )
         self.value = _condition_value(kind, self.operator, self.value)
+        if FIELDS[self.field].by_id and not (
+            isinstance(self.value, str)
+            and self.value.isascii()
+            and self.value.isdecimal()
+        ):
+            raise ValueError(f"Choose a {FIELDS[self.field].label.lower()} by its ID")
         return self
 
     @property
@@ -652,6 +663,9 @@ class CollectionPolicyBase(StrictBaseModel):
     auto_art: UniqueList[AutoArtSource] | None = None
     #: The colours of art Overture generates for it automatically.
     generated_style: ArtStyle | None = None
+    #: Whether posters generated for it automatically show its group above
+    #: its title.
+    generated_heading: bool | None = None
     #: The OvertureDB poster styles it takes, first to last; the first is what
     #: a poster chosen for it is contributed as unless OvertureDB holds it.
     overturedb_posters: UniqueList[CollectionPosterStyle] | None = None
@@ -1096,6 +1110,37 @@ class CollectionFieldRead(StrictBaseModel):
     choices: list[FieldChoice] = Field(default_factory=list[FieldChoice])
     #: Any value can be named, beyond those the library holds, such as an ID.
     free_values: bool = False
+    #: Its values are IDs, chosen by the labels the library's values give them.
+    by_id: bool = False
+
+    @classmethod
+    def of(
+        cls,
+        field: FilterField,
+        server: ServerType,
+        *,
+        local: bool = True,
+        smart: bool = False,
+        labelled: bool = False,
+    ) -> Self:
+        """Describe *field* as *server* names it, with how it can be tested."""
+        spec = FIELDS[field]
+        return cls(
+            field=field,
+            label=field_label(field, server),
+            kind=spec.kind,
+            operators=list(field_operators(field, smart=False)),
+            smart_operators=list(field_operators(field, smart=True)) if smart else [],
+            local=local,
+            smart=smart,
+            labelled=labelled,
+            library_status=spec.library_only,
+            choices=[
+                FieldChoice(value=value, label=label) for value, label in spec.choices
+            ],
+            free_values=spec.free,
+            by_id=spec.by_id,
+        )
 
 
 class CollectionSourceRead(StrictBaseModel):
@@ -1163,7 +1208,10 @@ class MdblistListRead(StrictBaseModel):
 class CollectionFieldValue(StrictBaseModel):
     """A value of a field in a library, with the number of items holding it."""
 
+    #: What criteria hold, such as a collection's ID.
     value: str
+    #: How the value is named to people, such as a collection's title.
+    label: str
     count: int
 
 

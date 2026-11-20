@@ -17,6 +17,7 @@ export const DEFAULT_APP_SETTINGS = {
   collection_delete_below_minimum: true,
   collection_delete_when_inactive: true,
   collection_filtering_default: "user",
+  collection_generated_heading: true,
   collection_generated_style: "dark",
   collection_import_unmanaged: true,
   collection_minimum_items: 2,

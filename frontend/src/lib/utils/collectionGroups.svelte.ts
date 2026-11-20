@@ -9,6 +9,8 @@ import {
 import type { CollectionGroupDelete } from "../../generated/rest/types.gen";
 import { UNGROUPED_GROUP } from "../../generated/settings";
 import { chooseAction, confirmAction, createNotifier } from "../stores/notificationState.svelte";
+import { syncSelection } from "../stores/syncSelection.svelte";
+import { renameAssetsGroup } from "./assetsForm.svelte";
 import { errorMessage } from "./errors";
 import type { ChoosableCollection } from "./popupSelection";
 
@@ -39,6 +41,8 @@ export class CollectionGroupActions {
         query: { name: this.group() },
         body: { name },
       });
+      syncSelection.renameGroup(this.group(), name);
+      renameAssetsGroup(this.group(), name);
       this.feedback.success("Group renamed.");
       return name;
     } catch (error) {

@@ -750,7 +750,9 @@ class CollectionEditor:
             field = fields.get(key)
             if field is None or key in names or plex_field(field).type != "tag":
                 continue
-            choices = await provider.filter_choices(part.library_id, media_type, key)
+            choices = await self._access.filter_choices(
+                part.library_id, media_type, key
+            )
             names[key] = dict(choices)
         try:
             decompiled = decompile_plex_query(query, media_type=media_type, names=names)

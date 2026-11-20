@@ -24,7 +24,6 @@ lazy from ...schemas.collections import (
     CollectionPreviewRequest,
     CollectionRuleWrite,
     CollectionSourceRead,
-    FieldChoice,
     KindRecommendation,
     MdblistListRead,
 )
@@ -35,7 +34,6 @@ lazy from ...utils.collection_fields import (
     dimension_available,
     field_available,
     field_label,
-    field_operators,
     labelled_field,
     plex_tests,
     smart_only_dimension,
@@ -191,22 +189,12 @@ class CollectionDiscovery:
             if not (local_on or smart):
                 continue
             found.append(
-                CollectionFieldRead(
-                    field=field,
-                    label=field_label(field, next(iter(local_on or servers))),
-                    kind=spec.kind,
-                    operators=list(field_operators(field, smart=False)),
-                    smart_operators=list(field_operators(field, smart=True))
-                    if smart
-                    else [],
+                CollectionFieldRead.of(
+                    field,
+                    next(iter(local_on or servers)),
                     local=bool(local_on),
                     smart=smart,
                     labelled=smart and not tested,
-                    choices=[
-                        FieldChoice(value=value, label=label)
-                        for value, label in spec.choices
-                    ],
-                    free_values=spec.free,
                 )
             )
         return found
@@ -246,7 +234,7 @@ class CollectionDiscovery:
             else:
                 items = await self._access.library_items(library_id, media_type)
                 collections = (
-                    await self._access.collection_titles(library_id, None)
+                    await self._access.memberships(library_id, None)
                     if field is FilterField.COLLECTION
                     else {}
                 )
@@ -268,21 +256,32 @@ class CollectionDiscovery:
                     f"cannot list the {field_label(field, server)} values of its "
                     f"{media_type.plural}",
                 )
-            provider = self._access.library_provider(library_id)
             counts.update(
                 dict.fromkeys(
                     (
                         plex.value_of(key, title)
-                        for key, title in await provider.filter_choices(
+                        for key, title in await self._access.filter_choices(
                             library_id, media_type, plex.key_for(media_type)
                         )
                     ),
                     0,
                 )
             )
+        labels = (
+            {
+                str(collection_id): title
+                for collection_id, title in (
+                    await self._access.collection_titles(map(int, counts))
+                ).items()
+            }
+            if field is FilterField.COLLECTION
+            else {value: value for value in counts}
+        )
         typed = (query or "").strip().casefold()
         values = {
-            value: count for value, count in counts.items() if typed in value.casefold()
+            value: count
+            for value, count in counts.items()
+            if value in labels and typed in labels[value].casefold()
         }
         if typed and field is FilterField.TMDB_KEYWORD:
             known = {value.casefold() for value in values}
@@ -290,10 +289,11 @@ class CollectionDiscovery:
                 if keyword.casefold() not in known:
                     known.add(keyword.casefold())
                     values[keyword] = 0
+                    labels[keyword] = keyword
         return [
-            CollectionFieldValue(value=value, count=count)
+            CollectionFieldValue(value=value, label=labels[value], count=count)
             for value, count in sorted(
-                values.items(), key=lambda pair: (-pair[1], pair[0].casefold())
+                values.items(), key=lambda pair: (-pair[1], labels[pair[0]].casefold())
             )
         ]
 

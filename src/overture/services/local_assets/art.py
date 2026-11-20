@@ -119,11 +119,7 @@ class LocalArtInspector:
         source = path if original is None else original.path
 
         phash = (
-            known.phash
-            if known is not None
-            and known.file_hash == file_hash
-            and self._phash.is_valid_fingerprint(known.phash)
-            else None
+            known.phash if known is not None and known.file_hash == file_hash else None
         )
         if phash is None:
             try:
@@ -152,7 +148,7 @@ class LocalArtInspector:
         return (
             known.file_mtime_ns == stat.st_mtime_ns
             and known.file_size == stat.st_size
-            and self._phash.is_valid_fingerprint(known.phash)
+            and known.phash is not None
         )
 
     def _cached(self, known: ArtFileFacts) -> bool:

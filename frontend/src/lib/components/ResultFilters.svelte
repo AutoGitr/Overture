@@ -20,7 +20,7 @@
     {#each groups as group (group.key)}
       <button
         type="button"
-        class={["result-filter", group.tone]}
+        class={["result-filter", group.tone, group.server]}
         aria-pressed={group.shown}
         title={group.shown ? `Hide ${group.label}` : `Show ${group.label}`}
         onclick={() => ontoggle(group.key)}
@@ -80,6 +80,21 @@
   .result-filter.muted {
     --filter-colour: var(--text-tertiary);
     --filter-bg: var(--badge-muted-bg);
+  }
+
+  .result-filter.plex {
+    --filter-colour: var(--server-plex);
+    --filter-bg: var(--server-plex-muted);
+  }
+
+  .result-filter.jellyfin {
+    --filter-colour: var(--server-jellyfin);
+    --filter-bg: var(--server-jellyfin-muted);
+  }
+
+  .result-filter.emby {
+    --filter-colour: var(--server-emby);
+    --filter-bg: var(--server-emby-muted);
   }
 
   .result-filter:hover {

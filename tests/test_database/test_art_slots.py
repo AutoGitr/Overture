@@ -19,6 +19,7 @@ lazy from overture.db.art_slots import (
 )
 lazy from overture.db.models.art import ArtSlot
 lazy from overture.domain import ITEM_ART_TYPES, ArtType
+lazy from overture.services.art.phash import PHASH_HEX_LENGTH
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from tests.factories import (
     MediaItemFactory,
@@ -82,7 +83,7 @@ def test_slots_of_different_types_do_not_collide(
 def _facts(file_hash: str = "h") -> ArtFileFacts:
     return ArtFileFacts(
         file_hash=file_hash,
-        phash="0" * 16,
+        phash="0" * PHASH_HEX_LENGTH,
         width=1000,
         height=1500,
         file_mtime_ns=1,

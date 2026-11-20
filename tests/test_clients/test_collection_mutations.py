@@ -399,11 +399,10 @@ async def test_plex_filter_choices_decode_the_keys_plex_encodes(
     ] == [("/library/sections/1/studio", "1"), ("/library/sections/2/resolution", "4")]
 
 
-async def test_plex_names_collections_by_their_title_now_and_keys_them_by_index(
+async def test_plex_names_collections_by_their_rating_key_and_keys_them_by_index(
     monkeypatch: pytest.MonkeyPatch, app_config: Settings
 ) -> None:
     def handle(request: httpx2.Request) -> httpx2.Response:
-        # Plex's own list would still name collection 7 by its first title.
         assert request.url.path == "/library/sections/1/collections"
         rows = [
             {"ratingKey": "c1", "title": "BFI Greats", "index": 7},
@@ -420,7 +419,7 @@ async def test_plex_names_collections_by_their_title_now_and_keys_them_by_index(
         choices = await client.get_filter_choices("1", MediaType.MOVIE, "collection")
     finally:
         await client.close()
-    assert choices == [("7", "BFI Greats")]
+    assert choices == [("7", "c1")]
 
 
 async def test_plex_names_the_filter_keys_of_the_values_an_item_holds(

@@ -1,3 +1,4 @@
+import type { ServerType } from "../../generated/rest/types.gen";
 import type { LogTone } from "./jobLog";
 
 /** Results of one kind, which a results view shows or hides together. */
@@ -7,6 +8,8 @@ export interface ResultGroup<K extends string = string> {
   count: number;
   shown: boolean;
   tone?: LogTone;
+  /** The kind of media server the results are about, which colours them. */
+  server?: ServerType;
 }
 
 /** Sort *groups* in the order *order* lists their keys; unlisted ones follow by label. */

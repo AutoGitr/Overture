@@ -85,12 +85,6 @@ def chosen_poster_style(
     return candidate.poster_style or CollectionPosterStyle.INDIVIDUAL
 
 
-def uploaded_image(row: MediaCollection, art_type: ArtType) -> ArtFileFacts | None:
-    """Return the facts of the image Overture last uploaded, if it can be compared."""
-    facts = art_file_facts(read_art_slot(row, art_type))
-    return facts if facts is not None and facts.phash is not None else None
-
-
 def _headed(row: MediaCollection) -> bool:
     """Whether a poster can show the collection's group above its title.
 
@@ -535,17 +529,14 @@ class CollectionArtService:
         """
         async with self._database.read_session() as db:
             row = await self._require(db, collection_id, art_type)
-        slot = read_art_slot(row, art_type)
-        file_hash = slot.file_hash
+        file_hash = read_art_slot(row, art_type).file_hash
         if file_hash is None:
             raise PublicServiceError(404, "Collection image not found")
 
         async def restore() -> CachedOriginal:
-            if (generation := art_generation(slot)) is not None:
-                generated = await self._generate(row, art_type, generation)
-                if generated.file_hash == file_hash:
-                    return generated
-            raise PublicServiceError(404, "Collection image not found")
+            if (generated := await self._regenerated(row, art_type)) is None:
+                raise PublicServiceError(404, "Collection image not found")
+            return generated
 
         return await cached_image_response(
             self._image_cache,
@@ -554,6 +545,50 @@ class CollectionArtService:
             size=size,
             current=version == file_hash,
         )
+
+    async def _regenerated(
+        self, row: MediaCollection, art_type: ArtType
+    ) -> CachedOriginal | None:
+        """Draw the slot's generated art again, if that gives the file it recorded."""
+        slot = read_art_slot(row, art_type)
+        if (generation := art_generation(slot)) is None:
+            return None
+        generated = await self._generate(row, art_type, generation)
+        return generated if generated.file_hash == slot.file_hash else None
+
+    async def uploaded(
+        self, row: MediaCollection, art_type: ArtType
+    ) -> ArtFileFacts | None:
+        """Return the facts of the image Overture last uploaded to the slot.
+
+        A record without a fingerprint is fingerprinted from the copy Overture
+        keeps, drawing generated art again if the cache lost it, and saved.
+
+        Returns:
+            The facts with their fingerprint, or ``None`` when Overture
+            uploaded no image to the slot.
+
+        Raises:
+            PublicServiceError: 409 when Overture no longer holds the image.
+        """
+        facts = art_file_facts(read_art_slot(row, art_type))
+        if facts is None or facts.phash is not None:
+            return facts
+        if await self._image_cache.original(facts.file_hash) is None:
+            await self._regenerated(row, art_type)
+        kept = await self._uploads.facts(facts.file_hash)
+        async with (
+            self._asset_locks.acquire(f"collection:{row.id}"),
+            self._database.write_session() as db,
+        ):
+            saved = await CollectionRepository(db).get_listed(row.id or 0)
+            # Another upload may have replaced the image meanwhile.
+            if saved is not None and read_art_slot(saved, art_type).file_hash == (
+                kept.file_hash
+            ):
+                record_art_file(saved, art_type, kept)
+                db.add(saved)
+        return kept
 
     async def adopt(
         self,
@@ -639,7 +674,7 @@ class CollectionArtService:
             raise PublicServiceError(
                 422, "Set a TMDB collection ID before matching artwork"
             )
-        facts = uploaded_image(row, art_type)
+        facts = await self.uploaded(row, art_type)
         if facts is not None and facts.phash is not None:
             reference, source = facts.phash, "local_file"
         else:

@@ -163,6 +163,14 @@
     options={STYLES}
     hint="The colours of art Automatic art generates, and of a group's separator."
   />
+  <InheritedSelect
+    label="Generated poster group"
+    {inherits}
+    bind:value={policy.generated_heading}
+    inherited={defaults?.generated_heading}
+    options={SHOW_HIDE}
+    hint="Whether a poster Automatic art generates shows the collection's group above its title. A collection with no group shows its title alone either way."
+  />
   <InheritedOrder
     label="OvertureDB posters"
     {inherits}

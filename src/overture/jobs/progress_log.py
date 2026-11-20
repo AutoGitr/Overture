@@ -12,6 +12,7 @@ entry as one line at the outcome's level.
 """
 
 lazy import logging
+lazy from dataclasses import dataclass
 lazy from enum import StrEnum
 
 lazy from pydantic import Field
@@ -106,10 +107,14 @@ class JobLogEntry(StrictBaseModel):
     target: str
     reason: PublicText
     at: str = Field(description="When the job wrote the entry, as an ISO timestamp.")
+    server_id: int | None = Field(
+        default=None,
+        description="The database's number of the media server the entry is "
+        "about; none for an entry about no single server.",
+    )
     server: str | None = Field(
         default=None,
-        description="The media server the entry is about, by its MEDIA_SERVERS "
-        "name; none for an entry about no single server.",
+        description="The MEDIA_SERVERS name of that server when the entry was written.",
     )
 
     def format(self) -> str:
@@ -118,13 +123,26 @@ class JobLogEntry(StrictBaseModel):
         return f"{prefix}{self.outcome} {self.target} - {self.reason}"
 
 
+@dataclass(frozen=True, slots=True)
+class LogServer:
+    """The media server a log entry is about."""
+
+    #: The database's number of the server.
+    id: int
+    #: Its MEDIA_SERVERS name.
+    name: str
+
+    def on(self, entry: JobLogEntry) -> JobLogEntry:
+        """Return *entry* as about this server."""
+        return entry.model_copy(update={"server_id": self.id, "server": self.name})
+
+
 def log_entry(
-    outcome: JobOutcome, target: str, reason: str, *, server: str | None = None
+    outcome: JobOutcome, target: str, reason: str, *, server: LogServer | None = None
 ) -> JobLogEntry:
     """Return the entry for one target and the reason for its outcome, stamped now.
 
-    *server* names the media server the entry is about, if it is about one.
+    *server* is the media server the entry is about, if it is about one.
     """
-    return JobLogEntry(
-        outcome=outcome, target=target, reason=reason, at=utc_now_iso(), server=server
-    )
+    entry = JobLogEntry(outcome=outcome, target=target, reason=reason, at=utc_now_iso())
+    return server.on(entry) if server is not None else entry

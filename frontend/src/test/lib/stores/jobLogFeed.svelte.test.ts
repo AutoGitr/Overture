@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { JobLogFeed } from "../../../lib/stores/jobLogFeed.svelte";
 import { JobLifecycleState } from "../../../lib/stores/jobLifecycleState.svelte";
-import { logEntry } from "../../helpers/fixtures";
+import { logEntry, mediaServers } from "../../helpers/fixtures";
 import { type FetchCall, mockFetchRoutes } from "../../helpers/fetch";
+import type { MediaServerRead } from "../../../generated/rest/types.gen";
 import type { JobOutcome } from "../../../generated/ws";
 
 /** A stored log of `total` lines whose targets name their position. */
@@ -40,8 +41,10 @@ function storedOutcomes(outcomes: JobOutcome[]) {
   });
 }
 
+const [plex, emby] = mediaServers("plex", "emby");
+
 /** A stored log of `[outcome, server]` lines, which the server filters as asked. */
-function storedServers(lines: [JobOutcome, string | null][]) {
+function storedServers(lines: [JobOutcome, MediaServerRead | null][]) {
   return mockFetchRoutes({
     "/api/job-snapshots/log/run": ({ url }: FetchCall) => {
       const params = new URL(url, location.origin).searchParams;
@@ -55,7 +58,7 @@ function storedServers(lines: [JobOutcome, string | null][]) {
         .filter(
           (entry) =>
             (!asked.length || asked.includes(entry.outcome)) &&
-            !(entry.server && hidden.includes(entry.server)),
+            !(entry.server_id != null && hidden.includes(String(entry.server_id))),
         );
       return Response.json({
         run_id: "run",
@@ -214,11 +217,28 @@ describe("JobLogFeed", () => {
     expect(feed.total).toBe(4);
     expect(feed.lines.has(4)).toBe(false);
   });
+  it("offers a filter for the server of a run's first line", () => {
+    const job = new JobLifecycleState({ failureMessage: "Failed" });
+    job.handleStarted({ run_id: "run", log_total: 0 });
+    job.handleProgress({
+      run_id: "run",
+      log_total: 1,
+      log_outcomes: { Started: 1 },
+      log_servers: { [plex!.id]: { Started: 1 } },
+      log: logEntry("Started", "Sync", "reading libraries from Plex", undefined, plex!),
+    });
+
+    expect(job.log.groups.map(({ key }) => key)).toEqual(["Started"]);
+    expect(job.log.serverGroups.map(({ key, count }) => [key, count])).toEqual([
+      [String(plex!.id), 1],
+    ]);
+  });
+
   it("hides a media server's lines and keeps lines about no server", async () => {
     storedServers([
-      ["Added", "Plex"],
-      ["Added", "Emby"],
-      ["Error", "Emby"],
+      ["Added", plex!],
+      ["Added", emby!],
+      ["Error", emby!],
       ["Started", null],
     ]);
     const feed = new JobLogFeed();
@@ -226,15 +246,15 @@ describe("JobLogFeed", () => {
       run_id: "run",
       log_total: 4,
       log_outcomes: { Added: 2, Error: 1, Started: 1 },
-      log_servers: { Plex: { Added: 1 }, Emby: { Added: 1, Error: 1 } },
+      log_servers: { [plex!.id]: { Added: 1 }, [emby!.id]: { Added: 1, Error: 1 } },
     });
     feed.show(0, 4);
     expect(feed.serverGroups.map(({ key, count }) => [key, count])).toEqual([
-      ["Plex", 1],
-      ["Emby", 2],
+      [String(plex!.id), 1],
+      [String(emby!.id), 2],
     ]);
 
-    feed.toggleServer("Emby");
+    feed.toggleServer(emby!.id);
 
     expect(feed.total).toBe(2);
     await vi.waitFor(() => expect(feed.lines.get(1)?.target).toBe("Line 3"));

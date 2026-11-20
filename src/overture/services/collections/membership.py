@@ -100,7 +100,7 @@ class Membership:
                     condition.source, media_type, items, region=region
                 )
         collections = (
-            await self._access.collection_titles(library_id, collection_id)
+            await self._access.memberships(library_id, collection_id)
             if any(
                 condition.field in _COLLECTION_FIELDS
                 for group in criteria
@@ -359,7 +359,9 @@ class Membership:
     ) -> str:
         provider = self._access.library_provider(library_id)
         choices = {
-            key: choice_keys(await provider.filter_choices(library_id, media_type, key))
+            key: choice_keys(
+                await self._access.filter_choices(library_id, media_type, key)
+            )
             for key in tag_keys(criteria, media_type, labels)
         }
         # Plex's list of a field's values can leave out many its items hold,

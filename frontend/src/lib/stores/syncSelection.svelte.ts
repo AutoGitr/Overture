@@ -1,4 +1,4 @@
-import { readJson, writeJson } from "../utils/storage";
+import { readJson, renameInStoredList, writeJson } from "../utils/storage";
 
 /** The groups and collections a shortcut opens the Sync tab with. */
 export interface SyncFocus {
@@ -35,6 +35,12 @@ class SyncSelection {
     writeJson("syncPopup_includeCollections", this.allCollections);
     writeJson("syncPopup_collectionGroups", this.groups);
     writeJson("syncPopup_collectionIds", this.collectionIds);
+  }
+
+  /** Keep a renamed group chosen, now and for the next visit. */
+  renameGroup(name: string, replacement: string): void {
+    this.groups = this.groups.map((group) => (group === name ? replacement : group));
+    renameInStoredList("syncPopup_collectionGroups", name, replacement);
   }
 
   /** Choose only these groups and collections, and no library, for the next visit. */

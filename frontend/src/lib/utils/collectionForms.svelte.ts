@@ -60,6 +60,7 @@ export type PolicyData = {
   delete_below_minimum?: boolean | null;
   auto_art?: AutoArtSource[] | null;
   generated_style?: ArtStyle | null;
+  generated_heading?: boolean | null;
   overturedb_posters?: CollectionPosterStyle[] | null;
   backgrounds?: boolean | null;
   themes?: boolean | null;
@@ -104,6 +105,7 @@ export function defaultRule(): CollectionRuleWriteInput {
     delete_below_minimum: null,
     auto_art: null,
     generated_style: null,
+    generated_heading: null,
     overturedb_posters: null,
     backgrounds: null,
     themes: null,
@@ -910,6 +912,7 @@ const RULE_POLICY = [
   "delete_below_minimum",
   "auto_art",
   "generated_style",
+  "generated_heading",
   "overturedb_posters",
   "backgrounds",
   "themes",

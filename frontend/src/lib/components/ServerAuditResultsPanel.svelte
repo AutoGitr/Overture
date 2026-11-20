@@ -3,6 +3,7 @@
   import IssueRow from "./IssueRow.svelte";
   import JobPanel from "./JobPanel.svelte";
   import JobResultsList from "./JobResultsList.svelte";
+  import ServerBadge from "./ServerBadge.svelte";
   import type { AuditStatus } from "../../generated/ws";
   import { serverAuditFixState } from "../stores/serverAuditFixState.svelte";
   import {
@@ -87,8 +88,8 @@
             <span class="badge {STATUS_BADGES[result.status] ?? 'badge-muted'}">
               {AUDIT_STATUS_LABELS[result.status]}
             </span>
-            {#if result.server}
-              <span class="badge badge-muted">{result.server}</span>
+            {#if result.server_id != null}
+              <ServerBadge serverId={result.server_id} name={result.server} />
             {/if}
             {#if result.hamming != null}
               <span class="badge badge-accent">d={result.hamming}</span>

@@ -41,7 +41,11 @@ bottom, that has any:
 With nothing ticked, Automatic art is off. A group or collection can follow
 **Default** or set its own order. The media server's own art is never taken. Generating makes a poster with the
 title and a background without text, in the **Generated colours** (dark, light or
-accent). A collection whose **Background** is **Not needed** gets no
+accent). **Generated poster group** chooses whether the poster shows the
+collection's group above its title (**Show**, the default) or the title alone
+(**Hide**); a collection without a group shows its title alone either way. Both
+apply when Automatic art generates a poster; art generated earlier keeps how it
+was generated, and you can pick either variant in the **Poster** tab. A collection whose **Background** is **Not needed** gets no
 background: its poster completes its art, as OvertureDB's No theme completes a
 theme.
 

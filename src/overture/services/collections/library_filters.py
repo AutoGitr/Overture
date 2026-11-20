@@ -10,7 +10,6 @@ lazy from ...repositories.libraries import LibraryRepository
 lazy from ...schemas.collections import (
     CollectionFieldRead,
     CollectionLibraryCriteria,
-    FieldChoice,
     FieldCondition,
     FilterGroup,
 )
@@ -21,8 +20,6 @@ lazy from ...schemas.library_filters import (
 )
 lazy from ...utils.collection_fields import (
     FIELDS,
-    field_label,
-    field_operators,
     library_field_available,
 )
 lazy from ...utils.errors import PublicServiceError
@@ -58,21 +55,7 @@ class LibraryFilters:
         servers = sorted(self._access.configured_types())
         tmdb = self._access.app_config.tmdb_configured
         fields = [
-            CollectionFieldRead(
-                field=field,
-                label=field_label(field, available[0]),
-                kind=spec.kind,
-                operators=list(field_operators(field, smart=False)),
-                smart_operators=[],
-                local=True,
-                smart=False,
-                library_status=spec.library_only,
-                choices=[
-                    FieldChoice(value=value, label=label)
-                    for value, label in spec.choices
-                ],
-                free_values=spec.free,
-            )
+            CollectionFieldRead.of(field, available[0])
             for field, spec in FIELDS.items()
             if (
                 available := [

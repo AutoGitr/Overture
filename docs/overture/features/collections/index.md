@@ -59,7 +59,7 @@ order:
    Sonarr.
 4. **Settings**: sort and limit, Sync mode (Sync removes members that stop
    matching, Append keeps them), minimum, [Automatic art](art-and-themes.md),
-   Generated colours, Background (Not needed makes a poster complete the
+   Generated colours, Generated poster group, Background (Not needed makes a poster complete the
    collection's art), automatic theme, Request missing, Member label, Radarr or
    Sonarr tag, Plex's collection mode, filtering (smart collections only: Plex
    evaluates a smart filter, such as Unplayed, for each user; a regular

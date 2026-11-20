@@ -2,9 +2,10 @@ import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import { getJobLog } from "../../generated/rest/sdk.gen";
 import type { JobLogEntry, JobOutcome } from "../../generated/ws";
 import { sdkData } from "../rest/sdk";
+import { settingsState } from "./settingsState.svelte";
 import { errorMessage } from "../utils/errors";
 import { OUTCOMES, OUTCOME_TONES } from "../utils/jobLog";
-import type { ResultGroup } from "../utils/resultGroups";
+import { orderGroups, type ResultGroup } from "../utils/resultGroups";
 
 /** Lines fetched per request. */
 const PAGE_SIZE = 200;
@@ -42,11 +43,11 @@ export class JobLogFeed {
   readonly lines = new SvelteMap<number, JobLogEntry>();
   /** Outcomes whose lines are hidden. */
   readonly hidden = new SvelteSet<JobOutcome>();
-  /** Media servers whose lines are hidden, by name. */
-  readonly hiddenServers = new SvelteSet<string>();
+  /** Media servers whose lines are hidden, by number. */
+  readonly hiddenServers = new SvelteSet<number>();
   /** The run's lines per outcome, as its latest event counts them. */
   counts = $state<Partial<Record<JobOutcome, number>>>({});
-  /** The run's lines about each media server, per outcome. */
+  /** The run's lines about each media server, by its number, per outcome. */
   serverCounts = $state<Record<string, Partial<Record<JobOutcome, number>>>>({});
   private view: readonly [number, number] = [0, 0];
   /** The requests in flight, by page. */
@@ -69,12 +70,20 @@ export class JobLogFeed {
   /** Each media server the run's lines are about, with its count, for the log's filters. */
   get serverGroups(): ResultGroup[] {
     if (!this.runId) return [];
-    return Object.entries(this.serverCounts).map(([server, outcomes]) => ({
-      key: server,
-      label: server,
-      count: OUTCOMES.reduce((sum, outcome) => sum + (outcomes[outcome] ?? 0), 0),
-      shown: !this.hiddenServers.has(server),
-    }));
+    const groups = Object.entries(this.serverCounts).map(([key, outcomes]) => {
+      const server = settingsState.server(Number(key));
+      return {
+        key,
+        label: server?.title ?? `Server ${key}`,
+        count: OUTCOMES.reduce((sum, outcome) => sum + (outcomes[outcome] ?? 0), 0),
+        shown: !this.hiddenServers.has(Number(key)),
+        server: server?.type,
+      };
+    });
+    return orderGroups(
+      groups,
+      settingsState.servers.map((server) => String(server.id)),
+    );
   }
 
   /** Whether any filter hides lines. */
@@ -85,7 +94,8 @@ export class JobLogFeed {
   /** Whether the filters show *entry*. */
   private shows(entry: JobLogEntry): boolean {
     return (
-      !this.hidden.has(entry.outcome) && !(entry.server && this.hiddenServers.has(entry.server))
+      !this.hidden.has(entry.outcome) &&
+      !(entry.server_id != null && this.hiddenServers.has(entry.server_id))
     );
   }
 
@@ -121,7 +131,7 @@ export class JobLogFeed {
   }
 
   /** Show the lines about a media server again, or hide them, and list the lines anew. */
-  toggleServer(server: string) {
+  toggleServer(server: number) {
     if (!this.hiddenServers.delete(server)) this.hiddenServers.add(server);
     this.relist();
   }

@@ -121,9 +121,11 @@ names in [Files](files.md#where-each-asset-goes-and-how-each-server-takes-it).
 
 A run's log has a filter for each outcome it logged, and, when its lines are
 about particular media servers, one for each server, by its `MEDIA_SERVERS`
-name; each such line shows its server. Sync's lines name the server they were
-read from, and Server audit's the server compared. Server audit's results can
-be filtered by server the same way.
+name and coloured by its kind (Plex amber, Jellyfin purple, Emby green); each
+such line shows its server the same way. Sync's lines name the server they
+were read from, including the collections it reads, and Server audit's and its
+fixes' the server compared. Server audit's results can be filtered by server
+the same way. A renamed server keeps its lines and filters.
 
 ## Schedules
 

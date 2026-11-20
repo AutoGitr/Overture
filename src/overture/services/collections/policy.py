@@ -47,6 +47,8 @@ class CollectionPolicy:
     #: The sources Automatic art tries, first to last.
     auto_art: tuple[AutoArtSource, ...]
     generated_style: ArtStyle
+    #: Generated posters show the collection's group above its title.
+    generated_heading: bool
     #: The OvertureDB poster styles taken, first to last.
     overturedb_posters: tuple[CollectionPosterStyle, ...]
     backgrounds: bool
@@ -112,6 +114,11 @@ def resolve_policy(
             rule.generated_style if rule else None,
             group.generated_style if group else None,
             defaults.collection_generated_style,
+        ),
+        generated_heading=inherit(
+            rule.generated_heading if rule else None,
+            group.generated_heading if group else None,
+            defaults.collection_generated_heading,
         ),
         overturedb_posters=tuple(
             CollectionPosterStyle(style)

@@ -35,7 +35,9 @@ _CASES = [
 ]
 
 
-def _round_trip(criteria: FilterGroup, media_type: MediaType) -> FilterGroup:
+def _round_trip(
+    criteria: FilterGroup, media_type: MediaType, name: str = "Action"
+) -> FilterGroup:
     tags = {
         plex_field(condition.field).key_for(media_type)
         for condition in criteria.field_conditions()
@@ -46,11 +48,11 @@ def _round_trip(criteria: FilterGroup, media_type: MediaType) -> FilterGroup:
         media_type=media_type,
         order=CollectionOrder.ADDED_DESC,
         limit=25,
-        choices={key: choice_keys([("12", "Action")]) for key in tags},
+        choices={key: choice_keys([("12", name)]) for key in tags},
         labels={},
     )
     decompiled = decompile_plex_query(
-        query, media_type=media_type, names={key: {"12": "Action"} for key in tags}
+        query, media_type=media_type, names={key: {"12": name} for key in tags}
     )
     assert (decompiled.order, decompiled.limit) == (CollectionOrder.ADDED_DESC, 25)
     return decompiled.criteria
@@ -65,6 +67,8 @@ def test_every_compilable_field_reads_back_as_written(
         operator = FilterOperator.IS
     if plex_field(field).keyed:
         value = "12"
+    if FIELDS[field].by_id:
+        value = "7"
     if field is FilterField.DECADE:
         # A decade compiles to a year range; only "is" reads back as a decade.
         operator, value = FilterOperator.IS, 1990
@@ -72,7 +76,7 @@ def test_every_compilable_field_reads_back_as_written(
         conditions=[FieldCondition(field=field, operator=operator, value=value)]
     )
 
-    assert _round_trip(criteria, media_type) == criteria
+    assert _round_trip(criteria, media_type, str(value)) == criteria
 
 
 def test_groups_decades_and_negated_tags_read_back() -> None:

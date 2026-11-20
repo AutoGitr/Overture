@@ -164,14 +164,6 @@ class PhashService:
         detail_distance = (_parse_phash(hash1) ^ _parse_phash(hash2)).bit_count()
         return (detail_distance + DISTANCE_SCALE - 1) // DISTANCE_SCALE
 
-    @staticmethod
-    def is_valid_fingerprint(value: str | None) -> bool:
-        """Return whether a stored pHash has the current fingerprint shape."""
-        try:
-            return value is not None and _parse_phash(value) >= 0
-        except ValueError:
-            return False
-
     def shutdown(self) -> None:
         """Prevent admission and terminate owned processes; safe to repeat."""
         self._closed = True

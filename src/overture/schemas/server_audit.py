@@ -6,7 +6,7 @@ lazy from typing import Literal, Self
 lazy from pydantic import Field, model_validator
 
 lazy from ..domain import ArtType, ServerAsset
-lazy from ..jobs.progress_log import JobOutcome
+lazy from ..jobs.progress_log import JobOutcome, LogServer
 lazy from .base import PublicText, StrictBaseModel
 lazy from .common import JobEnvelope, MediaFolderScope
 lazy from .validators import UniqueList
@@ -160,6 +160,13 @@ class ServerAuditResult(StrictBaseModel):
         default=None,
         description="Why the last fix failed, or how the server still differs.",
     )
+
+    @property
+    def log_server(self) -> LogServer | None:
+        """The server compared, as the job log names it."""
+        if self.server_id is None or self.server is None:
+            return None
+        return LogServer(self.server_id, self.server)
 
 
 class ServerAuditProgressEvent(JobEnvelope):

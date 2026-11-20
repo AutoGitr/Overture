@@ -71,38 +71,18 @@ def test_hamming_distance_rejects_non_detailed_fingerprints() -> None:
         )
 
 
-def test_is_valid_fingerprint_accepts_valid_hex_and_rejects_invalid() -> None:
-    assert PhashService.is_valid_fingerprint("0123456789abcdef" * 4) is True
-    assert PhashService.is_valid_fingerprint("ABCDEF0123456789" * 4) is True
-    # A fingerprint of an earlier, smaller shape is computed again.
-    assert PhashService.is_valid_fingerprint("0123456789abcdef") is False
-    assert PhashService.is_valid_fingerprint("a" * PHASH_HEX_LENGTH) is True
-
-    assert PhashService.is_valid_fingerprint(None) is False
-    assert PhashService.is_valid_fingerprint("") is False
-    assert PhashService.is_valid_fingerprint("0" * (PHASH_HEX_LENGTH - 1)) is False
-    assert PhashService.is_valid_fingerprint("0" * (PHASH_HEX_LENGTH + 1)) is False
-    assert PhashService.is_valid_fingerprint("g" * PHASH_HEX_LENGTH) is False
-    assert PhashService.is_valid_fingerprint("-00000000000001") is False
-    assert PhashService.is_valid_fingerprint("+00000000000001") is False
-    assert PhashService.is_valid_fingerprint(" 12345678901234") is False
-    assert PhashService.is_valid_fingerprint("not_a_phash_val!") is False
-
-
 def test_computed_fingerprint_contains_detailed_phash() -> None:
     buffer_white = io.BytesIO()
     Image.new("RGB", (32, 32), "white").save(buffer_white, format="PNG")
     white_hash = compute_phash_from_bytes(buffer_white.getvalue())
 
     assert len(white_hash) == PHASH_HEX_LENGTH
-    assert PhashService.is_valid_fingerprint(white_hash) is True
 
     buffer_black = io.BytesIO()
     Image.new("RGB", (32, 32), "black").save(buffer_black, format="PNG")
     black_hash = compute_phash_from_bytes(buffer_black.getvalue())
 
     assert len(black_hash) == PHASH_HEX_LENGTH
-    assert PhashService.is_valid_fingerprint(black_hash) is True
     # Solid black and solid white differ only in DC component vs background
     assert PhashService.hamming_distance(white_hash, black_hash) == 1
 

@@ -6,6 +6,7 @@ lazy from typing import Any
 
 lazy from ..config import MediaServerConfig, Settings
 lazy from ..domain import ArtType, ServerType, library_parts
+lazy from ..jobs.progress_log import LogServer
 lazy from ..utils.errors import PublicServiceError
 lazy from .adapters import ServerSection, ServerWebLinks
 lazy from .base import BaseMediaServerProvider
@@ -24,6 +25,12 @@ NO_MEDIA_SERVER = "No media server is configured"
 type CollectionProvider = BaseMediaServerProvider[Any]
 #: Any configured server's provider.
 type Provider = BaseMediaServerProvider[Any]
+
+
+def log_server(provider: Provider) -> LogServer:
+    """The server *provider* talks to, as job log lines about it name it."""
+    return LogServer(provider.server_id, provider.server.title)
+
 
 #: The provider class that adapts each media server.
 _PROVIDERS: frozendict[

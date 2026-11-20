@@ -20,7 +20,7 @@ lazy from ..ws.events import validate_event_payload
 lazy from . import results as job_results
 lazy from .kinds import INTERRUPTED_MESSAGE, JOB_STREAMED_KEYS
 lazy from .lifecycle import ManagedJobLifecycle, label, publish_job_lifecycle
-lazy from .progress_log import JobLogEntry, JobOutcome, log_entry
+lazy from .progress_log import JobLogEntry, JobOutcome, LogServer, log_entry
 lazy from .tally import JobTally
 
 #: Seconds between persisted summaries of progress that brings no new results.
@@ -57,7 +57,7 @@ class JobPersistence:
         self.run_id = uuid4().hex
         self.log_total = 0
         self.log_outcomes: Counter[JobOutcome] = Counter()
-        self.log_servers: defaultdict[str, Counter[JobOutcome]] = defaultdict(Counter)
+        self.log_servers: defaultdict[int, Counter[JobOutcome]] = defaultdict(Counter)
         self._log: list[dict[str, Any]] = []
         self._summarised_at: float | None = None
 
@@ -66,8 +66,8 @@ class JobPersistence:
         self._log.append(entry.model_dump(mode="json"))
         self.log_total += 1
         self.log_outcomes[entry.outcome] += 1
-        if entry.server is not None:
-            self.log_servers[entry.server][entry.outcome] += 1
+        if entry.server_id is not None:
+            self.log_servers[entry.server_id][entry.outcome] += 1
 
     async def record(
         self,
@@ -253,14 +253,14 @@ class ManagedJob[TallyT: JobTally]:
         *,
         count: int = 1,
         finished: bool = True,
-        server: str | None = None,
+        server: LogServer | None = None,
         **payload: Any,
     ) -> None:
         """Write one outcome for *count* targets to the log and count it.
 
         *finished* says the line is the target's final word in this run, so it
         also advances ``done``; a download's later outcome passes ``False``.
-        *server* names the media server the line is about, if it is about one.
+        *server* is the media server the line is about, if it is about one.
         """
         self.tally.count(outcome, count)
         if finished:

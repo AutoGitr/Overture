@@ -101,6 +101,15 @@
   --asset-theme: oklch(75% 0.15 350);
   --asset-theme-muted: oklch(from var(--asset-theme) l c h / 0.14);
 
+  /* -- Colors: Media server kinds, after each server's own brand: Plex's
+     amber, Jellyfin's purple and Emby's green -- */
+  --server-plex: oklch(78% 0.15 78);
+  --server-jellyfin: oklch(72% 0.15 310);
+  --server-emby: oklch(74% 0.17 145);
+  --server-plex-muted: oklch(from var(--server-plex) l c h / 0.14);
+  --server-jellyfin-muted: oklch(from var(--server-jellyfin) l c h / 0.14);
+  --server-emby-muted: oklch(from var(--server-emby) l c h / 0.14);
+
   /* -- Typography -- */
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
@@ -219,6 +228,12 @@
   --info-muted: oklch(from var(--info) l c h / 0.11);
   --violet-muted: oklch(from var(--violet) l c h / 0.11);
   --asset-theme-muted: oklch(from var(--asset-theme) l c h / 0.11);
+  --server-plex: oklch(53% 0.13 70);
+  --server-jellyfin: oklch(50% 0.18 310);
+  --server-emby: oklch(50% 0.15 145);
+  --server-plex-muted: oklch(from var(--server-plex) l c h / 0.11);
+  --server-jellyfin-muted: oklch(from var(--server-jellyfin) l c h / 0.11);
+  --server-emby-muted: oklch(from var(--server-emby) l c h / 0.11);
 
   --line-subtle: oklch(35% 0.03 84 / 0.11);
   --line-muted: oklch(35% 0.03 84 / 0.2);

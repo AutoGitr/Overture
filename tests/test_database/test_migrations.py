@@ -1761,3 +1761,216 @@ def test_job_log_lines_keep_their_lines_and_name_no_server() -> None:
             ).all() == [(0, "Added")]
     finally:
         engine.dispose()
+
+
+def test_fingerprints_of_an_earlier_format_are_cleared_and_current_ones_kept() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "b9e2f4a7c613")
+            conn.exec_driver_sql(
+                "INSERT INTO media_items (id, media_type, title, monitored, "
+                "theme_provenance_cleared) VALUES (1, 'movie', 'Alien', 1, 0)"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO art_slots (id, media_item_id, art_type, file_hash, "
+                "phash, generated_title_only) VALUES "
+                "(1, 1, 'poster', 'p', ?, 0), (2, 1, 'background', 'b', ?, 0)",
+                ("0" * 16, "a" * 64),
+            )
+
+            command.upgrade(config, "c4f8a2e6b913")
+
+            assert conn.exec_driver_sql(
+                "SELECT id, phash FROM art_slots ORDER BY id"
+            ).all() == [(1, None), (2, "a" * 64)]
+
+            command.downgrade(config, "b9e2f4a7c613")
+            assert conn.exec_driver_sql(
+                "SELECT id, phash FROM art_slots ORDER BY id"
+            ).all() == [(1, None), (2, "a" * 64)]
+    finally:
+        engine.dispose()
+
+
+def _collection_condition(value: str, operator: str = "is") -> dict[str, object]:
+    return {
+        "kind": "field",
+        "field": "collection",
+        "operator": operator,
+        "value": value,
+    }
+
+
+def test_collection_conditions_name_collections_by_id_and_by_title_again() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "c4f8a2e6b913")
+            conn.exec_driver_sql(
+                "INSERT INTO media_servers (id, key, title, server_type, identity, "
+                "position) VALUES (1, 'plex', 'Plex', 'plex', 'plex:a', 0)"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO libraries (id, media_type, server_id, title) VALUES "
+                "('1:1', 'movie', 1, 'Movies'), ('1:2', 'movie', 1, 'Films')"
+            )
+            for collection_id, title in ((3, "Top"), (4, "Saga"), (5, "Saga")):
+                conn.exec_driver_sql(
+                    "INSERT INTO media_collections (id, title, kind, order_type, "
+                    "visible_home, visible_shared, visible_library, child_count, "
+                    "monitored, deselected, unsynced, last_synced_at) VALUES "
+                    "(?, ?, 'regular', 'release.asc', 0, 0, 0, 0, 1, 0, 0, "
+                    "'2026-11-18')",
+                    (collection_id, title),
+                )
+            criteria = {
+                "mode": "all",
+                "conditions": [
+                    _collection_condition("top"),
+                    _collection_condition("Saga", "is_not"),
+                    _collection_condition("Gone"),
+                ],
+                "groups": [],
+            }
+            for part_id, collection_id, library_id, stored in (
+                (1, 3, "1:1", json.dumps(criteria)),
+                (2, 4, "1:1", None),
+                (3, 5, "1:2", None),
+            ):
+                conn.exec_driver_sql(
+                    "INSERT INTO collection_libraries (id, collection_id, "
+                    "library_id, media_type, server_id, criteria) VALUES "
+                    "(?, ?, ?, 'movie', 1, ?)",
+                    (part_id, collection_id, library_id, stored),
+                )
+            conn.exec_driver_sql(
+                "INSERT INTO saved_filters (id, name, criteria, created_at, "
+                "updated_at) VALUES (1, 'Sagas', ?, '2026-11-18', '2026-11-18')",
+                (json.dumps({"conditions": [_collection_condition("saga")]}),),
+            )
+
+            command.upgrade(config, "d7b3e9a1c524")
+
+            [part] = conn.exec_driver_sql(
+                "SELECT criteria FROM collection_libraries WHERE id = 1"
+            ).one()
+            # Only collection 4 named Saga is in the library.
+            assert json.loads(part) == {
+                "mode": "all",
+                "conditions": [
+                    _collection_condition("3"),
+                    _collection_condition("4", "is_not"),
+                    _collection_condition("0"),
+                ],
+                "groups": [],
+            }
+            [saved] = conn.exec_driver_sql("SELECT criteria FROM saved_filters").one()
+            assert json.loads(saved) == {
+                "conditions": [],
+                "groups": [
+                    {
+                        "mode": "any",
+                        "conditions": [
+                            _collection_condition("4"),
+                            _collection_condition("5"),
+                        ],
+                        "groups": [],
+                    }
+                ],
+            }
+
+            command.downgrade(config, "c4f8a2e6b913")
+            [part] = conn.exec_driver_sql(
+                "SELECT criteria FROM collection_libraries WHERE id = 1"
+            ).one()
+            assert [
+                condition["value"] for condition in json.loads(part)["conditions"]
+            ] == ["Top", "Saga", "0"]
+    finally:
+        engine.dispose()
+
+
+def test_job_log_lines_name_their_server_by_number_and_by_name_again() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "d7b3e9a1c524")
+            conn.exec_driver_sql(
+                "INSERT INTO media_servers (id, key, title, server_type, identity, "
+                "position) VALUES (2, 'plex', 'Plex', 'plex', 'plex:a', 0)"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO job_runs (id, kind, started_at, event, summary, total, "
+                "log_total, cleared) VALUES ('run', 'sync', '2026-11-18', "
+                "'sync.completed', '{}', 0, 2, 0)"
+            )
+            for ordinal, server in ((0, "Plex"), (1, None)):
+                conn.exec_driver_sql(
+                    "INSERT INTO job_log_lines (run_id, ordinal, outcome, server, "
+                    "entry) VALUES ('run', ?, 'Added', ?, ?)",
+                    (
+                        ordinal,
+                        server,
+                        json.dumps({"outcome": "Added", "server": server}),
+                    ),
+                )
+
+            command.upgrade(config, "e2a6c8f4d137")
+
+            rows = conn.exec_driver_sql(
+                "SELECT ordinal, server_id, entry FROM job_log_lines ORDER BY ordinal"
+            ).all()
+            assert [(row[0], row[1], json.loads(row[2])) for row in rows] == [
+                (0, 2, {"outcome": "Added", "server": "Plex", "server_id": 2}),
+                (1, None, {"outcome": "Added", "server": None}),
+            ]
+
+            command.downgrade(config, "d7b3e9a1c524")
+            rows = conn.exec_driver_sql(
+                "SELECT ordinal, server, entry FROM job_log_lines ORDER BY ordinal"
+            ).all()
+            assert [(row[0], row[1], json.loads(row[2])) for row in rows] == [
+                (0, "Plex", {"outcome": "Added", "server": "Plex"}),
+                (1, None, {"outcome": "Added", "server": None}),
+            ]
+    finally:
+        engine.dispose()
+
+
+def test_generated_posters_show_the_group_until_a_tier_hides_it() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "e2a6c8f4d137")
+            conn.exec_driver_sql(
+                "INSERT INTO collection_groups (id, name, separator) "
+                "VALUES (1, 'Sagas', 0)"
+            )
+            settings_columns = {
+                column["name"] for column in inspect(conn).get_columns("app_settings")
+            }
+
+            command.upgrade(config, "f5d1b7e3a982")
+
+            assert conn.exec_driver_sql(
+                "SELECT generated_heading FROM collection_groups"
+            ).all() == [(None,)]
+            assert "collection_generated_heading" in {
+                column["name"] for column in inspect(conn).get_columns("app_settings")
+            }
+
+            command.downgrade(config, "e2a6c8f4d137")
+            assert {
+                column["name"] for column in inspect(conn).get_columns("app_settings")
+            } == settings_columns
+    finally:
+        engine.dispose()

@@ -723,15 +723,19 @@ class CollectionRepository:
         )
         return dict(rows.all())
 
-    async def titles_by_item(
+    async def memberships_by_item(
         self, library_id: str, excluding: int | None = None
     ) -> dict[int, list[str]]:
-        """The titles of the listed collections each item of a library belongs to.
+        """The listed collections each item of a library belongs to, by ID.
 
-        The collection *excluding* names is left out.
+        The IDs are strings, as criteria hold them. The collection *excluding*
+        names is left out.
         """
         stmt = (
-            select(col(MediaCollectionMember.media_item_id), col(MediaCollection.title))
+            select(
+                col(MediaCollectionMember.media_item_id),
+                col(MediaCollectionMember.collection_id),
+            )
             .join(
                 MediaCollection,
                 col(MediaCollection.id) == col(MediaCollectionMember.collection_id),
@@ -748,10 +752,39 @@ class CollectionRepository:
         )
         if excluding is not None:
             stmt = stmt.where(col(MediaCollection.id) != excluding)
-        titles: dict[int, list[str]] = {}
-        for item_id, title in await self.session.exec(stmt):
-            titles.setdefault(item_id, []).append(title)
-        return titles
+        memberships: dict[int, list[str]] = {}
+        for item_id, collection_id in await self.session.exec(stmt):
+            memberships.setdefault(item_id, []).append(str(collection_id))
+        return memberships
+
+    async def titles_of(self, collection_ids: Iterable[int]) -> dict[int, str]:
+        """The titles of the collections *collection_ids* names that exist."""
+        ids = set(collection_ids)
+        if not ids:
+            return {}
+        rows = await self.session.exec(
+            select(col(MediaCollection.id), col(MediaCollection.title)).where(
+                col(MediaCollection.id).in_(ids)
+            )
+        )
+        return {collection_id: title for collection_id, title in rows if collection_id}
+
+    async def server_copies(self, server_id: int) -> dict[str, int]:
+        """The collections with a copy on a server, by the copy's server ID."""
+        rows = await self.session.exec(
+            select(
+                col(CollectionLibrary.server_item_id),
+                col(CollectionLibrary.collection_id),
+            ).where(
+                col(CollectionLibrary.server_id) == server_id,
+                col(CollectionLibrary.server_item_id).is_not(None),
+            )
+        )
+        return {
+            server_item_id: collection_id
+            for server_item_id, collection_id in rows
+            if server_item_id
+        }
 
     async def managed_ids(self, collection_ids: list[int]) -> set[int]:
         """The given collections Overture manages, which are those with a rule."""
