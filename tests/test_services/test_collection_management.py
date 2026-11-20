@@ -442,6 +442,8 @@ class Art(CollectionArtService):
         self.urls: list[str | None] = []
         self.selections: list[ArtType] = []
         self.generated: list[ArtType] = []
+        #: Whether each generated poster showed its title alone.
+        self.title_only: list[bool] = []
         self.removed: list[tuple[int, ArtType | None, AssetRemoval]] = []
         self.fail = False
 
@@ -469,6 +471,7 @@ class Art(CollectionArtService):
         self.urls.append(body.url)
         if body.generated is not None:
             self.generated.append(art_type)
+            self.title_only.append(body.title_only)
         return StatusResponse(status=Status.OK)
 
     @override
@@ -3967,7 +3970,10 @@ async def test_automatic_art_keeps_an_upload_and_generates_a_missing_poster(
     manager.art.fail = True
     manager.art.selections.clear()
     await manager.service.groups.save_policy(
-        "Ungrouped", CollectionGroupPolicy(auto_art=[AutoArtSource.GENERATE])
+        "Ungrouped",
+        CollectionGroupPolicy(
+            auto_art=[AutoArtSource.GENERATE], generated_title_only=True
+        ),
     )
     async with database.write_session() as session:
         row = await CollectionRepository(session).get(identity)
@@ -3978,6 +3984,8 @@ async def test_automatic_art_keeps_an_upload_and_generates_a_missing_poster(
     await manager.service.rules.sync(identity)
     assert manager.art.selections == [ArtType.POSTER]
     assert manager.art.generated == [ArtType.POSTER]
+    # The group says its generated posters show the title alone.
+    assert manager.art.title_only == [True]
 
 
 @pytest.mark.parametrize(

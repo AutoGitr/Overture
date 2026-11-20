@@ -10,11 +10,7 @@ export type SelectableServerAuditResult = Selectable<ServerAuditResult>;
 /** The group of the results about one media server, named as it is configured now. */
 function serverGroup(serverId: number, name: string | null | undefined) {
   const server = settingsState.server(serverId);
-  return [
-    `server:${serverId}`,
-    server?.title ?? name ?? `Server ${serverId}`,
-    server?.type,
-  ] as const;
+  return [`server:${serverId}`, settingsState.serverTitle(serverId, name), server?.type] as const;
 }
 
 class ServerAuditState extends CollectingJobState<ServerAuditProgressEvent, ServerAuditResult> {

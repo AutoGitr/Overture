@@ -663,9 +663,9 @@ class CollectionPolicyBase(StrictBaseModel):
     auto_art: UniqueList[AutoArtSource] | None = None
     #: The colours of art Overture generates for it automatically.
     generated_style: ArtStyle | None = None
-    #: Whether posters generated for it automatically show its group above
-    #: its title.
-    generated_heading: bool | None = None
+    #: Whether posters generated for it automatically show its title alone,
+    #: without its group.
+    generated_title_only: bool | None = None
     #: The OvertureDB poster styles it takes, first to last; the first is what
     #: a poster chosen for it is contributed as unless OvertureDB holds it.
     overturedb_posters: UniqueList[CollectionPosterStyle] | None = None

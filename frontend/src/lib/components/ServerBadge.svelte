@@ -16,7 +16,7 @@
 
 <!-- A media server, named as MEDIA_SERVERS names it now and coloured by its kind. -->
 <span class={["server-badge", server?.type]} title={server ? `${server.title} (${server.type})` : undefined}
-  >{server?.title ?? name ?? `Server ${serverId}`}</span
+  >{settingsState.serverTitle(serverId, name)}</span
 >
 
 <style>

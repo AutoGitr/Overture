@@ -16,6 +16,7 @@
   import { MEDIA_ICONS } from "../utils/mediaIcons";
   import type { CollectionEditor } from "../utils/collectionForms.svelte";
   import { librariesByServer } from "../utils/libraries.svelte";
+  import ServerBadge from "./ServerBadge.svelte";
   import ImageGrid from "./ImageGrid.svelte";
   import PosterCard from "./PosterCard.svelte";
 
@@ -66,14 +67,19 @@
   let memberGroups = $derived(
     [
       ...librariesByServer(collectionLibraries).flatMap((group) =>
-        group.libraries.map((library) => ({ ...library, server: group.label })),
+        group.libraries.map((library) => ({
+          ...library,
+          server: group.label,
+          serverId: group.server.id,
+        })),
       ),
-      { id: "", title: "Other libraries", server: "" },
+      { id: "", title: "Other libraries", server: "", serverId: null },
     ]
       .map((library) => ({
         id: library.id,
         title: library.title,
         server: library.server,
+        serverId: library.serverId,
         members: held.filter((member) => libraryOf(member) === library.id),
       }))
       .filter((group) => group.members.length > 0),
@@ -147,8 +153,8 @@
 
       {#if currentMembers.length}
         {#each memberGroups as group, index (group.id)}
-          {#if group.server && group.server !== memberGroups[index - 1]?.server}
-            <h4 class="caps-label">{group.server}</h4>
+          {#if group.server && group.serverId != null && group.server !== memberGroups[index - 1]?.server}
+            <h4 class="server-heading"><ServerBadge serverId={group.serverId} /></h4>
           {/if}
           <section
             class="member-group"
@@ -271,6 +277,11 @@
 </section>
 
 <style>
+  .server-heading {
+    display: flex;
+    margin: 0;
+  }
+
   .add-member {
     display: flex;
     flex-direction: column;

@@ -45,6 +45,14 @@ class SettingsState {
   }
 
   /**
+   * How the server the database numbers *id* is named: as configured now, else
+   * by the *name* it had when something recorded it, else by its number.
+   */
+  serverTitle(id: number, name?: string | null): string {
+    return this.server(id)?.title ?? name ?? `Server ${id}`;
+  }
+
+  /**
    * How a library is named to users: after its server too when more than one
    * is configured, as libraries of several servers can share a title.
    */

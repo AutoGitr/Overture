@@ -17,8 +17,8 @@ export const DEFAULT_APP_SETTINGS = {
   collection_delete_below_minimum: true,
   collection_delete_when_inactive: true,
   collection_filtering_default: "user",
-  collection_generated_heading: true,
   collection_generated_style: "dark",
+  collection_generated_title_only: false,
   collection_import_unmanaged: true,
   collection_minimum_items: 2,
   collection_mode_default: "default",
@@ -66,6 +66,7 @@ export const DIMENSION_LABELS = {"decade": "Decades", "year": "Years", "genre": 
 export const ITEM_ART_TYPES = ["poster", "background"] as const;
 export const UNMANAGED_GROUP = "Unmanaged";
 export const UNGROUPED_GROUP = "Ungrouped";
+export const POLICY_SETTINGS = {"sync_mode": "collection_sync_mode", "minimum_items": "collection_minimum_items", "delete_below_minimum": "collection_delete_below_minimum", "auto_art": "collection_auto_art", "generated_style": "collection_generated_style", "generated_title_only": "collection_generated_title_only", "overturedb_posters": "collection_overturedb_posters", "backgrounds": "collection_backgrounds", "themes": "collection_themes", "auto_match_theme": "collection_auto_match_theme", "collection_mode": "collection_mode_default", "order_type": "collection_order_default", "collection_filtering": "collection_filtering_default", "visible_home": "collection_visible_home", "visible_shared": "collection_visible_shared", "visible_library": "collection_visible_library", "sort_title_format": "collection_sort_title_format", "summary_format": "collection_summary_format", "delete_when_inactive": "collection_delete_when_inactive", "request_missing": "collection_request_missing"} as const;
 export const ASPECT_RATIOS = {"poster": 0.6666666666666666, "background": 1.7777777777777777} as const;
 export const ASPECT_TOLERANCES = {"strict": 0.01, "lenient": 0.05} as const;
 export const SERVER_ASSETS = ["poster", "background", "season_poster", "theme"] as const;

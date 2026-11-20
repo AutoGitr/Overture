@@ -40,8 +40,8 @@ class PolicyOverrides(SQLModel):
     #: The sources Automatic art tries, first to last; empty turns it off.
     auto_art: list[AutoArtSource] | None = Field(default=None, sa_type=JSON)
     generated_style: ArtStyle | None = Field(default=None, sa_type=enum_type(ArtStyle))
-    #: Generated posters show the collection's group above its title.
-    generated_heading: bool | None = None
+    #: Generated posters show the collection's title alone, without its group.
+    generated_title_only: bool | None = None
     #: The OvertureDB poster styles taken, first to last; empty takes none.
     overturedb_posters: list[CollectionPosterStyle] | None = Field(
         default=None, sa_type=JSON

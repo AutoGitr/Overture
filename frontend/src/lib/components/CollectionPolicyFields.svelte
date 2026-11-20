@@ -49,6 +49,11 @@
     [true, "Wanted"],
     [false, "Not needed"],
   ] as const;
+  /** Generated posters show the group unless they show the title alone. */
+  const GROUP_SHOWN = [
+    [false, "Show"],
+    [true, "Hide"],
+  ] as const;
   const SHOW_HIDE = [
     [true, "Show"],
     [false, "Hide"],
@@ -166,9 +171,9 @@
   <InheritedSelect
     label="Generated poster group"
     {inherits}
-    bind:value={policy.generated_heading}
-    inherited={defaults?.generated_heading}
-    options={SHOW_HIDE}
+    bind:value={policy.generated_title_only}
+    inherited={defaults?.generated_title_only}
+    options={GROUP_SHOWN}
     hint="Whether a poster Automatic art generates shows the collection's group above its title. A collection with no group shows its title alone either way."
   />
   <InheritedOrder

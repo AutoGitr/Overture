@@ -1,12 +1,14 @@
 """Collection policy resolution, from explicit choices to global defaults."""
 
-lazy from dataclasses import dataclass
+lazy from dataclasses import dataclass, fields
+lazy from typing import Any
 
 lazy from ...db.models.collection_group import CollectionGroup
 lazy from ...db.models.collection_rule import CollectionRule
 lazy from ...db.models.settings import AppSettings
 lazy from ...domain import (
     DEFAULT_COLLECTION_ORDER,
+    POLICY_SETTINGS,
     SEPARATED_SORT_TITLE,
     ArtStyle,
     AutoArtSource,
@@ -47,8 +49,8 @@ class CollectionPolicy:
     #: The sources Automatic art tries, first to last.
     auto_art: tuple[AutoArtSource, ...]
     generated_style: ArtStyle
-    #: Generated posters show the collection's group above its title.
-    generated_heading: bool
+    #: Generated posters show the collection's title alone, without its group.
+    generated_title_only: bool
     #: The OvertureDB poster styles taken, first to last.
     overturedb_posters: tuple[CollectionPosterStyle, ...]
     backgrounds: bool
@@ -84,145 +86,48 @@ def resolve_policy(
     group: CollectionGroup | CollectionGroupPolicy | None = None,
     rule: RuleOrPolicy = None,
 ) -> CollectionPolicy:
-    """Resolve nullable rule, group and application defaults in that order."""
-    return CollectionPolicy(
-        sync_mode=inherit(
-            rule.sync_mode if rule else None,
-            group.sync_mode if group else None,
-            defaults.collection_sync_mode,
-        ),
-        minimum_items=inherit(
-            rule.minimum_items if rule else None,
-            group.minimum_items if group else None,
-            defaults.collection_minimum_items,
-        ),
-        delete_below_minimum=inherit(
-            rule.delete_below_minimum if rule else None,
-            group.delete_below_minimum if group else None,
-            defaults.collection_delete_below_minimum,
-        ),
-        # JSON columns load their values as plain strings.
-        auto_art=tuple(
-            AutoArtSource(source)
-            for source in inherit(
-                rule.auto_art if rule else None,
-                group.auto_art if group else None,
-                defaults.collection_auto_art,
+    """Resolve nullable rule, group and application defaults in that order.
+
+    A setting with a global default (:data:`POLICY_SETTINGS`) always resolves
+    to a value; the others stay unset unless a group or collection sets them.
+    """
+
+    def tiers(name: str) -> list[Any]:
+        return [
+            getattr(tier, name) if tier is not None else None for tier in (rule, group)
+        ]
+
+    values: dict[str, Any] = {
+        name: inherit(*tiers(name), getattr(defaults, POLICY_SETTINGS[name]))
+        if name in POLICY_SETTINGS
+        else inherit_optional(*tiers(name))
+        for name in _POLICY_FIELDS
+    }
+    # JSON columns load their values as plain strings.
+    values["auto_art"] = tuple(AutoArtSource(source) for source in values["auto_art"])
+    values["overturedb_posters"] = tuple(
+        CollectionPosterStyle(style) for style in values["overturedb_posters"]
+    )
+    # Plex orders a smart collection by its query, never by hand, so an
+    # inherited Custom passes to the next tier.
+    values["order_type"] = inherit(
+        rule.order_type if rule else None,
+        *(
+            order
+            for order in (
+                group.order_type if group else None,
+                defaults.collection_order_default,
+                DEFAULT_COLLECTION_ORDER,
             )
-        ),
-        generated_style=inherit(
-            rule.generated_style if rule else None,
-            group.generated_style if group else None,
-            defaults.collection_generated_style,
-        ),
-        generated_heading=inherit(
-            rule.generated_heading if rule else None,
-            group.generated_heading if group else None,
-            defaults.collection_generated_heading,
-        ),
-        overturedb_posters=tuple(
-            CollectionPosterStyle(style)
-            for style in inherit(
-                rule.overturedb_posters if rule else None,
-                group.overturedb_posters if group else None,
-                defaults.collection_overturedb_posters,
-            )
-        ),
-        backgrounds=inherit(
-            rule.backgrounds if rule else None,
-            group.backgrounds if group else None,
-            defaults.collection_backgrounds,
-        ),
-        themes=inherit(
-            rule.themes if rule else None,
-            group.themes if group else None,
-            defaults.collection_themes,
-        ),
-        auto_match_theme=inherit(
-            rule.auto_match_theme if rule else None,
-            group.auto_match_theme if group else None,
-            defaults.collection_auto_match_theme,
-        ),
-        collection_mode=inherit(
-            rule.collection_mode if rule else None,
-            group.collection_mode if group else None,
-            defaults.collection_mode_default,
-        ),
-        order_type=inherit(
-            rule.order_type if rule else None,
-            *(
-                order
-                for order in (
-                    group.order_type if group else None,
-                    defaults.collection_order_default,
-                    DEFAULT_COLLECTION_ORDER,
-                )
-                # Plex orders a smart collection by its query, never by hand,
-                # so an inherited Custom passes to the next tier.
-                if not (
-                    rule is not None and rule.smart and order is CollectionOrder.CUSTOM
-                )
-            ),
-        ),
-        collection_filtering=inherit(
-            rule.collection_filtering if rule else None,
-            group.collection_filtering if group else None,
-            defaults.collection_filtering_default,
-        ),
-        visible_home=inherit(
-            rule.visible_home if rule else None,
-            group.visible_home if group else None,
-            defaults.collection_visible_home,
-        ),
-        visible_shared=inherit(
-            rule.visible_shared if rule else None,
-            group.visible_shared if group else None,
-            defaults.collection_visible_shared,
-        ),
-        visible_library=inherit(
-            rule.visible_library if rule else None,
-            group.visible_library if group else None,
-            defaults.collection_visible_library,
-        ),
-        sort_title_format=inherit(
-            rule.sort_title_format if rule else None,
-            group.sort_title_format if group else None,
-            defaults.collection_sort_title_format
-            or (SEPARATED_SORT_TITLE if group is not None and group.separator else ""),
-        ),
-        summary_format=inherit(
-            rule.summary_format if rule else None,
-            group.summary_format if group else None,
-            defaults.collection_summary_format,
-        ),
-        active_start_mmdd=inherit_optional(
-            rule.active_start_mmdd if rule else None,
-            group.active_start_mmdd if group else None,
-        ),
-        active_end_mmdd=inherit_optional(
-            rule.active_end_mmdd if rule else None,
-            group.active_end_mmdd if group else None,
-        ),
-        delete_when_inactive=inherit(
-            rule.delete_when_inactive if rule else None,
-            group.delete_when_inactive if group else None,
-            defaults.collection_delete_when_inactive,
-        ),
-        request_missing=inherit(
-            rule.request_missing if rule else None,
-            group.request_missing if group else None,
-            defaults.collection_request_missing,
-        ),
-        member_label=inherit_optional(
-            rule.member_label if rule else None,
-            group.member_label if group else None,
-        ),
-        arr_tag=inherit_optional(
-            rule.arr_tag if rule else None,
-            group.arr_tag if group else None,
-        ),
-        home_order=inherit_optional(
-            rule.home_order if rule else None,
-            group.home_order if group else None,
+            if not (rule is not None and rule.smart and order is CollectionOrder.CUSTOM)
         ),
     )
+    # A group's separator sorts its collections under it unless told otherwise.
+    if not values["sort_title_format"] and group is not None and group.separator:
+        values["sort_title_format"] = inherit(
+            *tiers("sort_title_format"), SEPARATED_SORT_TITLE
+        )
+    return CollectionPolicy(**values)
+
+
+_POLICY_FIELDS = tuple(field.name for field in fields(CollectionPolicy))

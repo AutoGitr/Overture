@@ -156,14 +156,14 @@ class AutoAssets:
                 return
 
     async def _generate(self, synced: SyncedCollection, art_type: ArtType) -> None:
-        """Generate the slot's art in the policy's style, with its group if it says."""
+        """Generate the slot's art in the policy's style, as its policy titles it."""
         await self._art.apply(
             synced.collection_id,
             art_type,
             SaveCollectionArtRequest(
                 generated=synced.policy.generated_style,
                 title_only=art_type is ArtType.POSTER
-                and not synced.policy.generated_heading,
+                and synced.policy.generated_title_only,
             ),
         )
 

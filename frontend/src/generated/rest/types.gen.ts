@@ -113,11 +113,11 @@ export type AppSettingsRead = {
      */
     collection_delete_when_inactive: boolean;
     collection_filtering_default: CollectionFiltering;
-    /**
-     * Collection Generated Heading
-     */
-    collection_generated_heading: boolean;
     collection_generated_style: ArtStyle;
+    /**
+     * Collection Generated Title Only
+     */
+    collection_generated_title_only: boolean;
     /**
      * Collection Import Unmanaged
      */
@@ -309,11 +309,11 @@ export type AppSettingsUpdate = {
      */
     collection_delete_when_inactive?: boolean | null;
     collection_filtering_default?: CollectionFiltering | null;
-    /**
-     * Collection Generated Heading
-     */
-    collection_generated_heading?: boolean | null;
     collection_generated_style?: ArtStyle | null;
+    /**
+     * Collection Generated Title Only
+     */
+    collection_generated_title_only?: boolean | null;
     /**
      * Collection Import Unmanaged
      */
@@ -2085,11 +2085,11 @@ export type CollectionDefaults = {
      * Delete When Inactive
      */
     delete_when_inactive: boolean | null;
-    /**
-     * Generated Heading
-     */
-    generated_heading: boolean | null;
     generated_style: ArtStyle | null;
+    /**
+     * Generated Title Only
+     */
+    generated_title_only: boolean | null;
     /**
      * Home Order
      */
@@ -2666,11 +2666,11 @@ export type CollectionGroupPolicyInput = {
      * Delete When Inactive
      */
     delete_when_inactive?: boolean | null;
-    /**
-     * Generated Heading
-     */
-    generated_heading?: boolean | null;
     generated_style?: ArtStyle | null;
+    /**
+     * Generated Title Only
+     */
+    generated_title_only?: boolean | null;
     generator?: CollectionGeneratorInput | null;
     /**
      * Home Order
@@ -2740,11 +2740,11 @@ export type CollectionGroupPolicyOutput = {
      * Delete When Inactive
      */
     delete_when_inactive: boolean | null;
-    /**
-     * Generated Heading
-     */
-    generated_heading: boolean | null;
     generated_style: ArtStyle | null;
+    /**
+     * Generated Title Only
+     */
+    generated_title_only: boolean | null;
     generator: CollectionGeneratorOutput | null;
     /**
      * Home Order
@@ -3326,11 +3326,11 @@ export type CollectionRuleRead = {
      * Delete When Inactive
      */
     delete_when_inactive: boolean | null;
-    /**
-     * Generated Heading
-     */
-    generated_heading: boolean | null;
     generated_style: ArtStyle | null;
+    /**
+     * Generated Title Only
+     */
+    generated_title_only: boolean | null;
     /**
      * Home Order
      */
@@ -3416,11 +3416,11 @@ export type CollectionRuleWriteInput = {
      * Delete When Inactive
      */
     delete_when_inactive?: boolean | null;
-    /**
-     * Generated Heading
-     */
-    generated_heading?: boolean | null;
     generated_style?: ArtStyle | null;
+    /**
+     * Generated Title Only
+     */
+    generated_title_only?: boolean | null;
     /**
      * Home Order
      */
@@ -3497,11 +3497,11 @@ export type CollectionRuleWriteOutput = {
      * Delete When Inactive
      */
     delete_when_inactive: boolean | null;
-    /**
-     * Generated Heading
-     */
-    generated_heading: boolean | null;
     generated_style: ArtStyle | null;
+    /**
+     * Generated Title Only
+     */
+    generated_title_only: boolean | null;
     /**
      * Home Order
      */

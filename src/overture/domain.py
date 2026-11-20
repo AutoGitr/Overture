@@ -132,6 +132,33 @@ SEPARATED_SORT_TITLE = "{group} {title}"
 #: The virtual group of collections without rules; no stored group may use it.
 UNMANAGED_GROUP = "Unmanaged"
 UNGROUPED_GROUP = "Ungrouped"
+
+#: Each collection policy setting with a global default, and the application
+#: setting that holds it; the others are set per group or collection only.
+POLICY_SETTINGS: frozendict[str, str] = frozendict(
+    {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
+        "sync_mode": "collection_sync_mode",
+        "minimum_items": "collection_minimum_items",
+        "delete_below_minimum": "collection_delete_below_minimum",
+        "auto_art": "collection_auto_art",
+        "generated_style": "collection_generated_style",
+        "generated_title_only": "collection_generated_title_only",
+        "overturedb_posters": "collection_overturedb_posters",
+        "backgrounds": "collection_backgrounds",
+        "themes": "collection_themes",
+        "auto_match_theme": "collection_auto_match_theme",
+        "collection_mode": "collection_mode_default",
+        "order_type": "collection_order_default",
+        "collection_filtering": "collection_filtering_default",
+        "visible_home": "collection_visible_home",
+        "visible_shared": "collection_visible_shared",
+        "visible_library": "collection_visible_library",
+        "sort_title_format": "collection_sort_title_format",
+        "summary_format": "collection_summary_format",
+        "delete_when_inactive": "collection_delete_when_inactive",
+        "request_missing": "collection_request_missing",
+    }
+)
 #: Why a collection Overture does not manage refuses every change but adoption.
 UNMANAGED_REFUSAL = "Adopt the collection before changing it"
 

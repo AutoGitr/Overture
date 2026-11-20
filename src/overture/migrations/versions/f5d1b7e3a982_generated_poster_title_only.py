@@ -26,24 +26,24 @@ def upgrade() -> None:
     with op.batch_alter_table("app_settings") as batch:
         batch.add_column(
             sa.Column(
-                "collection_generated_heading",
+                "collection_generated_title_only",
                 sa.Boolean(),
                 nullable=False,
-                server_default=sa.true(),
+                server_default=sa.false(),
             )
         )
         # The default fills the existing row; the app writes the column itself.
-        batch.alter_column("collection_generated_heading", server_default=None)
+        batch.alter_column("collection_generated_title_only", server_default=None)
     for table in _OVERRIDES:
         with op.batch_alter_table(table) as batch:
             batch.add_column(
-                sa.Column("generated_heading", sa.Boolean(), nullable=True)
+                sa.Column("generated_title_only", sa.Boolean(), nullable=True)
             )
 
 
 def downgrade() -> None:
     for table in _OVERRIDES:
         with op.batch_alter_table(table) as batch:
-            batch.drop_column("generated_heading")
+            batch.drop_column("generated_title_only")
     with op.batch_alter_table("app_settings") as batch:
-        batch.drop_column("collection_generated_heading")
+        batch.drop_column("collection_generated_title_only")

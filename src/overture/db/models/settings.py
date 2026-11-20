@@ -71,8 +71,8 @@ class AppSettingsBase(SQLModel):
     collection_generated_style: ArtStyle = Field(
         default=ArtStyle.DARK, sa_type=enum_type(ArtStyle)
     )
-    #: Generated posters show the collection's group above its title.
-    collection_generated_heading: bool = True
+    #: Generated posters show the collection's title alone, without its group.
+    collection_generated_title_only: bool = False
     #: The OvertureDB poster styles collections take, first to last; empty
     #: takes none.
     collection_overturedb_posters: list[CollectionPosterStyle] = Field(

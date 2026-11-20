@@ -662,7 +662,7 @@ describe("collection criteria", () => {
       delete_below_minimum: null,
       auto_art: null,
       generated_style: null,
-      generated_heading: null,
+      generated_title_only: null,
       overturedb_posters: null,
       backgrounds: null,
       themes: null,

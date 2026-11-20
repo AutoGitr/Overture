@@ -9,40 +9,18 @@
   import CollectionPolicyFields from "./CollectionPolicyFields.svelte";
   import CollectionScheduleFields from "./CollectionScheduleFields.svelte";
   import type { PolicyData, ScheduleData } from "../utils/collectionForms.svelte";
+  import { POLICY_SETTINGS } from "../../generated/settings";
   import DataStatus from "./DataStatus.svelte";
   import FieldRow from "./FieldRow.svelte";
 
   let { draft = $bindable() }: { draft: AppSettingsUpdate } = $props();
   const id = $props.id();
 
-  /** Each setting's global name; groups and collections use the policy's. */
-  const GLOBAL_NAMES = {
-    sync_mode: "collection_sync_mode",
-    minimum_items: "collection_minimum_items",
-    delete_below_minimum: "collection_delete_below_minimum",
-    auto_art: "collection_auto_art",
-    generated_style: "collection_generated_style",
-    generated_heading: "collection_generated_heading",
-    overturedb_posters: "collection_overturedb_posters",
-    backgrounds: "collection_backgrounds",
-    themes: "collection_themes",
-    auto_match_theme: "collection_auto_match_theme",
-    request_missing: "collection_request_missing",
-    collection_mode: "collection_mode_default",
-    order_type: "collection_order_default",
-    collection_filtering: "collection_filtering_default",
-    visible_home: "collection_visible_home",
-    visible_shared: "collection_visible_shared",
-    visible_library: "collection_visible_library",
-    sort_title_format: "collection_sort_title_format",
-    summary_format: "collection_summary_format",
-    delete_when_inactive: "collection_delete_when_inactive",
-  } as const satisfies Partial<Record<keyof (PolicyData & ScheduleData), keyof AppSettingsUpdate>>;
   const TEXT = new Set(["sort_title_format", "summary_format"]);
 
   // Global defaults always hold a value: cleared text is empty, other blanks are ignored.
   const policy: PolicyData & ScheduleData = {};
-  for (const [name, global] of Object.entries(GLOBAL_NAMES)) {
+  for (const [name, global] of Object.entries(POLICY_SETTINGS)) {
     Object.defineProperty(policy, name, {
       enumerable: true,
       get: () => draft[global],

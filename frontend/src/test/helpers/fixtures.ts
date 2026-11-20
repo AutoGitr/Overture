@@ -238,7 +238,7 @@ export function collectionRule(overrides: Partial<CollectionRuleRead> = {}): Col
     backgrounds: null,
     themes: null,
     generated_style: null,
-    generated_heading: null,
+    generated_title_only: null,
     overturedb_posters: null,
     libraries: [
       {

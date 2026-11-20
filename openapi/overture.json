@@ -151,14 +151,14 @@
             "$ref": "#/components/schemas/CollectionFiltering",
             "default": "user"
           },
-          "collection_generated_heading": {
-            "default": true,
-            "title": "Collection Generated Heading",
-            "type": "boolean"
-          },
           "collection_generated_style": {
             "$ref": "#/components/schemas/ArtStyle",
             "default": "dark"
+          },
+          "collection_generated_title_only": {
+            "default": false,
+            "title": "Collection Generated Title Only",
+            "type": "boolean"
           },
           "collection_import_unmanaged": {
             "default": true,
@@ -411,7 +411,7 @@
           "collection_delete_below_minimum",
           "collection_auto_art",
           "collection_generated_style",
-          "collection_generated_heading",
+          "collection_generated_title_only",
           "collection_overturedb_posters",
           "collection_backgrounds",
           "collection_themes",
@@ -593,17 +593,6 @@
               }
             ]
           },
-          "collection_generated_heading": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Collection Generated Heading"
-          },
           "collection_generated_style": {
             "anyOf": [
               {
@@ -613,6 +602,17 @@
                 "type": "null"
               }
             ]
+          },
+          "collection_generated_title_only": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Generated Title Only"
           },
           "collection_import_unmanaged": {
             "anyOf": [
@@ -4348,17 +4348,6 @@
             ],
             "title": "Delete When Inactive"
           },
-          "generated_heading": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Generated Heading"
-          },
           "generated_style": {
             "anyOf": [
               {
@@ -4368,6 +4357,17 @@
                 "type": "null"
               }
             ]
+          },
+          "generated_title_only": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated Title Only"
           },
           "home_order": {
             "anyOf": [
@@ -4517,7 +4517,7 @@
           "delete_below_minimum",
           "auto_art",
           "generated_style",
-          "generated_heading",
+          "generated_title_only",
           "overturedb_posters",
           "backgrounds",
           "themes",
@@ -5819,17 +5819,6 @@
             ],
             "title": "Delete When Inactive"
           },
-          "generated_heading": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Generated Heading"
-          },
           "generated_style": {
             "anyOf": [
               {
@@ -5839,6 +5828,17 @@
                 "type": "null"
               }
             ]
+          },
+          "generated_title_only": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated Title Only"
           },
           "generator": {
             "anyOf": [
@@ -6108,17 +6108,6 @@
             ],
             "title": "Delete When Inactive"
           },
-          "generated_heading": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Generated Heading"
-          },
           "generated_style": {
             "anyOf": [
               {
@@ -6128,6 +6117,17 @@
                 "type": "null"
               }
             ]
+          },
+          "generated_title_only": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated Title Only"
           },
           "generator": {
             "anyOf": [
@@ -6292,7 +6292,7 @@
           "delete_below_minimum",
           "auto_art",
           "generated_style",
-          "generated_heading",
+          "generated_title_only",
           "overturedb_posters",
           "backgrounds",
           "themes",
@@ -7579,17 +7579,6 @@
             ],
             "title": "Delete When Inactive"
           },
-          "generated_heading": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Generated Heading"
-          },
           "generated_style": {
             "anyOf": [
               {
@@ -7599,6 +7588,17 @@
                 "type": "null"
               }
             ]
+          },
+          "generated_title_only": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated Title Only"
           },
           "home_order": {
             "anyOf": [
@@ -7808,7 +7808,7 @@
           "delete_below_minimum",
           "auto_art",
           "generated_style",
-          "generated_heading",
+          "generated_title_only",
           "overturedb_posters",
           "backgrounds",
           "themes",
@@ -7946,17 +7946,6 @@
             ],
             "title": "Delete When Inactive"
           },
-          "generated_heading": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Generated Heading"
-          },
           "generated_style": {
             "anyOf": [
               {
@@ -7966,6 +7955,17 @@
                 "type": "null"
               }
             ]
+          },
+          "generated_title_only": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated Title Only"
           },
           "home_order": {
             "anyOf": [
@@ -8250,17 +8250,6 @@
             ],
             "title": "Delete When Inactive"
           },
-          "generated_heading": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Generated Heading"
-          },
           "generated_style": {
             "anyOf": [
               {
@@ -8270,6 +8259,17 @@
                 "type": "null"
               }
             ]
+          },
+          "generated_title_only": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated Title Only"
           },
           "home_order": {
             "anyOf": [
@@ -8446,7 +8446,7 @@
           "delete_below_minimum",
           "auto_art",
           "generated_style",
-          "generated_heading",
+          "generated_title_only",
           "overturedb_posters",
           "backgrounds",
           "themes",

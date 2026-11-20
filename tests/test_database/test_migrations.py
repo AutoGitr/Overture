@@ -1962,9 +1962,9 @@ def test_generated_posters_show_the_group_until_a_tier_hides_it() -> None:
             command.upgrade(config, "f5d1b7e3a982")
 
             assert conn.exec_driver_sql(
-                "SELECT generated_heading FROM collection_groups"
+                "SELECT generated_title_only FROM collection_groups"
             ).all() == [(None,)]
-            assert "collection_generated_heading" in {
+            assert "collection_generated_title_only" in {
                 column["name"] for column in inspect(conn).get_columns("app_settings")
             }
 

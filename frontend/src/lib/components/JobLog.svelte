@@ -3,6 +3,7 @@
   import { OUTCOME_TONES, logEntryTime } from "../utils/jobLog";
   import ResultFilters from "./ResultFilters.svelte";
   import ServerBadge from "./ServerBadge.svelte";
+  import { settingsState } from "../stores/settingsState.svelte";
   import VirtualList from "./VirtualList.svelte";
 
   let { feed }: { feed: JobLogFeed } = $props();
@@ -40,7 +41,7 @@
       {#snippet row(index: number, style: string)}
         {@const entry = feed.lines.get(index)}
         {#if entry}
-          <div class="job-log-row" {style} title="{entry.server ? `${entry.server}: ` : ""}{entry.target} - {entry.reason}">
+          <div class="job-log-row" {style} title="{entry.server_id != null ? `${settingsState.serverTitle(entry.server_id, entry.server)}: ` : ""}{entry.target} - {entry.reason}">
             <time class="log-time" datetime={entry.at}>{logEntryTime(entry)}</time>
             <span class="log-outcome {OUTCOME_TONES[entry.outcome]}">{entry.outcome}</span>
             {#if entry.server_id != null}

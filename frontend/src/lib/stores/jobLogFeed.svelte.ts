@@ -74,7 +74,7 @@ export class JobLogFeed {
       const server = settingsState.server(Number(key));
       return {
         key,
-        label: server?.title ?? `Server ${key}`,
+        label: settingsState.serverTitle(Number(key)),
         count: OUTCOMES.reduce((sum, outcome) => sum + (outcomes[outcome] ?? 0), 0),
         shown: !this.hiddenServers.has(Number(key)),
         server: server?.type,
