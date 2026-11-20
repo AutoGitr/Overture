@@ -8,9 +8,9 @@ lazy import httpx2
 lazy import pytest
 lazy from PIL import Image
 
-lazy import overture.utils.image as image_mod
+lazy import overture.utils.image_fetch as image_mod
 lazy from overture.utils import rate_limit
-lazy from overture.utils.image import (
+lazy from overture.utils.image_fetch import (
     MAX_IMAGE_BYTES,
     FetchedImage,
     RateLimitedError,

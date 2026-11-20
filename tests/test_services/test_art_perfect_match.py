@@ -12,8 +12,8 @@ lazy from overture.services.art import matcher_cache
 lazy from overture.services.art import perfect_match as module
 lazy from overture.services.art.matcher_cache import ArtMatcherCache
 lazy from overture.services.art.phash import PHASH_HEX_LENGTH
-lazy from overture.utils.file import compute_bytes_hash
-lazy from overture.utils.image import FetchedImage
+lazy from overture.utils.hashing import compute_bytes_hash
+lazy from overture.utils.image_fetch import FetchedImage
 lazy from tests.media_servers import configure, server_of
 lazy from tests.runtime_helpers import NoopProviderRegistry, StaticImageClients
 

@@ -3,7 +3,6 @@
 lazy from collections.abc import AsyncGenerator, Iterable, Sequence
 lazy from contextlib import asynccontextmanager
 lazy from dataclasses import dataclass
-lazy from datetime import datetime
 
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -40,6 +39,7 @@ lazy from ...utils.collection_fields import PLEX_COLLECTION_KEY
 lazy from ...utils.collection_formats import is_within_active_window
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.locks import KeyedLock
+lazy from ...utils.time import local_now
 lazy from ..schedule_store import CATALOG_SCHEDULE, load_schedule
 lazy from . import COLLECTIONS_LOCK
 lazy from .copies import ServerCopy, held_copies, lead_part, server_copies
@@ -414,7 +414,7 @@ class CollectionAccess:
             return (await get_app_settings(session)).tmdb_region
 
     def active(self, start: str | None, end: str | None) -> bool:
-        today = datetime.now(self.app_config.tzinfo).date()
+        today = local_now(self.app_config.tzinfo).date()
         return is_within_active_window(start, end, today)
 
     async def updated(self, collection_id: int | None) -> None:

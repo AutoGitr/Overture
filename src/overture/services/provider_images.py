@@ -9,7 +9,7 @@ lazy from ..integrations.http import retrying
 lazy from ..integrations.proxy import ProxyClientManager
 lazy from ..media_servers.adapters import ProviderImageRequest
 lazy from ..utils.errors import PublicServiceError
-lazy from ..utils.image import (
+lazy from ..utils.image_fetch import (
     RateLimitedError,
     RemoteImageError,
     fetch_image,

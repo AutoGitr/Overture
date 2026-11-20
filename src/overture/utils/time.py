@@ -14,6 +14,11 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+def local_now(timezone: tzinfo) -> datetime:
+    """Return the current time in *timezone*, such as the app's ``TZ``."""
+    return utc_now().astimezone(timezone)
+
+
 def format_duration(seconds: float) -> str:
     """Return a short duration for people: ``0.4s``, ``12s``, ``3m 05s``, ``2h 01m``."""
     if seconds < 10:

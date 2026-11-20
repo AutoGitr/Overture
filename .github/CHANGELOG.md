@@ -4,74 +4,67 @@
 
 ### Added
 
-- **Collections:** **Generated poster group** (global, per group or per collection) chooses whether posters Automatic art generates show the collection's group above its title or the title alone.
-- **Collections:** a collection's **Background** tab also offers its members' TMDB backgrounds, the largest 10 of each and 100 in all, fetched only when the tab opens.
-- **Operations:** job logs and Server audit results can be filtered by media server, and each line about one names its server by its `MEDIA_SERVERS` name, coloured by its kind and following a renamed server; Sync also names the server it reads collections from.
-- **Operations:** Assets can run collections chosen one by one under **Specific collections**, beside groups and libraries, now or on a schedule.
-- **Collections:** **Theme** (global, per group or per collection) can be **Not needed**, so a collection's theme counts as complete without one, in its status, filters and statistics, and none is chosen for it automatically.
-- **Collections:** the configure view's **Missing** section is shown only for collections whose criteria include TMDB or MDBList lists.
-- **Interface:** **Add saved filter...** adds a saved filter to any criteria, a collection's included, as a group.
-- **OvertureDB:** the catalog view shows a poster or background from your library's file when the linked title or collection has the same one chosen, instead of fetching it.
-- **Interface:** **Custom filter** in the movie and show filters saves named filters with conditions on any metadata collection criteria test (actor, director, resolution, codecs, ratings, keywords and more), TMDB and MDBList sources, and each title's library status (art, theme and OvertureDB status, sources, widths, metadata issues), matched together or apart in nested groups.
-- **API:** library items and collections list their `metadata_issues`, and `/api/library/filters` lists what custom filters can test, matches their conditions and keeps saved ones.
-- **Interface:** the sidebar's TMDB search also finds the titles of a person, a company, a keyword or a public list, by name, TMDB ID or link.
-- **Media servers:** Overture works with several Plex, Jellyfin and Emby servers at once, named in `MEDIA_SERVERS` and configured with `MEDIA_SERVER_<NAME>_*` variables: titles are shared across servers, files are written under every name their servers read, collections span libraries on any server (a smart collection is smart in its Plex libraries and regular in the others), and `PATH_MAP` maps folders a server sees elsewhere.
-- **Collections:** Plex smart collections test **Subtitle codec**, **File size (GB)** and **Bitrate (Mbps)**, and for shows **Episode added** and **Episode last played**, and order shows by **Latest episode added** and **Unplayed episodes**.
+- **API:** library items and collections list their `metadata_issues`; `/api/library/filters` lists, matches and saves custom filters.
+- **Collections:** **Theme** (global, per group or per collection) can be **Not needed**: the theme counts as complete without one and none is chosen automatically.
+- **Collections:** **Generated poster group** (global, per group or per collection) chooses whether generated posters show the collection's group above its title.
+- **Collections:** the **Background** tab also offers the members' TMDB backgrounds, up to 10 each and 100 in all, fetched when the tab opens.
+- **Collections:** Plex smart collections test **Subtitle codec**, **File size (GB)** and **Bitrate (Mbps)**, for shows also **Episode added** and **Episode last played**, and order shows by **Latest episode added** and **Unplayed episodes**.
+- **Interface:** **Custom filter** in the movie and show filters saves named filters that test any metadata collection criteria test, TMDB and MDBList sources, and each title's library status (art, theme and OvertureDB status, sources, widths, metadata issues), in nested groups. **Add saved filter...** adds one to any criteria.
+- **Interface:** the sidebar's TMDB search also finds the titles of a person, company, keyword or public list, by name, TMDB ID or link.
+- **Media servers:** several Plex, Jellyfin and Emby servers at once, named in `MEDIA_SERVERS` and configured with `MEDIA_SERVER_<NAME>_*` variables. Titles are shared across servers, files are written under every name their servers read, collections span libraries on any server (a smart collection is smart in its Plex libraries and regular elsewhere), and `PATH_MAP` maps folders a server sees elsewhere.
+- **Operations:** job logs and Server audit results can be filtered by media server; lines and filters name the server and are coloured by its kind.
+- **Operations:** Assets can run **Specific collections**, beside groups and libraries, now or on a schedule.
+- **OvertureDB:** the catalog view shows your library's file when the linked title or collection has the same art chosen, instead of fetching it.
 
 ### Changed
 
-- **Collections:** a **Collection** condition names the collection by its ID, so it keeps matching when the collection is renamed; saved criteria, saved filters and sets are converted, and a title several collections shared becomes a group testing each of them.
-- **API:** collection field values carry a `label` beside their `value`, and fields a `by_id` flag; job log lines carry `server_id`, `log_servers` is keyed by server number and `hide_server` takes server numbers.
-- **Operations:** an Assets run queues collection posters and backgrounds in the art download lane, as it does a title's, so its log shows them **Queued** and then **Downloaded**.
-- **Operations:** Server audit logs one line per media server compared, rather than one per file.
-- **Collections:** **Automatic theme** stays shown, and off, while **Theme** is **Not needed**.
-- **Interface:** a page or popup that fails to draw shows the error with **Try again** instead of leaving the app unresponsive.
-- **API:** download events name a collection's art or theme as one `collection` target with its `job_type` and `art_type`, instead of a `collection_theme` target.
-- **Collections:** **Automatic art** and **OvertureDB posters** are ordered lists you tick and drag: Automatic art tries OvertureDB, TMDB and Generate in your order, and a collection takes the first OvertureDB poster style it holds, such as Matte, then Individual. Saved choices keep what they did.
-- **Collections:** **Contribute to OvertureDB as** starts from the first style the collection's **OvertureDB posters** takes.
-- **Interface:** library lists are grouped under their media server, in `MEDIA_SERVERS` order, instead of naming the server on every library.
-- **Interface:** saved filters are shared between movies and shows, offered wherever all their conditions apply; same-named filters of both kinds become one when their conditions agree.
-- **Interface:** criteria offer a field's fixed values and the values your library holds in a list; IDs, TMDB keywords and labels stay typed.
-- **Interface:** the filters popup is wider, and **Custom filter** sits under Libraries; **Auto-match art on load** and **Auto-search themes on load** are under Workflow in Settings.
-- **Interface:** an item's link to its OvertureDB collection uses the collection icon.
-- **OvertureDB:** the **Contribute issue** link leaves **Reason for modification** empty for you to write, and its tooltip names what the issue replaces; GitHub writes a link's values back over the form as you edit other fields, so a prefilled reason undid what you typed.
-- **Interface:** the database record leaves out jobs and names each server copy after its server and library.
-- **Interface:** messages name the field, media type and media server they are about, such as "Unplayed is not available for shows on Jellyfin".
-- **Art:** perceptual hashes compare 256 points of detail instead of 64, so near-identical posters of another scan or grade no longer match at distance 0; existing fingerprints are cleared and taken again: a title's on the next refresh, a collection's from the image Overture keeps when it is next compared.
-- **Collections:** generated posters are 2000×3000 and generated gradients are dithered against banding; collections get them again on their next sync.
-- **Storage:** uploaded images are kept for good in `uploads/` in the config folder, apart from the image cache, which moves from `cache/images` to `cache/`; they were the only copy, yet kept in a cache the docs called safe to delete. Uploads already in the cache move there when Overture starts. Generated collection art stays in the cache and is drawn again when the cache lost it. **Statistics** show uploads as their own part of the footprint.
-- **API:** library IDs name their server (`1:2`); titles and collections list their `copies` on each server, the lead first, instead of one `server_item_id`; settings list `media_servers`, and collection capabilities, server links and server audit results are per server.
-- **Collections:** a smart collection tests a show's **Network** as TMDB names it, through a label, as a regular one does, rather than by Plex's own network names.
-- **Collections:** **In the last** and **not in the last** count days back from the moment they are tested, as Plex does, rather than whole days.
+- **API:** library IDs name their server (`1:2`); titles and collections list their `copies` per server instead of one `server_item_id`; settings list `media_servers`; capabilities, server links and server audit results are per server.
+- **API:** collection field values carry a `label` and fields a `by_id` flag; job log lines carry `server_id`, `log_servers` is keyed by server number and `hide_server` takes numbers; download events name collection art and themes as one `collection` target.
+- **Art:** perceptual hashes compare 256 points instead of 64, so another scan or grade of a poster no longer matches at distance 0. Existing fingerprints are taken again: a title's on its next refresh, a collection's from the image Overture keeps.
+- **Backups:** a backup taken before a database upgrade is named after the version it was taken of (`overture_<time>_before_<version>.db`), and retrying the same upgrade replaces it rather than adding a copy.
+- **Collections:** a **Collection** condition names the collection by ID, so it keeps matching after a rename, in Plex smart collections too. Saved criteria, saved filters and sets are converted; a title several collections shared becomes a group testing each.
+- **Collections:** **Automatic art** and **OvertureDB posters** are ordered lists you tick and drag: Automatic art tries OvertureDB, TMDB and Generate in your order, and a collection takes the first OvertureDB poster style available. Saved choices keep what they did. **Contribute to OvertureDB as** starts from the first style ticked.
+- **Collections:** generated posters are 2000×3000 with dithered gradients; collections get them again on their next sync.
+- **Collections:** a smart collection tests a show's **Network** as TMDB names it, as a regular one does.
+- **Collections:** **In the last** and **not in the last** count back from the moment they are tested, as Plex does.
+- **Collections:** the **Missing** section is shown only for collections whose criteria use TMDB or MDBList lists, and **Automatic theme** stays visible, switched off, while **Theme** is **Not needed**.
+- **Interface:** library lists are grouped under their media server; messages name the field, media type and server they are about; the database record leaves out jobs and names each server copy.
+- **Interface:** saved filters are shared between movies and shows wherever their conditions apply; same-named filters that agree become one.
+- **Interface:** criteria list a field's fixed values and those your library holds; IDs, TMDB keywords and labels stay typed.
+- **Interface:** the filters popup is wider with **Custom filter** under Libraries; **Auto-match art on load** and **Auto-search themes on load** moved to Workflow in Settings.
+- **Interface:** a page or popup that fails to draw shows the error with **Try again**, and an item's link to its OvertureDB collection uses the collection icon.
+- **Operations:** an Assets run queues collection art in the art download lane, so its log shows it **Queued** and then **Downloaded**; Server audit logs one line per media server compared.
+- **OvertureDB:** the **Contribute issue** link leaves **Reason for modification** for you to write, and its tooltip names what the issue replaces.
+- **Storage:** uploaded images are kept for good in `uploads/` in the config folder, apart from the image cache, which moves from `cache/images` to `cache/`. Uploads in the cache move there at startup, each kept in the cache until its copy is verified. **Statistics** show uploads separately.
+- **Storage:** every file Overture writes (images, artwork, themes, uploads, settings, backups) is on disk before it replaces the previous one, so a power cut leaves the old file or the new one.
 
 ### Removed
 
-- **Settings:** `TMDB_API_KEY`. Set `TMDB_READ_ACCESS_TOKEN` to the **API Read Access Token** under **Settings -> API** on themoviedb.org; Overture sends it in a header, so the credential never appears in a request URL. Until it is set, TMDB features are off.
-- **Settings:** `MEDIA_SERVER`, `MEDIA_SERVER_URL`, `MEDIA_SERVER_API_KEY`, `MEDIA_SERVER_VERIFY_TLS` and `JELLYFIN_COLLECTIONS_PATH`. Name the server instead: `MEDIA_SERVERS=Plex` with `MEDIA_SERVER_PLEX_TYPE=plex`, `MEDIA_SERVER_PLEX_URL`, `MEDIA_SERVER_PLEX_API_KEY` and, for Jellyfin, `MEDIA_SERVER_<NAME>_COLLECTIONS_PATH`; with the same type and URL, your library, choices and collections carry over.
+- **Settings:** `TMDB_API_KEY`. Set `TMDB_READ_ACCESS_TOKEN` to the **API Read Access Token** under **Settings -> API** on themoviedb.org; it is sent in a header, never in a URL. Until it is set, TMDB features are off.
+- **Settings:** `MEDIA_SERVER`, `MEDIA_SERVER_URL`, `MEDIA_SERVER_API_KEY`, `MEDIA_SERVER_VERIFY_TLS` and `JELLYFIN_COLLECTIONS_PATH`. Name the server instead: `MEDIA_SERVERS=Plex` with `MEDIA_SERVER_PLEX_TYPE=plex`, `MEDIA_SERVER_PLEX_URL`, `MEDIA_SERVER_PLEX_API_KEY` and, for Jellyfin, `MEDIA_SERVER_<NAME>_COLLECTIONS_PATH`. With the same type and URL, your library, choices and collections carry over.
 
 ### Fixed
 
-- **Collections:** renaming a group keeps it in the Sync and Assets schedules and remembered selections that run it.
-- **OvertureDB:** a collection's **Contribute issue** link includes the theme, art and other choices made since the collection was opened.
-- **Operations:** a busy Assets run no longer fails with "QueuePool limit of size 5 overflow 0 reached"; Overture keeps more database connections and waits for one instead of failing.
-- **Themes:** a theme that failed to download is tried again by later runs once a download of it for that title has succeeded, as choosing it by hand does.
-- **Media servers:** a background Overture writes is the one Jellyfin and Emby show: the backgrounds they downloaded are removed first, since they add a local one after them.
-- **Media servers:** Emby keeps a collection's sort title through refreshes.
+- **Collections:** renaming a group keeps it in the Sync and Assets schedules and selections that run it.
+- **Collections:** Jellyfin 12 creates, edits, lists and syncs collections, including their members, which it shows only to a user.
+- **Collections:** a Jellyfin or Emby library that groups movies into collections lists the movies, not the collection; syncing collections deleted such a collection.
 - **Collections:** a managed collection takes over the collection Jellyfin or Emby made for the same TMDB collection under another name, instead of making a second one.
-- **Operations:** a collection theme's container log line says it was uploaded to the media server rather than written to disk.
-- **Collections:** **Jump to** in the configure view puts the section's header at the top, also for the last sections and while content above it is still loading.
-- **Collections:** a collection whose settings or OvertureDB say it needs no theme reports its theme as complete after a theme is chosen or removed.
-- **Collections:** Jellyfin 12 creates and edits collections; it refuses the way Overture read a single item with an API key.
-- **Collections:** Overture lists and syncs Jellyfin 12 collections, whose members Jellyfin shows only to a user; it asks for them as an administrator.
-- **Libraries:** a Jellyfin or Emby library set to group movies into collections no longer lists a collection as a title in place of its movies; syncing collections then deleted the collection, finding none of its movies on the server.
-- **Collections:** Plex smart collections select the members of a regular collection renamed since it was made, which Plex's list of collections still names by its first title.
-- **Collections:** syncing one collection makes again the server collection deleted on its server, instead of failing to write to it.
-- **Collections:** a collection no server holds shows no server poster or background, rather than one that fails to load.
-- **Collections:** a new server copy of a collection gets its chosen art again, instead of the sync failing with "Overture has uploaded no image to it" once a sync forgot what Overture had sent; Audit's fix sends the chosen image the same way and records it as sent again.
-- **Collections:** a collection's images, kind and theme come from its copy on the first server in `MEDIA_SERVERS`, as everywhere else; a collection whose Jellyfin library was saved first took them from Jellyfin, so a sync forgot the art Overture sent to Plex, its theme, and that a Plex smart collection is smart.
-- **Collections:** a managed Jellyfin collection whose BoxSet folder has no theme gets its theme on its next sync, such as one made before `MEDIA_SERVER_<NAME>_COLLECTIONS_PATH` was set.
-- **Collections:** Plex smart collections select actors and other values Plex leaves off its list of a library's values, which holds only some of its actors.
-- **Collections:** Plex smart collections whose title or other text condition holds an apostrophe sync instead of failing; Plex cannot match such text exactly, so **is** matches a text starting and ending with it, and **is not** leaves out every text containing it.
+- **Collections:** a collection's images, kind and theme come from its copy on the first server in `MEDIA_SERVERS`.
+- **Collections:** a new server copy of a collection gets its chosen art, instead of the sync failing with "Overture has uploaded no image to it"; Server audit's fix sends it the same way.
+- **Collections:** syncing a collection whose server copy was deleted makes it again instead of failing.
+- **Collections:** a managed Jellyfin collection gets its theme on its next sync when its BoxSet folder has none.
+- **Collections:** Plex smart collections select actors and other values Plex leaves off its library list.
+- **Collections:** Plex smart collections with an apostrophe in a text condition sync; Plex cannot match such text exactly, so **is** matches text starting and ending with it.
+- **Collections:** a collection that needs no theme reports its theme complete after one is chosen or removed.
+- **Collections:** a collection no server holds shows no server art instead of a broken image.
+- **Collections:** **Jump to** in the configure view puts the section's header at the top, also for the last sections and while content above is loading.
+- **Media servers:** Jellyfin and Emby show the background Overture writes; the backgrounds they downloaded are removed first.
+- **Media servers:** Emby keeps a collection's sort title through refreshes.
+- **Operations:** a busy Assets run no longer fails with "QueuePool limit of size 5 overflow 0 reached".
+- **Operations:** an Assets scan of a large library takes the same time per folder however many there are.
+- **Operations:** a collection theme's log line says it was uploaded to the media server.
+- **OvertureDB:** a collection's **Contribute issue** link includes the choices made since the collection was opened.
+- **Themes:** a theme that failed to download is tried again once a download of it for that title has succeeded.
 
 ## 0.3.0 - 2026-11-15
 

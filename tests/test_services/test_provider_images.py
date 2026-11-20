@@ -7,9 +7,9 @@ lazy import pytest
 
 lazy from overture.media_servers.adapters import ProviderImageRequest
 lazy from overture.services import provider_images as module
-lazy from overture.utils import image
+lazy from overture.utils import image_fetch
 lazy from overture.utils.errors import PublicServiceError
-lazy from overture.utils.image import FetchedImage, RemoteImageError
+lazy from overture.utils.image_fetch import FetchedImage, RemoteImageError
 
 
 class FakeProxyClients:
@@ -81,7 +81,7 @@ async def test_proxy_provider_image_refuses_a_paused_host_at_once(
         raise AssertionError("a paused host is not asked")
 
     monkeypatch.setattr(module, "fetch_image", fake_fetch_image)
-    image.IMAGE_HOST_PAUSES.limited("plex.example")
+    image_fetch.IMAGE_HOST_PAUSES.limited("plex.example")
 
     with pytest.raises(PublicServiceError) as exc_info:
         await module.proxy_provider_image(

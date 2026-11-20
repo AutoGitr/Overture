@@ -14,7 +14,7 @@ lazy from overture.domain import MediaType, ThemeIdSource
 lazy from overture.services.local_assets.theme import refresh_theme
 lazy from overture.services.storage.assets import AssetStorage, FolderListing
 lazy from overture.utils.audio import ThemeAudioMetadata
-lazy from overture.utils.file import compute_file_hash
+lazy from overture.utils.hashing import compute_file_hash
 lazy from tests.runtime_helpers import make_local_assets
 
 

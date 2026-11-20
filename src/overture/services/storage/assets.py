@@ -3,7 +3,6 @@
 lazy import logging
 lazy import os
 lazy import stat
-lazy import tempfile
 lazy from collections.abc import Collection, Sequence
 lazy from dataclasses import dataclass
 lazy from pathlib import Path
@@ -19,7 +18,8 @@ lazy from ...utils.assets import (
     season_poster_candidates,
     season_poster_filename,
 )
-lazy from ...utils.file import compute_bytes_hash, compute_file_hash, sync_directory
+lazy from ...utils.file import staged_file, sync_directory
+lazy from ...utils.hashing import compute_bytes_hash, compute_file_hash
 lazy from ...utils.locks import KeyedLock
 lazy from ...utils.path import same_revision
 lazy from ...utils.threads import owned_thread
@@ -384,34 +384,19 @@ class AssetStorage:
             OSError: When the file cannot be written or committed.
         """
         root, parent, target = self._validated_target(target_path, trusted_root)
-        descriptor, temporary_name = tempfile.mkstemp(
-            dir=parent,
-            prefix=f".{target.name}.",
-            suffix=".tmp",
-        )
-        temporary: Path | None = Path(temporary_name)
-        try:
-            temporary.chmod(0o644)
-            with os.fdopen(descriptor, "wb") as stream:
-                descriptor = -1
-                stream.write(data)
-                stream.flush()
-                os.fsync(stream.fileno())
-
-            current = self._validated_target(target_path, trusted_root)
-            if current != (root, parent, target):
+        with staged_file(parent) as staged:
+            staged.stream.write(data)
+            staged.finish()
+            # The folder may have been swapped for a link while it was written.
+            if self._validated_target(target_path, trusted_root) != (
+                root,
+                parent,
+                target,
+            ):
                 raise PathTraversalError(
                     "Asset target changed while it was being written"
                 )
-
-            temporary.replace(target)
-            temporary = None
-            sync_directory(parent)
-        finally:
-            if descriptor != -1:
-                os.close(descriptor)
-            if temporary is not None:
-                temporary.unlink(missing_ok=True)
+            staged.place(target)
 
         self._remove_alternate_images(target)
         sync_directory(parent)

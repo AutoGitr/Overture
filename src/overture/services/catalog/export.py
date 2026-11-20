@@ -2,7 +2,6 @@
 
 lazy import json
 lazy import sqlite3
-lazy from contextlib import closing
 lazy from pathlib import Path
 lazy from tempfile import TemporaryDirectory
 lazy from typing import Any, cast, override
@@ -40,13 +39,14 @@ lazy from ...repositories.catalog_drafts import CatalogDraftRepository
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...utils.art_urls import art_refusals
 lazy from ...utils.errors import PublicServiceError
+lazy from ...utils.scratch import scratch_database
 lazy from ...utils.temporary import create_operation_directory
 lazy from ...utils.threads import owned_thread
 lazy from .entries import collection_poster_field
 
 
 def _initialize(directory: Path) -> None:
-    with closing(sqlite3.connect(directory / "export.sqlite")) as connection:
+    with scratch_database(directory / "export.sqlite") as connection:
         connection.executescript(
             "CREATE TABLE files (path TEXT PRIMARY KEY, content TEXT); "
             "CREATE TABLE identities (media TEXT, provider TEXT, value TEXT, "
@@ -152,7 +152,7 @@ def _stage_batch(
     Raises:
         PublicServiceError: When two staged entries claim one identity.
     """
-    with closing(sqlite3.connect(directory / "export.sqlite")) as connection:
+    with scratch_database(directory / "export.sqlite") as connection:
         for entry in entries:
             try:
                 validate_entry(entry)
@@ -203,7 +203,7 @@ REPORT_NAME = "EXPORT-REPORT.txt"
 def _archive(directory: Path, left_out: list[str]) -> Path:
     target = directory / "overturedb-selections.zip"
     with (
-        closing(sqlite3.connect(directory / "export.sqlite")) as connection,
+        scratch_database(directory / "export.sqlite") as connection,
         ZipFile(target, "w", compression=ZIP_DEFLATED) as archive,
     ):
         for path, content in connection.execute(

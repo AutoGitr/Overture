@@ -1,7 +1,6 @@
 """Runtime-owned authentication, token issuance, and login rate limits."""
 
 lazy import asyncio
-lazy import hashlib
 lazy import ipaddress
 lazy import logging
 lazy import secrets
@@ -30,6 +29,7 @@ lazy from ..schemas.auth import (
 lazy from ..schemas.common import Status, StatusResponse
 lazy from ..utils.cache import TimedRegistry
 lazy from ..utils.errors import PublicServiceError
+lazy from ..utils.hashing import text_digest
 lazy from ..utils.http_security import new_csrf_token
 lazy from ..utils.locks import KeyedLock
 lazy from ..utils.threads import owned_thread
@@ -112,7 +112,7 @@ class AuthService:
     @staticmethod
     def token_hash(token: SecretStr) -> str:
         """Hash a high-entropy credential before persistence."""
-        return hashlib.sha256(token.get_secret_value().encode()).hexdigest()
+        return text_digest(token.get_secret_value())
 
     def session_seconds(self) -> int:
         """Use the same absolute lifetime for every authentication method."""

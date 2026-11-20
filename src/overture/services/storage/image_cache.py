@@ -21,16 +21,15 @@ lazy import os
 lazy import re
 lazy import shutil
 lazy import stat
-lazy import tempfile
-lazy from collections.abc import Callable, Collection
+lazy from collections.abc import Collection
 lazy from contextlib import suppress
 lazy from dataclasses import dataclass, field
 lazy from pathlib import Path
-lazy from typing import BinaryIO
 
 lazy from ...domain import THUMB_BOUNDS
 lazy from ...utils.assets import SAVED_EXTENSIONS
-lazy from ...utils.file import compute_bytes_hash, copy_with_hash
+lazy from ...utils.file import staged_file, staged_leftovers
+lazy from ...utils.hashing import compute_bytes_hash, compute_file_hash, copy_with_hash
 lazy from ...utils.image import (
     SAVED_MEDIA_TYPES,
     THUMB_EXTENSION,
@@ -122,25 +121,6 @@ class ImageCache:
             raise ValueError("An image is named by the BLAKE3 hash of its bytes")
         return self._uploads / file_hash[:2] / f"{file_hash}{extension}"
 
-    @staticmethod
-    def _stage[T](staging: Path, write: Callable[[BinaryIO], T]) -> tuple[Path, T]:
-        """Write a new entry into a file of its own before moving it into place."""
-        staging.mkdir(parents=True, exist_ok=True)
-        descriptor, name = tempfile.mkstemp(dir=staging, suffix=".tmp")
-        staged = Path(name)
-        try:
-            with os.fdopen(descriptor, "wb") as stream:
-                written = write(stream)
-        except BaseException:
-            staged.unlink(missing_ok=True)
-            raise
-        return staged, written
-
-    @staticmethod
-    def _place(staged: Path, destination: Path) -> None:
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        staged.replace(destination)
-
     def _find_original(self, file_hash: str) -> CachedOriginal | None:
         if not _HASH.fullmatch(file_hash):
             return None
@@ -179,32 +159,21 @@ class ImageCache:
         """Return the kept thumbnail and its stat, or ``None`` when there is none."""
         return await owned_thread(self._find_thumb, file_hash)
 
-    def _keep(
-        self,
-        staged: Path,
-        file_hash: str,
-        extension: str,
-        width: int,
-        height: int,
-    ) -> CachedOriginal:
-        destination = self._entry(_ORIGINALS, file_hash, extension)
-        if not destination.is_file():
-            self._place(staged, destination)
-        return CachedOriginal(file_hash, destination, width=width, height=height)
-
     def _import_original(self, path: Path, root: Path) -> CachedOriginal:
         if not path.is_file():
             raise FileNotFoundError(path)
         if not is_within_roots(path, [real_path(root)]):
             raise PathTraversalError(f"Image {path} is outside {root}")
-        staged, file_hash = self._stage(
-            self._root / _STAGING, lambda stream: copy_with_hash(path, stream)
-        )
-        try:
-            extension, width, height = inspect_saved_image(staged)
-            return self._keep(staged, file_hash, extension, width, height)
-        finally:
-            staged.unlink(missing_ok=True)
+        with staged_file(self._root / _STAGING) as staged:
+            file_hash = copy_with_hash(path, staged.stream)
+            staged.finish()
+            extension, width, height = inspect_saved_image(staged.path)
+            destination = self._entry(_ORIGINALS, file_hash, extension)
+            # An entry is named by the hash of its bytes, so one already
+            # there holds these.
+            if not destination.is_file():
+                staged.place(destination)
+        return CachedOriginal(file_hash, destination, width=width, height=height)
 
     async def import_original(self, path: Path, root: Path) -> CachedOriginal:
         """Keep the image file at *path*, which must lie inside *root*.
@@ -227,12 +196,16 @@ class ImageCache:
         else:
             destination = self._entry(_ORIGINALS, file_hash, extension)
             staging = self._root / _STAGING
-        if not destination.is_file():
-            staged, _ = self._stage(staging, lambda stream: stream.write(data))
-            try:
-                self._place(staged, destination)
-            finally:
-                staged.unlink(missing_ok=True)
+        # An upload is the only copy, so one that does not hold its bytes, as
+        # a crash may leave, is written again; a cached copy can be fetched.
+        if (
+            compute_file_hash(destination) != file_hash
+            if upload
+            else not destination.is_file()
+        ):
+            with staged_file(staging) as staged:
+                staged.stream.write(data)
+                staged.place(destination)
         return CachedOriginal(file_hash, destination, width=width, height=height)
 
     async def store_original(self, data: bytes) -> CachedOriginal:
@@ -269,17 +242,15 @@ class ImageCache:
                 ):
                     if _regular_stat(cached) is None:
                         continue
-                    if not destination.is_file():
-                        staged, _ = self._stage(
-                            self._uploads / _UPLOAD_STAGING,
-                            lambda stream, source=cached: stream.write(
-                                source.read_bytes()
-                            ),
-                        )
-                        try:
-                            self._place(staged, destination)
-                        finally:
-                            staged.unlink(missing_ok=True)
+                    # The cached copy may be the only one, so it goes only once
+                    # an upload holding its bytes is on disk; one a crash left
+                    # partly written is written again.
+                    if compute_file_hash(destination) != file_hash:
+                        if compute_file_hash(cached) != file_hash:
+                            continue
+                        with staged_file(self._uploads / _UPLOAD_STAGING) as staged:
+                            copy_with_hash(cached, staged.stream)
+                            staged.place(destination)
                         moved += 1
                     cached.unlink()
         if legacy.is_dir():
@@ -298,13 +269,9 @@ class ImageCache:
         return await owned_thread(self._adopt_uploads, hashes)
 
     def _keep_thumb(self, destination: Path, data: bytes) -> None:
-        staged, _ = self._stage(
-            self._root / _STAGING, lambda stream: stream.write(data)
-        )
-        try:
-            self._place(staged, destination)
-        finally:
-            staged.unlink(missing_ok=True)
+        with staged_file(self._root / _STAGING) as staged:
+            staged.stream.write(data)
+            staged.place(destination)
 
     async def thumb(self, original: CachedOriginal) -> Path:
         """Return the thumbnail of *original*, rendering it on first use.
@@ -342,7 +309,8 @@ class ImageCache:
                     shard.rmdir()
         # A staged file is a write that was interrupted, never an entry.
         for staging in (self._root / _STAGING, self._uploads / _UPLOAD_STAGING):
-            for path in staging.glob("*"):
+            # Only old ones go: a write may be staging one now.
+            for path in staged_leftovers(staging) if staging.is_dir() else []:
                 try:
                     if path.stat().st_mtime < older_than:
                         path.unlink()

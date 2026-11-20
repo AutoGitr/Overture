@@ -173,7 +173,7 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
         return False
 
     monkeypatch.setattr("overture.services.art.choice.is_private_url", public)
-    monkeypatch.setattr("overture.utils.image.is_private_url", public)
+    monkeypatch.setattr("overture.utils.image_fetch.is_private_url", public)
     async with database.write_session() as session:
         session.add(
             stored_collection(

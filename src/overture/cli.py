@@ -8,7 +8,6 @@ lazy import os
 lazy import shutil
 lazy import subprocess
 lazy import sys
-lazy import tempfile
 lazy import time
 lazy import warnings
 lazy from ipaddress import ip_address
@@ -36,7 +35,7 @@ lazy from .passwords import hash_password
 lazy from .runtime import build_runtime
 lazy from .runtime_paths import FRONTEND_DIR
 lazy from .services.themes.youtube_resolver import THEME_PACKAGES, THEME_TOOLS
-lazy from .utils.file import process_owner
+lazy from .utils.file import process_owner, staged_file
 lazy from .utils.logging import configure_logging
 lazy from .utils.security import sanitise_error
 lazy from .version import APP_VERSION
@@ -180,9 +179,10 @@ def verify_config_dir(config_dir: Path) -> None:
         raise ValueError(
             f"Config directory {config_dir} is not writable by {process_owner()}."
         )
-    with tempfile.TemporaryFile(dir=config_dir) as stream:
-        stream.write(b"Overture filesystem check")
-        stream.flush()
+    # Write, sync and drop a file the way Overture keeps its own there.
+    with staged_file(config_dir) as staged:
+        staged.stream.write(b"Overture filesystem check")
+        staged.finish()
 
 
 def verify_theme_tools() -> None:

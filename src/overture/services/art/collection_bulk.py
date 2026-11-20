@@ -22,12 +22,12 @@ lazy from ...repositories.collections import CollectionRepository
 lazy from ...schemas.art import SaveCollectionArtRequest
 lazy from ...schemas.bulk import BulkMatchArtRequest
 lazy from ...utils.errors import PublicServiceError
+lazy from ...utils.text import count_label
 lazy from ...utils.time import utc_now
 lazy from ..bulk_common import (
     LEFT_LIBRARY,
     NOT_PUBLIC_ART_URL,
     AssetPlan,
-    count_label,
     no_match_reason,
     planned_outcome,
     queue_and_report,

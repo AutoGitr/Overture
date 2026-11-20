@@ -5,7 +5,7 @@ lazy import re
 lazy import sqlite3
 lazy from collections import defaultdict
 lazy from collections.abc import Callable, Collection, Iterator, Sequence
-lazy from contextlib import aclosing, closing
+lazy from contextlib import aclosing
 lazy from dataclasses import dataclass
 lazy from itertools import batched
 lazy from pathlib import Path
@@ -35,7 +35,9 @@ lazy from ...utils.assets import (
 )
 lazy from ...utils.concurrency import in_order
 lazy from ...utils.image import get_local_image_size
+lazy from ...utils.scratch import scratch_database
 lazy from ...utils.temporary import operation_directory
+lazy from ...utils.text import count_label
 lazy from ...utils.threads import owned_thread
 lazy from ..local_assets.service import LocalAssets
 
@@ -383,9 +385,9 @@ async def run_scan(
                     )
                 total = await owned_thread(stage_item_folders, item_folders, work_path)
             await job.planned(total)
-            offset = 0
+            done = 0
             while not job.stop_requested():
-                work = await owned_thread(scan_work_batch, work_path, offset)
+                work = await owned_thread(scan_work_batch, work_path, done)
                 if not work:
                     break
                 async with aclosing(
@@ -414,7 +416,7 @@ async def run_scan(
                         await job.report(
                             JobOutcome.CHECKED,
                             folder.name,
-                            f"{len(found)} issue{'s' if len(found) != 1 else ''} found"
+                            f"{count_label(len(found), 'issue')} found"
                             if found
                             else "no issues found",
                             issues=tally.collect(*first),
@@ -422,27 +424,44 @@ async def run_scan(
                         for issues in rest:
                             await job.progress(issues=tally.collect(*issues))
 
-                offset += len(work)
+                done += len(work)
 
 
 def _create_scan_work(connection: sqlite3.Connection) -> None:
     connection.execute(
-        "CREATE TABLE folders (path TEXT, kind TEXT, root_order INTEGER, name TEXT)"
+        "CREATE TABLE staged (path TEXT, kind TEXT, root_order INTEGER, name TEXT)"
     )
+
+
+def _order_scan_work(connection: sqlite3.Connection) -> None:
+    """Number the staged folders in the order they are scanned, sorting once.
+
+    Each batch then reads the next numbers by primary key, rather than sorting
+    every folder again to skip those already scanned.
+    """
+    connection.execute(
+        "CREATE TABLE folders (position INTEGER PRIMARY KEY, path TEXT, kind TEXT)"
+    )
+    connection.execute(
+        "INSERT INTO folders (path, kind) SELECT path, kind FROM staged "
+        "ORDER BY root_order, name, path"
+    )
+    connection.execute("DROP TABLE staged")
+    connection.commit()
 
 
 def stage_item_folders(item_folders: list[tuple[str, str]], database: Path) -> int:
     """Stage item folders on disk, movies first, then by folder name."""
-    with closing(sqlite3.connect(database)) as connection:
+    with scratch_database(database) as connection:
         _create_scan_work(connection)
         connection.executemany(
-            "INSERT INTO folders VALUES (?, ?, ?, ?)",
+            "INSERT INTO staged VALUES (?, ?, ?, ?)",
             (
                 (path, kind, 0 if kind == "movie" else 1, Path(path).name.casefold())
                 for path, kind in item_folders
             ),
         )
-        connection.commit()
+        _order_scan_work(connection)
         return len(item_folders)
 
 
@@ -450,7 +469,7 @@ def build_scan_work(
     movie_folders: list[str], show_folders: list[str], database: Path
 ) -> int:
     """Stage directory names on disk, preserving stable presentation order."""
-    with closing(sqlite3.connect(database)) as connection:
+    with scratch_database(database) as connection:
         _create_scan_work(connection)
         count = 0
         roots = [(root, "movie") for root in sorted(movie_folders, key=text_sort_key)]
@@ -464,22 +483,22 @@ def build_scan_work(
                 for child in children:
                     if child.is_dir():
                         connection.execute(
-                            "INSERT INTO folders VALUES (?, ?, ?, ?)",
+                            "INSERT INTO staged VALUES (?, ?, ?, ?)",
                             (child.path, kind, order, child.name.casefold()),
                         )
                         count += 1
-        connection.commit()
+        _order_scan_work(connection)
         return count
 
 
-def scan_work_batch(database: Path, offset: int) -> list[tuple[Path, str]]:
-    """Read at most one hundred staged folder names."""
-    with closing(sqlite3.connect(database)) as connection:
+def scan_work_batch(database: Path, done: int) -> list[tuple[Path, str]]:
+    """Read at most one hundred staged folders, after the *done* scanned already."""
+    with scratch_database(database) as connection:
         return [
             (Path(path), kind)
             for path, kind in connection.execute(
-                "SELECT path, kind FROM folders "
-                "ORDER BY root_order, name, path LIMIT 100 OFFSET ?",
-                (offset,),
+                "SELECT path, kind FROM folders WHERE position > ? "
+                "ORDER BY position LIMIT 100",
+                (done,),
             )
         ]

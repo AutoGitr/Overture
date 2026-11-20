@@ -17,8 +17,10 @@ lazy from overture.utils.http_security import (
 lazy from overture.utils.image import (
     UnsupportedImageFormatError,
     encoded_image_extension,
-    is_supported_remote_image_type,
     is_valid_aspect_ratio,
+)
+lazy from overture.utils.image_fetch import (
+    is_supported_remote_image_type,
     is_valid_image_format,
     normalise_content_type,
 )

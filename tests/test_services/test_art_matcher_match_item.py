@@ -30,8 +30,8 @@ lazy from overture.services.art.matcher import (
 lazy from overture.services.art.matcher_cache import ArtMatcherCache
 lazy from overture.services.art.phash import PHASH_HEX_LENGTH, PhashService
 lazy from overture.services.storage.assets import AssetStorage
-lazy from overture.utils.file import compute_bytes_hash
-lazy from overture.utils.image import FetchedImage
+lazy from overture.utils.hashing import compute_bytes_hash
+lazy from overture.utils.image_fetch import FetchedImage
 lazy from tests.factories import seed_art_slot
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,

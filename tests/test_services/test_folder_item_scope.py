@@ -127,3 +127,20 @@ async def test_audit_work_covers_only_the_selected_items(
     )
 
     assert targets == [AuditTarget(selected, ArtType.POSTER)]
+
+
+def test_scan_work_pages_every_folder_once_in_order(tmp_path: Path) -> None:
+    work_path = tmp_path / "scan.sqlite"
+    folders = [(f"/media/movies/Film {index:03}", "movie") for index in range(250)]
+    scan.stage_item_folders(list(reversed(folders)), work_path)
+
+    pages: list[list[tuple[Path, str]]] = []
+    done = 0
+    while page := scan.scan_work_batch(work_path, done):
+        pages.append(page)
+        done += len(page)
+
+    assert [len(page) for page in pages] == [100, 100, 50]
+    assert [entry for page in pages for entry in page] == [
+        (Path(path), kind) for path, kind in folders
+    ]

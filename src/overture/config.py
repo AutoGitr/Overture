@@ -2,7 +2,6 @@
 
 lazy import os
 lazy import re
-lazy import tempfile
 lazy import zoneinfo
 lazy from collections.abc import Iterable, Mapping
 lazy from ipaddress import (
@@ -43,7 +42,8 @@ lazy from pydantic_settings import (
 
 lazy from .domain import ServerType
 lazy from .passwords import validate_hash
-lazy from .utils.file import compute_bytes_hash
+lazy from .utils.file import staged_file
+lazy from .utils.hashing import compute_bytes_hash
 lazy from .utils.ssrf import LOOPBACK_HOSTS
 
 API_PREFIX = "/api"
@@ -797,20 +797,14 @@ def write_configuration(path: Path, values: Mapping[str, str]) -> None:
     ]
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o750)
     previous = path.stat() if path.exists() else None
-    descriptor, temporary = tempfile.mkstemp(prefix=".overture-", dir=path.parent)
-    temporary_path = Path(temporary)
-    try:
-        with os.fdopen(descriptor, "w", newline="\n") as stream:
-            temporary_path.chmod(previous.st_mode & 0o640 if previous else 0o640)
-            if os.name == "posix":
-                os.chown(
-                    temporary_path,
-                    previous.st_uid if previous else -1,
-                    previous.st_gid if previous else path.parent.stat().st_gid,
-                )
-            stream.writelines(lines)
-            stream.flush()
-            os.fsync(stream.fileno())
-        temporary_path.replace(path)
-    finally:
-        temporary_path.unlink(missing_ok=True)
+    with staged_file(
+        path.parent, mode=previous.st_mode & 0o640 if previous else 0o640
+    ) as staged:
+        if os.name == "posix":
+            os.chown(
+                staged.path,
+                previous.st_uid if previous else -1,
+                previous.st_gid if previous else path.parent.stat().st_gid,
+            )
+        staged.stream.write("".join(lines).encode())
+        staged.place(path)

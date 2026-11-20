@@ -45,11 +45,11 @@ lazy from ...schemas.removal import AssetRemoval
 lazy from ...utils.art_urls import public_art_url
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.generated_art import render_art
-lazy from ...utils.image import (
+lazy from ...utils.image import inspect_saved_image
+lazy from ...utils.image_fetch import (
     RATE_LIMIT_RETRIES,
     RateLimitedError,
     fetch_image,
-    inspect_saved_image,
     raise_if_rate_limited,
 )
 lazy from ...utils.locks import KeyedLock

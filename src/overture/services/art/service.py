@@ -34,10 +34,7 @@ lazy from ...schemas.common import SaveSelectionResponse, Status, StatusResponse
 lazy from ...schemas.library import ItemSelectionResponse
 lazy from ...schemas.removal import AssetRemoval, ItemArtAsset
 lazy from ...utils.errors import PublicServiceError
-lazy from ...utils.image import (
-    RateLimitedError,
-    raise_if_rate_limited,
-)
+lazy from ...utils.image_fetch import RateLimitedError, raise_if_rate_limited
 lazy from ...utils.time import utc_now
 lazy from ..downloads.queue import JobTarget
 lazy from ..downloads.service import DownloadService

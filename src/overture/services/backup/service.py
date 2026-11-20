@@ -131,9 +131,13 @@ class BackupService:
             status_code = 409 if isinstance(exc, BackupInProgressError) else 500
             raise PublicServiceError(status_code, str(exc)) from exc
 
-    async def backup_before_upgrade(self) -> None:
-        """Keep the previous schema restorable; the next scheduled backup prunes."""
-        created = await self.store.create(retention=None)
+    async def backup_before_upgrade(self, revision: str) -> None:
+        """Keep the schema at *revision* restorable; the next scheduled backup prunes.
+
+        An upgrade that failed changed nothing, so trying it again replaces the
+        backup taken before it rather than keeping another copy of the same data.
+        """
+        created = await self.store.create(retention=None, before=revision)
         logger.info("Backed up the database before upgrading it: %s", created.filename)
 
     def list_backups(self) -> BackupListResponse:

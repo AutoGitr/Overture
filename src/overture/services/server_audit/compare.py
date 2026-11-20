@@ -30,7 +30,7 @@ lazy from ...schemas.server_audit import (
 lazy from ...utils.audio import audio_hash, downloaded_audio, ffprobe_duration
 lazy from ...utils.concurrency import in_order
 lazy from ...utils.errors import PublicServiceError
-lazy from ...utils.image import fetch_image
+lazy from ...utils.image_fetch import fetch_image
 lazy from ...utils.threads import owned_thread
 lazy from ..art.collection_art import CollectionArtService
 lazy from ..art.phash import PhashService

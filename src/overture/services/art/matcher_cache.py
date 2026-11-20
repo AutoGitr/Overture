@@ -13,7 +13,7 @@ lazy from ...config import Settings
 lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...media_servers.registry import ProviderRegistry
 lazy from ...utils.cache import AsyncMemoizer
-lazy from ...utils.image import FetchedImage, fetch_image
+lazy from ...utils.image_fetch import FetchedImage, fetch_image
 lazy from .phash import PhashService
 
 logger = logging.getLogger(__name__)

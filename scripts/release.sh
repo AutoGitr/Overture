@@ -109,8 +109,11 @@ if [ -z "$check_run" ]; then
 fi
 
 # The tree was clean, so a failed or interrupted check leaves nothing to keep.
-trap 'git checkout -- .' EXIT
+databases="tests/fixtures/databases/$TAG"
+trap 'git checkout -- .; rm -f "$databases".*.sql' EXIT
 uv run --locked python -m scripts.release_metadata --prepare "$VERSION"
+# Later releases test upgrading the database this one writes.
+uv run --locked python -m scripts.release_database --version "$VERSION" >/dev/null
 bash scripts/pre-commit-check.sh
 echo "Waiting for the Release check: $(gh run view "$check_run" --json url --jq .url)"
 if ! gh run watch "$check_run" --exit-status >/dev/null; then
@@ -119,6 +122,7 @@ if ! gh run watch "$check_run" --exit-status >/dev/null; then
 fi
 trap - EXIT
 
+git add "$databases".*.sql
 git commit --all --gpg-sign --message "chore: release $TAG"
 git tag --sign "$TAG" --message "Release $TAG"
 git push --atomic origin main "$TAG"

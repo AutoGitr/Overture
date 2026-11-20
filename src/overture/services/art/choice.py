@@ -15,9 +15,9 @@ lazy from ...media_servers.registry import ProviderRegistry
 lazy from ...schemas.art import SaveArtRequest
 lazy from ...utils.art_urls import PublicArtUrl, public_art_url
 lazy from ...utils.errors import PublicServiceError
-lazy from ...utils.image import (
+lazy from ...utils.image import is_valid_aspect_ratio
+lazy from ...utils.image_fetch import (
     RateLimitedError,
-    is_valid_aspect_ratio,
     is_valid_image_format,
     raise_if_rate_limited,
     sniff_image_size,

@@ -1,6 +1,5 @@
 """Resolve source conditions against TMDB, MDBList, Radarr and Sonarr."""
 
-lazy import hashlib
 lazy from collections.abc import Sequence
 
 lazy from ...config import Settings
@@ -26,6 +25,7 @@ lazy from ...schemas.collections import (
     TmdbPersonSource,
 )
 lazy from ...utils.errors import PublicServiceError
+lazy from ...utils.hashing import text_digest
 
 SOURCE_LABELS: frozendict[SourceType, str] = frozendict(
     {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
@@ -93,7 +93,7 @@ def _source_identity(condition: SourceCondition) -> str:
         case RadarrTagSource(tags=[identity]) | SonarrTagSource(tags=[identity]):
             return identity
         case _:
-            return hashlib.sha256(condition.key.encode()).hexdigest()[:8]
+            return text_digest(condition.key, 8)
 
 
 class SourceResolver:

@@ -34,7 +34,8 @@ lazy from ...media_servers.registry import Provider, ProviderRegistry
 lazy from ...repositories.catalog import CatalogRepository
 lazy from ...schemas.art import ArtCandidate
 lazy from ...schemas.collections import FilterGroup, TmdbPersonSource
-lazy from ...utils.image import is_valid_aspect_ratio, is_valid_image_format
+lazy from ...utils.image import is_valid_aspect_ratio
+lazy from ...utils.image_fetch import is_valid_image_format
 lazy from ..catalog.entries import (
     catalog_collection_entry,
     collection_poster_field,

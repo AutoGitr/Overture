@@ -28,12 +28,12 @@ lazy from ...repositories.downloads import DownloadJobRepository
 lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...schemas.bulk import BulkThemeRequest
 lazy from ...utils.concurrency import in_order
+lazy from ...utils.text import count_label
 lazy from ..bulk_common import (
     DECIDE_CONCURRENCY,
     SAVED_SELECTION,
     AssetPlan,
     CheckedStamper,
-    count_label,
     planned_outcome,
     queue_and_report,
     queue_download,

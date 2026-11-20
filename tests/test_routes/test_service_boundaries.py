@@ -269,7 +269,7 @@ async def test_sync_http_timezone_matches_scheduler_in_winter_and_summer(
         def now(cls, _tz: object) -> datetime:
             return datetime(2026, month, 15, tzinfo=UTC)
 
-    monkeypatch.setattr("overture.services.scheduler.datetime", FrozenDateTime)
+    monkeypatch.setattr("overture.utils.time.datetime", FrozenDateTime)
     scheduler = SchedulerService(app_config=app_config)
     engine = SyncEngine(
         tmdb_client=unused(TMDBClient),

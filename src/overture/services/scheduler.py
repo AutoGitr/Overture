@@ -9,6 +9,7 @@ lazy from typing import Any
 
 lazy from ..config import Settings
 lazy from ..utils.cron import next_run_after, validate_cron_expression
+lazy from ..utils.time import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +108,7 @@ class SchedulerService:
 
         normalized = validate_cron_expression(cron_expression)
         next_run = next_run_after(
-            normalized, datetime.now(UTC), tz=self._app_config.tzinfo
+            normalized, utc_now(), tz=self._app_config.tzinfo
         ).astimezone(UTC)
 
         self._jobs[job_id] = ScheduledJob(
@@ -136,7 +137,7 @@ class SchedulerService:
             self.remove_job(job_id)
             return False
 
-        now = datetime.now(UTC)
+        now = utc_now()
         next_run = now + timedelta(minutes=minutes)
 
         self._jobs[job_id] = ScheduledJob(
@@ -212,7 +213,7 @@ class SchedulerService:
     async def _run_loop(self) -> None:
         while not self._closed:
             self._wake_event.clear()
-            now = datetime.now(UTC)
+            now = utc_now()
             for job in self._jobs.values():
                 if job.next_run_time > now:
                     continue
@@ -243,7 +244,7 @@ class SchedulerService:
             )
             # Recheck wall-clock time after clock corrections or system suspend.
             timeout = (
-                min(60.0, max(0.0, (earliest - datetime.now(UTC)).total_seconds()))
+                min(60.0, max(0.0, (earliest - utc_now()).total_seconds()))
                 if earliest is not None
                 else None
             )

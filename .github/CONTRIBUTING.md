@@ -119,7 +119,10 @@ or `src/overture/media_servers/`, and turn each problem it reports into a test.
   with `uv run python -m scripts.catalog_contract ../OvertureDB`.
 - **Database migrations.** After changing a model in `src/overture/db/models/`, run
   `uv run alembic revision --autogenerate -m "<summary>"`, review the result and
-  add a test in `tests/test_database/test_migrations.py`. Migrations run
+  add a test in `tests/test_database/test_migrations.py`.
+  `tests/test_database/test_release_upgrades.py` also upgrades the database
+  every release wrote, from `tests/fixtures/databases/`, which
+  `scripts/release.sh` adds when it releases. Migrations run
   when Overture starts.
 - **Brand assets.** See [Brand assets](#brand-assets) for sources, exports and
   the command that also updates OvertureDB.
@@ -185,6 +188,8 @@ that its license fits, and add it to `licenses/THIRD_PARTY_NOTICES.md`.
 - Update the pages in `docs/overture/` when behaviour changes, and the
   [README](README.md)'s feature list when a feature is added or removed.
 - Describe changes users notice under `## Unreleased` in
-  [CHANGELOG.md](CHANGELOG.md), in the same commit.
+  [CHANGELOG.md](CHANGELOG.md), in the same commit, as
+  `- **Area:** What changed.` under its change type;
+  `scripts/pre-commit-check.sh --fix` orders the entries.
 - Leave out credentials and private media details. Report vulnerabilities as
   described in [SECURITY.md](SECURITY.md).

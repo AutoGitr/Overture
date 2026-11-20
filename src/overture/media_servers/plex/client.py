@@ -22,7 +22,7 @@ lazy from ...integrations.http import LazyClient, create_client
 lazy from ...schemas.art import ArtCandidate
 lazy from ...utils.art_urls import art_preview_url, art_source_label, public_art_url
 lazy from ...utils.collection_fields import PLEX_COLLECTION_KEY
-lazy from ...utils.image import sniff_image_size
+lazy from ...utils.image_fetch import sniff_image_size
 lazy from ...utils.ssrf import LOOPBACK_HOSTS
 lazy from ...version import APP_VERSION
 lazy from ..adapters import ItemIdentity, ServerTheme

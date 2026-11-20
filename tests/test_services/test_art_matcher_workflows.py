@@ -16,7 +16,7 @@ lazy from overture.services.art.candidates import ArtCandidates, CandidatePolicy
 lazy from overture.services.art.matcher import ArtMatcher, ArtMatcherCache
 lazy from overture.services.art.phash import PhashService
 lazy from overture.services.storage.assets import AssetStorage
-lazy from overture.utils.image import FetchedImage
+lazy from overture.utils.image_fetch import FetchedImage
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     make_local_assets,

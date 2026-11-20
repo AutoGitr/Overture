@@ -31,9 +31,9 @@ lazy from overture.services.removal import AssetRemover
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.storage.image_cache import ImageCache
 lazy from overture.services.themes.youtube_resolver import YouTubeResolver
-lazy from overture.utils import image
+lazy from overture.utils import image_fetch
 lazy from overture.utils.errors import PublicServiceError
-lazy from overture.utils.image import RateLimitedError
+lazy from overture.utils.image_fetch import RateLimitedError
 lazy from tests.factories import (
     MediaItemFactory,
     SeasonFactory,
@@ -381,7 +381,7 @@ async def test_match_art_refuses_at_once_while_an_image_host_is_paused(
         matcher=matcher,
         publisher=FakePublisher(),
     )
-    image.IMAGE_HOST_PAUSES.limited("theposterdb.com")
+    image_fetch.IMAGE_HOST_PAUSES.limited("theposterdb.com")
     with pytest.raises(PublicServiceError) as exc_info:
         await service.match(item_id=1, art_type=ArtType.POSTER, threshold=5)
     assert exc_info.value.status_code == 503
@@ -514,7 +514,7 @@ async def test_save_art_refuses_at_once_to_measure_on_a_paused_host(
 
     monkeypatch.setattr(choice, "_validate_art_url", accept)
     monkeypatch.setattr(choice, "sniff_image_size", sniff)
-    image.IMAGE_HOST_PAUSES.limited("image.tmdb.org")
+    image_fetch.IMAGE_HOST_PAUSES.limited("image.tmdb.org")
     service = _art_service(app_config=app_config, database=database)
     with pytest.raises(PublicServiceError) as exc_info:
         await service.save(

@@ -22,19 +22,19 @@ def _store(tmp_path: Path) -> BackupStore:
     return BackupStore(tmp_path / "overture.db", tmp_path / "backups")
 
 
-async def test_startup_removes_only_owned_partial_backups(tmp_path: Path) -> None:
+async def test_startup_removes_only_interrupted_backups(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.directory.mkdir()
-    partial = store.directory / "overture_20260101_030000_123456.partial"
+    interrupted = store.directory / ".overture-copy.tmp"
     keep = [
         store.directory / "overture_20260101_030000.db",
-        store.directory / "overture_notes.partial",
-        store.directory / "other_20260101_030000.partial",
+        store.directory / "notes.tmp",
+        store.directory / ".notes",
     ]
-    for path in [partial, *keep]:
+    for path in [interrupted, *keep]:
         path.write_bytes(b"preserve completed backups")
     await store.clean_abandoned()
-    assert not partial.exists()
+    assert not interrupted.exists()
     assert all(path.read_bytes() == b"preserve completed backups" for path in keep)
     await store.clean_abandoned()
 
@@ -126,7 +126,7 @@ async def test_create_backup_filenames_do_not_collide(
             del tz
             return datetime(2026, 1, 2, 3, 4, 5, 6, tzinfo=UTC)
 
-    monkeypatch.setattr("overture.services.backup.files.datetime", FrozenDateTime)
+    monkeypatch.setattr("overture.utils.time.datetime", FrozenDateTime)
 
     first = (await store.create(retention=_LATEST_TWO)).filename
     second = (await store.create(retention=_LATEST_TWO)).filename
@@ -151,7 +151,7 @@ async def test_create_backup_honors_configured_timezone(
             utc_time = datetime(2026, 9, 19, 1, 0, 0, 18122, tzinfo=UTC)
             return utc_time.astimezone(tz if isinstance(tz, zoneinfo.ZoneInfo) else UTC)
 
-    monkeypatch.setattr("overture.services.backup.files.datetime", FrozenDateTime)
+    monkeypatch.setattr("overture.utils.time.datetime", FrozenDateTime)
 
     created = await store.create(retention=_LATEST_TWO)
     assert created.filename == "overture_20260919_030000_018122.db"

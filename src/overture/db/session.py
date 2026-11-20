@@ -138,11 +138,14 @@ def run_migrations(connection: Connection) -> tuple[str | None, str | None]:
     return before, MigrationContext.configure(connection).get_current_revision()
 
 
-def upgrade_pending(connection: Connection) -> bool:
-    """Report whether an existing schema is behind the bundled migrations."""
+def pending_upgrade(connection: Connection) -> str | None:
+    """Return the revision of an existing schema behind the bundled migrations.
+
+    ``None`` when there is no schema yet or it is current.
+    """
     current = MigrationContext.configure(connection).get_current_revision()
     head = ScriptDirectory.from_config(alembic_config()).get_current_head()
-    return current is not None and current != head
+    return current if current is not None and current != head else None
 
 
 class Database:
@@ -173,16 +176,19 @@ class Database:
         return self._engine
 
     async def initialize(
-        self, before_upgrade: Callable[[], Awaitable[None]] | None = None
+        self, before_upgrade: Callable[[str], Awaitable[None]] | None = None
     ) -> None:
         """Migrate atomically before any service uses the database.
 
-        *before_upgrade* runs first when an existing schema is about to change.
+        *before_upgrade* runs first, with the schema's revision, when an
+        existing schema is about to change.
         """
         async with self.write_lock, self._engine.connect() as conn:
-            if before_upgrade is not None and await conn.run_sync(upgrade_pending):
+            if before_upgrade is not None and (
+                revision := await conn.run_sync(pending_upgrade)
+            ):
                 await conn.rollback()
-                await before_upgrade()
+                await before_upgrade(revision)
             # Batch migrations replace parent tables. Foreign-key cascades
             # would delete their children when Alembic drops the old table.
             # SQLite requires changing this pragma outside a transaction.

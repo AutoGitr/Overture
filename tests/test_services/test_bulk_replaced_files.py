@@ -21,7 +21,7 @@ lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.themes import bulk as theme_bulk
 lazy from overture.services.themes.youtube_resolver import YouTubeResolver
 lazy from overture.utils.art_urls import PublicArtUrl
-lazy from overture.utils.file import compute_bytes_hash
+lazy from overture.utils.hashing import compute_bytes_hash
 lazy from tests.bulk_helpers import (
     Context,
     art_matcher,

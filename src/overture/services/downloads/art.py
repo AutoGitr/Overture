@@ -15,10 +15,10 @@ lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...media_servers.registry import ProviderRegistry
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...utils.art_urls import PublicArtUrl, public_art_url
-lazy from ...utils.image import (
+lazy from ...utils.image import UnsupportedImageFormatError
+lazy from ...utils.image_fetch import (
     RATE_LIMIT_RETRIES,
     RemoteImageError,
-    UnsupportedImageFormatError,
     fetch_image_bytes,
 )
 lazy from ...utils.progress import ProgressCallback, StepProgress

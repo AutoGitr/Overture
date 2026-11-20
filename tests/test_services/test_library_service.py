@@ -53,7 +53,7 @@ lazy from overture.services.themes.service import ThemesService
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.assets import season_poster_candidates
 lazy from overture.utils.errors import PublicServiceError
-lazy from overture.utils.file import compute_file_hash
+lazy from overture.utils.hashing import compute_file_hash
 lazy from overture.utils.time import utc_now
 lazy from tests.factories import seed_art_slot
 lazy from tests.media_servers import TEST_SERVER, TEST_SERVER_ID, served_item

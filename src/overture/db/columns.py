@@ -49,12 +49,18 @@ def _enum_annotation(annotation: Any) -> type[StrEnum] | None:
     return None
 
 
+def json_check(column: str) -> str:
+    """The SQL a JSON column's values satisfy: valid JSON, and never JSON's null."""
+    return f"json_valid({column}) AND json_type({column}) != 'null'"
+
+
 def typed_columns(model: type[SQLModel]) -> None:
     """Make a table model's enum and JSON columns hold only what their type does.
 
     Every enum column gets a CHECK constraint, ``ck_<table>_<column>``,
     admitting its values, and every JSON column one, ``ck_<table>_<column>_json``,
-    admitting valid JSON, so neither depends on the code that writes it. Table
+    admitting valid JSON other than ``null``, so neither depends on the code
+    that writes it; an empty JSON column holds SQL ``NULL``. Table
     models skip Pydantic validation, so a plain string handed to the constructor
     would sit in the attribute until the database round-tripped it - close
     enough to work, different enough to surprise; constructor arguments are
@@ -76,9 +82,13 @@ def typed_columns(model: type[SQLModel]) -> None:
         )
     for column in mapper.columns:
         if isinstance(column.type, JSON):
+            # SQLAlchemy writes None as JSON's null by default, which no SQL
+            # NULL test sees; one form of "no value" keeps queries and
+            # migrations honest.
+            column.type = JSON(none_as_null=True)
             table.append_constraint(
                 CheckConstraint(
-                    f"json_valid({column.name})",
+                    json_check(column.name),
                     name=f"ck_{table.name}_{column.name}_json",
                 )
             )

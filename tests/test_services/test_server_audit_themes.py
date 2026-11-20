@@ -21,7 +21,7 @@ lazy from overture.services.server_audit.compare import (
 )
 lazy from overture.services.server_audit.work import AuditTarget
 lazy from overture.services.storage.assets import AssetStorage
-lazy from overture.utils.file import compute_bytes_hash
+lazy from overture.utils.hashing import compute_bytes_hash
 lazy from tests.http_mock import mock_client_factory
 lazy from tests.media_servers import served_item
 lazy from tests.runtime_helpers import (

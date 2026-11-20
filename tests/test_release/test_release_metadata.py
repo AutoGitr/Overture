@@ -10,6 +10,7 @@ lazy from overture.version import APP_VERSION
 lazy from scripts.release_metadata import (
     CHANGELOG,
     REQUIRED_RELEASE_FILES,
+    format_changelog,
     prepare_release,
     project_version,
     release_notes,
@@ -23,7 +24,7 @@ UNRELEASED_CHANGELOG = """# Changelog
 
 ### Fixed
 
-- Saved themes play again.
+- **Themes:** saved themes play again.
 
 ## 1.0.0 - 2026-09-01
 
@@ -91,7 +92,7 @@ def test_prepare_release_updates_versions_and_releases_the_changelog(
         "# Changelog\n\n## Unreleased\n\n## 1.2.3 - 2026-10-21\n\n### Fixed\n"
     )
     notes = release_notes("1.2.3", tmp_path)
-    assert notes == "### Fixed\n\n- Saved themes play again.\n"
+    assert notes == "### Fixed\n\n- **Themes:** saved themes play again.\n"
 
 
 def test_prepare_release_requires_unreleased_entries(tmp_path: Path) -> None:
@@ -123,6 +124,19 @@ def test_tagged_release_requires_its_changelog_section(tmp_path: Path) -> None:
         ("## 1.0.0 - 2026-09-01\n\n- First.\n", "must start with"),
         ("## Unreleased\n\n## 1.0.0\n\n- First.\n", "no release date"),
         ("## Unreleased\n\n### Improved\n\n- Faster.\n", "unknown change types"),
+        ("## Unreleased\n\n### Fixed\n\n- Faster.\n", "one line each"),
+        ("## Unreleased\n\n- **Art:** faster.\n", "under a change type"),
+        (
+            "## Unreleased\n\n### Fixed\n\n- **Art:** faster.\n- **Art:** faster.\n",
+            "repeats an entry",
+        ),
+        (
+            (
+                "## Unreleased\n\n### Fixed\n\n- **Art:** b.\n\n"
+                "### Added\n\n- **Art:** a.\n"
+            ),
+            "out of order",
+        ),
         (
             "## Unreleased\n\n## 1.0.0 - 2026-09-01\n\n## 1.0.0 - 2026-09-01\n",
             r"more than one 1\.0\.0 section",
@@ -157,3 +171,25 @@ def test_validate_release_rejects_drifted_version_files(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match=r"frontend/package\.json version '1\.0\.0'"):
         validate_release(tmp_path)
+
+
+def test_unreleased_entries_are_ordered_by_change_type_then_area(
+    tmp_path: Path,
+) -> None:
+    _seed_release_tree(tmp_path, "1.0.0")
+    released = "## 1.0.0 - 2026-09-01\n\n### Fixed\n\n- **Zoo:** z.\n- **Art:** a.\n"
+    (tmp_path / CHANGELOG).write_text(
+        "# Changelog\n\n## Unreleased\n\n### Fixed\n\n- **Themes:** t.\n\n"
+        "### Added\n\n- **Themes:** first.\n- **Art:** a.\n- **Themes:** second.\n\n"
+        + released
+    )
+
+    format_changelog(tmp_path)
+
+    # Within an area, the order written stays; released sections stay as written.
+    assert (tmp_path / CHANGELOG).read_text() == (
+        "# Changelog\n\n## Unreleased\n\n### Added\n\n- **Art:** a.\n"
+        "- **Themes:** first.\n- **Themes:** second.\n\n### Fixed\n\n"
+        "- **Themes:** t.\n\n" + released
+    )
+    assert validate_release(tmp_path) == "1.0.0"

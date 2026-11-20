@@ -42,12 +42,12 @@ lazy from ...schemas.art import ArtCandidate
 lazy from ...schemas.bulk import BulkMatchArtRequest
 lazy from ...utils.art_urls import public_art_url
 lazy from ...utils.concurrency import in_order
+lazy from ...utils.text import count_label
 lazy from ..bulk_common import (
     DECIDE_CONCURRENCY,
     NOT_PUBLIC_ART_URL,
     SAVED_SELECTION,
     CheckedStamper,
-    count_label,
     no_match_reason,
     queue_and_report,
     queue_download,

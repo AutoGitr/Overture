@@ -7,7 +7,7 @@ lazy from ...config import MediaServerConfig
 lazy from ...db.theme_file import ThemeFileFacts
 lazy from ...media_servers.adapters import server_path
 lazy from ...utils.assets import THEME_FILENAME
-lazy from ...utils.file import compute_file_hash
+lazy from ...utils.hashing import compute_file_hash
 lazy from ...utils.path import same_revision
 
 

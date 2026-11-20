@@ -32,7 +32,9 @@ def upgrade() -> None:
                 server_default=sa.false(),
             )
         )
-        # The default fills the existing row; the app writes the column itself.
+    # The default fills the saved row; the app writes the column itself. A
+    # batch rebuilds the table, so the default goes only once the row holds it.
+    with op.batch_alter_table("app_settings") as batch:
         batch.alter_column("collection_generated_title_only", server_default=None)
     for table in _OVERRIDES:
         with op.batch_alter_table(table) as batch:

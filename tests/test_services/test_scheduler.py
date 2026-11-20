@@ -34,7 +34,7 @@ async def noop() -> None:
 @pytest.fixture
 def clock(monkeypatch: pytest.MonkeyPatch) -> Clock:
     value = Clock(datetime(2026, 3, 29, 0, 30, tzinfo=UTC))
-    monkeypatch.setattr("overture.services.scheduler.datetime", value)
+    monkeypatch.setattr("overture.utils.time.datetime", value)
     return value
 
 

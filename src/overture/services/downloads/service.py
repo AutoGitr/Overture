@@ -39,8 +39,8 @@ lazy from ...repositories.downloads import DownloadJobRepository
 lazy from ...schemas.art import SaveCollectionArtRequest
 lazy from ...schemas.downloads import DownloadJobEvent
 lazy from ...utils.errors import PublicServiceError
-lazy from ...utils.file import compute_bytes_hash
-lazy from ...utils.image import RemoteImageError
+lazy from ...utils.hashing import compute_bytes_hash
+lazy from ...utils.image_fetch import RemoteImageError
 lazy from ...utils.locks import KeyedLock
 lazy from ...utils.progress import ProgressUpdate
 lazy from ...utils.threads import owned_thread

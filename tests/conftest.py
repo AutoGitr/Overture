@@ -55,7 +55,7 @@ lazy from overture.main import create_app
 lazy from overture.runtime import build_runtime
 lazy from overture.services.art.phash import PhashService
 lazy from overture.services.auth import AuthService
-lazy from overture.utils import image, rate_limit
+lazy from overture.utils import image_fetch, rate_limit
 lazy from overture.utils.http_security import CSRF_COOKIE, CSRF_HEADER
 lazy from overture.utils.locks import KeyedLock
 lazy from overture.utils.rate_limit import RateLimitPause
@@ -121,7 +121,7 @@ def _terminate_phash_pools(monkeypatch: pytest.MonkeyPatch) -> Generator[None]:
 @pytest.fixture(autouse=True)
 def _fresh_image_host_pauses(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep an image host one test rate-limits from pausing the next test."""
-    monkeypatch.setattr(image, "IMAGE_HOST_PAUSES", RateLimitPause[str]())
+    monkeypatch.setattr(image_fetch, "IMAGE_HOST_PAUSES", RateLimitPause[str]())
 
 
 @pytest.fixture

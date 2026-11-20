@@ -8,7 +8,7 @@ lazy import httpx2
 lazy from ...db.art_slots import ArtFileFacts
 lazy from ...domain import PERFECT_MATCH_ONLY
 lazy from ...schemas.art import ArtCandidate
-lazy from ...utils.file import compute_bytes_hash
+lazy from ...utils.hashing import compute_bytes_hash
 lazy from .matcher_cache import ArtMatcherCache
 
 #: Previews can differ slightly from identical originals, so only candidates

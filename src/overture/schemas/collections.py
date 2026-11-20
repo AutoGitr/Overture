@@ -1,6 +1,5 @@
 """Collection REST and WebSocket schemas."""
 
-lazy import hashlib
 lazy from collections.abc import Sequence
 lazy from datetime import date, datetime
 lazy from typing import Annotated, Literal, Self
@@ -51,6 +50,7 @@ lazy from ..utils.collection_formats import (
     SortTitleFormat,
     SummaryFormat,
 )
+lazy from ..utils.hashing import text_digest
 lazy from .base import PublicText, StrictBaseModel
 lazy from .catalog import CatalogSelections
 lazy from .common import StatusResponse
@@ -509,7 +509,7 @@ class CollectionThemeUpdatedEvent(StrictBaseModel):
 
 def _server_image_version(server_url: str | None) -> str | None:
     """Name the server's image without revealing its URL."""
-    return hashlib.sha256(server_url.encode()).hexdigest()[:16] if server_url else None
+    return text_digest(server_url, 16) if server_url else None
 
 
 def collection_metadata_issues(row: MediaCollection) -> list[MetadataIssue]:

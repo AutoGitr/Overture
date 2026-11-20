@@ -1,7 +1,8 @@
 """Backup orchestration, persisted schedules and failure events."""
 
 lazy import asyncio
-lazy from contextlib import asynccontextmanager
+lazy import sqlite3
+lazy from contextlib import asynccontextmanager, closing
 lazy from pathlib import Path
 lazy from typing import Any
 lazy from unittest.mock import AsyncMock
@@ -265,8 +266,8 @@ async def test_pre_upgrade_backup_never_applies_retention(
 ) -> None:
     create = AsyncMock(return_value=BackupCreatedResponse(filename="before-upgrade.db"))
     monkeypatch.setattr(backup_service.store, "create", create)
-    await backup_service.backup_before_upgrade()
-    create.assert_awaited_once_with(retention=None)
+    await backup_service.backup_before_upgrade("abc123")
+    create.assert_awaited_once_with(retention=None, before="abc123")
     assert backup_service.events.job.last_event is None
 
 
@@ -365,3 +366,26 @@ async def test_backup_update_schedule_validates_and_applies_saved_values(
     assert updated.retention == BackupRetention(latest=5, monthly=0)
     assert updated.next_run == "2026-01-01T03:00:00+00:00"
     assert applied == [(True, "0 3 * * *")]
+
+
+async def test_retrying_an_upgrade_replaces_the_backup_taken_before_it(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    with closing(sqlite3.connect(store.database_path)) as database:
+        database.execute("CREATE TABLE auth_sessions (id INTEGER)")
+    store.directory.mkdir()
+    scheduled = store.directory / "overture_20261120_030000_024105.db"
+    scheduled.write_bytes(b"x")
+    other = store.directory / "overture_20261119_090000_1_before_b9e2f4a7c613.db"
+    other.write_bytes(b"x")
+
+    first = await store.create(retention=None, before="d7b3e9a1c524")
+    second = await store.create(retention=None, before="d7b3e9a1c524")
+
+    assert first.filename.endswith("_before_d7b3e9a1c524.db")
+    assert second.removed == [first.filename]
+    assert sorted(path.name for path in store.directory.iterdir()) == sorted(
+        [scheduled.name, other.name, second.filename]
+    )
+    assert next(backup.filename for backup in store.list_backups()) == second.filename

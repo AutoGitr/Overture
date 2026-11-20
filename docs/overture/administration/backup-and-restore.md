@@ -20,8 +20,11 @@ host now and then, together with `uploads/`.
 newest backup of each recent day, week and month. Every backup, scheduled or
 manual, applies it once it is written, and so does saving it, so a new backup
 can leave the count unchanged when it replaces one the rules no longer keep.
-**Back up now** names any backup it removed. Backups made before an upgrade
-never remove others.
+**Back up now** names any backup it removed. A backup made before an upgrade
+is named after the database version it was taken of, such as
+`overture_<time>_before_d7b3e9a1c524.db`, and removes no other backup, except
+one taken before the same upgrade: if an upgrade fails and Overture tries it
+again, only the latest backup of that database is kept.
 
 ## Restore
 

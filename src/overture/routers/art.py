@@ -21,7 +21,7 @@ lazy from ..schemas.common import StatusResponse
 lazy from ..schemas.library import ItemSelectionResponse
 lazy from ..schemas.removal import AssetRemoval, RemovalOptions, RemovalTarget
 lazy from ..utils.errors import PublicServiceError
-lazy from ..utils.image import MAX_IMAGE_BYTES
+lazy from ..utils.image_fetch import MAX_IMAGE_BYTES
 lazy from .auth import require_auth
 lazy from .parameters import (
     ArtTypePath,

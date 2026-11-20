@@ -100,20 +100,20 @@ async def test_only_an_existing_schema_upgrade_runs_the_pre_upgrade_hook(
     seen: list[str] = []
     database = Database(f"sqlite+aiosqlite:///{tmp_path / 'probe.db'}")
 
-    async def record() -> None:
-        seen.append("called")
+    async def record(revision: str) -> None:
+        seen.append(revision)
 
     try:
-        # On a fresh database, upgrade_pending is False, so hook is not called.
+        # A fresh database has no schema to upgrade, so the hook is not called.
         await database.initialize(record)
         assert seen == []
 
-        def fake_pending(_connection: Connection) -> bool:
-            return True
+        def fake_pending(_connection: Connection) -> str:
+            return "abc123"
 
-        monkeypatch.setattr(session_module, "upgrade_pending", fake_pending)
+        monkeypatch.setattr(session_module, "pending_upgrade", fake_pending)
         await database.initialize(record)
-        assert seen == ["called"]
+        assert seen == ["abc123"]
     finally:
         await database.close()
 
@@ -1837,10 +1837,15 @@ def test_collection_conditions_name_collections_by_id_and_by_title_again() -> No
                 ],
                 "groups": [],
             }
+            # A JSON column holds no criteria or generator as JSON's null.
+            conn.exec_driver_sql(
+                "INSERT INTO collection_groups (id, name, separator, generator) "
+                "VALUES (1, 'Plain', 0, 'null')"
+            )
             for part_id, collection_id, library_id, stored in (
                 (1, 3, "1:1", json.dumps(criteria)),
                 (2, 4, "1:1", None),
-                (3, 5, "1:2", None),
+                (3, 5, "1:2", "null"),
             ):
                 conn.exec_driver_sql(
                     "INSERT INTO collection_libraries (id, collection_id, "
@@ -1869,6 +1874,12 @@ def test_collection_conditions_name_collections_by_id_and_by_title_again() -> No
                 ],
                 "groups": [],
             }
+            assert conn.exec_driver_sql(
+                "SELECT generator FROM collection_groups"
+            ).all() == [("null",)]
+            assert conn.exec_driver_sql(
+                "SELECT criteria FROM collection_libraries WHERE id = 3"
+            ).all() == [("null",)]
             [saved] = conn.exec_driver_sql("SELECT criteria FROM saved_filters").one()
             assert json.loads(saved) == {
                 "conditions": [],
@@ -1972,5 +1983,31 @@ def test_generated_posters_show_the_group_until_a_tier_hides_it() -> None:
             assert {
                 column["name"] for column in inspect(conn).get_columns("app_settings")
             } == settings_columns
+    finally:
+        engine.dispose()
+
+
+def test_empty_json_values_become_sql_null_and_json_null_is_refused() -> None:
+    engine = create_engine("sqlite://")
+    try:
+        with engine.begin() as conn:
+            config = alembic_config()
+            config.attributes["connection"] = conn
+            command.upgrade(config, "f5d1b7e3a982")
+            conn.exec_driver_sql(
+                "INSERT INTO collection_groups (id, name, separator, generator, "
+                "auto_art) VALUES (1, 'Plain', 0, 'null', '[\"generate\"]')"
+            )
+
+            command.upgrade(config, "a1f6c3e8d590")
+
+            assert conn.exec_driver_sql(
+                "SELECT generator, auto_art FROM collection_groups"
+            ).all() == [(None, '["generate"]')]
+            with pytest.raises(IntegrityError, match="ck_collection_groups_generator"):
+                conn.exec_driver_sql("UPDATE collection_groups SET generator = 'null'")
+
+            command.downgrade(config, "f5d1b7e3a982")
+            conn.exec_driver_sql("UPDATE collection_groups SET generator = 'null'")
     finally:
         engine.dispose()

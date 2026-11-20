@@ -15,10 +15,8 @@ DOCKERHUB_IMAGE = "autogitr/overture"
 SIGNATURES = f"{IMAGE}-signatures"
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 CHANGELOG = ".github/CHANGELOG.md"
-#: The change types Keep a Changelog groups a release's entries under.
-CHANGE_TYPES = frozenset(
-    {"Added", "Changed", "Deprecated", "Removed", "Fixed", "Security"}
-)
+#: The change types Keep a Changelog groups a release's entries under, in order.
+CHANGE_TYPES = ("Added", "Changed", "Deprecated", "Removed", "Fixed", "Security")
 REQUIRED_RELEASE_FILES = (
     CHANGELOG,
     ".github/README.md",
@@ -33,6 +31,8 @@ _UNRELEASED = "Unreleased"
 _CHANGELOG_SECTION = re.compile(r"(?m)^## (\S+)(?: - (\d{4}-\d{2}-\d{2}))?$")
 _CHANGELOG_GROUP = re.compile(r"(?m)^### (.+)$")
 _CHANGELOG_ENTRY = re.compile(r"(?m)^- \S")
+#: An unreleased entry: one line naming its area, then a sentence.
+_UNRELEASED_ENTRY = re.compile(r"- \*\*(?P<area>[^*:]+):\*\* \S.*\.")
 
 
 def _parse_semver(value: object, *, label: str = "version") -> str:
@@ -86,7 +86,7 @@ def _changelog_sections(root: Path) -> dict[str, str]:
             if released is None:
                 raise ValueError(f"{CHANGELOG} section {name} has no release date")
         body = text[match.end() : end].strip()
-        unknown = set(_CHANGELOG_GROUP.findall(body)) - CHANGE_TYPES
+        unknown = set(_CHANGELOG_GROUP.findall(body)) - set(CHANGE_TYPES)
         if unknown:
             raise ValueError(
                 f"{CHANGELOG} section {name} has unknown change types: "
@@ -94,6 +94,51 @@ def _changelog_sections(root: Path) -> dict[str, str]:
             )
         sections[name] = body
     return sections
+
+
+def _ordered_unreleased(body: str) -> str:
+    """The Unreleased section in order, or why it cannot be.
+
+    Change types follow Keep a Changelog's order, and each one's entries are
+    grouped by area alphabetically, keeping the order written within an area,
+    which puts what matters most first.
+
+    Raises:
+        ValueError: When an entry is not one line naming its area, or repeats.
+    """
+    groups: dict[str, list[str]] = {}
+    group: list[str] | None = None
+    for line in body.splitlines():
+        if heading := _CHANGELOG_GROUP.fullmatch(line):
+            group = groups.setdefault(heading.group(1), [])
+        elif line.strip():
+            if group is None or not _UNRELEASED_ENTRY.fullmatch(line):
+                raise ValueError(
+                    f"{CHANGELOG} {_UNRELEASED} entries are one line each, "
+                    f"under a change type, as '- **Area:** What changed.': {line}"
+                )
+            if line in group:
+                raise ValueError(f"{CHANGELOG} repeats an entry: {line}")
+            group.append(line)
+
+    def area(entry: str) -> str:
+        match = _UNRELEASED_ENTRY.fullmatch(entry)
+        return match.group("area").casefold() if match else ""
+
+    return "\n\n".join(
+        f"### {name}\n\n" + "\n".join(sorted(groups[name], key=area))
+        for name in CHANGE_TYPES
+        if groups.get(name)
+    )
+
+
+def format_changelog(root: Path = ROOT) -> None:
+    """Put the Unreleased section in the order :func:`_ordered_unreleased` gives."""
+    path = root / CHANGELOG
+    body = _changelog_sections(root)[_UNRELEASED]
+    if (ordered := _ordered_unreleased(body)) != body:
+        text = path.read_text()
+        path.write_text(text.replace(body, ordered, 1), newline="\n")
 
 
 def release_notes(version: str, root: Path = ROOT) -> str:
@@ -112,7 +157,12 @@ def validate_release(root: Path = ROOT, *, tag: str | None = None) -> str:
     if missing:
         raise ValueError("missing release files: " + ", ".join(missing))
     if tag is None:
-        _changelog_sections(root)
+        unreleased = _changelog_sections(root)[_UNRELEASED]
+        if _ordered_unreleased(unreleased) != unreleased:
+            raise ValueError(
+                f"{CHANGELOG} {_UNRELEASED} is out of order; run "
+                "'uv run python -m scripts.release_metadata --format-changelog'"
+            )
     else:
         release_notes(version, root)
 
@@ -187,6 +237,11 @@ def main() -> int:
     )
     parser.add_argument("--tag")
     parser.add_argument(
+        "--format-changelog",
+        action="store_true",
+        help="Order the unreleased changelog entries by change type and area.",
+    )
+    parser.add_argument(
         "--notes-file", type=Path, help="Write the tag's changelog section here."
     )
     parser.add_argument("--github-output", type=Path)
@@ -194,6 +249,8 @@ def main() -> int:
     if args.notes_file and args.tag is None:
         parser.error("--notes-file requires --tag")
     try:
+        if args.format_changelog:
+            format_changelog()
         if args.prepare is not None:
             prepare_release(args.prepare, today=datetime.now(UTC).date())
         version = validate_release(tag=args.tag)

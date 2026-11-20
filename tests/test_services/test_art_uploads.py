@@ -243,7 +243,7 @@ async def test_retention_never_deletes_an_upload(
     service = _service(cache, app_config=app_config, database=database)
     unselected = await service.uploads.store(_poster("red"))
     stray = await cache.store_original(_poster("green"))
-    interrupted = tmp_path / "uploads" / ".staging" / "write.tmp"
+    interrupted = tmp_path / "uploads" / ".staging" / ".write.tmp"
     interrupted.parent.mkdir(parents=True, exist_ok=True)
     interrupted.write_bytes(b"half")
 
@@ -305,3 +305,49 @@ async def test_uploads_in_the_cache_move_to_the_uploads_folder(
     assert original.path.is_relative_to(tmp_path / "cache" / "originals")
     assert cache.has_thumb(generated.file_hash)
     assert not (tmp_path / "cache" / "images").exists()
+
+
+async def test_an_upload_a_crash_left_damaged_is_written_again_before_its_copy_goes(
+    tmp_path: Path,
+) -> None:
+    legacy = ImageCache(tmp_path / "cache" / "images", tmp_path / "unused")
+    kept = await legacy.store_original(_poster("red"))
+    cache = ImageCache(tmp_path / "cache", tmp_path / "uploads")
+    upload = (
+        tmp_path
+        / "uploads"
+        / kept.file_hash[:2]
+        / f"{kept.file_hash}{kept.path.suffix}"
+    )
+    upload.parent.mkdir(parents=True)
+    upload.write_bytes(b"")
+
+    assert await cache.adopt_uploads([kept.file_hash]) == 1
+
+    assert upload.read_bytes() == _poster("red")
+    assert not (tmp_path / "cache" / "images").exists()
+
+
+async def test_a_cached_upload_that_lost_its_bytes_is_left_where_it_is(
+    tmp_path: Path,
+) -> None:
+    cache = ImageCache(tmp_path / "cache", tmp_path / "uploads")
+    kept = await cache.store_original(_poster("red"))
+    kept.path.write_bytes(b"damaged")
+
+    assert await cache.adopt_uploads([kept.file_hash]) == 0
+
+    assert kept.path.read_bytes() == b"damaged"
+    assert not (tmp_path / "uploads").exists() or not any(
+        (tmp_path / "uploads").rglob("*.jpg")
+    )
+
+
+async def test_storing_an_upload_again_repairs_a_damaged_copy(tmp_path: Path) -> None:
+    cache = ImageCache(tmp_path / "cache", tmp_path / "uploads")
+    stored = await cache.store_upload(_poster("red"))
+    stored.path.write_bytes(b"")
+
+    again = await cache.store_upload(_poster("red"))
+
+    assert again.path.read_bytes() == _poster("red")

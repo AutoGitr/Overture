@@ -1,49 +1,20 @@
-"""Generic filesystem utility functions."""
+"""Writing the files Overture keeps, so a crash leaves each whole.
+
+Every file Overture keeps is written beside its destination, synced, and moved
+into place with a synced rename. Scratch files in an operation's own directory
+(:mod:`overture.utils.temporary`) need none of that.
+"""
 
 lazy import errno
 lazy import logging
 lazy import os
+lazy import tempfile
+lazy from collections.abc import Generator
+lazy from contextlib import contextmanager
 lazy from pathlib import Path
 lazy from typing import BinaryIO
 
-lazy from blake3 import blake3 as _blake3
-
 logger = logging.getLogger(__name__)
-
-
-def compute_file_hash(file_path: str | Path) -> str | None:
-    """Compute BLAKE3 hash of a file in chunks.
-
-    Returns None if the file cannot be read.
-    """
-    try:
-        hasher = _blake3()
-        with Path(file_path).open("rb") as f:
-            for chunk in iter(lambda: f.read(65_536), b""):
-                hasher.update(chunk)
-        return hasher.hexdigest()
-    except OSError as exc:
-        logger.debug("Could not hash a file: %s", exc)
-        return None
-
-
-def copy_with_hash(source: Path, destination: BinaryIO) -> str:
-    """Copy *source* into *destination* and return the BLAKE3 hash of what was copied.
-
-    The hash and the copy come from the same bytes, so they agree even when
-    *source* changes while it is read.
-    """
-    hasher = _blake3()
-    with source.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(65_536), b""):
-            hasher.update(chunk)
-            destination.write(chunk)
-    return hasher.hexdigest()
-
-
-def compute_bytes_hash(data: bytes) -> str:
-    """Compute BLAKE3 hash of an in-memory byte buffer."""
-    return _blake3(data).hexdigest()
 
 
 def process_owner() -> str:
@@ -65,3 +36,77 @@ def sync_directory(path: Path) -> None:
             raise
     finally:
         os.close(descriptor)
+
+
+#: How a staged file is named: hidden, and never like a file anything reads.
+_STAGED_PREFIX = "."
+_STAGED_SUFFIX = ".tmp"
+
+
+def staged_leftovers(directory: Path) -> list[Path]:
+    """The files staged in *directory* and never placed.
+
+    Each is a write that failed or a crash interrupted; one being written now
+    looks the same, so remove them only where no write can be running.
+    """
+    return [
+        path
+        for path in directory.glob(f"{_STAGED_PREFIX}*{_STAGED_SUFFIX}")
+        if path.is_file() and not path.is_symlink()
+    ]
+
+
+class StagedFile:
+    """A new file written beside where it goes, until it is placed there."""
+
+    def __init__(self, path: Path, stream: BinaryIO) -> None:
+        self.path = path
+        self.stream = stream
+        self.placed = False
+
+    def finish(self) -> None:
+        """Flush and sync what was written and close the file; safe to repeat."""
+        if not self.stream.closed:
+            self.stream.flush()
+            os.fsync(self.stream.fileno())
+            self.stream.close()
+
+    def place(self, destination: Path) -> None:
+        """Move the finished file to *destination*, replacing it in one step.
+
+        The rename is synced to its directory before returning, so a crash
+        leaves the old file or the new one, whole. *destination* must be on
+        the staging directory's filesystem.
+        """
+        self.finish()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        self.path.replace(destination)
+        self.placed = True
+        sync_directory(destination.parent)
+
+
+@contextmanager
+def staged_file(directory: Path, *, mode: int = 0o644) -> Generator[StagedFile]:
+    """Open a new file in *directory* to write and then place somewhere.
+
+    Unless it was placed by the end of the block, it is removed, so neither a
+    failure nor a crash leaves a partial file under a name anything reads.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    descriptor, name = tempfile.mkstemp(
+        dir=directory, prefix=_STAGED_PREFIX, suffix=_STAGED_SUFFIX
+    )
+    path = Path(name)
+    try:
+        path.chmod(mode)
+        staged = StagedFile(path, os.fdopen(descriptor, "wb"))
+    except BaseException:
+        os.close(descriptor)
+        path.unlink(missing_ok=True)
+        raise
+    try:
+        yield staged
+    finally:
+        staged.stream.close()
+        if not staged.placed:
+            path.unlink(missing_ok=True)

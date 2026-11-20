@@ -11,6 +11,7 @@ lazy from ...db.session import PAGE_SIZE
 lazy from ...domain import MediaType
 lazy from ...media_servers.adapters import MAX_SEASONS_PER_SHOW, ServerItem
 lazy from ...media_servers.errors import MediaServerError
+lazy from ...utils.scratch import configure_scratch
 lazy from ...utils.threads import owned_thread
 
 _ITEM = TypeAdapter(ServerItem)
@@ -56,10 +57,8 @@ class StagedListing:
         connection = sqlite3.connect(
             self.path, isolation_level=None, check_same_thread=False
         )
-        self._connection = connection
+        self._connection = configure_scratch(connection)
         connection.execute("PRAGMA locking_mode=EXCLUSIVE")
-        connection.execute("PRAGMA journal_mode=MEMORY")
-        connection.execute("PRAGMA synchronous=OFF")
         connection.execute(
             "CREATE TABLE items ("
             "media_type TEXT NOT NULL, server_id TEXT NOT NULL, "

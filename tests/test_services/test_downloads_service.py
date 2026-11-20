@@ -53,8 +53,8 @@ lazy from overture.services.themes.youtube_resolver import (
     ThemeAudio,
     YouTubeResolver,
 )
-lazy from overture.utils.file import compute_bytes_hash
-lazy from overture.utils.image import RATE_LIMIT_RETRIES, RateLimitedError
+lazy from overture.utils.hashing import compute_bytes_hash
+lazy from overture.utils.image_fetch import RATE_LIMIT_RETRIES, RateLimitedError
 lazy from overture.utils.progress import ProgressCallback, ProgressUpdate
 lazy from overture.ws.events import validate_event_payload
 lazy from tests.collection_helpers import stored_collection

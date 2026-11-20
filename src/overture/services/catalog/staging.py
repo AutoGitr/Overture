@@ -3,7 +3,6 @@
 lazy import json
 lazy import sqlite3
 lazy import zlib
-lazy from contextlib import closing
 lazy from datetime import datetime
 lazy from pathlib import Path
 lazy from typing import Any, cast
@@ -28,6 +27,7 @@ lazy from ...domain import CatalogMediaType
 lazy from ...integrations.http import create_client
 lazy from ...repositories.catalog import CatalogRepository
 lazy from ...schemas.catalog import CatalogSyncStats
+lazy from ...utils.scratch import scratch_database
 lazy from ...utils.threads import owned_thread
 lazy from . import remote
 
@@ -72,7 +72,7 @@ async def download(path: Path, stats: CatalogSyncStats) -> None:
 
 def _stage(path: Path, database: Path) -> int:
     """Validate one entry line at a time; enforce uniqueness with SQLite indexes."""
-    with closing(sqlite3.connect(database)) as stage, path.open("rb") as stream:
+    with scratch_database(database) as stage, path.open("rb") as stream:
         stage.execute(
             "CREATE TABLE entries (id INTEGER PRIMARY KEY, data TEXT NOT NULL)"
         )
@@ -98,7 +98,7 @@ def _stage(path: Path, database: Path) -> int:
 
 
 def _batch(database: Path, after: int) -> list[tuple[int, dict[str, Any]]]:
-    with closing(sqlite3.connect(database)) as stage:
+    with scratch_database(database) as stage:
         return [
             (int(key), cast("dict[str, Any]", json.loads(value)))
             for key, value in stage.execute(

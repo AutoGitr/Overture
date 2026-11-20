@@ -34,6 +34,7 @@ lazy from ..repositories.media_items import MediaItemRepository
 lazy from ..repositories.seasons import SeasonRepository
 lazy from ..schemas.art import ArtMatchResponse
 lazy from ..schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
+lazy from ..utils.text import count_label
 lazy from ..utils.time import utc_now
 lazy from .catalog.index import CatalogPick
 lazy from .downloads.queue import JobTarget
@@ -298,9 +299,9 @@ async def queue_and_report[TallyT: BulkAssetTally](
 
 def recent_window_label(params: AssetRunParams) -> str:
     """Name the skip-recent window the way the user set it."""
-    unit = params.skip_recent_unit.value.removesuffix("s")
-    plural = "" if params.skip_recent_val == 1 else "s"
-    return f"{params.skip_recent_val} {unit}{plural}"
+    return count_label(
+        params.skip_recent_val, params.skip_recent_unit.value.removesuffix("s")
+    )
 
 
 def checked_recently(last_checked: datetime | None, params: AssetRunParams) -> bool:
@@ -309,11 +310,6 @@ def checked_recently(last_checked: datetime | None, params: AssetRunParams) -> b
         return False
     window = timedelta(seconds=params.skip_recent_val * params.skip_recent_unit.seconds)
     return utc_now() - last_checked < window
-
-
-def count_label(count: int, noun: str) -> str:
-    """Return *count* with *noun*, pluralised."""
-    return f"{count} {noun}{'' if count == 1 else 's'}"
 
 
 async def scope_chunks(

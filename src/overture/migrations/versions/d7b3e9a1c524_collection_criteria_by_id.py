@@ -100,20 +100,24 @@ def _convert(by: Callable[[Titles], Rewrite]) -> None:
         held = set[int]().union(*(in_library.get(i, set()) for i in library_ids))
         return {key: title for key, title in titles.items() if key in held}
 
+    # A JSON column holds null as JSON's null, which no SQL NULL test excludes.
     for part_id, library_id, criteria in connection.execute(
         sa.text(
             "SELECT id, library_id, criteria FROM collection_libraries "
-            "WHERE criteria IS NOT NULL"
+            "WHERE json_type(criteria) = 'object'"
         )
-    ):
+    ).all():
         converted = _rewrite(json.loads(criteria), by(scope([library_id])))
         connection.execute(
             sa.text("UPDATE collection_libraries SET criteria = :c WHERE id = :id"),
             {"c": json.dumps(converted), "id": part_id},
         )
     for filter_id, criteria in connection.execute(
-        sa.text("SELECT id, criteria FROM saved_filters")
-    ):
+        sa.text(
+            "SELECT id, criteria FROM saved_filters "
+            "WHERE json_type(criteria) = 'object'"
+        )
+    ).all():
         converted = _rewrite(json.loads(criteria), by(titles))
         connection.execute(
             sa.text("UPDATE saved_filters SET criteria = :c WHERE id = :id"),
@@ -121,9 +125,10 @@ def _convert(by: Callable[[Titles], Rewrite]) -> None:
         )
     for group_id, generator in connection.execute(
         sa.text(
-            "SELECT id, generator FROM collection_groups WHERE generator IS NOT NULL"
+            "SELECT id, generator FROM collection_groups "
+            "WHERE json_type(generator) = 'object'"
         )
-    ):
+    ).all():
         stored = json.loads(generator)
         rewrite = by(scope(stored.get("library_ids", [])))
         stored["criteria"] = _rewrite(stored.get("criteria", {}), rewrite)

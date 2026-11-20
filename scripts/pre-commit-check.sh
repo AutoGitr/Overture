@@ -50,7 +50,11 @@ if ! uv lock --check; then
     echo "uv.lock does not match pyproject.toml. Run 'uv lock' and commit uv.lock." >&2
     exit 1
 fi
-uv run python -m scripts.release_metadata
+if [ "$FIX" = true ]; then
+    uv run python -m scripts.release_metadata --format-changelog
+else
+    uv run python -m scripts.release_metadata
+fi
 
 echo "=== Checking Agent Skills ==="
 if [ "$FIX" = true ]; then
