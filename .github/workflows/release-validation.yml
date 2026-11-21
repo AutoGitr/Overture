@@ -10,7 +10,7 @@ on:
         type: string
 
 concurrency:
-  group: release-validation-${{ github.event.pull_request.number || github.ref }}
+  group: release-validation-${{ inputs.ref || github.ref }}
   cancel-in-progress: true
 
 permissions:

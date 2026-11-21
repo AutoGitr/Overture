@@ -60,8 +60,8 @@ index is tagged.
 
 Protect `main` and `v*` tags, require only the `ci-result` check, which passes
 once every CI job a change needs has passed, and keep Actions permissions
-read-only by default. CodeQL analyses only the languages a change touches, so
-it is not a required check.
+read-only by default. CodeQL runs only when analysed code changes, so it is
+not a required check.
 
 Repository labels are defined in `.github/labels.json`. Preview changes with
 `uv run --locked python -m scripts.sync_labels`; use `--apply` to reconcile them

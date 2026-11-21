@@ -9,7 +9,7 @@
 ### Changed
 
 - **API:** titles and collections carry their poster, background and theme under `assets`, and seasons their poster under `poster`: each with its selection, the content Overture holds, its status and where it is delivered, per server and folder. This replaces the flat `poster_*`, `background_*`, `theme_*` and `youtube_*` fields; existing choices and files are converted.
-- **API:** the `collection.theme.updated` event is gone, as `collection.updated` reports a theme change; setting or removing a collection theme returns the theme. Job events carry `log_targets` in place of their outcome counters.
+- **API:** setting or removing a collection theme returns the theme, and job events carry `log_targets` in place of their outcome counters.
 - **API:** WebSocket events carry every field, `null` where it has no value, instead of leaving it out.
 - **API:** an asset says whether it is `selected`, `GET /api/collections/{id}/theme` returns the theme as an asset, and Server audit fixes take a collection's theme by `collection_id`.
 - **Collections:** a sync checks the art and theme of every server copy, not just the first, and a collection is complete only once every copy shows them.
@@ -18,6 +18,10 @@
 - **Operations:** Server audit compares and fixes collection images and themes exactly as a sync does, and records what it finds on a collection's copies, so the collection's status follows the audit.
 - **Operations:** Assets runs decide titles and collections by the same rules: a saved choice is restored wherever a place lacks it, OvertureDB art replaces a different image only with Replace existing, Replace existing skips a theme already in place as it does art, and planning lines count `assets` and `collection assets`.
 - **Statistics:** the images Overture uploads to collections count in the image cache, not in the artwork sizes.
+
+### Removed
+
+- **API:** the `collection.theme.updated` event; `collection.updated` reports a theme change.
 
 ### Fixed
 

@@ -3,7 +3,7 @@
 lazy import json
 lazy import re
 lazy import tomllib
-lazy from pathlib import Path
+lazy from pathlib import Path, PurePosixPath
 lazy from typing import Any
 
 lazy import pytest
@@ -71,43 +71,51 @@ def test_workflows_pin_actions_bound_runtime_and_do_not_persist_credentials() ->
             _assert_job_steps(job["steps"])
 
 
-_CODEQL_EXCLUDED = re.compile(r"grep -Ev '([^']+)' <<< \"\$changed\"")
-_CODEQL_LANGUAGE = re.compile(
-    r"grep -Eq '([^']+)' <<< \"\$code\"; then\s+languages\+=\('\"([\w-]+)\"'\)"
-)
-NO_LANGUAGE: frozenset[str] = frozenset()
+def _filtered_in(path: str, patterns: list[str]) -> bool:
+    """Whether a change to *path* starts a run, as GitHub reads ``paths``.
+
+    The last pattern a path matches decides, and a ``!`` pattern excludes it.
+    """
+    included = False
+    for pattern in patterns:
+        negated = pattern.startswith("!")
+        if PurePosixPath(path).full_match(pattern.removeprefix("!")):
+            included = not negated
+    return included
 
 
 @pytest.mark.parametrize(
-    ("path", "languages"),
+    ("path", "analysed"),
     [
-        ("src/overture/main.py", frozenset({"python"})),
-        ("scripts/release_metadata.py", frozenset({"python"})),
-        ("frontend/src/App.svelte", frozenset({"javascript-typescript"})),
-        ("frontend/vite.config.ts", frozenset({"javascript-typescript"})),
-        (".github/workflows/ci.yml", frozenset({"actions"})),
-        ("tests/test_api.py", NO_LANGUAGE),
-        ("frontend/src/test/e2e/fixtures.ts", NO_LANGUAGE),
-        ("frontend/package.json", NO_LANGUAGE),
-        ("uv.lock", NO_LANGUAGE),
-        (".github/README.md", NO_LANGUAGE),
-        ("Dockerfile", NO_LANGUAGE),
+        ("src/overture/main.py", True),
+        ("scripts/release_metadata.py", True),
+        ("packaging/linux/build.py", True),
+        ("frontend/src/App.svelte", True),
+        ("frontend/vite.config.ts", True),
+        (".github/workflows/ci.yml", True),
+        (".github/codeql/codeql-config.yml", True),
+        ("tests/test_api.py", False),
+        ("frontend/src/test/e2e/fixtures.ts", False),
+        ("frontend/src/generated/rest/types.gen.ts", False),
+        ("frontend/package.json", False),
+        ("uv.lock", False),
+        (".github/README.md", False),
+        ("docs/overture/index.md", False),
+        ("Dockerfile", False),
     ],
 )
-def test_codeql_analyses_only_the_languages_a_change_touches(
-    path: str, languages: frozenset[str]
+def test_codeql_runs_for_analysed_code_and_then_analyses_every_language(
+    path: str, *, analysed: bool
 ) -> None:
+    """Every run analyses every language, so code scanning compares it with main's."""
     workflow = yaml.safe_load((ROOT / ".github/workflows/codeql.yml").read_text())
-    script = workflow["jobs"]["languages"]["steps"][1]["run"]
-    assert """all='["python","javascript-typescript","actions"]'""" in script
-    excluded = _CODEQL_EXCLUDED.search(script)
-    assert excluded
-    selected = {
-        language
-        for pattern, language in _CODEQL_LANGUAGE.findall(script)
-        if re.search(pattern, path) and not re.search(excluded[1], path)
-    }
-    assert selected == languages
+    # PyYAML reads the ``on`` key as ``True``.
+    triggers = workflow[True]
+    patterns = triggers["pull_request"]["paths"]
+    assert triggers["push"]["paths"] == patterns
+    assert _filtered_in(path, patterns) is analysed
+    matrix = workflow["jobs"]["analyze"]["strategy"]["matrix"]["language"]
+    assert set(matrix) == {"python", "javascript-typescript", "actions"}
 
 
 def test_release_workflow_triggers_on_semver_tags_and_dispatch() -> None:
