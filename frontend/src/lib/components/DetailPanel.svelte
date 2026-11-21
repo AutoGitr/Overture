@@ -23,7 +23,7 @@
   import { MEDIA_ICONS } from "../utils/mediaIcons";
   import { CatalogBrowsing } from "../utils/catalogBrowsing.svelte";
   import { ItemRecordActions } from "../utils/itemRecordActions.svelte";
-  import { catalogStatus, holdsSomething, statusTone } from "../utils/sidebarDomain";
+  import { catalogStatus, holdsSomething, statusTone } from "../utils/sidebarShared";
   import { deliveryNote } from "../utils/assetDeliveries";
   import CollectionBadge from "./CollectionBadge.svelte";
   import ContributeIssueLink from "./ContributeIssueLink.svelte";

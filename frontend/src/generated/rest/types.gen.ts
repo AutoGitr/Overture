@@ -5407,13 +5407,18 @@ export type ServerAuditRequest = {
  * One theme delete target selected from server audit results.
  *
  * Without a ``theme_id`` the server has no theme to delete, so the item is
- * only refreshed to pick up the local file.
+ * only refreshed to pick up the local file. Collections name
+ * ``collection_id`` instead and re-deliver their saved or downloaded theme.
  */
 export type ServerAuditThemeDeleteTarget = {
     /**
+     * Collection Id
+     */
+    collection_id?: number | null;
+    /**
      * Item Id
      */
-    item_id: number;
+    item_id?: number | null;
     /**
      * Server Id
      */

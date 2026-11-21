@@ -1,9 +1,10 @@
-"""Typed persistence for the cron-backed background schedules.
+"""Typed persistence for singleton cron-backed background schedules.
 
-Every schedule is one row in ``task_schedule`` plus a JSON payload. The
-payload's shape is a Pydantic model rather than a free-form dict, so defaults,
-ranges, and field names are declared once and enforced on the way in and out.
-Adding a schedule means adding a payload model and a :class:`ScheduleSpec`.
+Each singleton schedule (backup, catalog) is stored as a row in
+``saved_schedules`` keyed by its :class:`~overture.domain.ScheduleKind` plus a
+typed JSON payload. The payload's shape is a Pydantic model rather than a
+free-form dict, so defaults, ranges, and field names are declared once and
+enforced on the way in and out.
 """
 
 lazy from dataclasses import dataclass
@@ -12,16 +13,15 @@ lazy from datetime import datetime
 lazy from pydantic import BaseModel, Field
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ..db.models.schedule import TaskSchedule
+lazy from ..db.models.saved_schedule import SavedSchedule
+lazy from ..domain import ScheduleKind
+lazy from ..repositories.saved_schedules import SavedScheduleRepository
 lazy from ..schemas.backup import BackupRetention
 lazy from ..schemas.catalog import (
     CatalogSyncOutcome,
     CatalogSyncStats,
 )
 lazy from ..utils.time import utc_now
-
-BACKUP_TASK_NAME = "backup"
-CATALOG_TASK_NAME = "catalog"
 
 DEFAULT_BACKUP_CRON = "0 3 * * *"
 DEFAULT_CATALOG_CRON = "0 0 * * *"
@@ -47,9 +47,9 @@ class CatalogPayload(SchedulePayload):
 
 @dataclass(slots=True, frozen=True)
 class ScheduleSpec[PayloadT: SchedulePayload]:
-    """Static description of one persisted schedule."""
+    """Static description of one singleton persisted schedule."""
 
-    task_name: str
+    kind: ScheduleKind
     payload_model: type[PayloadT]
     default_cron: str = ""
     default_enabled: bool = False
@@ -68,10 +68,10 @@ class Schedule[PayloadT: SchedulePayload]:
 
 
 BACKUP_SCHEDULE = ScheduleSpec(
-    BACKUP_TASK_NAME, BackupPayload, DEFAULT_BACKUP_CRON, default_enabled=True
+    ScheduleKind.BACKUP, BackupPayload, DEFAULT_BACKUP_CRON, default_enabled=True
 )
 CATALOG_SCHEDULE = ScheduleSpec(
-    CATALOG_TASK_NAME,
+    ScheduleKind.CATALOG,
     CatalogPayload,
     DEFAULT_CATALOG_CRON,
     default_enabled=True,
@@ -79,7 +79,7 @@ CATALOG_SCHEDULE = ScheduleSpec(
 
 
 def _parse[PayloadT: SchedulePayload](
-    record: TaskSchedule, spec: ScheduleSpec[PayloadT]
+    record: SavedSchedule, spec: ScheduleSpec[PayloadT]
 ) -> PayloadT:
     """Return the record's payload as its declared model, defaults filled in."""
     return spec.payload_model.model_validate(record.payload or {})
@@ -87,20 +87,31 @@ def _parse[PayloadT: SchedulePayload](
 
 async def _record[PayloadT: SchedulePayload](
     session: AsyncSession, spec: ScheduleSpec[PayloadT]
-) -> TaskSchedule:
+) -> SavedSchedule:
     """Return the schedule row to write to, creating it the first time."""
-    record = await session.get(TaskSchedule, spec.task_name)
+    repo = SavedScheduleRepository(session)
+    record = await repo.singleton(spec.kind)
     if record is None:
-        record = TaskSchedule(
-            task_name=spec.task_name,
+        now = utc_now()
+        record = SavedSchedule(
+            kind=spec.kind,
+            name=spec.kind.value,
             enabled=spec.default_enabled,
             cron_expression=spec.default_cron,
             payload=spec.payload_model().model_dump(mode="json"),
-            updated_at=utc_now(),
+            created_at=now,
+            updated_at=now,
         )
-        session.add(record)
+        repo.add(record)
         await session.flush()
     return record
+
+
+async def catalog_enabled(session: AsyncSession) -> bool:
+    """Return whether OvertureDB catalog integration is enabled."""
+    return await SavedScheduleRepository(session).enabled(
+        ScheduleKind.CATALOG, default=CATALOG_SCHEDULE.default_enabled
+    )
 
 
 async def load_schedule[PayloadT: SchedulePayload](
@@ -113,10 +124,9 @@ async def load_schedule[PayloadT: SchedulePayload](
 
     Reading does not write. A schedule nobody has saved yet simply reads as
     its defaults; inventing a row here would mean every status endpoint and
-    every scheduled run opened a write transaction to answer a question, and
-    that is what put a dozen read-only callers on ``write_session``.
+    every scheduled run opened a write transaction to answer a question.
     """
-    record = await session.get(TaskSchedule, spec.task_name)
+    record = await SavedScheduleRepository(session).singleton(spec.kind)
     if record is None:
         return Schedule(
             enabled=spec.default_enabled,
@@ -156,7 +166,7 @@ async def save_schedule[PayloadT: SchedulePayload](
     if payload is not None:
         record.payload = payload.model_dump(mode="json")
     record.updated_at = utc_now()
-    session.add(record)
+    SavedScheduleRepository(session).add(record)
     return await load_schedule(session, spec, timezone=timezone)
 
 

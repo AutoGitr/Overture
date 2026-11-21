@@ -8,7 +8,7 @@
   import { settingsState } from "../stores/settingsState.svelte";
   import CollectionPolicyFields from "./CollectionPolicyFields.svelte";
   import CollectionScheduleFields from "./CollectionScheduleFields.svelte";
-  import type { PolicyData, ScheduleData } from "../utils/collectionForms.svelte";
+  import type { PolicyData, ScheduleData } from "../utils/collectionFormShared.svelte";
   import { POLICY_SETTINGS } from "../../generated/settings";
   import DataStatus from "./DataStatus.svelte";
   import FieldRow from "./FieldRow.svelte";

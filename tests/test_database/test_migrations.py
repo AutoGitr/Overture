@@ -1869,18 +1869,28 @@ def test_slots_and_themes_become_assets_with_deliveries_and_come_back() -> None:
     with _at_revision("b7d2f9a4c681") as (conn, config):
         conn.exec_driver_sql(
             "INSERT INTO media_servers (id, key, title, server_type, identity, "
-            "position) VALUES (1, 'plex', 'Plex', 'plex', 'plex:a', 0)"
+            "position) VALUES (1, 'plex', 'Plex', 'plex', 'plex:a', 0), "
+            "(2, 'plex2', 'Plex 2', 'plex', 'plex:b', 1)"
         )
         conn.exec_driver_sql(
             "INSERT INTO libraries (id, media_type, server_id, title) VALUES "
-            "('1:1', 'movie', 1, 'Movies')"
+            "('1:1', 'movie', 1, 'Movies'), ('2:1', 'movie', 2, 'Movies 2')"
         )
         conn.exec_driver_sql(
             "INSERT INTO media_items (id, media_type, title, monitored, "
             "folder_path, youtube_id, youtube_id_source, theme_file_hash, "
             "theme_file_mtime_ns, theme_file_size, theme_selection_hash, "
             "theme_provenance_cleared) VALUES (1, 'movie', 'Alien', 1, "
-            "'/movies/Alien', 'yt-alien', 'download', 'other', 5, 6, 'theme', 0)"
+            "'/movies/Alien', 'yt-alien', 'download', 'other', 5, 6, 'theme', 0), "
+            "(2, 'show', 'Firefly', 1, '/shows/Firefly', NULL, NULL, 'unselected', "
+            "7, 8, NULL, 0)"
+        )
+        conn.exec_driver_sql(
+            "UPDATE media_items SET theme_file_duration = 30 WHERE id = 2"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO seasons (id, media_item_id, season_num, file_count) "
+            "VALUES (1, 2, 1, 1)"
         )
         conn.exec_driver_sql(
             "INSERT INTO art_slots (id, media_item_id, art_type, url, file_hash, "
@@ -1889,6 +1899,11 @@ def test_slots_and_themes_become_assets_with_deliveries_and_come_back() -> None:
             "'https://image.tmdb.org/t/p/original/a.jpg', 'poster', ?, 1000, "
             "1500, 1, 2, 'poster', 0)",
             ("a" * 64,),
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO art_slots (id, season_id, art_type, url, file_hash, "
+            "selection_hash, generated_title_only) VALUES (3, 1, 'season_poster', "
+            "'https://image.tmdb.org/t/p/original/s1.jpg', 's1', 's1', 0)"
         )
         conn.exec_driver_sql(
             "INSERT INTO media_collections (id, title, kind, order_type, "
@@ -1901,7 +1916,8 @@ def test_slots_and_themes_become_assets_with_deliveries_and_come_back() -> None:
         conn.exec_driver_sql(
             "INSERT INTO collection_libraries (id, collection_id, library_id, "
             "media_type, server_id, server_item_id) VALUES "
-            "(1, 2, '1:1', 'movie', 1, 'box')"
+            "(1, 2, '1:1', 'movie', 1, 'box'), "
+            "(2, 2, '2:1', 'movie', 2, 'box2')"
         )
         conn.exec_driver_sql(
             "INSERT INTO art_slots (id, collection_id, art_type, url, poster_style, "
@@ -1915,26 +1931,45 @@ def test_slots_and_themes_become_assets_with_deliveries_and_come_back() -> None:
         command.upgrade(config, "c3e8a1f5d927")
 
         assets = {
-            (row[0] or row[1], row[2]): row[3:]
+            (
+                "item"
+                if row[0] is not None
+                else "season"
+                if row[1] is not None
+                else "collection",
+                row[0] or row[1] or row[2],
+                row[3],
+            ): row[4:]
             for row in conn.exec_driver_sql(
-                "SELECT media_item_id, collection_id, kind, status, content_hash, "
-                "id FROM assets"
+                "SELECT media_item_id, season_id, collection_id, kind, status, "
+                "content_hash, duration, id FROM assets"
             )
         }
         # The poster file is the selection's; the theme file was replaced.
-        assert assets[(1, "poster")][:2] == ("complete", "poster")
-        assert assets[(1, "background")][:2] == ("missing", None)
-        assert assets[(1, "theme")][:2] == ("partial", "theme")
-        # The uploaded poster is on the collection's one copy, the lead.
-        assert assets[(2, "poster")][:2] == ("complete", "up")
-        # A Plex theme Overture uploaded is named by its video.
-        assert assets[(2, "theme")][:2] == ("complete", "youtube:yt-saga")
-        deliveries = conn.exec_driver_sql(
-            "SELECT server_item_id, channel, observed_hash, observed_ref "
-            "FROM asset_deliveries WHERE asset_id = ?",
-            (assets[(2, "poster")][2],),
+        assert assets[("item", 1, "poster")][:2] == ("complete", "poster")
+        assert assets[("item", 1, "background")][:2] == ("missing", None)
+        assert assets[("item", 1, "theme")][:2] == ("partial", "theme")
+        # An unselected local theme keeps its duration on the file delivery only.
+        assert assets[("item", 2, "theme")][:3] == ("partial", None, None)
+        assert conn.exec_driver_sql(
+            "SELECT duration FROM asset_deliveries WHERE asset_id = ?",
+            (assets[("item", 2, "theme")][3],),
+        ).one() == (30,)
+        # Season poster migrates with its local file delivery.
+        assert assets[("season", 1, "season_poster")][:2] == ("complete", "s1")
+        # The uploaded poster is on the collection's copies; only lead gets ref.
+        assert assets[("collection", 2, "poster")][:2] == ("complete", "up")
+        # A Plex theme Overture uploaded is named by its video; only lead gets ref/hash.
+        assert assets[("collection", 2, "theme")][:2] == ("partial", "youtube:yt-saga")
+        theme_deliveries = conn.exec_driver_sql(
+            "SELECT server_id, server_item_id, channel, observed_hash, observed_ref "
+            "FROM asset_deliveries WHERE asset_id = ? ORDER BY server_id",
+            (assets[("collection", 2, "theme")][3],),
         ).all()
-        assert deliveries == [("box", "upload", "up", "http://plex/thumb/1")]
+        assert theme_deliveries == [
+            (1, "box", "upload", "youtube:yt-saga", "/theme/1"),
+            (2, "box2", "upload", None, None),
+        ]
 
         command.downgrade(config, "b7d2f9a4c681")
 
@@ -1942,11 +1977,57 @@ def test_slots_and_themes_become_assets_with_deliveries_and_come_back() -> None:
             "SELECT art_type, url, file_hash, selection_hash FROM art_slots ORDER BY id"
         ).all() == [
             ("poster", "https://image.tmdb.org/t/p/original/a.jpg", "poster", "poster"),
+            (
+                "season_poster",
+                "https://image.tmdb.org/t/p/original/s1.jpg",
+                "s1",
+                "s1",
+            ),
             ("poster", "https://image.tmdb.org/t/p/original/s.jpg", "up", None),
         ]
         assert conn.exec_driver_sql(
-            "SELECT youtube_id, theme_file_hash, theme_selection_hash FROM media_items"
-        ).one() == ("yt-alien", "other", "theme")
+            "SELECT id, youtube_id, theme_file_hash, theme_selection_hash "
+            "FROM media_items ORDER BY id"
+        ).all() == [
+            (1, "yt-alien", "other", "theme"),
+            (2, None, "unselected", None),
+        ]
         assert conn.exec_driver_sql(
             "SELECT thumb_url, youtube_id, server_theme_id FROM media_collections"
         ).one() == ("http://plex/thumb/1", "yt-saga", "/theme/1")
+
+
+def test_task_schedules_move_into_saved_schedules_and_back() -> None:
+    with _at_revision("c3e8a1f5d927") as (conn, config):
+        conn.exec_driver_sql(
+            "INSERT INTO task_schedule (task_name, enabled, cron_expression, "
+            "payload, updated_at) VALUES "
+            "('backup', 1, '0 4 * * *', '{\"retention\":{\"latest\":5}}', "
+            "'2026-01-02 00:00:00.000000'), "
+            "('catalog', 0, '', '{}', NULL), "
+            "('value 1', 0, '', '{}', NULL)"
+        )
+
+        command.upgrade(config, "d4f9a2b6e831")
+
+        assert "task_schedule" not in inspect(conn).get_table_names()
+        rows = conn.exec_driver_sql(
+            "SELECT kind, name, enabled, cron_expression, payload "
+            "FROM saved_schedules ORDER BY kind"
+        ).all()
+        assert rows == [
+            ("backup", "backup", 1, "0 4 * * *", '{"retention":{"latest":5}}'),
+            ("catalog", "catalog", 0, "0 0 * * *", "{}"),
+        ]
+
+        command.downgrade(config, "c3e8a1f5d927")
+
+        restored = conn.exec_driver_sql(
+            "SELECT task_name, enabled, cron_expression, payload "
+            "FROM task_schedule ORDER BY task_name"
+        ).all()
+        assert restored == [
+            ("backup", 1, "0 4 * * *", '{"retention":{"latest":5}}'),
+            ("catalog", 0, "0 0 * * *", "{}"),
+        ]
+        assert conn.exec_driver_sql("SELECT * FROM saved_schedules").all() == []

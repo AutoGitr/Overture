@@ -6,7 +6,6 @@ lazy from dataclasses import dataclass
 lazy from datetime import datetime
 
 lazy from ... import protocols
-lazy from ...config import Settings
 lazy from ...db.ledger import (
     Destination,
     Evidence,
@@ -212,13 +211,11 @@ class CollectionSync:
         self,
         *,
         publisher: protocols.EventPublisher,
-        app_config: Settings,
         database: Database,
         downloads: DownloadService,
         checks: ServerCopies,
     ) -> None:
         self._publisher = publisher
-        self._config = app_config
         self._database = database
         self._downloads = downloads
         self._checks = checks
@@ -355,9 +352,7 @@ class CollectionSync:
                             now=utc_now(),
                         )
                         self._record(row, observations)
-                        await apply_needs(
-                            session, collections=[row], app_config=self._config
-                        )
+                        await apply_needs(session, collections=[row])
                 identified += row.tmdb_collection_id is not None
                 if (
                     row.id is not None
@@ -371,53 +366,14 @@ class CollectionSync:
                 await self._publisher.broadcast(
                     "collection.updated", {"collection_id": row.id}
                 )
-            async with self._database.read_session() as session:
-                gone = {
-                    row.id: missing
-                    for row in await CollectionRepository(session).list_all()
-                    if row.id is not None
-                    and (
-                        missing := {
-                            key
-                            for part in row.copies
-                            if part.server_id in by_server
-                            and (key := (part.server_id, part.server_item_id or ""))
-                            not in seen
-                        }
-                    )
-                    and (
-                        not library_ids
-                        or (
-                            row.last_synced_at is not None
-                            and set(row.library_ids) & set(library_ids)
-                        )
-                    )
-                }
-                managed = await CollectionRepository(session).managed_ids(list(gone))
-            for collection_id, missing in gone.items():
-                async with (
-                    self._downloads.asset_locks.acquire(f"collection:{collection_id}"),
-                    self._database.write_session() as session,
-                ):
-                    repo = CollectionRepository(session)
-                    if collection_id in managed:
-                        # Overture keeps what it manages; the next rule sync
-                        # puts the collection back on the server.
-                        await repo.clear_server_copies(
-                            collection_id, utc_now(), missing
-                        )
-                        continue
-                    await self._downloads.cancel_assets(
-                        session, AssetScope(collection_id=collection_id)
-                    )
-                    await repo.delete_ids([collection_id])
-                await self._downloads.committed(session)
+            removed, missing_managed = await self._reconcile_missing(
+                by_server, seen, library_ids
+            )
             await self._publisher.broadcast("collections.changed")
         await queue_catalog_themes_for_collections(
             newly_identified,
             theme_order=theme_order,
             downloads=self._downloads,
-            app_config=self._config,
             database=self._database,
         )
         if theme_order is IncrementalThemeOrder.OFF and newly_identified:
@@ -426,10 +382,63 @@ class CollectionSync:
             JobOutcome.STARTED,
             "Collections",
             f"{len(listed)} listed, {identified} with TMDB IDs, "
-            f"{len(gone) - len(managed)} removed, "
-            f"{len(managed)} managed no longer on the server",
+            f"{removed} removed, "
+            f"{missing_managed} managed no longer on the server",
             finished=False,
         )
+
+    async def _reconcile_missing(
+        self,
+        by_server: Mapping[int, Provider],
+        seen: set[CopyKey],
+        library_ids: list[str] | None,
+    ) -> tuple[int, int]:
+        """Forget managed copies missing from synced servers and drop unmanaged rows."""
+        async with self._database.read_session() as session:
+            gone = {
+                row.id: missing
+                for row in await CollectionRepository(session).list_all()
+                if row.id is not None
+                and (
+                    missing := {
+                        key
+                        for part in row.copies
+                        if part.server_id in by_server
+                        and (key := (part.server_id, part.server_item_id or ""))
+                        not in seen
+                    }
+                )
+                and (
+                    not library_ids
+                    or (
+                        row.last_synced_at is not None
+                        and set(row.library_ids) & set(library_ids)
+                    )
+                )
+            }
+            managed = await CollectionRepository(session).managed_ids(list(gone))
+        for collection_id, missing in gone.items():
+            async with (
+                self._downloads.asset_locks.acquire(f"collection:{collection_id}"),
+                self._database.write_session() as session,
+            ):
+                repo = CollectionRepository(session)
+                if collection_id in managed:
+                    # Overture keeps what it manages; the next rule sync
+                    # puts the collection back on the server.
+                    saved = await repo.clear_server_copies(
+                        collection_id, utc_now(), missing
+                    )
+                    if saved is not None:
+                        place_collection(saved, self._downloads.provider_registry)
+                        session.add(saved)
+                    continue
+                await self._downloads.cancel_assets(
+                    session, AssetScope(collection_id=collection_id)
+                )
+                await repo.delete_ids([collection_id])
+            await self._downloads.committed(session)
+        return len(gone) - len(managed), len(managed)
 
     async def _observe(
         self, current: MediaCollection | None, listed: ListedCopy, provider: Provider
@@ -542,7 +551,6 @@ class CollectionSync:
                 ids,
                 theme_order=order,
                 downloads=self._downloads,
-                app_config=self._config,
                 database=self._database,
             )
 

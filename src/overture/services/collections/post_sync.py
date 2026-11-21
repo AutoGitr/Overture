@@ -21,11 +21,12 @@ lazy from ...domain import (
     ServerAsset,
     TermKind,
 )
-lazy from ...repositories.collections import (
+lazy from ...repositories.collection_items import (
     CollectionItem,
-    CollectionRepository,
+    CollectionItemRepository,
     TermSelection,
 )
+lazy from ...repositories.collections import CollectionRepository
 lazy from ...schemas.art import ArtCandidate, SaveCollectionArtRequest
 lazy from ...schemas.collections import SetCollectionThemeRequest
 lazy from ...utils.collection_formats import format_arr_tag, format_member_tag
@@ -203,9 +204,7 @@ class AutoAssets:
         if not (policy.themes and policy.auto_match_theme and row.tmdb_collection_id):
             return
         async with self._access.database.read_session() as session:
-            catalog = await catalog_collections(
-                session, {row.tmdb_collection_id}, app_config=self._access.app_config
-            )
+            catalog = await catalog_collections(session, {row.tmdb_collection_id})
         entry = catalog.get(row.tmdb_collection_id)
         if entry and entry.youtube_id_overturedb and self._themes.unavailable() is None:
             await self._themes.queue(
@@ -305,7 +304,7 @@ class MemberTag:
                 and (template := resolve_policy(defaults, row.group, row.rule).arr_tag)
                 and _arr_tag(row, template) == tag
             ]
-            return await repo.members_of(sharing)
+            return await CollectionItemRepository(session).members_of(sharing)
 
 
 def _arr_tag(row: MediaCollection, template: str) -> str:
@@ -409,19 +408,16 @@ class PostSync:
         async with self._access.database.write_session() as session:
             row = await self._access.require(session, collection_id)
             place_collection(row, self._access.provider_registry)
-            await apply_needs(
-                session, collections=[row], app_config=self._access.app_config
-            )
+            await apply_needs(session, collections=[row])
             session.add(row)
         async with self._access.database.read_session() as session:
-            repo = CollectionRepository(session)
             row = await self._access.require(session, collection_id)
             rule = row.rule
             synced = SyncedCollection(
                 row=row,
                 rule=rule,
                 policy=await self._access.policy(session, row.group, rule),
-                members=await repo.members(collection_id),
+                members=await CollectionItemRepository(session).members(collection_id),
                 settings=await get_app_settings(session),
                 plex_libraries=frozenset(
                     part.library_id

@@ -3,7 +3,7 @@ import type { ArtType } from "../../generated/rest/types.gen";
 import type { CatalogTarget } from "../rest/cache";
 import { notify } from "../stores/notificationState.svelte";
 import { settingsState } from "../stores/settingsState.svelte";
-import type { SidebarMode, SidebarSource, SidebarTab } from "../utils/sidebarDomain";
+import type { SidebarMode, SidebarSource, SidebarTab } from "../utils/sidebarShared";
 import { buildIdSlug, parseCatalogSlug, parseItemSlug, type ItemSlug } from "../utils/slug";
 
 /**

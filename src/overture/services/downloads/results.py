@@ -81,6 +81,8 @@ class DownloadedTheme:
     youtube_id: str
     title: str | None
     duration: int | None
+    #: The audio stream's hash without tags, which a server's copy is compared by.
+    fingerprint: str | None = None
 
     async def record(
         self, session: AsyncSession, item: MediaItem, stored: StoredFile
@@ -100,23 +102,12 @@ class DownloadedTheme:
                 file_hash=stored.file_hash,
                 file_mtime_ns=stored.mtime_ns,
                 file_size=stored.size,
+                fingerprint=self.fingerprint,
                 duration=self.duration,
             ),
             at=utc_now(),
         )
         session.add(item)
-
-
-@dataclass(slots=True, frozen=True)
-class DownloadedCollectionTheme:
-    """One finished collection theme download, ready for the media server."""
-
-    youtube_id: str
-    title: str | None
-    duration: int | None
-    audio_bytes: bytes
-    #: The audio stream's hash without tags, which a server's copy is compared by.
-    fingerprint: str | None = None
 
 
 type DownloadResult = DownloadedArt | DownloadedTheme

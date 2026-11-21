@@ -77,7 +77,7 @@ async def test_group_scope_resolves_to_the_groups_collections(
 
     async def planned(**scope: object) -> int:
         params = BulkThemeRequest.model_validate(scope)
-        plan = await plan_run(params, app_config=app_config, database=database)
+        plan = await plan_run(params, database=database)
         return plan.total
 
     assert await planned(collection_groups=["Sagas"]) == 1
@@ -110,7 +110,6 @@ async def test_collection_art_plans_posters_and_backgrounds_with_item_rules(
 
     plan = await plan_run(
         BulkMatchArtRequest(collection_ids=[1]),
-        app_config=app_config,
         database=database,
     )
 
@@ -130,7 +129,6 @@ async def test_slots_no_source_can_serve_are_decided_together_while_planning(
 
     plan = await plan_run(
         BulkMatchArtRequest(collection_groups=["Sagas"]),
-        app_config=app_config,
         database=database,
     )
 
@@ -256,7 +254,7 @@ async def test_collection_art_run_uploads_the_catalog_art_it_finds(
     params = BulkMatchArtRequest(
         collection_groups=["Sagas"], source_order=[ArtBulkSource.OVERTUREDB]
     )
-    plan = await plan_run(params, app_config=app_config, database=database)
+    plan = await plan_run(params, database=database)
     assert decided(plan) == {
         (JobOutcome.NO_MATCH, "OvertureDB has no background for it"): 1
     }
@@ -371,7 +369,7 @@ async def test_a_run_names_collection_slots_and_skips_those_that_left(
         art_types=[ArtType.POSTER],
         source_order=[ArtBulkSource.OVERTUREDB],
     )
-    plan = await plan_run(params, app_config=app_config, database=database)
+    plan = await plan_run(params, database=database)
     async with database.write_session() as session:
         left = await session.get(MediaCollection, 2)
         await session.delete(left)

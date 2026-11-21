@@ -13,7 +13,6 @@ lazy from collections.abc import Sequence
 lazy from sqlmodel import col, inspect, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ..config import Settings
 lazy from ..db.ledger import set_needed
 lazy from ..db.models.media_collection import MediaCollection
 lazy from ..db.models.media_item import MediaItem
@@ -24,17 +23,14 @@ lazy from ..media_servers.registry import ProviderRegistry
 lazy from ..repositories.catalog import CatalogRepository
 lazy from .collections.destinations import place_collection
 lazy from .collections.policy import resolve_policy
-lazy from .schedule_store import CATALOG_SCHEDULE, load_schedule
+lazy from .schedule_store import catalog_enabled
 
 
-async def _trusts_no_theme(
-    session: AsyncSession, settings: AppSettings, app_config: Settings
-) -> bool:
+async def _trusts_no_theme(session: AsyncSession, settings: AppSettings) -> bool:
     """Whether OvertureDB's No theme flag counts: the catalog is on and trusted."""
     if not settings.overturedb_no_theme:
         return False
-    schedule = await load_schedule(session, CATALOG_SCHEDULE, timezone=app_config.TZ)
-    return schedule.enabled
+    return await catalog_enabled(session)
 
 
 async def apply_needs(
@@ -42,11 +38,10 @@ async def apply_needs(
     *,
     items: Sequence[MediaItem] = (),
     collections: Sequence[MediaCollection] = (),
-    app_config: Settings,
 ) -> None:
     """Record what is wanted for each of *items* and *collections*."""
     settings = await get_app_settings(session)
-    trusted = await _trusts_no_theme(session, settings, app_config)
+    trusted = await _trusts_no_theme(session, settings)
     catalog = CatalogRepository(session)
     if items:
         entries = await catalog.items_by_media_item_id(items) if trusted else {}
@@ -85,11 +80,9 @@ class AssetNeeds:
     def __init__(
         self,
         *,
-        app_config: Settings,
         database: Database,
         provider_registry: ProviderRegistry,
     ) -> None:
-        self._app_config = app_config
         self._database = database
         self._provider_registry = provider_registry
 
@@ -137,6 +130,5 @@ class AssetNeeds:
                     session,
                     items=items,
                     collections=collections,
-                    app_config=self._app_config,
                 )
             after = rows[-1].id or after

@@ -18,7 +18,7 @@
     remotePosterUrl,
   } from "../utils/artDisplay";
   import { MEDIA_ICONS, type MediaIcon } from "../utils/mediaIcons";
-  import { catalogStatus, type StatusTone } from "../utils/sidebarDomain";
+  import { catalogStatus, type StatusTone } from "../utils/sidebarShared";
   import SidebarAssetBadges from "./SidebarAssetBadges.svelte";
   import FallbackImage from "./FallbackImage.svelte";
 

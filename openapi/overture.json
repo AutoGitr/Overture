@@ -11789,11 +11789,29 @@
       },
       "ServerAuditThemeDeleteTarget": {
         "additionalProperties": false,
-        "description": "One theme delete target selected from server audit results.\n\nWithout a ``theme_id`` the server has no theme to delete, so the item is\nonly refreshed to pick up the local file.",
+        "description": "One theme delete target selected from server audit results.\n\nWithout a ``theme_id`` the server has no theme to delete, so the item is\nonly refreshed to pick up the local file. Collections name\n``collection_id`` instead and re-deliver their saved or downloaded theme.",
         "properties": {
+          "collection_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Id"
+          },
           "item_id": {
-            "title": "Item Id",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
           },
           "server_id": {
             "title": "Server Id",
@@ -11817,7 +11835,6 @@
           }
         },
         "required": [
-          "item_id",
           "server_id",
           "server_item_id"
         ],

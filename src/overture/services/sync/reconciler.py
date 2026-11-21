@@ -296,7 +296,7 @@ class LibraryReconciler:
             return
         async with self._database.write_session() as session:
             items = await MediaItemRepository(session).get_many(item_ids)
-            await apply_needs(session, items=items, app_config=self._app_config)
+            await apply_needs(session, items=items)
 
     @asynccontextmanager
     async def _stamping(self) -> AsyncGenerator[set[int]]:

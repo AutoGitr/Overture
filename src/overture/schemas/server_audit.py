@@ -17,7 +17,7 @@ class ServerAuditRequest(MediaFolderScope):
 
     art_types: UniqueList[ArtType] = Field(default_factory=lambda: list(ArtType))
     check_themes: bool = True
-    #: Compare the images Overture uploaded to collections with the server's.
+    #: Compare the images and themes Overture holds for collections with the server's.
     check_collections: bool = False
 
 
@@ -51,14 +51,23 @@ class ServerAuditThemeDeleteTarget(StrictBaseModel):
     """One theme delete target selected from server audit results.
 
     Without a ``theme_id`` the server has no theme to delete, so the item is
-    only refreshed to pick up the local file.
+    only refreshed to pick up the local file. Collections name
+    ``collection_id`` instead and re-deliver their saved or downloaded theme.
     """
 
-    item_id: int
+    item_id: int | None = None
+    collection_id: int | None = None
     #: The database's number of the server whose theme it is.
     server_id: int
     server_item_id: str = Field(min_length=1)
     theme_id: str | None = None
+
+    @model_validator(mode="after")
+    def require_one_owner(self) -> Self:
+        """Name either an item or a collection."""
+        if (self.item_id is None) == (self.collection_id is None):
+            raise ValueError("Name an item or a collection")
+        return self
 
 
 class FixAuditRequest(StrictBaseModel):

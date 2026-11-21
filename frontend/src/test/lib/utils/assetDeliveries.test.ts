@@ -21,6 +21,7 @@ const serverTitle = (id: number) => titles[id] ?? `Server ${id}`;
 describe("delivery notes", () => {
   it("names each required place that lacks Overture's content", () => {
     const poster = asset("poster", {
+      url: "https://image.tmdb.org/t/p/original/a.jpg",
       deliveries: [
         delivery({ server_id: 1 }),
         delivery({ server_id: 2, delivered: false }),
@@ -32,13 +33,40 @@ describe("delivery notes", () => {
 
   it("names a title's folder for its local file", () => {
     const theme = asset("theme", {
+      youtube_id: "yt1",
       deliveries: [delivery({ server_id: null, channel: "file", delivered: false })],
     });
     expect(deliveryNote(theme, serverTitle)).toBe("Not yet in the folder");
   });
 
-  it("says nothing once every required place holds it", () => {
-    expect(deliveryNote(asset("poster", { deliveries: [delivery({})] }), serverTitle)).toBeNull();
+  it("says nothing when unneeded, unselected, or every required place holds it", () => {
+    expect(
+      deliveryNote(
+        asset("poster", {
+          url: "https://image.tmdb.org/t/p/original/a.jpg",
+          deliveries: [delivery({})],
+        }),
+        serverTitle,
+      ),
+    ).toBeNull();
+    expect(
+      deliveryNote(
+        asset("background", {
+          needed: false,
+          deliveries: [delivery({ server_id: 1, delivered: false })],
+        }),
+        serverTitle,
+      ),
+    ).toBeNull();
+    expect(
+      deliveryNote(
+        asset("poster", {
+          status: "missing",
+          deliveries: [delivery({ server_id: null, channel: "file", delivered: false })],
+        }),
+        serverTitle,
+      ),
+    ).toBeNull();
     expect(deliveryNote(asset("poster"), serverTitle)).toBeNull();
   });
 });

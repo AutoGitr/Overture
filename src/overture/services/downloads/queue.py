@@ -1,12 +1,21 @@
 """What a download job targets, and queuing one inside the caller's transaction."""
 
+lazy from collections.abc import Awaitable, Callable
 lazy from dataclasses import asdict, dataclass
+lazy from datetime import datetime
 lazy from typing import Self
 
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ...db.models.download_job import DownloadJob
-lazy from ...domain import ArtType, AssetScope, CollectionPosterStyle, JobType
+lazy from ...db.session import Database
+lazy from ...domain import (
+    ArtType,
+    AssetScope,
+    CollectionPosterStyle,
+    JobStatus,
+    JobType,
+)
 lazy from ...repositories.downloads import DownloadJobRepository
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...utils.time import utc_now
@@ -160,3 +169,33 @@ async def add_job(
     job = repository.create(created_at=now, **asdict(target))
     await session.flush()
     return job.id, True, active
+
+
+def _apply_done(target: DownloadJob, *, now: datetime) -> None:
+    target.status = JobStatus.DONE
+    target.error_message = None
+    target.progress_percent = 100
+    target.completed_at = now
+
+
+async def complete_running_job(
+    database: Database,
+    job: DownloadJob,
+    write_assets: Callable[[AsyncSession, datetime], Awaitable[bool]] | None = None,
+) -> bool:
+    """Persist any asset updates and mark a running job done in one transaction.
+
+    Returns ``False`` without committing when the stored job already left the
+    ``RUNNING`` state or when *write_assets* declines the update.
+    """
+    now = utc_now()
+    async with database.write_session() as session:
+        stored = await DownloadJobRepository(session).get(job.id)
+        if not stored or stored.status is not JobStatus.RUNNING:
+            return False
+        if write_assets is not None and not await write_assets(session, now):
+            return False
+        _apply_done(stored, now=now)
+        session.add(stored)
+    _apply_done(job, now=now)
+    return True

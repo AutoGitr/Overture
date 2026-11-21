@@ -49,7 +49,7 @@ describe("ServerAuditTab results", () => {
     await waitFor(() =>
       expect(startServerAudit).toHaveBeenCalledWith(
         expect.objectContaining({
-          body: expect.objectContaining({ check_collections: true, check_themes: false }),
+          body: expect.objectContaining({ check_collections: true, check_themes: true }),
         }),
       ),
     );
@@ -100,7 +100,15 @@ describe("ServerAuditTab results", () => {
           targets: [
             { art_type: "poster", collection_id: null, item_id: 1, season_id: null, server_id: 1 },
           ],
-          themes: [{ item_id: 1, server_id: 1, server_item_id: "server-1", theme_id: "theme-1" }],
+          themes: [
+            {
+              collection_id: null,
+              item_id: 1,
+              server_id: 1,
+              server_item_id: "server-1",
+              theme_id: "theme-1",
+            },
+          ],
         },
       }),
     );
@@ -119,5 +127,67 @@ describe("ServerAuditTab results", () => {
       serverAuditFixEvent({ done: 1, total: 1, log_targets: { Matched: 1 } }),
     );
     expect(serverAuditFixState.pending.size).toBe(0);
+  });
+
+  it("enables Poster, Background and Themes for collections and fixes collection themes without delete confirmation", async () => {
+    settingsState.load(
+      appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    );
+    renderWithQueryClient(OperationsPopup);
+    await screen.findByRole("checkbox", { name: "/movies" });
+
+    expect(screen.getByRole("checkbox", { name: "Poster" })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Background" })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Themes" })).toBeDisabled();
+
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Select all collections" }));
+    expect(screen.getByRole("checkbox", { name: "Poster" })).not.toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Background" })).not.toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Themes" })).not.toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Season poster" })).toBeDisabled();
+
+    serverAuditState.handleCompleted(
+      serverAuditEvent({
+        finished_at: "2026-09-05T12:00:00Z",
+        results: [
+          {
+            ...serverAuditResult(),
+            art_type: "theme",
+            collection_id: 4,
+            item_id: null,
+            kind: "theme",
+            server_id: 1,
+            server_item_id: "box",
+            status: "theme_server_missing",
+            theme_id: "box",
+            title: "Saga",
+          },
+        ],
+      }),
+    );
+    fixAuditFindings.mockResolvedValue({ data: { status: "started" } });
+
+    await fireEvent.click(await screen.findByRole("button", { name: "Refresh 1 Item" }));
+    expect(screen.queryByText(/Delete .* server theme/)).not.toBeInTheDocument();
+
+    await waitFor(() => expect(fixAuditFindings).toHaveBeenCalledOnce());
+    expect(fixAuditFindings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: {
+          snapshot_finished_at: "2026-09-05T12:00:00Z",
+          targets: [],
+          themes: [
+            {
+              collection_id: 4,
+              item_id: null,
+              server_id: 1,
+              server_item_id: "box",
+              theme_id: "box",
+            },
+          ],
+        },
+      }),
+    );
+    expect(serverAuditFixState.pending).toEqual(new Set(["collection:4:theme:1"]));
   });
 });

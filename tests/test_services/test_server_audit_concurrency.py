@@ -49,7 +49,6 @@ def _audit_context(
             app_config=app_config, database=database, phash=phash
         ),
         phash=phash,
-        app_config=app_config,
         database=database,
         server_copies=make_server_copies(
             app_config=app_config,

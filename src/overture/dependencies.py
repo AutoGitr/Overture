@@ -20,6 +20,7 @@ lazy from .services.assets import AssetsService
 lazy from .services.auth import AuthService
 lazy from .services.backup.service import BackupService
 lazy from .services.catalog.service import CatalogService
+lazy from .services.collections.adoption import CollectionAdoption
 lazy from .services.collections.arr_requests import CollectionArr
 lazy from .services.collections.bulk import CollectionBulk
 lazy from .services.collections.discovery import CollectionDiscovery
@@ -123,6 +124,11 @@ def get_collection_discovery(runtime: RuntimeDep) -> CollectionDiscovery:
 def get_collection_editor(runtime: RuntimeDep) -> CollectionEditor:
     """Resolve the collections' editor component."""
     return runtime.collections.editor
+
+
+def get_collection_adoption(runtime: RuntimeDep) -> CollectionAdoption:
+    """Resolve the collections' adoption component."""
+    return runtime.collections.adoption
 
 
 def get_collection_groups(runtime: RuntimeDep) -> CollectionGroups:
@@ -247,6 +253,7 @@ CollectionDiscoveryDep = Annotated[
     CollectionDiscovery, Depends(get_collection_discovery)
 ]
 CollectionEditorDep = Annotated[CollectionEditor, Depends(get_collection_editor)]
+CollectionAdoptionDep = Annotated[CollectionAdoption, Depends(get_collection_adoption)]
 CollectionGroupsDep = Annotated[CollectionGroups, Depends(get_collection_groups)]
 CollectionSetsDep = Annotated[CollectionSets, Depends(get_collection_sets)]
 CollectionBulkDep = Annotated[CollectionBulk, Depends(get_collection_bulk)]

@@ -7,8 +7,8 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.term import MediaItemTerm, Term
 lazy from overture.domain import MediaType, TermKind
-lazy from overture.repositories.collections import (
-    CollectionRepository,
+lazy from overture.repositories.collection_items import (
+    CollectionItemRepository,
     TermSelection,
 )
 lazy from overture.repositories.terms import TermRepository
@@ -130,7 +130,7 @@ async def test_a_library_read_selects_values_and_unread_kinds_raise(
 ) -> None:
     await _library_with_titles(db_session)
 
-    first, second = await CollectionRepository(db_session).library_items(
+    first, second = await CollectionItemRepository(db_session).library_items(
         MediaType.MOVIE,
         "1:movies",
         TermSelection(
@@ -152,11 +152,11 @@ async def test_term_counts_count_each_value_across_the_librarys_titles(
 ) -> None:
     await _library_with_titles(db_session)
 
-    assert await CollectionRepository(db_session).term_counts(
+    assert await CollectionItemRepository(db_session).term_counts(
         MediaType.MOVIE, "1:movies", TermKind.ACTOR
     ) == {"Åsa Söderström": 1, "Lead": 2}
     # Labels are each server's own, as its copies hold them.
-    assert await CollectionRepository(db_session).term_counts(
+    assert await CollectionItemRepository(db_session).term_counts(
         MediaType.MOVIE, "1:movies", TermKind.LABEL
     ) == {"One": 1, "Two": 2}
 

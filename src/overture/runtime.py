@@ -593,14 +593,12 @@ def build_runtime(
         local_assets=local_assets,
         phash=phash,
         publisher=events,
-        app_config=app_config,
         database=database,
         collection_art=art.collections,
         server_copies=server_copies,
+        theme_handler=downloads.theme_handler,
     )
-    needs = AssetNeeds(
-        app_config=app_config, database=database, provider_registry=provider_registry
-    )
+    needs = AssetNeeds(database=database, provider_registry=provider_registry)
     collections = CollectionsService(
         needs=needs,
         tmdb=tmdb,

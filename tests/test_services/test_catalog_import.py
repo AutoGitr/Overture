@@ -109,7 +109,6 @@ async def test_catalog_replacement_is_atomic(
         database=database,
         config_dir=tmp_path,
         needs=AssetNeeds(
-            app_config=app_config,
             database=database,
             provider_registry=NoopProviderRegistry(),
         ),

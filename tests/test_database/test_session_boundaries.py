@@ -6,13 +6,27 @@ lazy from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 lazy from sqlmodel import select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from overture.db.models.schedule import TaskSchedule
+lazy from overture.db.models.saved_schedule import SavedSchedule
 lazy from overture.db.session import Database
+lazy from overture.domain import ScheduleKind
+lazy from overture.utils.time import utc_now
+
+
+def _schedule(name: str) -> SavedSchedule:
+    now = utc_now()
+    return SavedSchedule(
+        kind=ScheduleKind.BACKUP,
+        name=name,
+        enabled=True,
+        cron_expression="0 * * * *",
+        created_at=now,
+        updated_at=now,
+    )
 
 
 async def _schedule_names(factory: async_sessionmaker[AsyncSession]) -> list[str]:
     async with factory() as session:
-        rows = await session.exec(select(TaskSchedule.task_name))
+        rows = await session.exec(select(SavedSchedule.name))
         return list(rows.all())
 
 
@@ -21,9 +35,7 @@ async def test_write_session_commits_on_a_clean_exit(
     isolated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with database.write_session() as session:
-        session.add(
-            TaskSchedule(task_name="demo", enabled=True, cron_expression="0 * * * *")
-        )
+        session.add(_schedule("demo"))
 
     assert await _schedule_names(isolated_session_factory) == ["demo"]
 
@@ -36,11 +48,7 @@ async def test_write_session_rolls_back_when_the_block_raises(
 
     async def add_then_fail() -> None:
         async with database.write_session() as session:
-            session.add(
-                TaskSchedule(
-                    task_name="demo", enabled=True, cron_expression="0 * * * *"
-                )
-            )
+            session.add(_schedule("demo"))
             raise RuntimeError("boom")
 
     with pytest.raises(RuntimeError, match="boom"):
@@ -55,9 +63,7 @@ async def test_read_session_does_not_persist_accidental_changes(
 ) -> None:
     """A reader commits nothing, so a stray add() is discarded rather than stored."""
     async with database.read_session() as session:
-        session.add(
-            TaskSchedule(task_name="demo", enabled=True, cron_expression="0 * * * *")
-        )
+        session.add(_schedule("demo"))
 
     assert await _schedule_names(isolated_session_factory) == []
 
@@ -74,14 +80,12 @@ async def test_rows_read_stay_usable_after_the_reader_closes(
     and a lapful of ``DetachedInstanceError``.
     """
     async with database.write_session() as session:
-        session.add(
-            TaskSchedule(task_name="demo", enabled=True, cron_expression="0 * * * *")
-        )
+        session.add(_schedule("demo"))
 
     async with database.read_session() as session:
-        rows = list((await session.exec(select(TaskSchedule))).all())
+        rows = list((await session.exec(select(SavedSchedule))).all())
 
-    assert [row.task_name for row in rows] == ["demo"]
+    assert [row.name for row in rows] == ["demo"]
 
 
 async def test_a_writer_that_reads_first_still_writes(
@@ -100,14 +104,12 @@ async def test_a_writer_that_reads_first_still_writes(
     from committing between the read and the write.
     """
     async with database.write_session() as session:
-        await session.exec(select(TaskSchedule.task_name))
+        await session.exec(select(SavedSchedule.name))
         async with isolated_engine.connect() as peer:
             await peer.exec_driver_sql("PRAGMA busy_timeout=0")
             with pytest.raises(OperationalError, match="database is locked"):
                 await peer.exec_driver_sql("BEGIN IMMEDIATE")
             await peer.invalidate()
-        session.add(
-            TaskSchedule(task_name="held", enabled=True, cron_expression="0 * * * *")
-        )
+        session.add(_schedule("held"))
 
     assert await _schedule_names(isolated_session_factory) == ["held"]

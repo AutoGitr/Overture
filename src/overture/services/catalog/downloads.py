@@ -7,7 +7,6 @@ lazy from typing import Self
 lazy from sqlalchemy.exc import SQLAlchemyError
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ...config import Settings
 lazy from ...db.ledger import local_file, read_asset
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
@@ -118,7 +117,6 @@ async def queue_overturedb_downloads_for_items(
     include_art: bool,
     theme_order: IncrementalThemeOrder = IncrementalThemeOrder.OFF,
     downloads: DownloadService,
-    app_config: Settings,
     database: Database,
 ) -> QueuedDownloads:
     """Queue OvertureDB art/theme downloads for the supplied local item IDs.
@@ -134,7 +132,7 @@ async def queue_overturedb_downloads_for_items(
         items = await MediaItemRepository(session).list_bulk_targets(
             item_ids=item_ids, include_unmonitored=True
         )
-        index = await CatalogIndex.build(session, items, app_config=app_config)
+        index = await CatalogIndex.build(session, items)
 
     for item in items:
         if item.id is None:
@@ -171,7 +169,6 @@ async def queue_catalog_themes_for_collections(
     *,
     theme_order: IncrementalThemeOrder,
     downloads: DownloadService,
-    app_config: Settings,
     database: Database,
 ) -> QueuedDownloads:
     """Fill newly matched, monitored collections without replacing a theme."""
@@ -187,9 +184,7 @@ async def queue_catalog_themes_for_collections(
             rows = await CollectionRepository(session).bulk_targets(
                 collection_ids=list(batch)
             )
-            index = await CatalogIndex.build_collections(
-                session, rows, app_config=app_config
-            )
+            index = await CatalogIndex.build_collections(session, rows)
         for row in rows:
             if row.id is None:
                 continue

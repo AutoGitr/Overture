@@ -39,6 +39,7 @@ lazy from ...domain import (
 )
 lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...media_servers.registry import ProviderRegistry
+lazy from ...repositories.collection_items import CollectionItemRepository
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...schemas.art import (
     ArtCandidate,
@@ -198,7 +199,7 @@ class CollectionArtService:
             row = await self._require(db, collection_id, art_type)
             policy = CandidatePolicy.of(await get_app_settings(db))
             members = (
-                await CollectionRepository(db).member_tmdb_titles(
+                await CollectionItemRepository(db).member_tmdb_titles(
                     collection_id, MEMBER_BACKGROUNDS_TOTAL
                 )
                 if art_type is ArtType.BACKGROUND

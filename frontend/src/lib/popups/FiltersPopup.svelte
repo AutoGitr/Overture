@@ -12,7 +12,8 @@
   import { defaultFilters, uiState, type FilterState } from "../stores/uiState.svelte";
   import { errorMessage } from "../utils/errors";
   import { filterAvailableValues, toggleSelectedValue } from "../utils/popupSelection";
-  import * as sidebarDomain from "../utils/sidebarDomain";
+  import { filterCatalogEntries } from "../utils/sidebarDomain";
+  import * as sidebarFilters from "../utils/sidebarFilters";
   import { METADATA_ISSUES } from "../../generated/settings";
   import BulkOperationsCard from "../components/BulkOperationsCard.svelte";
   import CardColumn from "../components/CardColumn.svelte";
@@ -154,23 +155,23 @@
     ),
   );
   let metadataIssueOptions = $derived(
-    sidebarDomain.metadataIssuesFor(uiState.sidebarTab, catalogEnabled, uiState.sidebarMode),
+    sidebarFilters.metadataIssuesFor(uiState.sidebarTab, catalogEnabled, uiState.sidebarMode),
   );
   let groupedSections = $derived.by(() => {
-    const shown = sidebarDomain.filterSections(uiState.sidebarMode, {
+    const shown = sidebarFilters.filterSections(uiState.sidebarMode, {
       tab: uiState.sidebarTab,
       catalogEnabled,
       smart: !!capabilities.data?.smart,
       collections: settingsState.current.collections_supported,
     });
-    return (Object.keys(sidebarDomain.FILTER_GROUPS) as sidebarDomain.FilterGroup[])
-      .map((group) => [group, shown.filter((key) => sidebarDomain.FILTERS[key].group === group)] as const)
+    return (Object.keys(sidebarFilters.FILTER_GROUPS) as sidebarFilters.FilterGroup[])
+      .map((group) => [group, shown.filter((key) => sidebarFilters.FILTERS[key].group === group)] as const)
       .filter(([, keys]) => keys.length > 0);
   });
 
   /** Splits *keys* into runs of neighbours offering the same choices. */
-  function choiceRuns(keys: readonly sidebarDomain.FilterKey[]): sidebarDomain.FilterKey[][] {
-    const runs: sidebarDomain.FilterKey[][] = [];
+  function choiceRuns(keys: readonly sidebarFilters.FilterKey[]): sidebarFilters.FilterKey[][] {
+    const runs: sidebarFilters.FilterKey[][] = [];
     for (const key of keys) {
       const run = runs.at(-1);
       const previous = run?.at(-1);
@@ -180,7 +181,7 @@
     return runs;
   }
 
-  function choicesOf(key: sidebarDomain.FilterKey) {
+  function choicesOf(key: sidebarFilters.FilterKey) {
     return key in CHOICES ? CHOICES[key as keyof typeof CHOICES].options : key;
   }
 
@@ -209,7 +210,7 @@
   let catalogPosters = $state(uiState.catalogPosters);
   let tmdbDraft = $state($state.snapshot(uiState.tmdbFilters));
   let tmdbFilterKeys = $derived(
-    sidebarDomain.tmdbFilterKeys(uiState.sidebarSource, uiState.sidebarMode, catalogEnabled),
+    sidebarFilters.tmdbFilterKeys(uiState.sidebarSource, uiState.sidebarMode, catalogEnabled),
   );
   const catalogQuery = createQuery(() => ({
     ...listCatalogEntriesOptions({
@@ -222,7 +223,7 @@
   }));
   /** The entries the draft filters and the search match, as the sidebar would list them. */
   let catalogEntries = $derived(
-    sidebarDomain.filterCatalogEntries({
+    filterCatalogEntries({
       entries: catalogQuery.data ?? [],
       filters: catalogDraft,
       searchQuery: uiState.searchQuery,
@@ -253,19 +254,21 @@
       return;
     }
     const applied = $state.snapshot(filters);
-    uiState.setFilters(catalogEnabled ? applied : sidebarDomain.withoutCatalogFilters(applied, defaultFilters()));
+    uiState.setFilters(
+      catalogEnabled ? applied : sidebarFilters.withoutCatalogFilters(applied, defaultFilters()),
+    );
     uiState.closePopup();
   }
 
   function clear() {
     draft = defaultFilters();
-    catalogDraft = sidebarDomain.defaultCatalogFilters();
-    tmdbDraft = sidebarDomain.defaultTmdbFilters();
+    catalogDraft = sidebarFilters.defaultCatalogFilters();
+    tmdbDraft = sidebarFilters.defaultTmdbFilters();
   }
 </script>
 
-{#snippet filter(key: sidebarDomain.FilterKey)}
-  {@const label = sidebarDomain.FILTERS[key].label}
+{#snippet filter(key: sidebarFilters.FilterKey)}
+  {@const label = sidebarFilters.FILTERS[key].label}
   {#if key === "resolution"}
     <FieldRow {label}>
       <SegmentedControl
@@ -290,9 +293,9 @@
       />
     </FieldRow>
     <CheckboxList
-      options={sidebarDomain.ART_SOURCES.map((source) => ({
+      options={sidebarFilters.ART_SOURCES.map((source) => ({
         value: source,
-        label: sidebarDomain.ART_SOURCE_LABELS[source],
+        label: sidebarFilters.ART_SOURCE_LABELS[source],
       }))}
       selected={draft.artSource.sources}
       ontoggle={(source) =>
@@ -329,9 +332,9 @@
   {:else if key === "themeSources"}
     <FieldRow {label} />
     <CheckboxList
-      options={sidebarDomain.THEME_SOURCES.map((source) => ({
+      options={sidebarFilters.THEME_SOURCES.map((source) => ({
         value: source,
-        label: sidebarDomain.THEME_SOURCE_LABELS[source],
+        label: sidebarFilters.THEME_SOURCE_LABELS[source],
       }))}
       selected={draft.themeSources}
       ontoggle={(source) => (draft.themeSources = toggleSelectedValue(draft.themeSources, source))}
@@ -380,9 +383,9 @@
     {#if uiState.searchingTmdb}
       <PopupSection label="TMDB results">
         {#each tmdbFilterKeys as key (key)}
-          <FieldRow label={sidebarDomain.TMDB_FILTER_LABELS[key]}>
+          <FieldRow label={sidebarFilters.TMDB_FILTER_LABELS[key]}>
             <SegmentedControl
-              label={sidebarDomain.TMDB_FILTER_LABELS[key]}
+              label={sidebarFilters.TMDB_FILTER_LABELS[key]}
               options={MEDIA_SERVER_OPTIONS}
               bind:value={tmdbDraft[key]}
             />
@@ -390,7 +393,7 @@
         {/each}
       </PopupSection>
     {:else if uiState.sidebarSource === "overturedb"}
-      <PopupSection label={sidebarDomain.FILTER_GROUPS.status}>
+      <PopupSection label={sidebarFilters.FILTER_GROUPS.status}>
         {#if uiState.sidebarMode === "collections"}
           <FieldRow label="Poster style">
             <SegmentedControl
@@ -400,11 +403,11 @@
             />
           </FieldRow>
         {/if}
-        {#each sidebarDomain.CATALOG_FILTER_KEYS as key (key)}
+        {#each sidebarFilters.CATALOG_FILTER_KEYS as key (key)}
           {#if key !== "seasonPosters" || uiState.sidebarTab === "show"}
-            <FieldRow label={sidebarDomain.CATALOG_FILTER_LABELS[key]}>
+            <FieldRow label={sidebarFilters.CATALOG_FILTER_LABELS[key]}>
               <SegmentedControl
-                label={sidebarDomain.CATALOG_FILTER_LABELS[key]}
+                label={sidebarFilters.CATALOG_FILTER_LABELS[key]}
                 options={MEDIA_SERVER_OPTIONS}
                 bind:value={catalogDraft[key]}
               />
@@ -415,7 +418,7 @@
       <CatalogDraftsCard entries={catalogEntries} />
     {:else}
       {#each groupedSections as [group, keys] (group)}
-        {@const title = sidebarDomain.FILTER_GROUPS[group]}
+        {@const title = sidebarFilters.FILTER_GROUPS[group]}
         {#if title}
           <PopupSection label={title}>
             <!-- Status holds one-line choices only, evenly spaced as one run;
@@ -431,16 +434,16 @@
         {:else}
           {#each keys as key (key)}
             {#if key !== "libraries"}
-              <PopupSection label={sidebarDomain.FILTERS[key].label}>
+              <PopupSection label={sidebarFilters.FILTERS[key].label}>
                 {@render filter(key)}
               </PopupSection>
             {:else if librariesQuery.isError}
-              <PopupSection label={sidebarDomain.FILTERS.libraries.label}>
+              <PopupSection label={sidebarFilters.FILTERS.libraries.label}>
                 <p class="hint">{errorMessage(librariesQuery.error, "Failed to load libraries")}</p>
               </PopupSection>
             {:else if libraries.length > 1}
               <PopupSection
-                label={sidebarDomain.FILTERS.libraries.label}
+                label={sidebarFilters.FILTERS.libraries.label}
                 description={filters.libraryIds.length === 0
                   ? "All libraries"
                   : `${filters.libraryIds.length} of ${libraries.length} selected`}

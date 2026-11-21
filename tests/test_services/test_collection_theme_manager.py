@@ -8,6 +8,7 @@ lazy import pytest
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
+lazy from overture.db.ledger import missing_deliveries
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.session import Database
 lazy from overture.domain import (
@@ -22,8 +23,8 @@ lazy from overture.media_servers.jellyfin import JellyfinProvider
 lazy from overture.media_servers.plex import PlexProvider
 lazy from overture.repositories.collections import CollectionRepository
 lazy from overture.services.art.collection_art import CollectionArtService
+lazy from overture.services.asset_runs.support import refresh_folder_themes
 lazy from overture.services.downloads.art import DownloadArtHandler
-lazy from overture.services.downloads.collection_theme import folder_lacks_theme
 lazy from overture.services.downloads.events import DownloadEventPublisher
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.downloads.service import DownloadService
@@ -155,7 +156,12 @@ class Resolver:
     ) -> ThemeAudio:
         del youtube_id, min_duration, max_duration, progress_callback
         del normalize_loudness
-        return ThemeAudio(audio_bytes=b"mp3", title="YouTube Theme", duration=123)
+        return ThemeAudio(
+            audio_bytes=b"mp3",
+            title="YouTube Theme",
+            duration=123,
+            fingerprint="collection-fp",
+        )
 
 
 async def _listed_collection(
@@ -274,6 +280,8 @@ async def test_jellyfin_collection_theme_is_written_to_the_boxset_folder(
     assert server_ref(row, ServerAsset.THEME) is None
     [folder_copy] = theme_of(row).deliveries
     assert folder_copy.observed_hash == theme_of(row).content_hash is not None
+    assert theme_of(row).fingerprint == "collection-fp"
+    assert folder_copy.fingerprint == "collection-fp"
     assert (folder_copy.file_size, folder_copy.file_mtime_ns) == (
         stat.st_size,
         stat.st_mtime_ns,
@@ -310,25 +318,58 @@ async def test_jellyfin_collection_theme_needs_the_collections_path(
 
 async def test_a_jellyfin_folder_without_its_theme_file_is_found(
     tmp_path: Path,
-    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
     *,
     app_config: Settings,
     database: Database,
 ) -> None:
+    class Provider(JellyfinProvider):
+        @override
+        async def refresh_item(
+            self, item_id: str, *, unlock: Collection[ServerAsset]
+        ) -> None:
+            del item_id, unlock
+
     folder = tmp_path / "Star Wars [boxset]"
     folder.mkdir()
     configure(app_config, collections_path=tmp_path)
     await _listed_collection(database, "/config/data/collections/Star Wars [boxset]")
-    registry = NoopProviderRegistry(
-        JellyfinProvider(
-            server=server_of(app_config, ServerType.JELLYFIN),
+    publisher = RecordingPublisher()
+    service = _download_service(
+        publisher,
+        youtube_resolver=cast("Any", Resolver()),
+        provider=Provider(
+            server=server_of(app_config, Provider.server_type),
             server_id=TEST_SERVER_ID,
             app_config=app_config,
-        )
+        ),
+        database=database,
+        app_config=app_config,
     )
-    row = await CollectionRepository(db_session).get(1)
-    assert row is not None
+    async with database.write_session() as session:
+        job_id, _ = await service.queue_job(
+            session, JobTarget.collection_theme(1, "Collection", "VENZKx1iFzA")
+        )
+    await service.process_job(job_id)
 
-    assert await folder_lacks_theme(row, registry)
-    (folder / "theme.mp3").write_bytes(b"mp3")
-    assert not await folder_lacks_theme(row, registry)
+    async with database.read_session() as session:
+        row = await CollectionRepository(session).get(1)
+    assert row is not None
+    assert not missing_deliveries(theme_of(row))
+
+    publisher.events.clear()
+    original_write_session = database.write_session
+
+    def fail_write() -> Any:
+        raise AssertionError("refresh_folder_themes must not open write_session")
+
+    monkeypatch.setattr(database, "write_session", fail_write)
+    unchanged = await refresh_folder_themes(row, downloads=service, database=database)
+    assert not missing_deliveries(theme_of(unchanged))
+    assert publisher.events == []
+
+    monkeypatch.setattr(database, "write_session", original_write_session)
+    (folder / "theme.mp3").unlink()
+    refreshed = await refresh_folder_themes(row, downloads=service, database=database)
+    assert missing_deliveries(theme_of(refreshed))
+    assert publisher.events == [("collection.updated", {"collection_id": 1})]

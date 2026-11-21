@@ -11,10 +11,26 @@ lazy import pytest
 lazy from PIL import Image
 
 lazy from overture.config import Settings
-lazy from overture.db.ledger import read_asset
+lazy from overture.db.ledger import (
+    ContentFacts,
+    Destination,
+    confirm_delivery,
+    read_asset,
+    record_content,
+)
+lazy from overture.db.models.library import Library
+lazy from overture.db.models.media_collection import CollectionLibrary
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, ImageSize, MediaType, ServerAsset, ServerType
+lazy from overture.domain import (
+    ArtType,
+    AssetStatus,
+    DeliveryChannel,
+    ImageSize,
+    MediaType,
+    ServerAsset,
+    ServerType,
+)
 lazy from overture.media_servers.adapters import ProviderImageRequest
 lazy from overture.protocols import EventPublisher
 lazy from overture.repositories.collections import CollectionRepository
@@ -130,7 +146,6 @@ async def _audit(
             app_config=app_config, database=database, phash=phash
         ),
         phash=phash,
-        app_config=app_config,
         database=database,
         collection_art=unused(CollectionArtService),
         server_copies=make_server_copies(
@@ -268,7 +283,6 @@ async def test_an_item_gone_from_the_library_is_an_error(
             app_config=app_config, database=database, phash=phash
         ),
         phash=phash,
-        app_config=app_config,
         database=database,
         collection_art=unused(CollectionArtService),
         server_copies=make_server_copies(
@@ -379,7 +393,6 @@ async def _audit_collection(
             app_config=app_config, database=database, phash=phash
         ),
         phash=phash,
-        app_config=app_config,
         database=database,
         collection_art=_collection_art(
             tmp_path,
@@ -400,10 +413,10 @@ async def _audit_collection(
         ServerAuditRequest(check_collections=True), database=database
     )
     assert planned == (
-        [CollectionAuditTarget(1, ArtType.POSTER)] if uploaded is not None else []
+        [CollectionAuditTarget(1, ServerAsset.POSTER)] if uploaded is not None else []
     )
     _, [result] = await audit_target(
-        CollectionAuditTarget(1, ArtType.POSTER), context=context
+        CollectionAuditTarget(1, ServerAsset.POSTER), context=context
     )
     return result
 
@@ -482,3 +495,206 @@ async def test_a_collection_image_without_a_fingerprint_is_fingerprinted_from_it
     assert read_asset(
         row, ServerAsset.POSTER
     ).fingerprint == await phash.compute_from_bytes(_jpeg())
+
+
+async def test_collection_audit_broadcasts_status_change_and_keeps_concurrent_upload(
+    tmp_path: Path, *, app_config: Settings, database: Database, phash: PhashService
+) -> None:
+    class RecordingPublisher(EventPublisher):
+        def __init__(self) -> None:
+            self.events: list[tuple[str, object]] = []
+
+        @override
+        async def broadcast(
+            self, event: str, payload: object = None, *, before_publish: object = None
+        ) -> None:
+            self.events.append((event, payload))
+
+        @override
+        async def broadcast_built(self, builder: object) -> bool:
+            return False
+
+    image_cache = ImageCache(tmp_path / "cache", tmp_path / "uploads")
+    uploaded = _jpeg()
+    kept = await image_cache.store_original(uploaded)
+    fingerprint = await phash.compute_from_bytes(uploaded)
+    async with database.write_session() as session:
+        row = stored_collection(
+            id=1,
+            server_item_id="box",
+            media_type=MediaType.MOVIE,
+            title="Saga",
+            last_synced_at=utc_now(),
+        )
+        shown_on_server(row)
+        seed_asset(
+            row,
+            ServerAsset.POSTER,
+            upload_hash=kept.file_hash,
+            file_hash=kept.file_hash,
+            fingerprint=fingerprint,
+            width=256,
+            height=256,
+        )
+        session.add(row)
+
+    publisher = RecordingPublisher()
+    factory, _ = mock_client_factory(lambda _req: _image(_jpeg(flipped=True)))
+    image_clients = StaticImageClients(factory())
+    context = AuditContext(
+        provider_registry=NoopProviderRegistry(CollectionProvider(SERVER_URL)),
+        asset_storage=AssetStorage(app_config=app_config),
+        local_assets=make_local_assets(
+            app_config=app_config, database=database, phash=phash
+        ),
+        phash=phash,
+        database=database,
+        collection_art=_collection_art(
+            tmp_path,
+            image_cache,
+            app_config=app_config,
+            database=database,
+            phash=phash,
+            image_clients=image_clients,
+        ),
+        server_copies=make_server_copies(
+            app_config=app_config,
+            image_clients=image_clients,
+            config_dir=tmp_path / "config",
+            phash=phash,
+        ),
+        publisher=publisher,
+    )
+
+    _, [mismatch] = await audit_target(
+        CollectionAuditTarget(1, ServerAsset.POSTER), context=context
+    )
+    assert mismatch.status is AuditStatus.PHASH_MISMATCH
+    assert publisher.events == [("collection.updated", {"collection_id": 1})]
+    async with database.read_session() as session:
+        row = await CollectionRepository(session).get(1)
+        assert row is not None
+        assert read_asset(row, ServerAsset.POSTER).status is AssetStatus.PARTIAL
+
+    # Simulate an upload replacing the collection's art while audit reads the old copy.
+    publisher.events.clear()
+
+    class RacingProvider(CollectionProvider):
+        @override
+        async def get_collection_image_url(
+            self, server_collection_id: str, art_type: ArtType
+        ) -> str | None:
+            async with database.write_session() as session:
+                current = await CollectionRepository(session).get(1)
+                assert current is not None
+                record_content(
+                    current,
+                    ServerAsset.POSTER,
+                    ContentFacts("newer-upload", fingerprint),
+                )
+                confirm_delivery(
+                    current,
+                    ServerAsset.POSTER,
+                    Destination(1, "box", DeliveryChannel.UPLOAD),
+                    ref="/thumb/new",
+                )
+                session.add(current)
+            return None
+
+    racing_context = AuditContext(
+        provider_registry=NoopProviderRegistry(RacingProvider(SERVER_URL)),
+        asset_storage=context.asset_storage,
+        local_assets=context.local_assets,
+        phash=phash,
+        database=database,
+        collection_art=context.collection_art,
+        server_copies=context.server_copies,
+        publisher=publisher,
+    )
+    await audit_target(
+        CollectionAuditTarget(1, ServerAsset.POSTER), context=racing_context
+    )
+    async with database.read_session() as session:
+        row = await CollectionRepository(session).get(1)
+        assert row is not None
+        assert read_asset(row, ServerAsset.POSTER).status is AssetStatus.COMPLETE
+    assert publisher.events == []
+
+
+async def test_a_cross_library_collection_copy_is_audited_once(
+    tmp_path: Path, *, app_config: Settings, database: Database, phash: PhashService
+) -> None:
+    image_cache = ImageCache(tmp_path / "cache", tmp_path / "uploads")
+    uploaded = _jpeg()
+    kept = await image_cache.store_original(uploaded)
+    fingerprint = await phash.compute_from_bytes(uploaded)
+    async with database.write_session() as session:
+        session.add(
+            Library(
+                id="1:films",
+                media_type=MediaType.MOVIE,
+                server_id=1,
+                title="Films",
+            )
+        )
+        await session.flush()
+        row = stored_collection(
+            id=1,
+            server_item_id="box",
+            library_id="1:movies",
+            media_type=MediaType.MOVIE,
+            title="Saga",
+            last_synced_at=utc_now(),
+        )
+        row.libraries.append(
+            CollectionLibrary(
+                server_id=1,
+                collection_id=0,
+                library_id="1:films",
+                media_type=MediaType.MOVIE,
+                server_item_id="box",
+            )
+        )
+        shown_on_server(row)
+        seed_asset(
+            row,
+            ServerAsset.POSTER,
+            upload_hash=kept.file_hash,
+            file_hash=kept.file_hash,
+            fingerprint=fingerprint,
+            width=256,
+            height=256,
+        )
+        session.add(row)
+    factory, _ = mock_client_factory(lambda _req: _image(uploaded))
+    image_clients = StaticImageClients(factory())
+    context = AuditContext(
+        provider_registry=NoopProviderRegistry(CollectionProvider(SERVER_URL)),
+        asset_storage=AssetStorage(app_config=app_config),
+        local_assets=make_local_assets(
+            app_config=app_config, database=database, phash=phash
+        ),
+        phash=phash,
+        database=database,
+        collection_art=_collection_art(
+            tmp_path,
+            image_cache,
+            app_config=app_config,
+            database=database,
+            phash=phash,
+            image_clients=image_clients,
+        ),
+        server_copies=make_server_copies(
+            app_config=app_config,
+            image_clients=image_clients,
+            config_dir=tmp_path / "config",
+            phash=phash,
+        ),
+    )
+
+    _, results = await audit_target(
+        CollectionAuditTarget(1, ServerAsset.POSTER), context=context
+    )
+
+    assert len(results) == 1
+    assert results[0].status is AuditStatus.PHASH_MATCH

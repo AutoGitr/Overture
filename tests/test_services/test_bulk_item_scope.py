@@ -117,8 +117,8 @@ async def test_both_workflows_use_only_explicit_items_and_their_seasons(
     art_request, theme_request = request.art_request(), request.theme_request()
     assert art_request is not None
     assert theme_request is not None
-    art = await plan_run(art_request, app_config=app_config, database=database)
-    themes = await plan_run(theme_request, app_config=app_config, database=database)
+    art = await plan_run(art_request, database=database)
+    themes = await plan_run(theme_request, database=database)
     assert visits(art) == (
         {
             selected_id: (
@@ -187,10 +187,8 @@ async def test_fully_saved_chunk_does_not_hide_later_missing_slots(
     theme_params = BulkThemeRequest(
         library_ids=["1:movies"], source_order=[ThemeBulkSource.YOUTUBE_SEARCH]
     )
-    art = await plan_run(art_params, app_config=app_config, database=database, chunk=1)
-    themes = await plan_run(
-        theme_params, app_config=app_config, database=database, chunk=1
-    )
+    art = await plan_run(art_params, database=database, chunk=1)
+    themes = await plan_run(theme_params, database=database, chunk=1)
     assert visits(art) == {row_id(missing): ((ArtType.POSTER, None),)}
     assert visits(themes) == {row_id(missing): ((ServerAsset.THEME, None),)}
     saved = {(JobOutcome.SKIPPED, SAVED_SELECTION): 1}
@@ -231,12 +229,8 @@ async def test_both_workflows_visit_movies_then_shows_by_title(
     theme_params = BulkThemeRequest(
         item_ids=item_ids, source_order=[ThemeBulkSource.YOUTUBE_SEARCH]
     )
-    (art_batch,) = (
-        await plan_run(art_params, app_config=app_config, database=database)
-    ).batches()
-    (theme_batch,) = (
-        await plan_run(theme_params, app_config=app_config, database=database)
-    ).batches()
+    (art_batch,) = (await plan_run(art_params, database=database)).batches()
+    (theme_batch,) = (await plan_run(theme_params, database=database)).batches()
 
     titles = {row_id(item): item.title for item in items}
     assert [

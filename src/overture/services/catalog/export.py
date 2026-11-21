@@ -22,6 +22,7 @@ lazy from ...catalog_contract.contract import (
     validate_entry,
 )
 lazy from ...db.ledger import read_asset
+lazy from ...db.models.asset import Asset, AssetDelivery
 lazy from ...db.models.catalog import CatalogCollection
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
@@ -284,10 +285,33 @@ async def export_selections(database: Database, directory: Path) -> Path:
                         .options(
                             selectinload(
                                 cast(
+                                    "QueryableAttribute[list[Asset]]",
+                                    MediaItem.assets,
+                                )
+                            ).raiseload(
+                                cast(
+                                    "QueryableAttribute[list[AssetDelivery]]",
+                                    Asset.deliveries,
+                                )
+                            ),
+                            selectinload(
+                                cast(
                                     "QueryableAttribute[list[Season]]",
                                     MediaItem.seasons,
                                 )
                             )
+                            .selectinload(
+                                cast(
+                                    "QueryableAttribute[list[Asset]]",
+                                    Season.assets,
+                                )
+                            )
+                            .raiseload(
+                                cast(
+                                    "QueryableAttribute[list[AssetDelivery]]",
+                                    Asset.deliveries,
+                                )
+                            ),
                         )
                         .order_by(col(MediaItem.id))
                         .limit(PAGE_SIZE)

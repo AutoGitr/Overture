@@ -34,7 +34,7 @@ _LISTINGS = {
     # The title, its poster, background and theme with the folder each is
     # delivered to, its copy on the one server, and a show's season.
     "/api/library/items": 9,
-    "/api/catalog/export": 8,
+    "/api/catalog/export": 5,
     "/api/stats": 3,
 }
 

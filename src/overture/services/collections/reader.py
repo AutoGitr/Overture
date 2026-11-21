@@ -8,6 +8,7 @@ lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.settings import get_app_settings
 lazy from ...domain import ITEM_ART_TYPES, ArtType, CollectionKind, ImageSize
 lazy from ...integrations.proxy import ProxyClientManager
+lazy from ...repositories.collection_items import CollectionItemRepository
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.records import RecordRepository
 lazy from ...schemas.collections import (
@@ -54,7 +55,6 @@ class CollectionReader:
             catalog = await catalog_collections(
                 session,
                 {row.tmdb_collection_id for row in rows if row.tmdb_collection_id},
-                app_config=self._access.app_config,
             )
         return [
             collection_read(
@@ -110,7 +110,7 @@ class CollectionReader:
                 list(
                     {
                         member.id: member
-                        for member in await CollectionRepository(session).members(
+                        for member in await CollectionItemRepository(session).members(
                             row.id or 0
                         )
                     }.values()
@@ -121,7 +121,6 @@ class CollectionReader:
             catalog = await catalog_collections(
                 session,
                 {row.tmdb_collection_id} if row.tmdb_collection_id else set(),
-                app_config=self._access.app_config,
             )
         entry = catalog.get(row.tmdb_collection_id or 0)
         reason = await collection_theme_unavailable(

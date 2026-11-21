@@ -679,6 +679,36 @@ class TestServerAuditContract:
                 server_id=1, item_id=1, server_item_id="s", theme_id="t"
             )
         ]
+        collection_fix = FixAuditRequest.model_validate(
+            {
+                "themes": [
+                    {
+                        "collection_id": 4,
+                        "server_id": 1,
+                        "server_item_id": "box",
+                    }
+                ],
+                "snapshot_finished_at": "finish",
+            }
+        )
+        assert collection_fix.themes == [
+            ServerAuditThemeDeleteTarget(
+                server_id=1, collection_id=4, server_item_id="box"
+            )
+        ]
+        with pytest.raises(ValidationError, match="Name an item or a collection"):
+            ServerAuditThemeDeleteTarget.model_validate(
+                {"server_id": 1, "server_item_id": "box"}
+            )
+        with pytest.raises(ValidationError, match="Name an item or a collection"):
+            ServerAuditThemeDeleteTarget.model_validate(
+                {
+                    "item_id": 1,
+                    "collection_id": 4,
+                    "server_id": 1,
+                    "server_item_id": "box",
+                }
+            )
 
     def test_fix_request_needs_a_finding(self) -> None:
         with pytest.raises(ValidationError, match="at least one finding"):

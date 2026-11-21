@@ -4,6 +4,7 @@ import {
   formatThemeDuration,
   isYouTubeUrl,
   mergeThemeResults,
+  themeCandidateVideoIds,
   youtubeEmbedUrl,
   youtubeShortUrl,
 } from "../../../lib/utils/themeSearch";
@@ -159,5 +160,19 @@ describe("themeSearch helpers", () => {
       });
       expect(merged).toEqual([]);
     });
+  });
+
+  it("collects unique non-empty candidate YouTube IDs in order", () => {
+    expect(
+      themeCandidateVideoIds(
+        null,
+        undefined,
+        "",
+        "   ",
+        " abc123_DEF0 ",
+        "xyz987_UVW1",
+        "abc123_DEF0",
+      ),
+    ).toEqual(["abc123_DEF0", "xyz987_UVW1"]);
   });
 });

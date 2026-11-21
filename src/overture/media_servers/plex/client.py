@@ -641,10 +641,11 @@ class PlexClient(MediaServerHttpClient):
         requests with the segment coincided with "Time value greater than
         duration" in its log.
         """
-        if not await self._theme_id(item_id):
+        theme_id = await self._theme_id(item_id)
+        if not theme_id:
             return []
         url = await self.asset_url(f"/library/metadata/{item_id}/theme")
-        return [ServerTheme(id=item_id, url=url)]
+        return [ServerTheme(id=theme_id, url=url)]
 
     async def delete_theme(self, rating_key: str) -> None:
         """Delete the item's theme; Plex locks the field until it is unlocked."""

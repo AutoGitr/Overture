@@ -178,7 +178,6 @@ async def test_server_audit_streams_actionable_results_and_terminal_counts(
         asset_storage=AssetStorage(app_config=app_config),
         local_assets=make_local_assets(app_config=app_config, database=database),
         phash=PhashService(app_config=app_config),
-        app_config=app_config,
         database=database,
         server_copies=make_server_copies(
             app_config=app_config,

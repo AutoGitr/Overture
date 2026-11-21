@@ -6,12 +6,17 @@ lazy from collections.abc import Mapping
 lazy from ...db.models.collection_rule import CollectionRule
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...domain import UNMANAGED_REFUSAL, CollectionKind, SyncMode
-lazy from ...repositories.collections import CollectionItem, CollectionRepository
+lazy from ...repositories.collection_items import (
+    CollectionItem,
+    CollectionItemRepository,
+)
+lazy from ...repositories.collections import CollectionRepository
 lazy from ...schemas.collections import CollectionSyncResponse
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
 lazy from .access import CollectionAccess, LibraryScope
 lazy from .copies import copy_keys
+lazy from .destinations import place_collection
 lazy from .display import saved_options
 lazy from .editor import CollectionEditor, Held, save_placement
 lazy from .membership import Membership
@@ -45,16 +50,16 @@ class RuleSync:
         """Resolve every source before changing any server membership."""
         async with self._access.locked(collection_id):
             async with self._access.database.read_session() as session:
-                repo = CollectionRepository(session)
+                items = CollectionItemRepository(session)
                 row = await self._access.require(session, collection_id)
                 rule = row.rule
                 policy = await self._access.policy(session, row.group, rule)
                 if rule is None:
                     raise PublicServiceError(409, UNMANAGED_REFUSAL)
-                current = await repo.members(collection_id)
+                current = await items.members(collection_id)
                 scopes = [
                     await self._access.scope(
-                        repo,
+                        items,
                         part.library_id,
                         part.media_type,
                         criteria_of(part),
@@ -67,7 +72,9 @@ class RuleSync:
             await self._refresh_source_summary(rule, row)
             if await self._forget_gone_copies(row):
                 async with self._access.database.read_session() as session:
-                    current = await CollectionRepository(session).members(collection_id)
+                    current = await CollectionItemRepository(session).members(
+                        collection_id
+                    )
             await self._take_over_copies(row)
             error = None
             try:
@@ -263,6 +270,7 @@ class RuleSync:
         async with self._access.database.write_session() as session:
             saved = await self._access.require(session, row.id or 0)
             save_placement(saved, row)
+            place_collection(saved, self._access.provider_registry)
             session.add(saved)
 
     async def _refresh_source_summary(
@@ -303,9 +311,12 @@ class RuleSync:
         if not gone:
             return False
         async with self._access.database.write_session() as session:
-            await CollectionRepository(session).clear_server_copies(
+            saved = await CollectionRepository(session).clear_server_copies(
                 row.id or 0, utc_now(), gone
             )
+            if saved is not None:
+                place_collection(saved, self._access.provider_registry)
+                session.add(saved)
         for part in row.libraries:
             if (part.server_id, part.server_item_id or "") in gone:
                 part.server_item_id = None
@@ -352,6 +363,7 @@ class RuleSync:
                 for part in saved.libraries:
                     if part.library_id in held:
                         part.server_item_id, part.server_path = held[part.library_id]
+                place_collection(saved, self._access.provider_registry)
                 session.add(saved)
                 await CollectionRepository(session).delete_ids([other.id or 0])
                 save_placement(row, saved)

@@ -22,7 +22,12 @@ lazy from overture.domain import (
 )
 lazy from overture.integrations.mdblist import MDBListClient
 lazy from overture.integrations.tmdb import TMDBClient
-lazy from overture.repositories.collections import CollectionItem
+lazy from overture.media_servers.plex.query import (
+    choice_keys,
+    compile_plex_query,
+    tag_keys,
+)
+lazy from overture.repositories.collection_items import CollectionItem
 lazy from overture.schemas.collections import (
     CollectionGeneratorBase,
     FieldCondition,
@@ -36,11 +41,6 @@ lazy from overture.services.collections.criteria import (
     criteria_terms,
     evaluate,
     order_items,
-)
-lazy from overture.services.collections.plex_query import (
-    choice_keys,
-    compile_plex_query,
-    tag_keys,
 )
 lazy from overture.services.collections.sets import count_values, set_values
 lazy from overture.services.collections.sources import SourceResolver, condition_label

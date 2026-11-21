@@ -117,7 +117,7 @@ Renamer scan also notices files deleted outside Overture.
 ## Server audit
 
 Server audit compares the local assets on disk with what the server displays and
-plays, and optionally the images Overture uploaded to collections with the
+plays, and optionally the images and themes Overture holds for collections with the
 server's copies. Each server holding a file is compared on its own, with a
 line and a result per server. Images and themes are compared the way a sync
 compares them, and what an audit finds on a collection's copies is recorded

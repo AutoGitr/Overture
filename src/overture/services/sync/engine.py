@@ -85,11 +85,9 @@ class SyncEngine:
         server_copies: ServerCopies,
     ) -> None:
         """Initialize instance state."""
-        self._app_config = app_config
         self._groups = groups
         self._database = database
         self._config_dir = config_dir
-        self._publisher = publisher
         self._library_gate = library_gate
         self.downloads = downloads
         self.provider_registry = provider_registry
@@ -104,7 +102,6 @@ class SyncEngine:
         )
         self._collections = CollectionSync(
             publisher=publisher,
-            app_config=app_config,
             database=database,
             downloads=downloads,
             checks=server_copies,
@@ -247,7 +244,6 @@ class SyncEngine:
                         include_art=config.download_overturedb_art,
                         theme_order=config.download_themes,
                         downloads=self.downloads,
-                        app_config=self._app_config,
                         database=self._database,
                     )
             except MediaServerError as exc:

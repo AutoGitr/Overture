@@ -1,4 +1,4 @@
-"""SavedSchedule model - named cron schedules for assets and sync workflows."""
+"""SavedSchedule model - persisted cron schedules for all scheduled tasks."""
 
 lazy from datetime import datetime
 lazy from typing import Any, ClassVar
@@ -10,7 +10,7 @@ lazy from ..columns import enum_type, typed_columns
 
 
 class SavedSchedule(SQLModel, table=True):
-    """A named cron schedule for reusable asset and sync runs."""
+    """A persisted cron schedule for an assets, sync, backup or catalog task."""
 
     __tablename__: ClassVar[Any] = "saved_schedules"
     __table_args__ = (

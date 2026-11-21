@@ -50,9 +50,9 @@ export function auditRowKey(
   >,
 ): string {
   const server = result.server_id ?? "";
-  if (result.kind === "theme")
-    return `theme:${result.item_id}:${result.server_item_id ?? ""}:${result.theme_id ?? ""}:${server}`;
   if (result.collection_id)
     return `collection:${result.collection_id}:${result.art_type}:${server}`;
+  if (result.kind === "theme")
+    return `theme:${result.item_id}:${result.server_item_id ?? ""}:${result.theme_id ?? ""}:${server}`;
   return `art:${result.item_id}:${result.season_id ?? ""}:${result.art_type}:${server}`;
 }

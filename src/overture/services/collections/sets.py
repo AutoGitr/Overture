@@ -5,7 +5,7 @@ lazy from collections.abc import Mapping, Sequence
 lazy from dataclasses import dataclass
 
 lazy from ...domain import FilterOperator, SetDimension
-lazy from ...repositories.collections import CollectionItem
+lazy from ...repositories.collection_items import CollectionItem
 lazy from ...schemas.collections import (
     CollectionGeneratorBase,
     FieldCondition,

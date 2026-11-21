@@ -39,6 +39,7 @@ lazy from overture.services.catalog.downloads import (
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.themes.youtube_resolver import YouTubeResolver
+lazy from overture.utils.hashing import compute_bytes_hash
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_catalog, make_bulk_downloads
 lazy from tests.collection_helpers import managing_rule, stored_collection
@@ -135,7 +136,7 @@ async def test_bulk_collection_scope_uses_catalog_order_and_never_searches_youtu
 ) -> None:
     await _seed(database)
     params = BulkThemeRequest(collection_ids=[1], source_order=sources)
-    plan = await plan_run(params, app_config=app_config, database=database)
+    plan = await plan_run(params, database=database)
     assert plan.total == 1
     downloads = make_bulk_downloads(
         app_config=app_config,
@@ -167,7 +168,7 @@ async def test_collections_run_beside_libraries_only_when_chosen(
         (BulkThemeRequest(library_ids=["1:elsewhere"], all_collections=True), 1),
         (BulkThemeRequest(item_ids=[1]), 0),
     ]:
-        plan = await plan_run(params, app_config=app_config, database=database)
+        plan = await plan_run(params, database=database)
         assert collection_total(plan) == total
 
 
@@ -192,7 +193,6 @@ async def test_incremental_fill_keeps_choices_and_deletion_cascades_jobs(
         [1],
         theme_order=IncrementalThemeOrder.OVERTUREDB_THEMERRDB,
         downloads=downloads,
-        app_config=app_config,
         database=database,
     )
     assert queued.themes == 0
@@ -242,36 +242,59 @@ def test_schedules_take_collection_scopes_but_not_sidebar_items() -> None:
         schedule({"item_ids": [1], "themes": {}})
 
 
-@pytest.mark.parametrize("existing_file", [False, True])
-async def test_jellyfin_restores_a_missing_theme_and_keeps_a_recorded_one(
+@pytest.mark.parametrize(
+    ("disk_state", "expected"),
+    [
+        ("unchanged", []),
+        ("missing", ["savedTheme1"]),
+        ("deleted_after_sync", ["savedTheme1"]),
+        ("replaced_after_sync", ["savedTheme1"]),
+    ],
+)
+async def test_jellyfin_restores_a_missing_or_replaced_theme_and_keeps_an_unchanged_one(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     *,
     app_config: Settings,
     database: Database,
-    existing_file: bool,
+    disk_state: str,
+    expected: list[str],
 ) -> None:
     await _seed(database, saved="savedTheme1")
     folder = tmp_path / "Saga [boxset]"
     folder.mkdir()
-    if existing_file:
-        (folder / "theme.mp3").write_bytes(b"replaced by another application")
+    written = b"saved collection theme"
+    theme_path = folder / "theme.mp3"
+    if disk_state != "missing":
+        theme_path.write_bytes(written)
+        stat = theme_path.stat()
+        recorded_hash = compute_bytes_hash(written)
+    else:
+        stat = None
+        recorded_hash = None
     configure(app_config, collections_path=tmp_path)
     async with database.write_session() as session:
         row = await session.get(MediaCollection, 1)
         assert row is not None
         row.libraries[0].server_path = "/config/collections/Saga [boxset]"
-        # Planning trusts what the last check recorded in the boxset folder:
-        # the saved theme as downloaded, or nothing.
         folder_copy = Destination(
             TEST_SERVER_ID, "opaque-server-id", DeliveryChannel.FILE
         )
         place(row, ServerAsset.THEME, (folder_copy,))
-        if existing_file:
+        if stat is not None and recorded_hash is not None:
             seed_theme(
-                row, "savedTheme1", file_hash="previous-file", destination=folder_copy
+                row,
+                "savedTheme1",
+                file_hash=recorded_hash,
+                file_mtime_ns=stat.st_mtime_ns,
+                file_size=stat.st_size,
+                destination=folder_copy,
             )
         session.add(row)
+    if disk_state == "deleted_after_sync":
+        theme_path.unlink()
+    elif disk_state == "replaced_after_sync":
+        theme_path.write_bytes(b"replaced by another application")
     downloads = make_bulk_downloads(
         app_config=app_config,
         database=database,
@@ -292,9 +315,7 @@ async def test_jellyfin_restores_a_missing_theme_and_keeps_a_recorded_one(
         row = await session.get(MediaCollection, 1)
         assert row is not None
         assert theme_of(row).youtube_id == "savedTheme1"
-    assert [target.target_url for target in queued] == (
-        [] if existing_file else ["savedTheme1"]
-    )
+    assert [target.target_url for target in queued] == expected
 
 
 async def test_runs_leave_unmanaged_collections_alone(
@@ -304,7 +325,5 @@ async def test_runs_leave_unmanaged_collections_alone(
     async with database.write_session() as session:
         rule = await CollectionRepository(session).rule(1)
         await session.delete(rule)
-    plan = await plan_run(
-        BulkThemeRequest(all_collections=True), app_config=app_config, database=database
-    )
+    plan = await plan_run(BulkThemeRequest(all_collections=True), database=database)
     assert collection_total(plan) == 0

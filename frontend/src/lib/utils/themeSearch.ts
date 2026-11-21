@@ -53,6 +53,20 @@ export function extractYouTubeId(value: string): string | null {
   return value.match(/(?:v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})/)?.[1] ?? null;
 }
 
+/** Return unique non-empty YouTube IDs in order, trimming surrounding whitespace. */
+export function themeCandidateVideoIds(...ids: (string | null | undefined)[]): string[] {
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of ids) {
+    const id = raw?.trim();
+    if (id && !seen.has(id)) {
+      seen.add(id);
+      unique.push(id);
+    }
+  }
+  return unique;
+}
+
 export interface MergeThemeResultsParams {
   /** The title or collection the theme is for. */
   title: string | null;

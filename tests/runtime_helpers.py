@@ -367,6 +367,7 @@ class NoopDownloads(DownloadService):
 
     def __init__(self) -> None:
         self._asset_locks = KeyedLock[int | str]()
+        self.theme_handler = unused(DownloadThemeHandler)
 
     @property
     @override
@@ -724,7 +725,6 @@ def make_runtime(
             local_assets=local_assets,
             phash=phash,
             publisher=events,
-            app_config=app_config,
             database=database,
             collection_art=art.collections,
             server_copies=make_server_copies(
@@ -733,13 +733,12 @@ def make_runtime(
                 config_dir=config_dir,
                 phash=phash,
             ),
+            theme_handler=downloads.theme_handler,
         )
         if server_audit is None
         else server_audit
     )
-    needs = AssetNeeds(
-        app_config=app_config, database=database, provider_registry=provider_registry
-    )
+    needs = AssetNeeds(database=database, provider_registry=provider_registry)
     collections = (
         CollectionsService(
             needs=needs,
@@ -819,7 +818,7 @@ def make_runtime(
             themes=themes,
             downloads=downloads,
             publisher=events,
-            catalog=CatalogBrowser(database=database, app_config=app_config),
+            catalog=CatalogBrowser(database=database),
         ),
         asset_manager=asset_manager,
         stats=stats,

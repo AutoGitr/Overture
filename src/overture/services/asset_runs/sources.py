@@ -26,7 +26,7 @@ lazy from ..art.collection_art import CollectionArtService, chosen_poster_style
 lazy from ..art.matcher import ArtMatcher
 lazy from ..art.perfect_match import accepted_matches, accepts, comparison_threshold
 lazy from ..catalog.index import CatalogIndex
-lazy from ..themes.youtube_resolver import YouTubeResolver
+lazy from ..themes.youtube_resolver import DownloadError, YouTubeResolver
 lazy from .plan import RunParams, Source, Target, Unusable, catalog_pick, triage
 lazy from .support import no_match_reason
 
@@ -37,6 +37,7 @@ SOURCE_ERRORS = (
     httpx2.HTTPError,
     OSError,
     ValueError,
+    DownloadError,
 )
 
 #: What the comparison reference was, as said in a reason.

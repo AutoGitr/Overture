@@ -6,7 +6,7 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.domain import TermKind
-lazy from overture.repositories.collections import CollectionItem
+lazy from overture.repositories.collection_items import CollectionItem
 lazy from overture.repositories.terms import TermRepository
 
 

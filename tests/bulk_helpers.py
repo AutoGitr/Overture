@@ -10,7 +10,6 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from overture.config import Settings
 lazy from overture.db.models.catalog import CatalogItem
 lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.schedule import TaskSchedule
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
 lazy from overture.domain import (
@@ -32,6 +31,7 @@ lazy from overture.services.asset_runs.plan import AssetPlan, Target, slot
 lazy from overture.services.asset_runs.sources import BatchFacts
 lazy from overture.services.catalog.index import CatalogIndex
 lazy from overture.services.downloads.service import DownloadService
+lazy from overture.services.schedule_store import CATALOG_SCHEDULE, save_schedule
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.themes.youtube_resolver import YouTubeResolver
 lazy from overture.utils.audio import ThemeAudioMetadata
@@ -211,27 +211,13 @@ def use_theme_work(monkeypatch: pytest.MonkeyPatch, work: BulkThemeWork) -> None
 
 async def enable_catalog(session: AsyncSession) -> None:
     """Switch OvertureDB on, as the user does with Enable OvertureDB."""
-    await session.merge(
-        TaskSchedule(
-            task_name="catalog",
-            enabled=True,
-            cron_expression="0 0 * * *",
-            payload={},
-        )
-    )
+    await save_schedule(session, CATALOG_SCHEDULE, enabled=True)
     await session.commit()
 
 
 async def disable_catalog(session: AsyncSession) -> None:
     """Switch OvertureDB off, which it is not unless the user says so."""
-    await session.merge(
-        TaskSchedule(
-            task_name="catalog",
-            enabled=False,
-            cron_expression="0 0 * * *",
-            payload={},
-        )
-    )
+    await save_schedule(session, CATALOG_SCHEDULE, enabled=False)
     await session.commit()
 
 

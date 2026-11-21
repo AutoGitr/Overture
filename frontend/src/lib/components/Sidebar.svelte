@@ -34,14 +34,31 @@
   import { CollectionMembers } from "../utils/collectionMembers.svelte";
   import { CustomFilterMatch } from "../utils/customFilterMatch.svelte";
   import { collectionArtDisplayUrl, itemArtDisplayUrl, remotePosterUrl } from "../utils/artDisplay";
-  import type {
-    SidebarSortPreference,
-    SortScope,
-    SidebarTab,
-    SidebarSortDir as SortDir,
-    SidebarSortField as SortField,
+  import {
+    filterCatalogEntries,
+    filterSidebarCollections,
+    filterSidebarItems,
   } from "../utils/sidebarDomain";
-  import * as sidebarDomain from "../utils/sidebarDomain";
+  import * as sidebarFilters from "../utils/sidebarFilters";
+  import { searchFieldGroups, searchPlaceholder } from "../utils/sidebarSearches";
+  import {
+    collectionGroupNames,
+    inCollectionGroup,
+    statusTone,
+    type CollectionGroupRow,
+    type SidebarSortDir as SortDir,
+    type SidebarTab,
+    type SortScope,
+  } from "../utils/sidebarShared";
+  import {
+    collectionGroupRows,
+    defaultSort,
+    normalizeSortPreference,
+    sortCollectionGroups,
+    sortMenu,
+    type SidebarSortField as SortField,
+    type SidebarSortPreference,
+  } from "../utils/sidebarSorts";
   import { UNMANAGED_GROUP, UNGROUPED_GROUP } from "../../generated/settings";
   import { readJson, writeJson } from "../utils/storage";
   import DataStatus from "./DataStatus.svelte";
@@ -115,7 +132,7 @@
   };
 
   function loadSortPreference(scope: SortScope, tab: SidebarTab) {
-    return sidebarDomain.normalizeSortPreference(
+    return normalizeSortPreference(
       readJson<unknown>(`${SORT_KEYS[scope]}_${tab}`, null),
       scope,
     );
@@ -159,7 +176,7 @@
             : "collections",
   );
   let sortFields = $derived(
-    sidebarDomain.sortMenu(sortScope, {
+    sortMenu(sortScope, {
       inGroup: groupView,
       plex: settingsState.hasServerType("plex"),
     }),
@@ -169,13 +186,13 @@
   let sort = $derived<SidebarSortPreference>(
     sortFields.some((entry) => entry.id === chosenSort.field)
       ? chosenSort
-      : sidebarDomain.defaultSort(sortFields),
+      : defaultSort(sortFields),
   );
   let tmdbFilterKeys = $derived(
-    sidebarDomain.tmdbFilterKeys(uiState.sidebarSource, uiState.sidebarMode, catalog.enabled),
+    sidebarFilters.tmdbFilterKeys(uiState.sidebarSource, uiState.sidebarMode, catalog.enabled),
   );
   let catalogRows = $derived(
-    sidebarDomain.filterCatalogEntries({
+    filterCatalogEntries({
       entries: catalogEntries,
       filters: uiState.catalogFilters,
       searchQuery: uiState.searchQuery,
@@ -226,7 +243,7 @@
     uiState.sidebarMode === "items" ? uiState.currentFilters.collectionId : null,
   );
   let filteredItems = $derived(
-    sidebarDomain.filterSidebarItems({
+    filterSidebarItems({
       items: libraryItems,
       filters: uiState.currentFilters,
       catalogEnabled: catalog.enabled,
@@ -274,7 +291,7 @@
   });
 
   let filteredCollections = $derived(
-    sidebarDomain.filterSidebarCollections({
+    filterSidebarCollections({
       collections,
       filters: uiState.currentFilters,
       catalogEnabled: catalog.enabled,
@@ -286,9 +303,9 @@
   );
 
   let collectionGroups = $derived(
-    sidebarDomain.sortCollectionGroups(
-      sidebarDomain.collectionGroupRows(
-        sidebarDomain.collectionGroupNames(groupsQuery.data ?? [], filteredCollections),
+    sortCollectionGroups(
+      collectionGroupRows(
+        collectionGroupNames(groupsQuery.data ?? [], filteredCollections),
         filteredCollections,
       ),
       sort.field,
@@ -297,7 +314,7 @@
   );
   let visibleCollections = $derived(
     groupView
-      ? filteredCollections.filter((row) => sidebarDomain.inCollectionGroup(row, currentGroup))
+      ? filteredCollections.filter((row) => inCollectionGroup(row, currentGroup))
       : filteredCollections,
   );
 
@@ -347,11 +364,11 @@
     {index}
     active={routedItemId() === item.id}
     {item}
-    artStatus={sidebarDomain.statusTone(
+    artStatus={statusTone(
       item.art_status,
       downloadState.isDownloadingType(item.id, "art"),
     )}
-    themeStatus={sidebarDomain.statusTone(
+    themeStatus={statusTone(
       item.assets.theme.status,
       downloadState.isDownloadingType(item.id, "theme"),
     )}
@@ -367,8 +384,8 @@
     {index}
     active={routedCollectionId() === collection.id}
     {collection}
-    artStatus={sidebarDomain.statusTone(collection.art_status, false)}
-    themeStatus={sidebarDomain.statusTone(
+    artStatus={statusTone(collection.art_status, false)}
+    themeStatus={statusTone(
       collection.assets.theme.status,
       downloadState.isDownloadingCollection(collection.id),
     )}
@@ -396,7 +413,7 @@
   />
 {/snippet}
 
-{#snippet collectionGroupRow(group: sidebarDomain.CollectionGroupRow, _index: number, style: string)}
+{#snippet collectionGroupRow(group: CollectionGroupRow, _index: number, style: string)}
   <SidebarGroupRow
     title={group.title}
     count={group.collections}
@@ -417,19 +434,19 @@
     totalCollections={uiState.sidebarSource === "overturedb"
       ? (catalogCollections.data?.length ?? 0)
       : groupView
-        ? sidebarDomain.collectionGroupNames(groupsQuery.data ?? [], collections).length
+        ? collectionGroupNames(groupsQuery.data ?? [], collections).length
         : collections.length}
   />
 
   <SidebarControls
     {section}
-    searchGroups={sidebarDomain.searchFieldGroups(
+    searchGroups={searchFieldGroups(
       uiState.sidebarSource,
       uiState.sidebarMode,
       uiState.sidebarTab,
       settingsState.current.tmdb_configured,
     )}
-    placeholder={sidebarDomain.searchPlaceholder(
+    placeholder={searchPlaceholder(
       uiState.sidebarMode,
       uiState.sidebarTab,
       uiState.searchField,
@@ -444,20 +461,20 @@
     activeFilters={searchingTmdb
       ? tmdbFilterKeys.filter((key) => uiState.tmdbFilters[key] !== "all").length
       : uiState.sidebarSource === "overturedb"
-      ? sidebarDomain.CATALOG_FILTER_KEYS.filter(
+      ? sidebarFilters.CATALOG_FILTER_KEYS.filter(
           (key) =>
             (key !== "seasonPosters" || uiState.sidebarTab === "show") &&
             uiState.catalogFilters[key] !== "all",
         ).length
-      : sidebarDomain.activeFilterCount(
+      : sidebarFilters.activeFilterCount(
           uiState.currentFilters,
           catalog.enabled,
           uiState.sidebarMode,
         )}
     onResetFilters={() => {
-      if (searchingTmdb) uiState.tmdbFilters = sidebarDomain.defaultTmdbFilters();
+      if (searchingTmdb) uiState.tmdbFilters = sidebarFilters.defaultTmdbFilters();
       else if (uiState.sidebarSource === "overturedb")
-        uiState.catalogFilters = sidebarDomain.defaultCatalogFilters();
+        uiState.catalogFilters = sidebarFilters.defaultCatalogFilters();
       else uiState.setFilters(defaultFilters());
     }}
     searchQuery={uiState.searchQuery}

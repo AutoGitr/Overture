@@ -24,7 +24,6 @@ lazy from .media_item_copy import MediaItemCopy, SeasonCopy
 lazy from .media_server import MediaServer
 lazy from .notification import NotificationRule
 lazy from .saved_schedule import SavedSchedule
-lazy from .schedule import TaskSchedule
 lazy from .season import Season
 lazy from .settings import (
     MAX_THEME_FORMAT_LENGTH,
@@ -66,7 +65,6 @@ __all__ = [
     "SavedSchedule",
     "Season",
     "SeasonCopy",
-    "TaskSchedule",
     "Term",
     "get_app_settings",
 ]

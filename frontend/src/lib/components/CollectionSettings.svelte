@@ -1,9 +1,7 @@
 <script lang="ts">
-  import {
-    formPolicy,
-    type CollectionDraft,
-    type CollectionEditor,
-  } from "../utils/collectionForms.svelte";
+  import type { CollectionDraft } from "../utils/collectionDraft.svelte";
+  import type { CollectionEditor } from "../utils/collectionForms.svelte";
+  import { formPolicy } from "../utils/collectionFormShared.svelte";
   import CollectionPolicyFields from "./CollectionPolicyFields.svelte";
   import DetailForm from "./DetailForm.svelte";
   import FieldRow from "./FieldRow.svelte";

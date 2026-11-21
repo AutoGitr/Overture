@@ -9,11 +9,14 @@ lazy from ...repositories.collections import CollectionRepository
 lazy from ...schemas.collections import (
     BulkCollectionOperation,
     BulkCollectionOperationResult,
-    CollectionAdoption,
     CollectionOptions,
+)
+lazy from ...schemas.collections import (
+    CollectionAdoption as CollectionAdoptionRequest,
 )
 lazy from ..art.collection_art import CollectionArtService
 lazy from .access import CollectionAccess
+lazy from .adoption import CollectionAdoption
 lazy from .display import saved_options
 lazy from .editor import CollectionEditor
 lazy from .themes import CollectionThemes
@@ -76,6 +79,7 @@ class CollectionBulk:
         *,
         access: CollectionAccess,
         editor: CollectionEditor,
+        adoption: CollectionAdoption,
         art: CollectionArtService,
         themes: CollectionThemes,
     ) -> None:
@@ -85,10 +89,10 @@ class CollectionBulk:
             "delete": lambda i, body: editor.delete(i, target=body.delete_target),
             "remove_artwork": lambda i, body: art.remove(i, None, body.removal),
             "remove_themes": lambda i, body: themes.remove(i, body.removal),
-            "adopt": lambda i, body: editor.adopt(
-                i, CollectionAdoption(group=body.collection_group)
+            "adopt": lambda i, body: adoption.adopt(
+                i, CollectionAdoptionRequest(group=body.collection_group)
             ),
-            "orphan": lambda i, _: editor.orphan(i),
+            "orphan": lambda i, _: adoption.orphan(i),
             "set_monitored": lambda i, body: editor.set_monitored(
                 i, bool(body.monitored)
             ),

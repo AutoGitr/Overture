@@ -7,7 +7,7 @@
     CollectionOrder,
     SyncMode,
   } from "../../generated/rest/types.gen";
-  import type { PolicyData } from "../utils/collectionForms.svelte";
+  import type { PolicyData } from "../utils/collectionFormShared.svelte";
   import { COLLECTION_POSTER_LABELS } from "../utils/collectionPosters";
 
   /**

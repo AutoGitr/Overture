@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { SidebarTab } from "../utils/sidebarDomain";
+  import type { SidebarTab } from "../utils/sidebarShared";
 
   let {
     checked,

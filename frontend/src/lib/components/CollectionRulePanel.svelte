@@ -1,11 +1,9 @@
 <script lang="ts">
   import type { LibrarySectionRead } from "../../generated/rest/types.gen";
   import { countOf } from "../utils/plural";
-  import {
-    switchKind,
-    type CollectionDraft,
-    type CollectionEditor,
-  } from "../utils/collectionForms.svelte";
+  import type { CollectionDraft } from "../utils/collectionDraft.svelte";
+  import type { CollectionEditor } from "../utils/collectionForms.svelte";
+  import { switchKind } from "../utils/collectionFormShared.svelte";
   import { errorMessage } from "../utils/errors";
   import { inLibraryOrder, libraryScope } from "../utils/libraries.svelte";
   import DetailForm from "./DetailForm.svelte";

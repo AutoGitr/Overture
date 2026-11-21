@@ -53,6 +53,7 @@ lazy from .downloads.service import DownloadService
 lazy from .library.items import (
     emit_library_item_upserted,
 )
+lazy from .needs import apply_needs
 lazy from .themes.service import ThemesService
 
 logger = logging.getLogger(__name__)
@@ -395,9 +396,7 @@ class TmdbItemsService:
         """Return what OvertureDB holds for an unsaved item."""
         details = await self._details(media_type, tmdb_id)
         async with self._database.read_session() as db:
-            return await sources_for(
-                db, unsaved_item(details), [], app_config=self._config
-            )
+            return await sources_for(db, unsaved_item(details), [])
 
     @staticmethod
     async def _stored_item(db: AsyncSession, details: TmdbDetails) -> MediaItem:
@@ -420,6 +419,8 @@ class TmdbItemsService:
             for season in details.tracked_seasons
         )
         await db.flush()
+        await apply_needs(db, items=[item])
+        db.add(item)
         return item
 
     @asynccontextmanager

@@ -287,10 +287,10 @@ export interface JobSnapshotClearedEvent {
   finished_at: string;
 }
 
-export type ScheduleKind = "assets" | "sync";
+export type NamedScheduleKind = "assets" | "sync";
 
 export interface SchedulesChangedEvent {
-  kind: ScheduleKind;
+  kind: NamedScheduleKind;
 }
 
 /** A tag the REST query keys carry. */

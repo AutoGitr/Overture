@@ -89,7 +89,6 @@ async def test_http_services_use_bound_database_events_and_queue(
         database=database,
         config_dir=tmp_path,
         needs=AssetNeeds(
-            app_config=app_config,
             database=database,
             provider_registry=NoopProviderRegistry(),
         ),

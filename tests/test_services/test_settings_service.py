@@ -165,7 +165,6 @@ async def test_update_settings_creates_row_when_absent_and_applies_all_fields(
         database=database,
         provider_registry=attached_registry(app_config),
         needs=AssetNeeds(
-            app_config=app_config,
             database=database,
             provider_registry=attached_registry(app_config),
         ),
@@ -202,7 +201,6 @@ async def test_update_settings_with_no_fields_preserves_existing_row(
         database=database,
         provider_registry=attached_registry(app_config),
         needs=AssetNeeds(
-            app_config=app_config,
             database=database,
             provider_registry=attached_registry(app_config),
         ),
@@ -240,7 +238,6 @@ async def test_update_settings_rejects_min_greater_than_max_duration(
         database=database,
         provider_registry=attached_registry(app_config),
         needs=AssetNeeds(
-            app_config=app_config,
             database=database,
             provider_registry=attached_registry(app_config),
         ),
@@ -253,7 +250,6 @@ async def test_update_settings_rejects_min_greater_than_max_duration(
             database=database,
             provider_registry=attached_registry(app_config),
             needs=AssetNeeds(
-                app_config=app_config,
                 database=database,
                 provider_registry=attached_registry(app_config),
             ),

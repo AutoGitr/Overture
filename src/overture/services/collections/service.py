@@ -13,6 +13,7 @@ lazy from ..downloads.service import DownloadService
 lazy from ..needs import AssetNeeds
 lazy from ..removal import AssetRemover
 lazy from .access import CollectionAccess
+lazy from .adoption import CollectionAdoption
 lazy from .arr_requests import CollectionArr
 lazy from .bulk import CollectionBulk
 lazy from .discovery import CollectionDiscovery
@@ -98,6 +99,12 @@ class CollectionsService:
             reader=self.reader,
             downloads=downloads,
         )
+        self.adoption = CollectionAdoption(
+            access=access,
+            membership=membership,
+            reader=self.reader,
+            save_rule=self.editor.save_rule_locked,
+        )
         self.themes = CollectionThemes(
             access=access, downloads=downloads, remover=remover
         )
@@ -130,6 +137,7 @@ class CollectionsService:
             access=access,
             validator=validator,
             editor=self.editor,
+            adoption=self.adoption,
             sets=self.sets,
             rules=self.rules,
             separators=CollectionSeparators(
@@ -137,7 +145,11 @@ class CollectionsService:
             ),
         )
         self.bulk = CollectionBulk(
-            access=access, editor=self.editor, art=art, themes=self.themes
+            access=access,
+            editor=self.editor,
+            adoption=self.adoption,
+            art=art,
+            themes=self.themes,
         )
         self.library_filters = LibraryFilters(
             access=access,

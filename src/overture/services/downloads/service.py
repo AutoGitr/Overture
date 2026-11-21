@@ -45,7 +45,7 @@ lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.hashing import compute_bytes_hash
 lazy from ...utils.image_fetch import RemoteImageError
 lazy from ...utils.locks import KeyedLock
-lazy from ...utils.progress import ProgressUpdate
+lazy from ...utils.progress import ProgressCallback, ProgressUpdate
 lazy from ...utils.threads import owned_thread
 lazy from ...utils.time import utc_now
 lazy from ..art.collection_art import CollectionArtService
@@ -66,9 +66,9 @@ lazy from ..themes.youtube_resolver import (
 lazy from .art import DownloadArtHandler
 lazy from .collection_theme import store_collection_theme
 lazy from .events import DownloadEventPublisher
-lazy from .queue import JobTarget, add_job
+lazy from .queue import JobTarget, add_job, complete_running_job
 lazy from .results import (
-    DownloadedCollectionTheme,
+    DownloadedTheme,
     DownloadResult,
     DownloadTarget,
     PreparedDownload,
@@ -184,7 +184,6 @@ class DownloadService:
         self._events = events
         self._publisher = publisher
         self._asset_storage = asset_storage
-        self._app_config = app_config
         self._lane_sizes = {
             JobType.ART: app_config.ART_DOWNLOAD_WORKERS,
             JobType.THEME: app_config.THEME_DOWNLOAD_WORKERS,
@@ -201,6 +200,11 @@ class DownloadService:
     def asset_locks(self) -> KeyedLock[int | str]:
         """Locks coordinating access to item and collection assets."""
         return self._asset_storage.asset_locks
+
+    @property
+    def publisher(self) -> protocols.EventPublisher:
+        """Publisher announcing completed asset updates."""
+        return self._publisher
 
     def _staged(self, session: AsyncSession) -> _Staged:
         return session.info.setdefault(self, _Staged())
@@ -528,23 +532,7 @@ class DownloadService:
                 )
                 return
             if job.job_type is JobType.COLLECTION_THEME:
-                downloaded_collection = (
-                    await self.theme_handler.download_collection_theme(job, progress)
-                )
-                # The upload is the write: one collection takes one at a time.
-                async with self.asset_locks.acquire(_lock_key(job)):
-                    await self._finish_commit(
-                        job.id,
-                        self._commit(
-                            job,
-                            job.collection_title,
-                            partial(
-                                self._upload_collection_theme,
-                                job,
-                                downloaded_collection,
-                            ),
-                        ),
-                    )
+                await self._run_collection_theme_job(job, progress)
                 return
             if item is None:
                 raise DownloadError("Media item not found")
@@ -733,12 +721,36 @@ class DownloadService:
         await self.record_job(job, downloaded.result, recorded)
         return _Placed.WRITTEN if written else _Placed.UNCHANGED
 
+    async def _run_collection_theme_job(
+        self, job: DownloadJob, progress: ProgressCallback
+    ) -> None:
+        """Download and deliver one collection theme under the collection lock."""
+        prepared = await self.theme_handler.download(job, None, progress)
+        if not isinstance(prepared.result, DownloadedTheme):
+            raise TypeError("Expected DownloadedTheme for collection theme job")
+        # The upload is the write: one collection takes one at a time.
+        async with self.asset_locks.acquire(_lock_key(job)):
+            await self._finish_commit(
+                job.id,
+                self._commit(
+                    job,
+                    job.collection_title,
+                    partial(
+                        self._upload_collection_theme,
+                        job,
+                        prepared.data,
+                        prepared.result,
+                    ),
+                ),
+            )
+
     async def _upload_collection_theme(
-        self, job: DownloadJob, downloaded: DownloadedCollectionTheme
+        self, job: DownloadJob, audio_bytes: bytes, downloaded: DownloadedTheme
     ) -> _Placed:
         """Store the theme on each server copy and record it."""
         await store_collection_theme(
             job,
+            audio_bytes,
             downloaded,
             provider_registry=self.provider_registry,
             asset_storage=self._asset_storage,
@@ -765,42 +777,22 @@ class DownloadService:
 
     async def _mark_done(self, job: DownloadJob) -> None:
         """Mark a running job done once what it writes is recorded."""
-        async with self._database.write_session() as session:
-            stored = await DownloadJobRepository(session).get(job.id)
-            if not stored or stored.status is not JobStatus.RUNNING:
-                return
-            stored.status = JobStatus.DONE
-            stored.error_message = None
-            stored.progress_percent = 100
-            stored.completed_at = utc_now()
-            session.add(stored)
-        job.status = JobStatus.DONE
-        job.error_message = None
-        job.progress_percent = 100
-        job.completed_at = stored.completed_at
+        await complete_running_job(self._database, job)
 
     async def record_job(
         self, job: DownloadJob, downloaded: DownloadResult, stored: StoredFile
     ) -> None:
         """Store what the download produced and mark the job done."""
-        async with self._database.write_session() as session:
-            stored_job = await DownloadJobRepository(session).get(job.id)
-            item = await session.get(MediaItem, job.media_item_id)
-            if not stored_job or stored_job.status is not JobStatus.RUNNING or not item:
-                return
 
+        async def _record(session: AsyncSession, _now: object) -> bool:
+            item = await session.get(MediaItem, job.media_item_id)
+            if not item:
+                return False
             await downloaded.record(session, item, stored)
             await auto_unmonitor_completed(session, item)
-            stored_job.status = JobStatus.DONE
-            stored_job.error_message = None
-            stored_job.progress_percent = 100
-            stored_job.completed_at = utc_now()
-            session.add(stored_job)
+            return True
 
-        job.status = JobStatus.DONE
-        job.error_message = None
-        job.progress_percent = 100
-        job.completed_at = stored_job.completed_at
+        await complete_running_job(self._database, job, _record)
 
     async def _emit_progress(
         self,

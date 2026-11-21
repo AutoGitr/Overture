@@ -152,9 +152,7 @@ async def bed(
     remover = make_remover(provider, app_config=app_config, database=database)
     registry = NoopProviderRegistry(provider)
     service = CollectionsService(
-        needs=AssetNeeds(
-            app_config=app_config, database=database, provider_registry=registry
-        ),
+        needs=AssetNeeds(database=database, provider_registry=registry),
         database=database,
         provider_registry=registry,
         publisher=FakePublisher(),

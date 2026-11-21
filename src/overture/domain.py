@@ -769,10 +769,16 @@ class MediaServerState(StrEnum):
 
 
 class ScheduleKind(StrEnum):
-    """Category of reusable named schedule."""
+    """Category of persisted schedule."""
 
     ASSETS = "assets"
     SYNC = "sync"
+    BACKUP = "backup"
+    CATALOG = "catalog"
+
+
+#: User-named schedule kinds that manage multiple entries via ``NamedSchedules``.
+type NamedScheduleKind = Literal[ScheduleKind.ASSETS, ScheduleKind.SYNC]
 
 
 class Workflow(StrEnum):

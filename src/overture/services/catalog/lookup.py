@@ -9,7 +9,6 @@ lazy from ...catalog_contract.contract import (
     entry_file_stem,
     parse_entry_file_stem,
 )
-lazy from ...config import Settings
 lazy from ...db.models.catalog import CatalogItem
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
@@ -29,7 +28,7 @@ lazy from ...schemas.catalog import (
     CatalogSourcesItem,
 )
 lazy from ...utils.art_urls import art_preview_url, art_source_label
-lazy from ..schedule_store import CATALOG_SCHEDULE, load_schedule
+lazy from ..schedule_store import catalog_enabled
 lazy from .index import CatalogIndex, catalog_art_url
 
 
@@ -71,8 +70,6 @@ async def get_art_candidates(
     item: MediaItem,
     art_type: ArtType,
     season_num: int | None = None,
-    *,
-    app_config: Settings,
 ) -> list[ArtCandidate]:
     """Return catalog art candidates for one stored or unsaved item.
 
@@ -81,7 +78,7 @@ async def get_art_candidates(
     :class:`~overture.services.catalog.index.CatalogIndex` for the
     whole batch and read it with :func:`art_candidates` instead.
     """
-    if not await _enabled(session, app_config=app_config):
+    if not await catalog_enabled(session):
         return []
     public_item = await find_public_item(session, item)
     if public_item is None or public_item.id is None:
@@ -100,15 +97,7 @@ async def get_art_candidates(
     return [candidate] if candidate else []
 
 
-async def _enabled(session: AsyncSession, *, app_config: Settings) -> bool:
-    """Return whether the catalog is switched on."""
-    schedule = await load_schedule(session, CATALOG_SCHEDULE, timezone=app_config.TZ)
-    return schedule.enabled
-
-
-async def get_sources_for_item(
-    item_id: int, *, app_config: Settings, database: Database
-) -> CatalogSources:
+async def get_sources_for_item(item_id: int, *, database: Database) -> CatalogSources:
     """Return available catalog art sources for a local media item.
 
     Nothing is found when the catalog is disabled or holds no entry.
@@ -121,7 +110,6 @@ async def get_sources_for_item(
             session,
             item,
             await SeasonRepository(session).list_for_item(item_id),
-            app_config=app_config,
         )
 
 
@@ -129,14 +117,12 @@ async def sources_for(
     session: AsyncSession,
     item: MediaItem,
     local_seasons: Sequence[Season],
-    *,
-    app_config: Settings,
 ) -> CatalogSources:
     """Return the catalog sources for a stored or unsaved item.
 
     *local_seasons* give each season candidate its ``season_id``.
     """
-    if not await _enabled(session, app_config=app_config):
+    if not await catalog_enabled(session):
         return CatalogSources(found=False)
 
     public_item = await find_public_item(session, item)

@@ -33,7 +33,6 @@ lazy from overture.db.models.catalog import CatalogItem
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.schedule import TaskSchedule
 lazy from overture.db.models.season import Season
 lazy from overture.db.models.settings import AppSettings
 lazy from overture.domain import (
@@ -77,12 +76,6 @@ class AppSettingsFactory(Protocol):
     """Build an :class:`AppSettings` row."""
 
     def __call__(self, **overrides: Any) -> AppSettings: ...
-
-
-class ScheduleFactory(Protocol):
-    """Build a :class:`TaskSchedule` row."""
-
-    def __call__(self, **overrides: Any) -> TaskSchedule: ...
 
 
 class DownloadJobFactory(Protocol):

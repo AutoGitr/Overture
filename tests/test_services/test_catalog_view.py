@@ -93,7 +93,7 @@ async def browser(
 ) -> CatalogBrowser:
     await _import_catalog(db_session, tmp_path, app_config)
     await enable_catalog(db_session)
-    return CatalogBrowser(database=database, app_config=app_config)
+    return CatalogBrowser(database=database)
 
 
 async def test_collection_entries_are_stored_apart_from_titles(
@@ -119,7 +119,7 @@ async def test_the_catalog_view_needs_overturedb_enabled(
     await _import_catalog(db_session, tmp_path, app_config)
     await save_schedule(db_session, CATALOG_SCHEDULE, enabled=False)
     await db_session.commit()
-    browser = CatalogBrowser(database=database, app_config=app_config)
+    browser = CatalogBrowser(database=database)
 
     with pytest.raises(PublicServiceError) as exc_info:
         await browser.list_entries(CatalogMediaType.MOVIE)
@@ -435,7 +435,7 @@ async def test_no_theme_is_imported_drafted_and_skipped_by_theme_runs(
     await db_session.flush()
     db_session.add(managing_rule(1))
     await db_session.commit()
-    browser = CatalogBrowser(database=database, app_config=app_config)
+    browser = CatalogBrowser(database=database)
 
     detail = await browser.get_entry(CatalogMediaType.COLLECTION, "tmdb-10")
     assert detail.entry.no_theme is True
@@ -443,10 +443,8 @@ async def test_no_theme_is_imported_drafted_and_skipped_by_theme_runs(
     async with database.write_session() as session:
         row = await CollectionRepository(session).get(1)
         assert row is not None
-        await apply_needs(session, collections=[row], app_config=app_config)
-    plan = await plan_run(
-        BulkThemeRequest(collection_ids=[1]), app_config=app_config, database=database
-    )
+        await apply_needs(session, collections=[row])
+    plan = await plan_run(BulkThemeRequest(collection_ids=[1]), database=database)
     assert dict(plan.decided) == {(True, JobOutcome.SKIPPED, NO_THEME): 1}
 
     drafted = await browser.save_draft(
@@ -489,7 +487,7 @@ async def test_a_collection_needs_no_theme_its_catalog_or_settings_rule_out(
         )
         session.add(row)
         await session.flush()
-        await apply_needs(session, collections=[row], app_config=app_config)
+        await apply_needs(session, collections=[row])
 
     theme = read_asset(row, ServerAsset.THEME)
     assert theme.needed is needed

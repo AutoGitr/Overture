@@ -14,7 +14,6 @@ lazy from itertools import batched
 
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ...config import Settings
 lazy from ...db.ledger import missing_deliveries, read_asset, selection
 lazy from ...db.models.asset import Asset
 lazy from ...db.models.media_collection import MediaCollection
@@ -269,8 +268,12 @@ def not_needed(target: Target, index: CatalogIndex) -> str | None:
         return NO_THEME
     if target.kind is not ServerAsset.THEME:
         return f"its collection settings need no {target.kind.value}"
-    # The settings decide alone while OvertureDB is off.
-    if row.id in index.themeless_collections or not index.enabled:
+    entry = (
+        index.collections.get(row.tmdb_collection_id)
+        if row.tmdb_collection_id is not None
+        else None
+    )
+    if entry is None or not entry.no_theme:
         return THEME_NOT_NEEDED
     return NO_THEME
 
@@ -433,7 +436,6 @@ def _plan_targets(
 async def plan_run(
     params: RunParams,
     *,
-    app_config: Settings,
     database: Database,
     chunk: int = CHUNK_SIZE,
 ) -> AssetPlan:
@@ -460,7 +462,7 @@ async def plan_run(
                 else []
             )
             index = (
-                await CatalogIndex.build(session, items, app_config=app_config)
+                await CatalogIndex.build(session, items)
                 if catalog
                 else CatalogIndex.empty()
             )
@@ -489,9 +491,7 @@ async def plan_run(
                     collection_groups=params.collection_groups,
                     include_unmonitored=params.include_unmonitored,
                 )
-                index = await CatalogIndex.build_collections(
-                    session, rows, app_config=app_config
-                )
+                index = await CatalogIndex.build_collections(session, rows)
                 failed = (
                     await DownloadJobRepository(session).failed_themes_by_collection(
                         [row.id for row in rows if row.id is not None]

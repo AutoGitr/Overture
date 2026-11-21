@@ -113,7 +113,7 @@ async def test_overturedb_only_drops_targets_the_catalog_cannot_serve(
     params = BulkMatchArtRequest(
         art_types=[ArtType.POSTER], source_order=[ArtBulkSource.OVERTUREDB]
     )
-    plan = await plan_run(params, app_config=app_config, database=database)
+    plan = await plan_run(params, database=database)
 
     assert visits(plan) == {row_id(served): ((ArtType.POSTER, None),)}
     assert decided(plan) == {no_art(ArtType.POSTER): 1, NO_ENTRY: 1}
@@ -156,7 +156,6 @@ async def test_saved_url_is_skipped_unless_its_file_is_missing(
             art_types=[ArtType.POSTER],
             source_order=[ArtBulkSource.OVERTUREDB],
         ),
-        app_config=app_config,
         database=database,
     )
 
@@ -219,7 +218,6 @@ async def test_partial_catalog_entry_drops_only_the_slots_it_lacks(
             source_order=[ArtBulkSource.OVERTUREDB],
             overwrite_existing=True,
         ),
-        app_config=app_config,
         database=database,
     )
     assert visits(plan) == {
@@ -237,7 +235,6 @@ async def test_partial_catalog_entry_drops_only_the_slots_it_lacks(
         BulkMatchArtRequest(
             art_types=list(ArtType), source_order=[ArtBulkSource.OVERTUREDB]
         ),
-        app_config=app_config,
         database=database,
     )
     assert visits(plan) == {
@@ -271,7 +268,6 @@ async def test_missing_catalog_entry_takes_precedence_over_recent_check(
             skip_recent_val=1,
             skip_recent_unit=RecentUnit.DAYS,
         ),
-        app_config=app_config,
         database=database,
     )
 
@@ -297,7 +293,6 @@ async def test_a_second_source_keeps_every_target(
             art_types=[ArtType.POSTER],
             source_order=[ArtBulkSource.OVERTUREDB, ArtBulkSource.LOCAL_ART_MATCHING],
         ),
-        app_config=app_config,
         database=database,
     )
 
@@ -342,7 +337,6 @@ async def test_season_posters_are_matched_by_season_num(
         BulkMatchArtRequest(
             art_types=[ArtType.SEASON_POSTER], source_order=[ArtBulkSource.OVERTUREDB]
         ),
-        app_config=app_config,
         database=database,
     )
 
@@ -373,7 +367,6 @@ async def test_a_disabled_catalog_drops_every_target(
         BulkMatchArtRequest(
             art_types=[ArtType.POSTER], source_order=[ArtBulkSource.OVERTUREDB]
         ),
-        app_config=app_config,
         database=database,
     )
 
@@ -416,7 +409,7 @@ async def test_theme_run_drops_items_without_a_catalog_video_id(
     await db_session.commit()
 
     params = BulkThemeRequest(source_order=[ThemeBulkSource.OVERTUREDB])
-    plan = await plan_run(params, app_config=app_config, database=database)
+    plan = await plan_run(params, database=database)
 
     assert visits(plan) == {row_id(served): ((ServerAsset.THEME, None),)}
     assert decided(plan) == {
@@ -483,7 +476,6 @@ async def test_saved_selection_that_is_the_catalog_choice_says_so(
         BulkMatchArtRequest(
             art_types=[ArtType.POSTER], source_order=[ArtBulkSource.OVERTUREDB]
         ),
-        app_config=app_config,
         database=database,
     )
 
@@ -536,12 +528,10 @@ async def test_a_disabled_catalog_skips_all_but_saved_restores(
             source_order=[ArtBulkSource.OVERTUREDB],
             **options,
         ),
-        app_config=app_config,
         database=database,
     )
     themes = await plan_run(
         BulkThemeRequest(source_order=[ThemeBulkSource.OVERTUREDB], **options),
-        app_config=app_config,
         database=database,
     )
 
@@ -568,7 +558,6 @@ async def test_themerrdb_only_run_names_the_switch_it_needs(
 
     plan = await plan_run(
         BulkThemeRequest(source_order=[ThemeBulkSource.THEMERRDB]),
-        app_config=app_config,
         database=database,
     )
 
@@ -608,7 +597,6 @@ async def test_a_theme_that_failed_before_is_planned_as_no_match(
         BulkThemeRequest(
             source_order=[ThemeBulkSource.OVERTUREDB, ThemeBulkSource.THEMERRDB]
         ),
-        app_config=app_config,
         database=database,
     )
 
@@ -657,7 +645,6 @@ async def test_a_theme_that_succeeded_after_failing_is_planned_again(
 
     plan = await plan_run(
         BulkThemeRequest(source_order=[ThemeBulkSource.OVERTUREDB]),
-        app_config=app_config,
         database=database,
     )
 

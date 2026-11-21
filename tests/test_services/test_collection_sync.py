@@ -47,6 +47,7 @@ lazy from overture.jobs.tally import JobTally
 lazy from overture.media_servers.adapters import ServerCollection, UploadThemes
 lazy from overture.media_servers.jellyfin import JellyfinProvider
 lazy from overture.media_servers.registry import Provider
+lazy from overture.repositories.collection_items import CollectionItemRepository
 lazy from overture.repositories.collections import CollectionRepository
 lazy from overture.repositories.terms import TermRepository
 lazy from overture.services.art.phash import PHASH_HEX_LENGTH, PhashService
@@ -205,7 +206,6 @@ async def _run(
             app_config=app_config, database=database, provider=server
         ),
         publisher=NullEventPublisher(),
-        app_config=app_config,
         database=database,
         checks=ServedImages(getattr(server, "images", {}), app_config=app_config),
     )
@@ -763,7 +763,7 @@ async def test_unsynced_choices_and_members_survive_a_library_sync(
         "https://server.test/new",
     )
     async with database.read_session() as session:
-        members = await CollectionRepository(session).members(refreshed.id or 0)
+        members = await CollectionItemRepository(session).members(refreshed.id or 0)
     assert [member.id for member in members] == [movies["m2"]]
 
 
@@ -865,7 +865,7 @@ async def test_managed_collections_keep_overtures_choices_and_outlive_their_serv
         kept = await repo.get(saga.id or 0)
         assert kept is not None
         assert (copy_id(kept), kept.child_count) == (None, 0)
-        assert await repo.members(saga.id or 0) == []
+        assert await CollectionItemRepository(session).members(saga.id or 0) == []
         assert [row.title for row in await repo.list_all()] == ["Saga"]
 
 

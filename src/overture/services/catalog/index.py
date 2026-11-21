@@ -6,7 +6,6 @@ lazy from typing import Self
 
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ...config import Settings
 lazy from ...db.models.catalog import CatalogCollection, CatalogItem
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
@@ -15,7 +14,7 @@ lazy from ...db.models.settings import get_app_settings
 lazy from ...domain import ArtType, CollectionPosterStyle, ThemeBulkSource
 lazy from ...repositories.catalog import CatalogRepository
 lazy from ..collections.policy import resolve_policy
-lazy from ..schedule_store import CATALOG_SCHEDULE, load_schedule
+lazy from ..schedule_store import catalog_enabled
 lazy from .entries import catalog_collection_poster
 
 
@@ -108,22 +107,15 @@ class CatalogIndex:
     collection_posters: dict[int, tuple[CollectionPosterStyle, ...]] = field(
         default_factory=dict[int, tuple[CollectionPosterStyle, ...]]
     )
-    #: The collections whose settings need no theme, by collection ID.
-    themeless_collections: frozenset[int] = frozenset()
 
     @classmethod
     async def build_collections(
         cls,
         session: AsyncSession,
         collections: Sequence[MediaCollection],
-        *,
-        app_config: Settings,
     ) -> Self:
         """Resolve catalog themes for a bounded batch of collections."""
-        schedule = await load_schedule(
-            session, CATALOG_SCHEDULE, timezone=app_config.TZ
-        )
-        if not schedule.enabled:
+        if not await catalog_enabled(session):
             return cls.empty(enabled=False)
         entries = await CatalogRepository(session).collections_by_tmdb_id(
             {
@@ -145,9 +137,6 @@ class CatalogIndex:
             collection_posters={
                 row_id: policy.overturedb_posters for row_id, policy in policies.items()
             },
-            themeless_collections=frozenset(
-                row_id for row_id, policy in policies.items() if not policy.themes
-            ),
         )
 
     @classmethod
@@ -156,15 +145,11 @@ class CatalogIndex:
         return cls({}, {}, enabled)
 
     @classmethod
-    async def build(
-        cls, session: AsyncSession, items: Sequence[MediaItem], *, app_config: Settings
-    ) -> Self:
+    async def build(cls, session: AsyncSession, items: Sequence[MediaItem]) -> Self:
         """Resolve the catalog's rows for *items*, or nothing when disabled."""
-        schedule = await load_schedule(
-            session, CATALOG_SCHEDULE, timezone=app_config.TZ
-        )
-        if not schedule.enabled or not items:
-            return cls.empty(enabled=schedule.enabled)
+        enabled = await catalog_enabled(session)
+        if not enabled or not items:
+            return cls.empty(enabled=enabled)
 
         repository = CatalogRepository(session)
         matched = await repository.items_by_media_item_id(items)

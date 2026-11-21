@@ -35,7 +35,10 @@ lazy from overture.domain import (
 )
 lazy from overture.jobs.progress_log import JobOutcome
 lazy from overture.media_servers.adapters import ServerItem
-lazy from overture.repositories.collections import CollectionItem, CollectionRepository
+lazy from overture.repositories.collection_items import (
+    CollectionItem,
+    CollectionItemRepository,
+)
 lazy from overture.repositories.terms import TermRepository
 lazy from overture.schemas.catalog import CatalogSyncStats
 lazy from overture.schemas.collections import FieldCondition, FilterGroup
@@ -363,7 +366,7 @@ async def test_resolving_a_rule_stays_within_time_memory_and_stall_budgets(
 
     async def resolve() -> list[CollectionItem]:
         async with database.read_session() as session:
-            items = await CollectionRepository(session).library_items(
+            items = await CollectionItemRepository(session).library_items(
                 MediaType.MOVIE, "1:rules", criteria_terms([criteria])
             )
         return order_items(

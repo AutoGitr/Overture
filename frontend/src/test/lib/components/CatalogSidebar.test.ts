@@ -12,7 +12,7 @@ import { navigate, route } from "../../../lib/router/routes";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
 import { sidebarState } from "../../../lib/stores/sidebarState.svelte";
 import { uiState } from "../../../lib/stores/uiState.svelte";
-import { defaultCatalogFilters } from "../../../lib/utils/sidebarDomain";
+import { defaultCatalogFilters } from "../../../lib/utils/sidebarFilters";
 import { appSettings, catalogRow, mediaItem, catalogStatus } from "../../helpers/fixtures";
 import { mockFetchRoutes } from "../../helpers/fetch";
 import { renderWithQueryClient } from "../../helpers/render";

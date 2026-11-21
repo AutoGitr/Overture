@@ -1,5 +1,5 @@
 import type { AdvanceRecord } from "../utils/recordAdvance";
-import type { SidebarTab } from "../utils/sidebarDomain";
+import type { SidebarTab } from "../utils/sidebarShared";
 
 /** A row auto-advance can move to: a stored item, or a TMDB title not yet stored. */
 export type AdvanceEntry =

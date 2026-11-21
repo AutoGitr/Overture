@@ -81,4 +81,10 @@ describe("auditRowKey", () => {
     expect(auditRowKey(themeResult())).toBe("theme:1:server-1:theme-1:1");
     expect(auditRowKey(themeResult({ server_item_id: null, theme_id: null }))).toBe("theme:1:::1");
   });
+
+  it("keys collection rows before theme rows so collection themes align with backend keys", () => {
+    expect(auditRowKey(themeResult({ item_id: null, collection_id: 4 }))).toBe(
+      "collection:4:theme:1",
+    );
+  });
 });

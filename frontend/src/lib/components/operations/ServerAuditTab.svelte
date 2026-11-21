@@ -61,11 +61,11 @@
   let artTypes = $derived(
     assetsInScope(config.artTypes, { hasSelection: scope.hasSelection, hasShows: scope.hasShows }),
   );
-  let checkThemes = $derived(scope.hasSelection && config.checkThemes);
+  let checkThemes = $derived((scope.hasSelection || checkCollections) && config.checkThemes);
   let canAudit = $derived(
     scope.ready &&
       ((scope.hasSelection && (artTypes.length > 0 || checkThemes)) ||
-        (checkCollections && collectionArtTypes.length > 0)),
+        (checkCollections && (collectionArtTypes.length > 0 || checkThemes))),
   );
 
   const feedback = createNotifier();
@@ -140,9 +140,10 @@
     }
     const art = selectedArtResults;
     const themes = selectedThemeResults;
-    if (themes.length) {
+    const itemThemes = themes.filter((result) => result.item_id != null);
+    if (itemThemes.length) {
       const confirmed = await confirmAction({
-        title: `Delete ${countOf(themes.length, "server theme")}?`,
+        title: `Delete ${countOf(itemThemes.length, "server theme")}?`,
         message:
           "The server then reloads each theme from your local file. Jellyfin and Emby may also delete the file behind the server's theme.",
         confirmLabel: "Delete",
@@ -173,10 +174,11 @@
                 ],
           ),
           themes: themes.flatMap((result) =>
-            result.item_id && result.server_id != null
+            (result.item_id != null || result.collection_id != null) && result.server_id != null
               ? [
                   {
                     item_id: result.item_id,
+                    collection_id: result.collection_id,
                     server_id: result.server_id,
                     server_item_id: result.server_item_id || "",
                     theme_id: result.theme_id,
@@ -213,9 +215,9 @@
   <CardColumn>
     <FolderScopeCard {scope} collections={settingsState.current.collections_supported ? collectionScope : undefined} />
     <ArtTypeFiltersCard
-      {artTypes}
-      hasSelectedFolders={scope.hasSelection}
-      hasShowFolders={scope.hasShows}
+      artTypes={scope.hasSelection ? artTypes : collectionArtTypes}
+      hasSelectedFolders={scope.hasSelection || checkCollections}
+      hasShowFolders={scope.hasSelection && scope.hasShows}
       themeChecked={checkThemes}
       ontoggletype={toggleArtType}
       ontoggletheme={(value) => (config.checkThemes = value)}
@@ -241,8 +243,8 @@
 
 {#snippet collectionHint()}
   <span class="hint"
-    >Compares the posters and backgrounds Overture uploaded to collections with what the server
-    shows; refreshing uploads them again.</span
+    >Compares the posters, backgrounds and themes Overture holds for collections with what the
+    server shows and plays.</span
   >
 {/snippet}
 

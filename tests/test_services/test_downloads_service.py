@@ -21,7 +21,7 @@ lazy from overture.config import Settings
 lazy from overture.db.ledger import read_asset
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.schedule import TaskSchedule
+lazy from overture.db.models.saved_schedule import SavedSchedule
 lazy from overture.db.models.season import Season
 lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database
@@ -31,6 +31,7 @@ lazy from overture.domain import (
     JobType,
     MediaServerState,
     MediaType,
+    ScheduleKind,
     ServerAsset,
     ServerType,
 )
@@ -43,7 +44,7 @@ lazy from overture.services.downloads import art as art_module
 lazy from overture.services.downloads.art import DownloadArtHandler
 lazy from overture.services.downloads.events import DownloadEventPublisher, job_target
 lazy from overture.services.downloads.queue import JobTarget
-lazy from overture.services.downloads.results import DownloadedCollectionTheme
+lazy from overture.services.downloads.results import DownloadedTheme, PreparedDownload
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.downloads.theme import DownloadThemeHandler
 lazy from overture.services.downloads.watch import DownloadOutcome
@@ -408,13 +409,15 @@ async def test_shutdown_owns_remote_upload_until_it_settles(
     )
     monkeypatch.setattr(
         manager.theme_handler,
-        "download_collection_theme",
+        "download",
         AsyncMock(
-            return_value=DownloadedCollectionTheme(
-                youtube_id="abcDEF123_4",
-                title="Theme",
-                duration=60,
-                audio_bytes=b"audio",
+            return_value=PreparedDownload(
+                data=b"audio",
+                result=DownloadedTheme(
+                    youtube_id="abcDEF123_4",
+                    title="Theme",
+                    duration=60,
+                ),
             )
         ),
     )
@@ -964,7 +967,12 @@ async def test_process_theme_job_writes_theme_and_updates_item(
         ) -> ThemeAudio:
             _ = youtube_id, min_duration, max_duration, progress_callback
             levelled.append(normalize_loudness)
-            return ThemeAudio(audio_bytes=b"mp3", title="Theme", duration=120)
+            return ThemeAudio(
+                audio_bytes=b"mp3",
+                title="Theme",
+                duration=120,
+                fingerprint="audio-fp",
+            )
 
     movie_dir = tmp_path / "Movie"
     movie_dir.mkdir()
@@ -1013,6 +1021,7 @@ async def test_process_theme_job_writes_theme_and_updates_item(
     assert theme_of(item).youtube_title == "Theme"
     assert theme_of(item).youtube_duration == 120
     assert theme_file_hash(item) is not None
+    assert file_of(theme_of(item)).fingerprint == "audio-fp"
     assert theme_of(item).provenance_cleared is False
     assert theme_of(item).youtube_id_source == "download"
     assert (movie_dir / "theme.mp3").read_bytes() == b"mp3"
@@ -1132,10 +1141,13 @@ async def test_another_writer_can_commit_while_a_download_is_in_flight(
             _ = normalize_loudness
             async with database.write_session() as session:
                 session.add(
-                    TaskSchedule(
-                        task_name="wrote-mid-download",
+                    SavedSchedule(
+                        kind=ScheduleKind.BACKUP,
+                        name="wrote-mid-download",
                         enabled=True,
                         cron_expression="0 * * * *",
+                        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+                        updated_at=datetime(2026, 1, 1, tzinfo=UTC),
                     )
                 )
             return ThemeAudio(audio_bytes=b"mp3", title="Theme", duration=120)
@@ -1174,7 +1186,7 @@ async def test_another_writer_can_commit_while_a_download_is_in_flight(
     await manager.process_job("job-theme")
 
     async with isolated_session_factory() as session:
-        names = list((await session.exec(select(TaskSchedule.task_name))).all())
+        names = list((await session.exec(select(SavedSchedule.name))).all())
         job = await session.get(DownloadJob, "job-theme")
 
     assert names == ["wrote-mid-download"]

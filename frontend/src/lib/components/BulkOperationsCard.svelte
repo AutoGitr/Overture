@@ -35,8 +35,8 @@
   import {
     filterSidebarCollections,
     filterSidebarItems,
-    inCollectionGroup,
   } from "../utils/sidebarDomain";
+  import { inCollectionGroup } from "../utils/sidebarShared";
 
   /** A request the popup owns, so its other actions wait while one runs. */
   interface Request<TBody, TResult> {

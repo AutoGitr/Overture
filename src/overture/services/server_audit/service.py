@@ -3,7 +3,6 @@
 lazy from collections.abc import Mapping, Sequence
 
 lazy from ... import protocols
-lazy from ...config import Settings
 lazy from ...db.session import Database
 lazy from ...jobs.registry import BackgroundJobRegistry
 lazy from ...media_servers.registry import ProviderRegistry
@@ -16,6 +15,7 @@ lazy from ...schemas.server_audit import (
 )
 lazy from ..art.collection_art import CollectionArtService
 lazy from ..art.phash import PhashService
+lazy from ..downloads.theme import DownloadThemeHandler
 lazy from ..job_snapshots import patch_snapshot, require_snapshot_keys
 lazy from ..local_assets.service import LocalAssets
 lazy from ..server_copies import ServerCopies
@@ -41,20 +41,20 @@ class ServerAuditService:
         local_assets: LocalAssets,
         phash: PhashService,
         publisher: protocols.EventPublisher,
-        app_config: Settings,
         database: Database,
         collection_art: CollectionArtService,
         server_copies: ServerCopies,
+        theme_handler: DownloadThemeHandler,
     ) -> None:
         self._jobs = background_jobs
         self._provider_registry = provider_registry
         self._local_assets = local_assets
         self._phash = phash
         self._publisher = publisher
-        self._config = app_config
         self._database = database
         self._collection_art = collection_art
         self._server_copies = server_copies
+        self._theme_handler = theme_handler
 
     def _audit_context(self) -> AuditContext:
         return AuditContext(
@@ -63,9 +63,10 @@ class ServerAuditService:
             local_assets=self._local_assets,
             phash=self._phash,
             server_copies=self._server_copies,
-            app_config=self._config,
             database=self._database,
             collection_art=self._collection_art,
+            theme_handler=self._theme_handler,
+            publisher=self._publisher,
         )
 
     async def start(

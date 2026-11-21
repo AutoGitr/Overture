@@ -16,7 +16,14 @@ lazy from typing import Protocol
 lazy from sqlalchemy.exc import SQLAlchemyError
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ...db.ledger import Selection, read_asset, selection
+lazy from ...db.ledger import (
+    Selection,
+    delivery,
+    file_facts,
+    read_asset,
+    record_file,
+    selection,
+)
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.session import CHUNK_SIZE, Database
@@ -28,18 +35,23 @@ lazy from ...domain import (
 lazy from ...jobs.progress_log import JobOutcome
 lazy from ...jobs.runner import ManagedJob
 lazy from ...jobs.tally import BulkAssetTally
+lazy from ...media_servers.adapters import FolderThemes
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...schemas.art import ArtMatchResponse
 lazy from ...schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
 lazy from ...utils.text import count_label
+lazy from ...utils.threads import owned_thread
 lazy from ...utils.time import utc_now
 lazy from ..catalog.index import CatalogPick
+lazy from ..collections.theme_files import inspect_theme_file
+lazy from ..downloads.collection_theme import theme_folders
 lazy from ..downloads.queue import JobTarget
 lazy from ..downloads.service import DownloadService
 lazy from ..downloads.watch import DownloadWatch
 lazy from ..local_assets.service import LocalAssets
+lazy from ..themes.youtube_resolver import DownloadError
 
 logger = logging.getLogger(__name__)
 
@@ -155,10 +167,112 @@ def _saved_reason(catalog: CatalogPick | None) -> str:
     )
 
 
+async def refresh_folder_themes(
+    row: MediaCollection,
+    *,
+    downloads: DownloadService,
+    database: Database,
+) -> MediaCollection:
+    """Record the theme file each Jellyfin server's folder holds for *row*."""
+    changed = False
+    async with downloads.asset_locks.acquire(f"collection:{row.id}"):
+        async with database.read_session() as session:
+            current = await CollectionRepository(session).get(row.id or 0)
+        if current is None:
+            raise ValueError("Collection no longer exists")
+        folders = await theme_folders(current, downloads.provider_registry)
+        if not folders:
+            return current
+        theme = read_asset(current, ServerAsset.THEME)
+        found = [
+            (
+                destination,
+                await owned_thread(
+                    inspect_theme_file,
+                    folder,
+                    file_facts(delivery(theme, destination)),
+                ),
+            )
+            for destination, _, _, folder in folders
+        ]
+        if all(
+            file_facts(delivery(theme, destination)) == facts
+            for destination, facts in found
+        ):
+            return current
+        async with database.write_session() as session:
+            current = await CollectionRepository(session).get(row.id or 0)
+            if current is None:
+                raise ValueError("Collection no longer exists")
+            now = utc_now()
+            latest_theme = read_asset(current, ServerAsset.THEME)
+            for destination, facts in found:
+                if file_facts(delivery(latest_theme, destination)) != facts:
+                    record_file(
+                        current,
+                        ServerAsset.THEME,
+                        facts,
+                        destination=destination,
+                        at=now,
+                    )
+                    changed = True
+            if changed:
+                session.add(current)
+    if changed:
+        await downloads.publisher.broadcast(
+            "collection.updated", {"collection_id": current.id}
+        )
+    return current
+
+
+async def _refresh_collection_theme_folders(
+    params: BulkThemeRequest,
+    *,
+    downloads: DownloadService,
+    database: Database,
+) -> None:
+    """Refresh recorded Jellyfin theme files for collections in scope."""
+    registry = downloads.provider_registry
+    if not any(
+        isinstance(provider.collections, FolderThemes)
+        and provider.server.collections_path is not None
+        for provider in registry.collection_providers()
+    ):
+        return
+    after = 0
+    while True:
+        async with database.read_session() as session:
+            rows = await CollectionRepository(session).bulk_targets(
+                after=after,
+                collection_ids=params.collection_ids,
+                collection_groups=params.collection_groups,
+                include_unmonitored=params.include_unmonitored,
+            )
+        if not rows:
+            return
+        for row in rows:
+            if (
+                not params.overwrite_existing
+                or selection(read_asset(row, ServerAsset.THEME)) is not None
+            ):
+                try:
+                    await refresh_folder_themes(
+                        row, downloads=downloads, database=database
+                    )
+                except (DownloadError, OSError, ValueError) as exc:
+                    logger.debug(
+                        "Skipping pre-plan folder refresh for collection %s: %s",
+                        row.id,
+                        exc,
+                    )
+        after = rows[-1].id or after
+
+
 async def refresh_scope(
     params: BulkMatchArtRequest | BulkThemeRequest,
     *,
     local_assets: LocalAssets,
+    downloads: DownloadService,
     art: bool,
     source: str,
     database: Database,
@@ -167,13 +281,18 @@ async def refresh_scope(
 
     Planning keeps a saved selection on the strength of its recorded file, so
     a file deleted or replaced since the last refresh has to be seen first.
-    Only titles keeping one are refreshed, and an unchanged file costs one stat
-    without being read. Every other target is visited, or decided without its
-    files, and a visit refreshes the files it decides on.
+    Only titles and collection theme folders keeping one are refreshed, and an
+    unchanged file costs one stat without being read. Every other target is
+    visited, or decided without its files, and a visit refreshes the files it
+    decides on.
     """
-    if params.overwrite_existing or (
-        params.collection_scope and not params.library_ids
-    ):
+    if params.overwrite_existing:
+        return
+    if not art and params.collection_scope and isinstance(params, BulkThemeRequest):
+        await _refresh_collection_theme_folders(
+            params, downloads=downloads, database=database
+        )
+    if params.collection_scope and not params.library_ids:
         return
     after_id = 0
     while True:

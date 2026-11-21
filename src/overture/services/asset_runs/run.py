@@ -26,11 +26,8 @@ lazy from functools import partial
 lazy from ...config import Settings
 lazy from ...db.ledger import (
     Selection,
-    delivery,
-    file_facts,
     local_file,
     missing_deliveries,
-    record_file,
     selection,
     shows_something,
 )
@@ -51,17 +48,11 @@ lazy from ...schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
 lazy from ...utils.art_urls import public_art_url
 lazy from ...utils.concurrency import in_order
 lazy from ...utils.text import count_label
-lazy from ...utils.threads import owned_thread
-lazy from ...utils.time import utc_now
 lazy from ..art.collection_art import CollectionArtService
 lazy from ..art.matcher import ArtMatcher
 lazy from ..art.selection import adopt_art
 lazy from ..catalog.index import CatalogIndex
-lazy from ..collections.theme_files import inspect_theme_file
-lazy from ..downloads.collection_theme import (
-    collection_themes_unavailable,
-    theme_folders,
-)
+lazy from ..downloads.collection_theme import collection_themes_unavailable
 lazy from ..downloads.service import DownloadService
 lazy from ..downloads.watch import DownloadWatch
 lazy from ..library.items import emit_library_item_upserted
@@ -77,6 +68,7 @@ lazy from .support import (
     CheckedStamper,
     queue_and_report,
     queue_download,
+    refresh_folder_themes,
     refresh_scope,
     report_downloads,
 )
@@ -156,42 +148,6 @@ def _in_place(asset: Asset) -> bool:
     return any(seen.required and shows_something(seen) for seen in asset.deliveries)
 
 
-async def _refresh_folder_themes(run: _Run, row: MediaCollection) -> MediaCollection:
-    """Record the theme file each Jellyfin server's folder holds for *row*."""
-    downloads, database = run.downloads, run.database
-    async with downloads.asset_locks.acquire(f"collection:{row.id}"):
-        async with database.read_session() as session:
-            current = await CollectionRepository(session).get(row.id or 0)
-        if current is None:
-            raise ValueError("Collection no longer exists")
-        folders = await theme_folders(current, downloads.provider_registry)
-        if not folders:
-            return current
-        theme = Target(current, ServerAsset.THEME).asset
-        found = [
-            (
-                destination,
-                await owned_thread(
-                    inspect_theme_file,
-                    folder,
-                    file_facts(delivery(theme, destination)),
-                ),
-            )
-            for destination, _, _, folder in folders
-        ]
-        async with database.write_session() as session:
-            current = await CollectionRepository(session).get(row.id or 0)
-            if current is None:
-                raise ValueError("Collection no longer exists")
-            now = utc_now()
-            for destination, facts in found:
-                record_file(
-                    current, ServerAsset.THEME, facts, destination=destination, at=now
-                )
-            session.add(current)
-    return current
-
-
 async def _load(run: _Run, batch: Batch) -> tuple[list[Target], BatchFacts]:
     """Read one batch's files, then load its targets and what its sources read."""
     owner_ids = list(batch.visits)
@@ -211,9 +167,7 @@ async def _load(run: _Run, batch: Batch) -> tuple[list[Target], BatchFacts]:
                 collection_ids=owner_ids, include_unmonitored=True
             )
             index = (
-                await CatalogIndex.build_collections(
-                    session, rows, app_config=run.app_config
-                )
+                await CatalogIndex.build_collections(session, rows)
                 if catalog
                 else CatalogIndex.empty()
             )
@@ -245,7 +199,7 @@ async def _load(run: _Run, batch: Batch) -> tuple[list[Target], BatchFacts]:
                 )
             }
             index = (
-                await CatalogIndex.build(session, items, app_config=run.app_config)
+                await CatalogIndex.build(session, items)
                 if catalog
                 else CatalogIndex.empty()
             )
@@ -277,7 +231,10 @@ async def _decide(
             if run.themes_unavailable:
                 return target, _Keep(JobOutcome.SKIPPED, run.themes_unavailable)
             target = dataclasses.replace(
-                target, owner=await _refresh_folder_themes(run, row)
+                target,
+                owner=await refresh_folder_themes(
+                    row, downloads=run.downloads, database=run.database
+                ),
             )
         asset = target.asset
         saved = selection(asset)
@@ -480,11 +437,12 @@ async def _run(
             await refresh_scope(
                 params,
                 local_assets=local_assets,
+                downloads=downloads,
                 art=not themes,
                 source="assets.themes" if themes else "assets.art",
                 database=database,
             )
-            plan = await plan_run(params, app_config=app_config, database=database)
+            plan = await plan_run(params, database=database)
             await job.planned(plan.total)
             for (collections, outcome, reason), count in plan.decided.items():
                 await job.report(

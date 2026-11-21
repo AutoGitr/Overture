@@ -78,7 +78,7 @@ class CatalogService:
         self._config_dir = config_dir
         self._publisher = publisher
         self.scheduler = scheduler
-        self.browser = CatalogBrowser(database=database, app_config=app_config)
+        self.browser = CatalogBrowser(database=database)
         self.job = ManagedBackgroundJob(
             ManagedJobLifecycle(
                 JobKind.CATALOG_SYNC,
@@ -110,7 +110,7 @@ class CatalogService:
         logger.debug("OvertureDB scheduler stopped")
 
     async def set_enabled(self, enabled: bool) -> CatalogStatus:
-        """Persist enabled state and reschedule accordingly."""
+        """Persist enabled state, recompute asset needs, and reschedule."""
         async with self._database.write_session() as session:
             schedule = await save_schedule(
                 session,
@@ -119,7 +119,10 @@ class CatalogService:
                 timezone=self._app_config.TZ,
             )
         self._schedule_job(schedule)
-        return self.status_from_schedule(schedule)
+        await self._needs.apply_all()
+        status = self.status_from_schedule(schedule)
+        await self._publisher.broadcast("catalog.updated", status)
+        return status
 
     async def get_status(self) -> CatalogStatus:
         """Return the catalog's state and its last sync."""
@@ -281,9 +284,7 @@ class CatalogService:
 
     async def get_sources_for_item(self, item_id: int) -> CatalogSources:
         """Look up catalog candidates for an item."""
-        return await get_sources_for_item(
-            item_id, app_config=self._app_config, database=self._database
-        )
+        return await get_sources_for_item(item_id, database=self._database)
 
     async def get_issue_for_item(self, item_id: int) -> ContributionIssue:
         """Return the issue contributing one item's saved selections."""

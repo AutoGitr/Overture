@@ -6,19 +6,20 @@ import {
   THEME_SOURCES,
   defaultCatalogFilters,
   defaultTmdbFilters,
-  tmdbSearchBy,
-  type CatalogFilters,
-  type TmdbFilters,
-  type CollectionView,
-  type ArtSource,
   type ArtSourceSlot,
+  type CatalogFilters,
   type MetadataIssue,
-  type SidebarMode,
-  type SidebarSearchField,
-  type SidebarSource,
-  type SidebarTab,
-  type ThemeSource,
-} from "../utils/sidebarDomain";
+  type TmdbFilters,
+} from "../utils/sidebarFilters";
+import { tmdbSearchBy, type SidebarSearchField } from "../utils/sidebarSearches";
+import type {
+  ArtSource,
+  CollectionView,
+  SidebarMode,
+  SidebarSource,
+  SidebarTab,
+  ThemeSource,
+} from "../utils/sidebarShared";
 import { keysOf } from "../utils/records";
 import { readJson, writeJson } from "../utils/storage";
 import type { CollectionPosterStyle } from "../../generated/rest/types.gen";

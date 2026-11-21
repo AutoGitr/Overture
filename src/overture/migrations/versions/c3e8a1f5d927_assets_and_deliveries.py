@@ -635,6 +635,9 @@ def _convert() -> None:
                 else ([{}] if folder else []),
             )
         selected = item["youtube_id"] is not None
+        theme_content = item["theme_selection_hash"] or (
+            item["theme_file_hash"] if selected else None
+        )
         _insert(
             connection,
             owner,
@@ -645,9 +648,11 @@ def _convert() -> None:
                 "youtube_title": item["youtube_title"],
                 "youtube_duration": item["youtube_duration"],
                 "provenance_cleared": item["theme_provenance_cleared"],
-                "content_hash": item["theme_selection_hash"]
-                or (item["theme_file_hash"] if selected else None),
-                "duration": item["theme_file_duration"],
+                "content_hash": theme_content,
+                "duration": item["theme_file_duration"]
+                if theme_content is not None
+                and theme_content == item["theme_file_hash"]
+                else None,
             },
             _local(item, "theme_file_", folder=folder),
         )
@@ -695,7 +700,7 @@ def _convert() -> None:
             f"youtube:{video}" if video and collection["server_theme_id"] else None
         )
         deliveries = _collection_theme_deliveries(
-            collection, held, server_types, content
+            collection, held, server_types, content, lead_server
         )
         _insert(
             connection,
@@ -707,7 +712,9 @@ def _convert() -> None:
                 "youtube_title": collection["youtube_title"],
                 "youtube_duration": collection["youtube_duration"],
                 "content_hash": content if video else None,
-                "duration": collection["theme_file_duration"],
+                "duration": collection["theme_file_duration"]
+                if video and content is not None
+                else None,
             },
             deliveries,
         )
@@ -718,6 +725,7 @@ def _collection_theme_deliveries(
     held: list[tuple[int, str]],
     server_types: Mapping[int, str | None],
     content: str | None,
+    lead_server: int | None,
 ) -> list[dict[str, object]]:
     """A collection theme's places: each Plex copy, and one folder per Jellyfin."""
     deliveries: list[dict[str, object]] = []
@@ -725,13 +733,16 @@ def _collection_theme_deliveries(
     for server_id, server_item_id in held:
         server_type = server_types.get(server_id)
         if server_type == "plex":
+            is_lead = server_id == lead_server
             deliveries.append(
                 {
                     "server_id": server_id,
                     "server_item_id": server_item_id,
                     "channel": "upload",
-                    "observed_hash": content if collection["server_theme_id"] else None,
-                    "observed_ref": collection["server_theme_id"],
+                    "observed_hash": content
+                    if collection["server_theme_id"] and is_lead
+                    else None,
+                    "observed_ref": collection["server_theme_id"] if is_lead else None,
                 }
             )
         elif server_type == "jellyfin" and server_id not in folders_seen:

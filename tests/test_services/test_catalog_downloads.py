@@ -122,7 +122,6 @@ async def test_returns_default_stats_when_item_ids_empty(
         include_art=True,
         theme_order=IncrementalThemeOrder.OVERTUREDB_THEMERRDB,
         downloads=FakeDownloads(),
-        app_config=app_config,
         database=database,
     )
 
@@ -137,7 +136,6 @@ async def test_returns_default_stats_when_no_flags_enabled(
         include_art=False,
         theme_order=IncrementalThemeOrder.OFF,
         downloads=FakeDownloads(),
-        app_config=app_config,
         database=database,
     )
 
@@ -157,7 +155,6 @@ async def test_missing_item_is_skipped(
         include_art=True,
         theme_order=IncrementalThemeOrder.OVERTUREDB_THEMERRDB,
         downloads=downloads,
-        app_config=app_config,
         database=database,
     )
 
@@ -198,7 +195,6 @@ async def test_queues_poster_and_background_for_incomplete_movie(
         include_art=True,
         theme_order=IncrementalThemeOrder.OFF,
         downloads=downloads,
-        app_config=app_config,
         database=database,
     )
 
@@ -235,7 +231,6 @@ async def test_skips_art_type_that_is_already_complete(
         include_art=True,
         theme_order=IncrementalThemeOrder.OFF,
         downloads=downloads,
-        app_config=app_config,
         database=database,
     )
 
@@ -268,7 +263,6 @@ async def test_no_candidates_means_no_job_queued(
         include_art=True,
         theme_order=IncrementalThemeOrder.OFF,
         downloads=downloads,
-        app_config=app_config,
         database=database,
     )
 
@@ -322,7 +316,6 @@ async def test_show_seasons_are_queued_and_zero_file_count_skipped(
         include_art=True,
         theme_order=IncrementalThemeOrder.OFF,
         downloads=downloads,
-        app_config=app_config,
         database=database,
     )
 
@@ -360,7 +353,6 @@ async def test_created_false_does_not_increment_stats(
         include_art=True,
         theme_order=IncrementalThemeOrder.OFF,
         downloads=downloads,
-        app_config=app_config,
         database=database,
     )
 
@@ -393,7 +385,6 @@ async def test_theme_is_queued_when_incomplete(
         include_art=False,
         theme_order=IncrementalThemeOrder.OVERTUREDB_THEMERRDB,
         downloads=downloads,
-        app_config=app_config,
         database=database,
     )
 
@@ -434,7 +425,6 @@ async def test_existing_local_theme_is_never_replaced(
         include_art=False,
         theme_order=IncrementalThemeOrder.OVERTUREDB_THEMERRDB,
         downloads=downloads,
-        app_config=app_config,
         database=database,
     )
 
@@ -467,7 +457,6 @@ async def test_theme_not_queued_when_no_youtube_id_found(
         include_art=False,
         theme_order=IncrementalThemeOrder.OVERTUREDB_THEMERRDB,
         downloads=downloads,
-        app_config=app_config,
         database=database,
     )
 
@@ -507,7 +496,6 @@ async def test_theme_priority_ordering(
         include_art=False,
         theme_order=IncrementalThemeOrder.OVERTUREDB_THEMERRDB,
         downloads=downloads_ov,
-        app_config=app_config,
         database=database,
     )
     assert stats_ov.themes == 1
@@ -520,7 +508,6 @@ async def test_theme_priority_ordering(
         include_art=False,
         theme_order=IncrementalThemeOrder.THEMERRDB_OVERTUREDB,
         downloads=downloads_th,
-        app_config=app_config,
         database=database,
     )
     assert stats_th.themes == 1
@@ -533,7 +520,6 @@ async def test_theme_priority_ordering(
         include_art=False,
         theme_order=IncrementalThemeOrder.OFF,
         downloads=downloads_off,
-        app_config=app_config,
         database=database,
     )
     assert stats_off.themes == 0
@@ -572,7 +558,6 @@ async def test_theme_priority_fallback(
         include_art=False,
         theme_order=IncrementalThemeOrder.OVERTUREDB_THEMERRDB,
         downloads=downloads,
-        app_config=app_config,
         database=database,
     )
     assert stats.themes == 1
@@ -633,7 +618,6 @@ async def test_error_for_one_item_is_recorded_and_loop_continues(
         include_art=True,
         theme_order=IncrementalThemeOrder.OFF,
         downloads=downloads,
-        app_config=app_config,
         database=database,
     )
 

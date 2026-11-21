@@ -155,9 +155,7 @@ def _service(
         provider or FakePlex(app_config=app_config), collections=supported
     )
     return module.CollectionsService(
-        needs=AssetNeeds(
-            app_config=app_config, database=database, provider_registry=registry
-        ),
+        needs=AssetNeeds(database=database, provider_registry=registry),
         tmdb=unused(TMDBClient),
         mdblist=unused(MDBListClient),
         remover=make_remover(

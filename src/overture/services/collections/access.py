@@ -22,11 +22,12 @@ lazy from ...domain import (
 )
 lazy from ...media_servers.registry import CollectionProvider, ProviderRegistry
 lazy from ...repositories.catalog import CatalogRepository
-lazy from ...repositories.collections import (
+lazy from ...repositories.collection_items import (
     CollectionItem,
-    CollectionRepository,
+    CollectionItemRepository,
     TermSelection,
 )
+lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.libraries import LibraryRepository
 lazy from ...schemas.collections import (
     CollectionLibraryCriteria,
@@ -38,7 +39,7 @@ lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.locks import KeyedLock
 lazy from ...utils.time import local_now
 lazy from ..needs import AssetNeeds
-lazy from ..schedule_store import CATALOG_SCHEDULE, load_schedule
+lazy from ..schedule_store import catalog_enabled
 lazy from . import COLLECTIONS_LOCK
 lazy from .copies import ServerCopy, held_copies, lead_part, server_copies
 lazy from .criteria import criteria_terms
@@ -59,11 +60,10 @@ class LibraryScope:
 
 
 async def catalog_collections(
-    session: AsyncSession, tmdb_ids: set[int], *, app_config: Settings
+    session: AsyncSession, tmdb_ids: set[int]
 ) -> dict[int, CatalogCollection]:
     """Return the catalog's entries for these TMDB collections, if it is enabled."""
-    schedule = await load_schedule(session, CATALOG_SCHEDULE, timezone=app_config.TZ)
-    if not schedule.enabled or not tmdb_ids:
+    if not tmdb_ids or not await catalog_enabled(session):
         return {}
     return await CatalogRepository(session).collections_by_tmdb_id(tmdb_ids)
 
@@ -272,7 +272,7 @@ class CollectionAccess:
         """The stored items of one of the server's libraries of this media type."""
         await self._require_type(library_id, media_type)
         async with self.database.read_session() as session:
-            return await CollectionRepository(session).library_items(
+            return await CollectionItemRepository(session).library_items(
                 media_type, library_id, terms
             )
 
@@ -281,7 +281,7 @@ class CollectionAccess:
     ) -> list[CollectionItem]:
         """The stored items of a library a collection spans, listed or not."""
         async with self.database.read_session() as session:
-            return await CollectionRepository(session).library_items(
+            return await CollectionItemRepository(session).library_items(
                 part.media_type, part.library_id, terms
             )
 
@@ -291,13 +291,13 @@ class CollectionAccess:
         """How many of the items of one of the server's libraries hold each value."""
         await self._require_type(library_id, media_type)
         async with self.database.read_session() as session:
-            return await CollectionRepository(session).term_counts(
+            return await CollectionItemRepository(session).term_counts(
                 media_type, library_id, kind
             )
 
     async def scope(
         self,
-        repo: CollectionRepository,
+        repo: CollectionItemRepository,
         library_id: str,
         media_type: MediaType,
         criteria: FilterGroup,
@@ -330,7 +330,7 @@ class CollectionAccess:
         """Each library's criteria with the items it selects from."""
         types = await self.library_types(entry.library_id for entry in libraries)
         async with self.database.read_session() as session:
-            repo = CollectionRepository(session)
+            repo = CollectionItemRepository(session)
             return [
                 await self.scope(
                     repo,
@@ -348,7 +348,7 @@ class CollectionAccess:
     ) -> dict[int, list[str]]:
         """The IDs of the collections each item of a library belongs to."""
         async with self.database.read_session() as session:
-            return await CollectionRepository(session).memberships_by_item(
+            return await CollectionItemRepository(session).memberships_by_item(
                 library_id, excluding
             )
 

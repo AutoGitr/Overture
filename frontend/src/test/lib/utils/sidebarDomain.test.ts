@@ -3,30 +3,36 @@ import type { CollectionRead, MediaItemRead } from "../../../generated/rest/type
 import { defaultFilters, type FilterState } from "../../../lib/stores/uiState.svelte";
 import {
   arrangeTmdbResults,
-  aspectDeviation,
-  CATALOG_FILTER_KEYS,
-  catalogStatus,
-  defaultCatalogFilters,
-  defaultSortDir,
-  FILTERS,
   filterCatalogEntries,
-  filterSections,
-  FILTER_GROUPS,
   filterSidebarCollections,
   filterSidebarItems,
-  holdsSomething,
+} from "../../../lib/utils/sidebarDomain";
+import {
+  CATALOG_FILTER_KEYS,
+  FILTERS,
+  FILTER_GROUPS,
   activeFilterCount,
-  inCollectionGroup,
+  defaultCatalogFilters,
+  filterSections,
   metadataIssuesFor,
-  normalizeSortPreference,
-  collectionGroupRows,
+} from "../../../lib/utils/sidebarFilters";
+import { searchFieldGroups } from "../../../lib/utils/sidebarSearches";
+import {
+  catalogStatus,
+  holdsSomething,
+  inCollectionGroup,
   preloadRowIndexes,
-  searchFieldGroups,
+  statusTone,
+} from "../../../lib/utils/sidebarShared";
+import {
+  aspectDeviation,
+  collectionGroupRows,
+  defaultSortDir,
+  normalizeSortPreference,
   sortCollectionGroups,
   sortMenu,
   type SidebarSortField,
-  statusTone,
-} from "../../../lib/utils/sidebarDomain";
+} from "../../../lib/utils/sidebarSorts";
 import { asset, assetFile, catalogRow, collection, mediaItem } from "../../helpers/fixtures";
 
 describe("catalog badge status", () => {

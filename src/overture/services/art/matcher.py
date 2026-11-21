@@ -77,7 +77,6 @@ class ArtMatcher:
         database: Database,
         compare_concurrency: int,
     ) -> None:
-        self._app_config = app_config
         #: Candidate images fetched and hashed at once while matching one slot.
         self._compare_concurrency = compare_concurrency
         self._database = database

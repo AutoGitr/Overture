@@ -4,14 +4,19 @@ lazy import asyncio
 lazy from contextlib import asynccontextmanager
 lazy from datetime import UTC, datetime
 lazy from pathlib import Path
+lazy from typing import override
 
 lazy import pytest
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy import overture.services.catalog.service as service_module
 lazy from overture.config import Settings
+lazy from overture.db.ledger import read_asset
+lazy from overture.db.models.catalog import CatalogItem
+lazy from overture.db.models.media_item import MediaItem
+lazy from overture.db.models.settings import SETTINGS_ROW_ID, AppSettings
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType
+lazy from overture.domain import ArtType, AssetStatus, MediaType, ServerAsset
 lazy from overture.schemas.art import ArtCandidate
 lazy from overture.schemas.catalog import CatalogSyncStats
 lazy from overture.services.catalog.lookup import (
@@ -73,17 +78,17 @@ class TestCatalogHelper:
             )
 
         database = database_for(session_factory)
+        needs = AssetNeeds(
+            database=database,
+            provider_registry=NoopProviderRegistry(),
+        )
         service = CatalogService(
             scheduler=SchedulerService(app_config=app_config),
             publisher=NullEventPublisher(),
             app_config=app_config,
             database=database,
             config_dir=tmp_path,
-            needs=AssetNeeds(
-                app_config=app_config,
-                database=database,
-                provider_registry=NoopProviderRegistry(),
-            ),
+            needs=needs,
         )
         monkeypatch.setattr(service_module, "save_schedule", fake_save)
 
@@ -97,9 +102,83 @@ class TestCatalogHelper:
 
         monkeypatch.setattr(service.scheduler, "job_info", job_info)
 
+        async def noop_apply() -> None:
+            return None
+
+        monkeypatch.setattr(needs, "apply_all", noop_apply)
+
         status = await service.set_enabled(True)
 
         assert status.next_run == "2026-06-01T03:00:00+00:00"
+
+    async def test_set_enabled_updates_asset_needs_and_broadcasts(
+        self, tmp_path: Path, *, app_config: Settings, database: Database
+    ) -> None:
+        events: list[tuple[str, object]] = []
+
+        class RecordingPublisher(NullEventPublisher):
+            @override
+            async def broadcast(
+                self,
+                event: str,
+                payload: object = None,
+                *,
+                before_publish: object = None,
+            ) -> None:
+                events.append((event, payload))
+
+        async with database.write_session() as session:
+            session.add(AppSettings(id=SETTINGS_ROW_ID, overturedb_no_theme=True))
+            session.add(
+                MediaItem(
+                    id=1,
+                    media_type=MediaType.MOVIE,
+                    title="Arrival",
+                    tmdb_id=329865,
+                )
+            )
+            session.add(
+                CatalogItem(
+                    media_type=MediaType.MOVIE,
+                    title="Arrival",
+                    tmdb_id=329865,
+                    no_theme=True,
+                )
+            )
+
+        service = CatalogService(
+            scheduler=SchedulerService(app_config=app_config),
+            publisher=RecordingPublisher(),
+            app_config=app_config,
+            database=database,
+            config_dir=tmp_path,
+            needs=AssetNeeds(
+                database=database,
+                provider_registry=NoopProviderRegistry(),
+            ),
+        )
+        try:
+            disabled = await service.set_enabled(False)
+            assert disabled.enabled is False
+            async with database.read_session() as session:
+                item = await session.get(MediaItem, 1)
+                assert item is not None
+                theme = read_asset(item, ServerAsset.THEME)
+                assert (theme.needed, theme.status) == (True, AssetStatus.MISSING)
+
+            enabled = await service.set_enabled(True)
+            assert enabled.enabled is True
+            async with database.read_session() as session:
+                item = await session.get(MediaItem, 1)
+                assert item is not None
+                theme = read_asset(item, ServerAsset.THEME)
+                assert (theme.needed, theme.status) == (False, AssetStatus.COMPLETE)
+            assert [name for name, _ in events] == [
+                "catalog.updated",
+                "catalog.updated",
+            ]
+        finally:
+            await service.stop()
 
     def test_candidate_shape_and_status_projection(
         self, tmp_path: Path, *, app_config: Settings, database: Database
@@ -121,7 +200,6 @@ class TestCatalogHelper:
             database=database,
             config_dir=tmp_path,
             needs=AssetNeeds(
-                app_config=app_config,
                 database=database,
                 provider_registry=NoopProviderRegistry(),
             ),
@@ -214,7 +292,6 @@ async def test_a_first_start_syncs_the_catalog_overturedb_starts_enabled_with(
         database=database,
         config_dir=tmp_path,
         needs=AssetNeeds(
-            app_config=app_config,
             database=database,
             provider_registry=NoopProviderRegistry(),
         ),

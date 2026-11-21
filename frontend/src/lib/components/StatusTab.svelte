@@ -1,6 +1,6 @@
 <script lang="ts">
   import X from "@lucide/svelte/icons/x";
-  import type { StatusTone } from "../utils/sidebarDomain";
+  import type { StatusTone } from "../utils/sidebarShared";
 
   let {
     icon: Icon,

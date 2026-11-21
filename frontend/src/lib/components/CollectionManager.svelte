@@ -14,7 +14,8 @@
   import { getCatalogCollectionIssueOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
   import ContributeIssueLink from "./ContributeIssueLink.svelte";
   import DataStatus from "./DataStatus.svelte";
-  import { CollectionDraft, CollectionEditor } from "../utils/collectionForms.svelte";
+  import { CollectionDraft } from "../utils/collectionDraft.svelte";
+  import { CollectionEditor } from "../utils/collectionForms.svelte";
   import { CollectionActions } from "../utils/collectionActions.svelte";
   import {
     goToCatalogEntry,
@@ -22,7 +23,7 @@
     routedCollectionView,
     routedCollectionArtType,
   } from "../router/routes";
-  import { statusTone } from "../utils/sidebarDomain";
+  import { statusTone } from "../utils/sidebarShared";
   import { deliveryNote } from "../utils/assetDeliveries";
   import CollectionThemePanel from "./CollectionThemePanel.svelte";
   import ConfigureNavigation from "./ConfigureNavigation.svelte";

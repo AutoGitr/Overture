@@ -2,7 +2,7 @@
   import LoaderCircle from "@lucide/svelte/icons/loader-circle";
   import type { Snippet } from "svelte";
   import { preloadImages } from "../utils/imagePreload";
-  import { preloadRowIndexes, SIDEBAR_OVERSCAN_ROWS } from "../utils/sidebarDomain";
+  import { preloadRowIndexes, SIDEBAR_OVERSCAN_ROWS } from "../utils/sidebarShared";
   import VirtualList from "./VirtualList.svelte";
 
   let {

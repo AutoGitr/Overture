@@ -5,7 +5,7 @@ lazy from typing import Literal
 
 lazy from pydantic import BaseModel, Field
 
-lazy from ..domain import ScheduleKind
+lazy from ..domain import NamedScheduleKind
 lazy from .base import StrictBaseModel
 lazy from .validators import CronExpression, DisplayName
 
@@ -55,4 +55,4 @@ class ScheduleResponseBase(StrictBaseModel):
 class SchedulesChangedEvent(StrictBaseModel):
     """WebSocket payload telling clients to reload one kind's schedules."""
 
-    kind: ScheduleKind
+    kind: NamedScheduleKind

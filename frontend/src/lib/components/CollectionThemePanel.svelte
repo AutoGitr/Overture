@@ -5,6 +5,7 @@
   import {
     buildCollectionThemeSearchQuery,
     mergeThemeResults,
+    themeCandidateVideoIds,
   } from "../utils/themeSearch";
   import ThemeSearch from "./ThemeSearch.svelte";
 
@@ -34,13 +35,11 @@
       <ThemeSearch
         label="Search collection themes"
         initialQuery={buildCollectionThemeSearchQuery(coll.title)}
-        videoIds={[
-          ...new Set(
-            [coll.assets.theme.youtube_id, coll.youtube_id_overturedb, coll.youtube_id_themerrdb].filter(
-              (id): id is string => !!id,
-            ),
-          ),
-        ]}
+        videoIds={themeCandidateVideoIds(
+          coll.assets.theme.youtube_id,
+          coll.youtube_id_overturedb,
+          coll.youtube_id_themerrdb,
+        )}
         present={(results: ThemeSearchResult[]) =>
           mergeThemeResults({
             title: coll.title,

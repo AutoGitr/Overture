@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultGenerator, withDimension } from "../../../lib/utils/collectionForms.svelte";
+import { defaultGenerator, withDimension } from "../../../lib/utils/collectionFormShared.svelte";
 import { dimension } from "../../helpers/fixtures";
 
 describe("withDimension", () => {

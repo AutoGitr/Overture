@@ -1,5 +1,5 @@
 <script module lang="ts">
-  import type { ScheduleData } from "../utils/collectionForms.svelte";
+  import type { ScheduleData } from "../utils/collectionFormShared.svelte";
 
   const REMOVE_KEEP = [
     [true, "Remove from server"],

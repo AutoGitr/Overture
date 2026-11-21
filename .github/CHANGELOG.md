@@ -12,7 +12,7 @@
 - **API:** the `collection.theme.updated` event is gone, as `collection.updated` reports a theme change; setting or removing a collection theme returns the theme. Job events carry `log_targets` in place of their outcome counters.
 - **Collections:** a sync checks the art and theme of every server copy, not just the first, and a collection is complete only once every copy shows them.
 - **Collections:** a chosen theme stays chosen when a server plays another; the collection's next sync or an Assets run sends it again.
-- **Operations:** Server audit compares images and themes exactly as a sync does, and records what it finds on a collection's copies, so the collection's status follows the audit.
+- **Operations:** Server audit compares and fixes collection images and themes exactly as a sync does, and records what it finds on a collection's copies, so the collection's status follows the audit.
 - **Operations:** Assets runs decide titles and collections by the same rules: a saved choice is restored wherever a place lacks it, Replace existing skips a theme already in place as it does art, and planning lines count `assets` and `collection assets`.
 - **Statistics:** the images Overture uploads to collections count in the image cache, not in the artwork sizes.
 

@@ -16,7 +16,6 @@ lazy from ...catalog_contract.contract import (
     parse_entry_file_stem,
     validate_entry,
 )
-lazy from ...config import Settings
 lazy from ...db.models.catalog import (
     CatalogCollection,
     CatalogDraft,
@@ -40,7 +39,7 @@ lazy from ...schemas.catalog import (
 lazy from ...utils.art_urls import art_preview_url, refused_art_host
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
-lazy from ..schedule_store import CATALOG_SCHEDULE, load_schedule
+lazy from ..schedule_store import catalog_enabled
 lazy from .entries import (
     Entry,
     catalog_collection_entry,
@@ -101,9 +100,8 @@ def _canonical_art(entry: Entry) -> Entry:
 class CatalogBrowser:
     """List, read and draft changes to the whole catalog."""
 
-    def __init__(self, *, database: Database, app_config: Settings) -> None:
+    def __init__(self, *, database: Database) -> None:
         self._database = database
-        self._config = app_config
 
     async def counts(self) -> CatalogCounts:
         """Count catalog entries and every draft in one database round trip."""
@@ -137,10 +135,7 @@ class CatalogBrowser:
         )
 
     async def _require_enabled(self, session: AsyncSession) -> None:
-        schedule = await load_schedule(
-            session, CATALOG_SCHEDULE, timezone=self._config.TZ
-        )
-        if not schedule.enabled:
+        if not await catalog_enabled(session):
             raise PublicServiceError(409, "OvertureDB is disabled")
 
     async def list_entries(

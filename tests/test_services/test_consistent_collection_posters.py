@@ -63,9 +63,7 @@ async def test_a_collection_takes_the_poster_the_setting_chooses(
     await db_session.commit()
     await db_session.refresh(row, ["group", "rule"])
 
-    index = await CatalogIndex.build_collections(
-        db_session, [row], app_config=app_config
-    )
+    index = await CatalogIndex.build_collections(db_session, [row])
 
     assert index.collection_art(row, ArtType.POSTER).value == expected
 
@@ -94,9 +92,7 @@ async def test_a_collection_takes_the_first_style_in_order_that_overturedb_holds
     await db_session.commit()
     await db_session.refresh(row, ["group", "rule"])
 
-    index = await CatalogIndex.build_collections(
-        db_session, [row], app_config=app_config
-    )
+    index = await CatalogIndex.build_collections(db_session, [row])
 
     assert index.collection_art(row, ArtType.POSTER).value == expected
     assert index.collection_poster_style(row, ArtType.POSTER) == (
@@ -125,9 +121,7 @@ async def test_a_group_chooses_its_collections_posters_over_the_global_choice(
     await db_session.commit()
     await db_session.refresh(row, ["group", "rule"])
 
-    index = await CatalogIndex.build_collections(
-        db_session, [row], app_config=app_config
-    )
+    index = await CatalogIndex.build_collections(db_session, [row])
 
     assert index.collection_art(row, ArtType.POSTER).value == MATTE
 

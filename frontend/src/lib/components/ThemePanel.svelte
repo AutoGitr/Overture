@@ -30,6 +30,7 @@
     buildCollectionThemeSearchQuery,
     buildThemeSearchQuery,
     mergeThemeResults,
+    themeCandidateVideoIds,
   } from "../utils/themeSearch";
   import { openPersistedItem } from "../utils/tmdbItems";
   import DataStatus from "./DataStatus.svelte";
@@ -79,18 +80,14 @@
     catalogEntry ?? (catalogEnabled ? publicSourcesQuery.data?.item : null),
   );
   // The themes shown whatever is searched for: the current one and the catalog's.
-  let candidateVideoIds = $derived([
-    ...new Set(
-      [
-        item?.assets.theme.youtube_id,
-        catalog?.detail.entry.youtube_id_overturedb,
-        catalogSource?.youtube_id_overturedb,
-        catalogSource?.youtube_id_themerrdb,
-      ]
-        .map((id) => id?.trim())
-        .filter((id): id is string => Boolean(id)),
+  let candidateVideoIds = $derived(
+    themeCandidateVideoIds(
+      item?.assets.theme.youtube_id,
+      catalog?.detail.entry.youtube_id_overturedb,
+      catalogSource?.youtube_id_overturedb,
+      catalogSource?.youtube_id_themerrdb,
     ),
-  ]);
+  );
   let subjectKey = $derived(
     catalog
       ? `catalog-${catalog.detail.entry.media_type}-${catalog.detail.entry_key}`

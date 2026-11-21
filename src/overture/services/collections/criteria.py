@@ -15,7 +15,7 @@ lazy from ...domain import (
     FilterOperator,
     TermKind,
 )
-lazy from ...repositories.collections import CollectionItem, TermSelection
+lazy from ...repositories.collection_items import CollectionItem, TermSelection
 lazy from ...schemas.collections import FieldCondition, FilterGroup, SourceCondition
 lazy from ...utils.collection_fields import FIELDS, order_field
 

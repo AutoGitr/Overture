@@ -37,7 +37,7 @@
 </script>
 
 <script lang="ts">
-  import type { StatusTone } from "../utils/sidebarDomain";
+  import type { StatusTone } from "../utils/sidebarShared";
   import StatusTab from "./StatusTab.svelte";
 
   let {

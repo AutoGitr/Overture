@@ -14,11 +14,11 @@ lazy from overture.config import Settings
 lazy from overture.db.ledger import read_asset, select_art
 lazy from overture.db.models.catalog import CatalogItem
 lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.schedule import TaskSchedule
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     ArtType,
+    AssetStatus,
     CatalogMediaType,
     MediaType,
     ServerAsset,
@@ -234,7 +234,7 @@ def _service(
         themes=themes,
         downloads=downloads,
         publisher=NullEventPublisher(),
-        catalog=CatalogBrowser(database=database, app_config=app_config),
+        catalog=CatalogBrowser(database=database),
     )
 
 
@@ -345,7 +345,7 @@ async def test_catalog_members_use_only_catalog_or_draft_artwork(
     )
     await db_session.commit()
     await enable_catalog(db_session)
-    browser = CatalogBrowser(database=database, app_config=tmdb_config)
+    browser = CatalogBrowser(database=database)
     service = _service(app_config=tmdb_config, database=database, tmdb=Tmdb())
 
     async def members() -> dict[int, TmdbItemResult]:
@@ -511,20 +511,13 @@ async def test_unsaved_items_see_overturedb_artwork(
     tmdb_config: Settings,
     database: Database,
 ) -> None:
-    db_session.add_all(
-        [
-            TaskSchedule(
-                task_name="catalog",
-                enabled=True,
-                cron_expression="0 0 * * *",
-                payload={},
-            ),
-            catalog_item_factory(
-                tmdb_id=603,
-                poster_url=f"{IMAGE}/curated.jpg",
-                youtube_id_overturedb="abcDEF123_4",
-            ),
-        ]
+    await enable_catalog(db_session)
+    db_session.add(
+        catalog_item_factory(
+            tmdb_id=603,
+            poster_url=f"{IMAGE}/curated.jpg",
+            youtube_id_overturedb="abcDEF123_4",
+        )
     )
     await db_session.commit()
     service = _service(app_config=tmdb_config, database=database)
@@ -769,3 +762,27 @@ async def test_a_search_lists_the_titles_of_a_person_company_or_list(
     assert ("discover_company", 79) in tmdb.calls
     # A list is found by its ID or link only: TMDB cannot search lists.
     assert (by_list.matched, by_list.results) == (None, [])
+
+
+async def test_saving_art_for_a_new_tmdb_item_applies_catalog_theme_need(
+    db_session: AsyncSession,
+    catalog_item_factory: CatalogItemFactory,
+    *,
+    tmdb_config: Settings,
+    database: Database,
+) -> None:
+    await enable_catalog(db_session)
+    db_session.add(
+        catalog_item_factory(tmdb_id=603, media_type=MediaType.MOVIE, no_theme=True)
+    )
+    await db_session.commit()
+    service = _service(app_config=tmdb_config, database=database, tmdb=FakeTmdb())
+
+    response = await service.save_art(
+        MediaType.MOVIE, 603, ArtType.POSTER, None, POSTER
+    )
+
+    assert response.item.assets.theme.needed is False
+    assert response.item.assets.theme.status is AssetStatus.COMPLETE
+    (item,) = await _items(db_session)
+    assert read_asset(item, ServerAsset.THEME).needed is False
