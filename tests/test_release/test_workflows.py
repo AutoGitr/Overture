@@ -185,7 +185,7 @@ DEPENDENCIES = APP
         ("pyproject.toml", DEPENDENCIES),
         ("uv.lock", DEPENDENCIES),
         ("frontend/src/App.svelte", WEB),
-        ("frontend/package.json", WEB | {"contracts"}),
+        ("frontend/package.json", WEB | {"contracts", "backend"}),
         ("frontend/bun.lock", WEB | {"contracts"}),
         ("frontend/src/generated/rest/types.gen.ts", WEB | {"contracts"}),
         ("scripts/contracts.py", {"backend", "contracts"}),
@@ -204,7 +204,7 @@ DEPENDENCIES = APP
         (".github/CHANGELOG.md", {"backend"}),
         ("AGENTS.md", {"backend"}),
         ("docs/overture/index.md", set[str]()),
-        ("docs/package.json", set[str]()),
+        ("docs/package.json", {"backend"}),
     ],
 )
 def test_ci_runs_exactly_the_jobs_a_change_affects(
