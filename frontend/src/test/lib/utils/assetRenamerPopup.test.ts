@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { assetIssue } from "../../helpers/fixtures";
 import type { SelectableAssetIssue } from "../../../lib/stores/assetManagerState.svelte";
 import { assetRenameRequests } from "../../../lib/utils/assetRenamerPopup";
 
 function issue(overrides: Partial<SelectableAssetIssue> = {}): SelectableAssetIssue {
   return {
+    ...assetIssue(),
     current_path: "/movies/a.jpg",
     suggested_path: "/movies/poster.jpg",
     current_filename: "a.jpg",

@@ -24,6 +24,7 @@ OPENAPI_PATH = Path(__file__).resolve().parents[1] / "openapi" / "overture.json"
 
 
 def _openapi_document() -> dict[str, Any]:
+    """Return the committed OpenAPI document, or an empty one before it exists."""
     if not OPENAPI_PATH.exists():
         return {}
     return json.loads(OPENAPI_PATH.read_text())
@@ -264,7 +265,9 @@ def render_ws_types() -> str:
         if model is None:
             payload_type_by_event[event] = "null"
             continue
-        schema = model.model_json_schema(ref_template="#/$defs/{model}")
+        schema = model.model_json_schema(
+            ref_template="#/$defs/{model}", mode="serialization"
+        )
         renderer.render_named_schema(model.__name__, schema)
         payload_type_by_event[event] = model.__name__
 

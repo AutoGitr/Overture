@@ -1,26 +1,28 @@
+import type { JobOutcome } from "../../../generated/ws";
 import { beforeEach, describe, expect, it } from "vitest";
 import { syncState } from "../../../lib/stores/jobStates.svelte";
-import { logEntry, loggedLines } from "../../helpers/fixtures";
+import { jobMetadata, logEntry, loggedLines, syncEvent } from "../../helpers/fixtures";
 
 describe("syncState", () => {
   beforeEach(() => syncState.reset());
 
   it("handles lifecycle events and completion progress", () => {
-    syncState.handleStarted({ total: 2, started_at: "start" });
+    syncState.handleStarted(syncEvent({ total: 2, started_at: "start" }));
     const added = logEntry("Added", "Alien", "new library item");
     const removed = logEntry("Removed", "Aliens", "no longer on the media server");
-    syncState.handleProgress({ done: 1, added: 1, log: added });
-    syncState.handleCompleted({
-      done: 2,
-      total: 2,
-      added: 2,
-      unchanged: 0,
-      log: removed,
-      finished_at: "finish",
-    });
+    syncState.handleProgress(syncEvent({ done: 1, log: added, log_targets: { Added: 1 } }));
+    syncState.handleCompleted(
+      syncEvent({
+        done: 2,
+        total: 2,
+        log: removed,
+        finished_at: "finish",
+        log_targets: { Added: 2, Unchanged: 0 },
+      }),
+    );
 
     expect(syncState.running).toBe(false);
-    expect(syncState.counters.added).toBe(2);
+    expect(syncState.count("Added")).toBe(2);
     expect(syncState.done).toBe(2);
     expect(syncState.progress).toBe(100);
     expect(loggedLines(syncState.log)).toEqual([added, removed]);
@@ -28,56 +30,59 @@ describe("syncState", () => {
   });
 
   it("zeroes its own counters on start", () => {
-    syncState.handleProgress({ added: 9, updated: 9, unchanged: 9, removed: 9 });
+    syncState.handleProgress(
+      syncEvent({ log_targets: { Added: 9, Updated: 9, Unchanged: 9, Removed: 9 } }),
+    );
 
-    syncState.handleStarted({ total: 3 });
+    syncState.handleStarted(syncEvent({ total: 3 }));
 
-    expect(syncState.counters).toEqual({ added: 0, updated: 0, unchanged: 0, removed: 0 });
+    expect(syncState.count("Added") + syncState.count("Removed")).toBe(0);
     expect(syncState.total).toBe(3);
   });
 
   it("keeps counters the first progress event does not carry", () => {
     // The first progress event of a run reports only a log line, so the
     // store must hold the zeros it was just reset to rather than go blank.
-    syncState.handleStarted({ total: 3 });
+    syncState.handleStarted(syncEvent({ total: 3 }));
     const started = logEntry("Started", "Sync", "reading libraries from Plex");
-    syncState.handleProgress({ log: started });
+    syncState.handleProgress(syncEvent({ log: started }));
 
-    expect(syncState.counters.added).toBe(0);
-    expect(syncState.counters.unchanged).toBe(0);
+    expect(syncState.count("Added")).toBe(0);
+    expect(syncState.count("Unchanged")).toBe(0);
     expect(loggedLines(syncState.log)).toEqual([started]);
   });
 
   it("carries the authoritative terminal counts", () => {
-    syncState.handleStarted({ total: 4 });
-    syncState.handleProgress({ done: 2, added: 2 });
+    syncState.handleStarted(syncEvent({ total: 4 }));
+    syncState.handleProgress(syncEvent({ done: 2, log_targets: { Added: 2 } }));
 
-    syncState.handleCompleted({
-      done: 4,
-      total: 4,
-      added: 2,
-      updated: 1,
-      unchanged: 1,
-      removed: 1,
-      finished_at: "finish",
-    });
+    syncState.handleCompleted(
+      syncEvent({
+        done: 4,
+        total: 4,
+        finished_at: "finish",
+        log_targets: { Added: 2, Updated: 1, Unchanged: 1, Removed: 1 },
+      }),
+    );
 
-    expect(syncState.counters).toEqual({ added: 2, updated: 1, unchanged: 1, removed: 1 });
+    expect(
+      ["Added", "Updated", "Unchanged", "Removed"].map((outcome) =>
+        syncState.count(outcome as JobOutcome),
+      ),
+    ).toEqual([2, 1, 1, 1]);
     expect(syncState.progress).toBe(100);
     expect(syncState.running).toBe(false);
   });
 
   it("logs the typed message of a failed run", () => {
-    syncState.handleStarted({ total: 1 });
+    syncState.handleStarted(syncEvent({ total: 1 }));
 
-    syncState.handleFailed({
-      job: {
-        kind: "sync",
-        status: "failed",
-        error: { message: "typed sync failed" },
-      },
-      log: logEntry("Error", "Library sync", "typed sync failed"),
-    });
+    syncState.handleFailed(
+      syncEvent({
+        job: jobMetadata("sync", "failed", { error: { message: "typed sync failed" } }),
+        log: logEntry("Error", "Library sync", "typed sync failed"),
+      }),
+    );
 
     expect(syncState.status).toBe("failed");
     expect(syncState.log.lines.get(syncState.log.total - 1)).toEqual(
@@ -86,21 +91,23 @@ describe("syncState", () => {
   });
 
   it("marks a stopped run without inventing a log line", () => {
-    syncState.handleStarted({ total: 2 });
+    syncState.handleStarted(syncEvent({ total: 2 }));
 
-    syncState.handleStopped({ done: 1, added: 1 });
+    syncState.handleStopped(syncEvent({ done: 1, log_targets: { Added: 1 } }));
 
     expect(syncState.status).toBe("stopped");
     expect(syncState.log.total).toBe(0);
-    expect(syncState.counters.added).toBe(1);
+    expect(syncState.count("Added")).toBe(1);
   });
 
   it("resets every counter", () => {
-    syncState.handleProgress({ added: 5, updated: 5, unchanged: 5, removed: 5 });
+    syncState.handleProgress(
+      syncEvent({ log_targets: { Added: 5, Updated: 5, Unchanged: 5, Removed: 5 } }),
+    );
 
     syncState.reset();
 
-    expect(syncState.counters).toEqual({ added: 0, updated: 0, unchanged: 0, removed: 0 });
+    expect(syncState.count("Added")).toBe(0);
     expect(syncState.status).toBe("idle");
   });
 });

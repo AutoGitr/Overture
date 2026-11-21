@@ -12,7 +12,7 @@ lazy from ...domain import (
     SourceType,
     library_server,
 )
-lazy from ...repositories.collections import CollectionItem
+lazy from ...repositories.collection_items import CollectionItem
 lazy from ...schemas.collections import (
     CollectionGenerator,
     CollectionLibraryCriteria,

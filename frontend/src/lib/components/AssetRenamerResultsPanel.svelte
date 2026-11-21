@@ -14,7 +14,7 @@
   unit="folders"
   stats={[
     { label: "issues", value: assetManagerState.found, title: "Files with a suggested new name" },
-    { label: "errors", value: assetManagerState.errors, tone: "danger" },
+    { label: "errors", value: assetManagerState.count("Error"), tone: "danger" },
   ]}
 >
   <JobResultsList

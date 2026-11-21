@@ -8,19 +8,19 @@ lazy from sqlmodel import (
     Field,
     Index,
     Relationship,
+    SQLModel,
 )
 
-lazy from ...domain import MediaType, ThemeIdSource
+lazy from ...domain import MediaType
 lazy from ..columns import enum_type, typed_columns
-lazy from .art import ArtSlot
+lazy from .asset import Asset
 lazy from .download_job import DownloadJob
 lazy from .media_collection import MediaCollectionMember
 lazy from .media_item_copy import MediaItemCopy
 lazy from .season import Season
-lazy from .shared import ThemeColumns
 
 
-class MediaItem(ThemeColumns, table=True):
+class MediaItem(SQLModel, table=True):
     """A movie or TV show, held by any number of media servers.
 
     Its metadata describes it as its lead copy does: the copy on the first
@@ -63,11 +63,6 @@ class MediaItem(ThemeColumns, table=True):
 
     monitored: bool = Field(default=True, nullable=False)
 
-    #: How the selected video was established.
-    youtube_id_source: ThemeIdSource | None = Field(
-        default=None, sa_type=enum_type(ThemeIdSource)
-    )
-
     studio: str | None = None
     content_rating: str | None = None
     edition: str | None = None
@@ -100,10 +95,6 @@ class MediaItem(ThemeColumns, table=True):
     #: alone has no copies and is never removed.
     server_removed_at: datetime | None = None
 
-    theme_provenance_cleared: bool = Field(default=False, nullable=False)
-    #: The hash of the theme file Overture wrote or verified for the
-    #: selection; a recorded file with another hash was replaced outside it.
-    theme_selection_hash: str | None = None
     #: The tmdb_id the TMDB fields describe; a different tmdb_id means they
     #: have to be looked up again, as does an old lookup.
     tmdb_checked_id: int | None = None
@@ -122,7 +113,7 @@ class MediaItem(ThemeColumns, table=True):
         cascade_delete=True,
         sa_relationship_kwargs={"lazy": "raise"},
     )
-    art_slots: list["ArtSlot"] = Relationship(
+    assets: list["Asset"] = Relationship(
         back_populates="media_item",
         cascade_delete=True,
         sa_relationship_kwargs={"lazy": "selectin"},
@@ -140,8 +131,8 @@ class MediaItem(ThemeColumns, table=True):
 
     def __init__(self, **data: Any) -> None:
         super().__init__(**data)
-        if "art_slots" not in data:
-            self.art_slots = []
+        if "assets" not in data:
+            self.assets = []
 
 
 typed_columns(MediaItem)

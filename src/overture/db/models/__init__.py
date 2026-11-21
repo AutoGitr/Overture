@@ -1,9 +1,7 @@
 """Database models package."""
 
 lazy from .api_key import ApiKey
-lazy from .art import (
-    ArtSlot,
-)
+lazy from .asset import Asset, AssetDelivery
 lazy from .auth_session import AuthSession
 lazy from .catalog import (
     CatalogCollection,
@@ -26,7 +24,6 @@ lazy from .media_item_copy import MediaItemCopy, SeasonCopy
 lazy from .media_server import MediaServer
 lazy from .notification import NotificationRule
 lazy from .saved_schedule import SavedSchedule
-lazy from .schedule import TaskSchedule
 lazy from .season import Season
 lazy from .settings import (
     MAX_THEME_FORMAT_LENGTH,
@@ -43,7 +40,8 @@ __all__ = [
     "ApiKey",
     "AppSettings",
     "AppSettingsBase",
-    "ArtSlot",
+    "Asset",
+    "AssetDelivery",
     "AuthSession",
     "CatalogCollection",
     "CatalogDraft",
@@ -67,7 +65,6 @@ __all__ = [
     "SavedSchedule",
     "Season",
     "SeasonCopy",
-    "TaskSchedule",
     "Term",
     "get_app_settings",
 ]

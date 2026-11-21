@@ -4,6 +4,7 @@ lazy import asyncio
 lazy import logging
 lazy from collections.abc import (
     Awaitable,
+    Callable,
     Collection,
     Coroutine,
     Generator,
@@ -12,6 +13,8 @@ lazy from collections.abc import (
 )
 lazy from contextlib import contextmanager
 lazy from dataclasses import dataclass, field
+lazy from enum import Enum, auto
+lazy from functools import partial
 lazy from itertools import batched
 lazy from typing import Any
 
@@ -42,7 +45,7 @@ lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.hashing import compute_bytes_hash
 lazy from ...utils.image_fetch import RemoteImageError
 lazy from ...utils.locks import KeyedLock
-lazy from ...utils.progress import ProgressUpdate
+lazy from ...utils.progress import ProgressCallback, ProgressUpdate
 lazy from ...utils.threads import owned_thread
 lazy from ...utils.time import utc_now
 lazy from ..art.collection_art import CollectionArtService
@@ -63,9 +66,9 @@ lazy from ..themes.youtube_resolver import (
 lazy from .art import DownloadArtHandler
 lazy from .collection_theme import store_collection_theme
 lazy from .events import DownloadEventPublisher
-lazy from .queue import JobTarget, add_job
+lazy from .queue import JobTarget, add_job, complete_running_job
 lazy from .results import (
-    DownloadedCollectionTheme,
+    DownloadedTheme,
     DownloadResult,
     DownloadTarget,
     PreparedDownload,
@@ -100,6 +103,26 @@ _JOB_ERRORS = (
     TranscodeError,
     MediaServerError,
 )
+
+
+#: Errors that fail a job while its content is put in place.
+_COMMIT_ERRORS = (
+    *_JOB_ERRORS,
+    PublicServiceError,
+    httpx2.HTTPError,
+    OSError,
+    SQLAlchemyError,
+    ValueError,
+)
+
+
+class _Placed(Enum):
+    """How a download's content ended up in place."""
+
+    WRITTEN = auto()
+    #: The place already held these bytes, so nothing was written.
+    UNCHANGED = auto()
+    UPLOADED = auto()
 
 
 def _replaced_assets(job: DownloadJob) -> tuple[ServerAsset, ...]:
@@ -161,7 +184,6 @@ class DownloadService:
         self._events = events
         self._publisher = publisher
         self._asset_storage = asset_storage
-        self._app_config = app_config
         self._lane_sizes = {
             JobType.ART: app_config.ART_DOWNLOAD_WORKERS,
             JobType.THEME: app_config.THEME_DOWNLOAD_WORKERS,
@@ -178,6 +200,11 @@ class DownloadService:
     def asset_locks(self) -> KeyedLock[int | str]:
         """Locks coordinating access to item and collection assets."""
         return self._asset_storage.asset_locks
+
+    @property
+    def publisher(self) -> protocols.EventPublisher:
+        """Publisher announcing completed asset updates."""
+        return self._publisher
 
     def _staged(self, session: AsyncSession) -> _Staged:
         return session.info.setdefault(self, _Staged())
@@ -495,18 +522,17 @@ class DownloadService:
         try:
             if job.job_type is JobType.COLLECTION_ART:
                 # The upload takes the collection's locks itself.
-                await self._finish_commit(job.id, self._commit_collection_art(job))
+                await self._finish_commit(
+                    job.id,
+                    self._commit(
+                        job,
+                        job.collection_title,
+                        partial(self._upload_collection_art, job),
+                    ),
+                )
                 return
             if job.job_type is JobType.COLLECTION_THEME:
-                downloaded_collection = (
-                    await self.theme_handler.download_collection_theme(job, progress)
-                )
-                # The upload is the write: one collection takes one at a time.
-                async with self.asset_locks.acquire(_lock_key(job)):
-                    await self._finish_commit(
-                        job.id,
-                        self._commit_collection_theme(job, downloaded_collection),
-                    )
+                await self._run_collection_theme_job(job, progress)
                 return
             if item is None:
                 raise DownloadError("Media item not found")
@@ -535,7 +561,12 @@ class DownloadService:
                     else self.theme_handler.target(item)
                 )
                 written = await self._finish_commit(
-                    job.id, self._commit_download(job, item, downloaded, target)
+                    job.id,
+                    self._commit(
+                        job,
+                        item.title,
+                        partial(self._write_files, job, downloaded, target),
+                    ),
                 )
         except _JOB_ERRORS as exc:
             await self.fail_job(job, exc, title=title)
@@ -624,64 +655,35 @@ class DownloadService:
             job = await DownloadJobRepository(session).get(job_id)
         return job is not None and job.status is JobStatus.RUNNING
 
-    async def _commit_download(
+    async def _commit(
         self,
         job: DownloadJob,
-        item: MediaItem,
-        downloaded: PreparedDownload,
-        target: DownloadTarget,
+        title: str | None,
+        place: Callable[[], Awaitable[_Placed]],
     ) -> bool:
-        """Replace the file unless it already holds these bytes, then record it.
+        """Put a running job's content in place, record it and announce it.
+
+        The one way every download ends well: *place* writes or uploads the
+        content and records the job done through the ledger; a job something
+        else ended first is left as it is, and a failure fails the job.
 
         Returns:
-            Whether a file was written; ``False`` also when the job failed.
+            Whether anything in place changed; ``False`` also when the job
+            failed or had already ended.
         """
-        storage = self._asset_storage
         try:
-            data_hash = downloaded.file_hash or compute_bytes_hash(downloaded.data)
-            for path in target.paths:
-                await owned_thread(storage.validate_target, path, target.trusted_root)
             if not await self._is_running(job.id):
                 return False
-            written = False
-            recorded: StoredFile | None = None
-            for path in target.paths:
-                stored = await owned_thread(storage.identical_file, path, data_hash)
-                if stored is None:
-                    written = True
-                    stored = await storage.write_file_async(
-                        path,
-                        downloaded.data,
-                        target.trusted_root,
-                        file_hash=data_hash,
-                    )
-                else:
-                    logger.debug(
-                        "Download %s is identical to %s; nothing written",
-                        job.id,
-                        path,
-                    )
-                recorded = recorded or stored
-            if recorded is None:
-                raise DownloadError("The download has nowhere to go")
-            await self.record_job(job, downloaded.result, recorded)
-        except (
-            DownloadError,
-            PathTraversalError,
-            TargetDirectoryMissingError,
-            OSError,
-            SQLAlchemyError,
-            ValueError,
-        ) as exc:
-            await self.fail_job(job, exc, title=item.title)
+            placed = await place()
+        except _COMMIT_ERRORS as exc:
+            await self.fail_job(job, exc, title=title)
             return False
-
         if job.status is not JobStatus.DONE:
             return False
-
-        self._settle(job.id, unchanged=not written)
+        unchanged = placed is _Placed.UNCHANGED
+        self._settle(job.id, unchanged=unchanged, uploaded=placed is _Placed.UPLOADED)
         await self._events.publish(
-            job, DownloadStatus.COMPLETED, title=item.title, unchanged=not written
+            job, DownloadStatus.COMPLETED, title=title, unchanged=unchanged
         )
         if job.media_item_id is not None:
             await emit_library_item_upserted(
@@ -690,110 +692,100 @@ class DownloadService:
                 self._publisher,
                 database=self._database,
             )
-        return written
+        return not unchanged
 
-    async def _commit_collection_theme(
-        self, job: DownloadJob, downloaded: DownloadedCollectionTheme
-    ) -> bool:
-        """Store the theme on the server unless the job has ended, then record it.
+    async def _write_files(
+        self, job: DownloadJob, downloaded: PreparedDownload, target: DownloadTarget
+    ) -> _Placed:
+        """Write the download into each of a title's paths that lacks these bytes."""
+        storage = self._asset_storage
+        data_hash = downloaded.file_hash or compute_bytes_hash(downloaded.data)
+        for path in target.paths:
+            await owned_thread(storage.validate_target, path, target.trusted_root)
+        written = False
+        recorded: StoredFile | None = None
+        for path in target.paths:
+            stored = await owned_thread(storage.identical_file, path, data_hash)
+            if stored is None:
+                written = True
+                stored = await storage.write_file_async(
+                    path, downloaded.data, target.trusted_root, file_hash=data_hash
+                )
+            else:
+                logger.debug(
+                    "Download %s is identical to %s; nothing written", job.id, path
+                )
+            recorded = recorded or stored
+        if recorded is None:
+            raise DownloadError("The download has nowhere to go")
+        await self.record_job(job, downloaded.result, recorded)
+        return _Placed.WRITTEN if written else _Placed.UNCHANGED
 
-        Returns:
-            Whether the theme was stored; ``False`` also when the job failed.
-        """
-        try:
-            if not await self._is_running(job.id):
-                return False
-            await store_collection_theme(
-                job,
-                downloaded,
-                provider_registry=self.provider_registry,
-                asset_storage=self._asset_storage,
-                publisher=self._publisher,
-                database=self._database,
-            )
-        except _JOB_ERRORS as exc:
-            await self.fail_job(job, exc, title=job.collection_title)
-            return False
-
-        if job.status is not JobStatus.DONE:
-            return False
-        self._settle(job.id, uploaded=True)
-        await self._events.publish(
-            job, DownloadStatus.COMPLETED, title=job.collection_title
+    async def _run_collection_theme_job(
+        self, job: DownloadJob, progress: ProgressCallback
+    ) -> None:
+        """Download and deliver one collection theme under the collection lock."""
+        audio_bytes, downloaded = await self.theme_handler.download_youtube(
+            job.target_url or "", progress
         )
-        return True
-
-    async def _commit_collection_art(self, job: DownloadJob) -> bool:
-        """Upload the chosen art to each server copy unless the job has ended.
-
-        Returns:
-            Whether the art was uploaded; ``False`` also when the job failed.
-        """
-        try:
-            if not await self._is_running(job.id):
-                return False
-            if job.collection_id is None or job.art_type is None:
-                raise DownloadError("The download names no collection slot")
-            await self._collection_art.apply(
-                job.collection_id,
-                job.art_type,
-                SaveCollectionArtRequest(
-                    url=job.target_url,
-                    upload_hash=job.upload_hash,
-                    poster_style=job.poster_style,
+        # The upload is the write: one collection takes one at a time.
+        async with self.asset_locks.acquire(_lock_key(job)):
+            await self._finish_commit(
+                job.id,
+                self._commit(
+                    job,
+                    job.collection_title,
+                    partial(
+                        self._upload_collection_theme, job, audio_bytes, downloaded
+                    ),
                 ),
             )
-            await self._mark_done(job)
-        except (*_JOB_ERRORS, PublicServiceError, httpx2.HTTPError, OSError) as exc:
-            await self.fail_job(job, exc, title=job.collection_title)
-            return False
 
-        if job.status is not JobStatus.DONE:
-            return False
-        self._settle(job.id, uploaded=True)
-        await self._events.publish(
-            job, DownloadStatus.COMPLETED, title=job.collection_title
+    async def _upload_collection_theme(
+        self, job: DownloadJob, audio_bytes: bytes, downloaded: DownloadedTheme
+    ) -> _Placed:
+        """Store the theme on each server copy and record it."""
+        await store_collection_theme(
+            job,
+            audio_bytes,
+            downloaded,
+            provider_registry=self.provider_registry,
+            asset_storage=self._asset_storage,
+            publisher=self._publisher,
+            database=self._database,
         )
-        return True
+        return _Placed.UPLOADED
 
-    async def _mark_done(self, job: DownloadJob) -> None:
-        """Mark a running job done once what it writes is recorded."""
-        async with self._database.write_session() as session:
-            stored = await DownloadJobRepository(session).get(job.id)
-            if not stored or stored.status is not JobStatus.RUNNING:
-                return
-            stored.status = JobStatus.DONE
-            stored.error_message = None
-            stored.progress_percent = 100
-            stored.completed_at = utc_now()
-            session.add(stored)
-        job.status = JobStatus.DONE
-        job.error_message = None
-        job.progress_percent = 100
-        job.completed_at = stored.completed_at
+    async def _upload_collection_art(self, job: DownloadJob) -> _Placed:
+        """Upload the chosen art to each server copy and record it."""
+        if job.collection_id is None or job.art_type is None:
+            raise DownloadError("The download names no collection slot")
+        await self._collection_art.apply(
+            job.collection_id,
+            job.art_type,
+            SaveCollectionArtRequest(
+                url=job.target_url,
+                upload_hash=job.upload_hash,
+                poster_style=job.poster_style,
+            ),
+        )
+        await complete_running_job(self._database, job)
+        return _Placed.UPLOADED
 
     async def record_job(
         self, job: DownloadJob, downloaded: DownloadResult, stored: StoredFile
     ) -> None:
         """Store what the download produced and mark the job done."""
-        async with self._database.write_session() as session:
-            stored_job = await DownloadJobRepository(session).get(job.id)
-            item = await session.get(MediaItem, job.media_item_id)
-            if not stored_job or stored_job.status is not JobStatus.RUNNING or not item:
-                return
 
+        async def _record(session: AsyncSession, _now: object) -> bool:
+            item = await session.get(MediaItem, job.media_item_id)
+            if not item:
+                return False
             await downloaded.record(session, item, stored)
             await auto_unmonitor_completed(session, item)
-            stored_job.status = JobStatus.DONE
-            stored_job.error_message = None
-            stored_job.progress_percent = 100
-            stored_job.completed_at = utc_now()
-            session.add(stored_job)
+            return True
 
-        job.status = JobStatus.DONE
-        job.error_message = None
-        job.progress_percent = 100
-        job.completed_at = stored_job.completed_at
+        await complete_running_job(self._database, job, _record)
 
     async def _emit_progress(
         self,

@@ -1,4 +1,4 @@
-import { appSettings } from "../../helpers/fixtures";
+import { appSettings, assetFile } from "../../helpers/fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { listItemsOptions } from "../../../generated/rest/@tanstack/svelte-query.gen";
 import { queryClient } from "../../../lib/rest/queryClient";
@@ -17,7 +17,7 @@ import {
   scheduleAutoAdvance,
   type AutoAdvanceSettings,
 } from "../../../lib/utils/autoAdvance";
-import { mediaItem, season } from "../../helpers/fixtures";
+import { mediaItem, season, withAsset } from "../../helpers/fixtures";
 
 const { preloadImages } = vi.hoisted(() => ({ preloadImages: vi.fn() }));
 vi.mock("../../../lib/utils/imagePreload", () => ({ preloadImages }));
@@ -47,13 +47,15 @@ const current = mediaItem({ id: 100 });
 const complete = mediaItem({
   id: 200,
   art_status: "complete",
-  poster_status: "complete",
-  background_status: "complete",
-  theme_status: "complete",
+  assets: {
+    poster: { status: "complete" },
+    background: { status: "complete" },
+    theme: { status: "complete" },
+  },
 });
 const s1 = season({ id: 10, season_num: 1 });
 const s2 = season({ id: 20, season_num: 2 });
-const completedSeason = season({ ...s2, poster_status: "complete" });
+const completedSeason = season({ ...s2, poster: { status: "complete" } });
 
 function setLibrary(items: ReturnType<typeof mediaItem>[]) {
   queryClient.setQueryData(listItemsOptions().queryKey, { items, total: items.length });
@@ -215,7 +217,7 @@ describe("next item navigation", () => {
 
   it("skips complete art without requiring a theme in the art workflow", () => {
     const next = mediaItem({ id: 300 });
-    setLibrary([mediaItem({ ...complete, theme_status: "partial" }), next]);
+    setLibrary([withAsset(complete, "theme", { status: "partial" }), next]);
     advanceToNextItem(current, {
       ...baseSettings,
       workflow: "art",
@@ -232,12 +234,11 @@ describe("next item navigation", () => {
   });
 
   it("skips complete cached items and lands on the first incomplete slot", () => {
-    const next = mediaItem({
-      ...complete,
+    const next = {
+      ...withAsset(complete, "background", { status: "missing" }),
       id: 300,
-      art_status: "partial",
-      background_status: "missing",
-    });
+      art_status: "partial" as const,
+    };
     setLibrary([complete, next]);
     expect(advanceToNextItem(current, { ...baseSettings, auto_advance_skip_completed: true })).toBe(
       true,
@@ -246,7 +247,7 @@ describe("next item navigation", () => {
   });
 
   it("opens Themes for an item whose art is complete", () => {
-    const next = mediaItem({ ...complete, theme_status: "missing" });
+    const next = withAsset(complete, "theme", { status: "missing" });
     setLibrary([next]);
     advanceToNextItem(current, { ...baseSettings, auto_advance_skip_completed: true });
     expect(goToItemThemes).toHaveBeenCalledExactlyOnceWith(next);
@@ -255,7 +256,7 @@ describe("next item navigation", () => {
   it("skips complete themes even if their artwork is missing", () => {
     route.pathname = "/movies/100-current/themes";
     const next = mediaItem({ id: 300 });
-    setLibrary([mediaItem({ id: 200, theme_status: "complete" }), next]);
+    setLibrary([mediaItem({ id: 200, assets: { theme: { status: "complete" } } }), next]);
     advanceToNextItem(current, {
       ...baseSettings,
       workflow: "themes",
@@ -450,8 +451,7 @@ describe("next item preloading", () => {
     const next = mediaItem({
       id: 300,
       folder_path: "/movies/Next",
-      poster_hash: "p3",
-      background_hash: "b3",
+      assets: { poster: { file: assetFile("p3") }, background: { file: assetFile("b3") } },
     });
     setLibrary([complete, next]);
     settingsState.show_background_image = true;

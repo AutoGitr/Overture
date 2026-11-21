@@ -2,7 +2,6 @@
 
 lazy import asyncio
 lazy import time
-lazy from collections import Counter, defaultdict
 lazy from collections.abc import AsyncGenerator, Callable, Coroutine, Mapping
 lazy from contextlib import asynccontextmanager
 lazy from dataclasses import dataclass, field, replace
@@ -20,7 +19,13 @@ lazy from ..ws.events import validate_event_payload
 lazy from . import results as job_results
 lazy from .kinds import INTERRUPTED_MESSAGE, JOB_STREAMED_KEYS
 lazy from .lifecycle import ManagedJobLifecycle, label, publish_job_lifecycle
-lazy from .progress_log import JobLogEntry, JobOutcome, LogServer, log_entry
+lazy from .progress_log import (
+    JobLogEntry,
+    JobOutcome,
+    LogServer,
+    OutcomeCounts,
+    log_entry,
+)
 lazy from .tally import JobTally
 
 #: Seconds between persisted summaries of progress that brings no new results.
@@ -42,10 +47,8 @@ DEFAULT_JOB_ERRORS: tuple[type[BaseException], ...] = (
 class JobPersistence:
     """One run's durable summary, its progress log and its result batches.
 
-    Log lines are numbered and counted per outcome as they are published, so a
-    client knows where each live line sits in the log it pages and how many
-    lines each outcome filter holds, and are written in batches with the
-    summary rather than one transaction per line.
+    Log lines are written in batches with the summary rather than one
+    transaction per line.
     """
 
     def __init__(
@@ -55,19 +58,12 @@ class JobPersistence:
         self.lifecycle = lifecycle
         self.started_at = started_at
         self.run_id = uuid4().hex
-        self.log_total = 0
-        self.log_outcomes: Counter[JobOutcome] = Counter()
-        self.log_servers: defaultdict[int, Counter[JobOutcome]] = defaultdict(Counter)
         self._log: list[dict[str, Any]] = []
         self._summarised_at: float | None = None
 
     def add_log(self, entry: JobLogEntry) -> None:
-        """Number one log line and keep it for the next write."""
+        """Keep one log line for the next write."""
         self._log.append(entry.model_dump(mode="json"))
-        self.log_total += 1
-        self.log_outcomes[entry.outcome] += 1
-        if entry.server_id is not None:
-            self.log_servers[entry.server_id][entry.outcome] += 1
 
     async def record(
         self,
@@ -118,6 +114,8 @@ class JobContext:
     #: Set once the run is asked to stop.
     stop_event: asyncio.Event = field(default_factory=asyncio.Event)
     persistence: JobPersistence | None = None
+    #: What the run's log adds up to; every event carries it.
+    counts: OutcomeCounts = field(default_factory=OutcomeCounts)
     shutdown_event: asyncio.Event = field(default_factory=asyncio.Event)
     publication_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     #: The saved schedule that started the run, which its events name.
@@ -155,16 +153,14 @@ class JobContext:
                 payload.setdefault(
                     "log", log_entry(JobOutcome.ERROR, label(name), error)
                 )
+            if (raw := payload.get("log")) is not None:
+                entry = JobLogEntry.model_validate(raw)
+                self.counts.add(entry)
+                if self.persistence is not None:
+                    self.persistence.add_log(entry)
             if self.persistence is not None:
                 payload["run_id"] = self.persistence.run_id
-                if (entry := payload.get("log")) is not None:
-                    self.persistence.add_log(JobLogEntry.model_validate(entry))
-                payload["log_total"] = self.persistence.log_total
-                payload["log_outcomes"] = dict(self.persistence.log_outcomes)
-                payload["log_servers"] = {
-                    server: dict(outcomes)
-                    for server, outcomes in self.persistence.log_servers.items()
-                }
+            payload.update(self.counts.payload())
             await publish_job_lifecycle(
                 self.lifecycle.kind,
                 status,
@@ -256,17 +252,17 @@ class ManagedJob[TallyT: JobTally]:
         server: LogServer | None = None,
         **payload: Any,
     ) -> None:
-        """Write one outcome for *count* targets to the log and count it.
+        """Write one outcome for *count* targets to the log, which counts it.
 
         *finished* says the line is the target's final word in this run, so it
         also advances ``done``; a download's later outcome passes ``False``.
         *server* is the media server the line is about, if it is about one.
         """
-        self.tally.count(outcome, count)
         if finished:
             self.tally.done += count
         await self.progress(
-            log=log_entry(outcome, target, reason, server=server), **payload
+            log=log_entry(outcome, target, reason, server=server, count=count),
+            **payload,
         )
 
     async def progress(self, **payload: Any) -> None:
@@ -339,7 +335,6 @@ async def run_managed_job[TallyT: JobTally](
         safe_message = (
             str(exc) if isinstance(exc, catch) else "Background operation failed"
         )
-        tally.errors += 1
         await job.publish_terminal("failed", exc=exc, error=safe_message)
     else:
         await job.publish_terminal(

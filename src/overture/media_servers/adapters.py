@@ -1,6 +1,6 @@
 """Normalized media-server adapter contracts."""
 
-lazy from collections.abc import Awaitable, Callable
+lazy from collections.abc import Callable
 lazy from dataclasses import dataclass, field
 lazy from datetime import datetime
 lazy from pathlib import PurePath, PurePosixPath, PureWindowsPath
@@ -12,7 +12,6 @@ lazy from ..domain import (
     CollectionOrder,
     MediaType,
 )
-lazy from ..jobs.progress_log import JobLogEntry
 
 MAX_SEASONS_PER_SHOW = 1000
 
@@ -209,8 +208,6 @@ class SyncItemResult:
     left_libraries: tuple[str, ...] = ()
 
 
-#: Called after the shared tally is updated, with the current item's log entry.
-type SyncProgressCallback = Callable[[JobLogEntry], Awaitable[None]]
 #: Returns True once the caller wants the run to stop.
 type SyncStopCheck = Callable[[], bool]
 

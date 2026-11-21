@@ -81,16 +81,6 @@ export function applyRestCachePolicy(message: ServerWebSocketDataMessage): void 
   if (message.event === "collection.monitored") {
     patchCollection(message.data.collection_id, { monitored: message.data.monitored });
   }
-  if (message.event === "collection.theme.updated") {
-    patchCollection(message.data.collection_id, {
-      has_theme: message.data.has_theme,
-      youtube_id: message.data.youtube_id ?? null,
-      youtube_title: message.data.youtube_title ?? null,
-      youtube_duration: message.data.youtube_duration ?? null,
-      theme_status: message.data.theme_status,
-    });
-  }
-
   if (message.event === "library.item.upserted") {
     if (message.data.source !== "sync") {
       upsertLibraryItem(message.data.item);

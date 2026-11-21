@@ -7,7 +7,7 @@ lazy from ...domain import FilterOperator, MediaType, SourceType
 lazy from ...integrations.arr import ArrClient
 lazy from ...integrations.mdblist import MDBListClient, MdblistList
 lazy from ...integrations.tmdb import TMDBClient
-lazy from ...repositories.collections import CollectionItem
+lazy from ...repositories.collection_items import CollectionItem
 lazy from ...schemas.collections import (
     ArrTagRead,
     CollectionLibraryCriteria,

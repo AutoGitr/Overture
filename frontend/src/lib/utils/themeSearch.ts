@@ -1,4 +1,4 @@
-import type { MediaItemRead, ThemeSearchResult } from "../../generated/rest/types.gen";
+import type { AssetRead, MediaItemRead, ThemeSearchResult } from "../../generated/rest/types.gen";
 
 export interface ThemeResultBadge {
   label: string;
@@ -53,15 +53,33 @@ export function extractYouTubeId(value: string): string | null {
   return value.match(/(?:v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})/)?.[1] ?? null;
 }
 
+/** Return unique non-empty YouTube IDs in order, trimming surrounding whitespace. */
+export function themeCandidateVideoIds(...ids: (string | null | undefined)[]): string[] {
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of ids) {
+    const id = raw?.trim();
+    if (id && !seen.has(id)) {
+      seen.add(id);
+      unique.push(id);
+    }
+  }
+  return unique;
+}
+
 export interface MergeThemeResultsParams {
-  item: Pick<MediaItemRead, "title" | "youtube_id" | "youtube_title" | "youtube_duration"> | null;
+  /** The title or collection the theme is for. */
+  title: string | null;
+  /** Its theme asset, when one is stored. */
+  theme: Pick<AssetRead, "youtube_id" | "youtube_title" | "youtube_duration"> | null;
   overtureDbId?: string | null;
   themerrDbId?: string | null;
   searchResults?: ThemeSearchResult[];
 }
 
 export function mergeThemeResults({
-  item,
+  title: subject,
+  theme,
   overtureDbId,
   themerrDbId,
   searchResults = [],
@@ -97,29 +115,28 @@ export function mergeThemeResults({
   }
 
   // 1. Currently selected video first (if any)
-  if (item?.youtube_id?.trim()) {
-    const currentId = item.youtube_id.trim();
-    const title =
-      item.youtube_title?.trim() || (item.title ? `${item.title} Theme` : "Current theme");
+  if (theme?.youtube_id?.trim()) {
+    const currentId = theme.youtube_id.trim();
+    const title = theme.youtube_title?.trim() || (subject ? `${subject} Theme` : "Current theme");
     addOrUpdateBadge(
       currentId,
       { label: "Currently selected", variant: "success" },
       title,
-      item.youtube_duration ?? null,
+      theme.youtube_duration ?? null,
     );
   }
 
   // 2. OvertureDB selection (if any)
   if (overtureDbId?.trim()) {
     const ovtId = overtureDbId.trim();
-    const title = item?.title ? `${item.title} Theme` : "OvertureDB theme";
+    const title = subject ? `${subject} Theme` : "OvertureDB theme";
     addOrUpdateBadge(ovtId, { label: "OvertureDB", variant: "accent" }, title);
   }
 
   // 3. ThemerrDB public selection (if any)
   if (themerrDbId?.trim()) {
     const thmId = themerrDbId.trim();
-    const title = item?.title ? `${item.title} Theme` : "ThemerrDB theme";
+    const title = subject ? `${subject} Theme` : "ThemerrDB theme";
     addOrUpdateBadge(thmId, { label: "ThemerrDB", variant: "warning" }, title);
   }
 

@@ -12,13 +12,13 @@ lazy from httpx2 import AsyncClient
 lazy from sqlalchemy.ext.asyncio import AsyncEngine
 lazy from sqlmodel import text
 
-lazy from overture.db.models.art import ArtSlot
 lazy from overture.db.models.media_collection import CollectionLibrary, MediaCollection
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
 lazy from overture.domain import ArtType, MediaType, TermKind
 lazy from overture.repositories.terms import TermRepository
 lazy from overture.utils.time import utc_now
+lazy from tests.factories import seed_asset
 lazy from tests.media_servers import served_item
 lazy from tests.workload import Workload, recording
 
@@ -31,9 +31,10 @@ _PAGED = {"/api/catalog/export"}
 #: Reads that return every title or collection, with the entities each may build.
 _LISTINGS = {
     "/api/collections": 3,
-    # The title, its poster, its copy on the one server, and a show's season.
-    "/api/library/items": 4,
-    "/api/catalog/export": 3,
+    # The title, its poster, background and theme with the folder each is
+    # delivered to, its copy on the one server, and a show's season.
+    "/api/library/items": 9,
+    "/api/catalog/export": 5,
     "/api/stats": 3,
 }
 
@@ -54,7 +55,7 @@ async def _stock(database: Database, first: int, count: int) -> None:
     """Add titles with artwork and values, every tenth also in a collection."""
     span = range(first, first + count)
     async with database.write_session() as session:
-        session.add_all(
+        items = [
             served_item(
                 id=item_id,
                 media_type=MediaType.SHOW if item_id % 4 == 0 else MediaType.MOVIE,
@@ -65,18 +66,13 @@ async def _stock(database: Database, first: int, count: int) -> None:
                 library_id="1:shows" if item_id % 4 == 0 else "1:movies",
             )
             for item_id in span
-        )
+        ]
+        session.add_all(items)
         await session.flush()
-        session.add_all(
-            ArtSlot(
-                media_item_id=item_id,
-                art_type=ArtType.POSTER,
-                file_hash="a" * 32,
-                width=1000,
-                height=1500,
+        for item in items:
+            seed_asset(
+                item, ArtType.POSTER, file_hash="a" * 32, width=1000, height=1500
             )
-            for item_id in span
-        )
         session.add_all(
             Season(media_item_id=item_id, season_num=1, file_count=3)
             for item_id in span

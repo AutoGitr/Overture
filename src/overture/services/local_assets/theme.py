@@ -8,37 +8,46 @@ has none and the user has not cleared it.
 lazy import os
 lazy from pathlib import Path
 
+lazy from ...db.ledger import (
+    FileFacts,
+    local_file,
+    read_asset,
+    record_content,
+    record_file,
+    select_theme,
+)
+lazy from ...db.models.asset import Asset
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.session import Database
-lazy from ...db.theme_file import (
-    ThemeFileFacts,
-    record_theme_file,
-    select_theme,
-    theme_file_columns,
-    theme_file_facts,
-)
+lazy from ...domain import ServerAsset
 lazy from ...utils.audio import ThemeAudioMetadata, ffprobe_theme_metadata
 lazy from ...utils.path import same_revision
 lazy from ...utils.threads import owned_thread
+lazy from ...utils.time import utc_now
 lazy from ..library.completion import auto_unmonitor_completed
 lazy from ..storage.assets import AssetStorage, FolderListing
 
 
-def _selection(item: MediaItem) -> tuple[object, ...]:
+def _theme(item: MediaItem) -> Asset:
+    return read_asset(item, ServerAsset.THEME)
+
+
+def _selection(theme: Asset) -> tuple[object, ...]:
     """Return the selection columns a refresh may fill from the file's metadata."""
     return (
-        item.youtube_id,
-        item.youtube_id_source,
-        item.youtube_title,
-        item.youtube_duration,
+        theme.youtube_id,
+        theme.youtube_id_source,
+        theme.youtube_title,
+        theme.youtube_duration,
+        theme.provenance_cleared,
     )
 
 
-def _wants_provenance(item: MediaItem) -> bool:
-    return not item.theme_provenance_cleared and (
-        item.youtube_id is None
-        or item.youtube_title is None
-        or item.youtube_duration is None
+def _wants_provenance(theme: Asset) -> bool:
+    return not theme.provenance_cleared and (
+        theme.youtube_id is None
+        or theme.youtube_title is None
+        or theme.youtube_duration is None
     )
 
 
@@ -56,9 +65,9 @@ def _locate(
 
 async def _inspect(
     item: MediaItem, asset_storage: AssetStorage, listing: FolderListing
-) -> tuple[ThemeFileFacts | None, ThemeAudioMetadata | None] | None:
+) -> tuple[FileFacts | None, ThemeAudioMetadata | None] | None:
     """Return the file's facts and tags, or ``None`` when it could not be read."""
-    known = theme_file_facts(item)
+    known = local_file(_theme(item))
     try:
         located = await owned_thread(_locate, item, asset_storage, listing)
         if located is None:
@@ -79,33 +88,44 @@ async def _inspect(
         return None
     if not same_revision(stat, after):
         return None
-    facts = ThemeFileFacts(
+    facts = FileFacts(
         file_hash=file_hash,
         # A failed probe leaves the revision unset so the next refresh retries.
         file_mtime_ns=stat.st_mtime_ns if metadata else None,
         file_size=stat.st_size if metadata else None,
         duration=round(metadata.duration) if metadata and metadata.duration else None,
     )
-    return facts, metadata if _wants_provenance(item) else None
+    return facts, metadata if _wants_provenance(_theme(item)) else None
 
 
-def _adopt_provenance(item: MediaItem, metadata: ThemeAudioMetadata | None) -> None:
-    """Fill a missing selection from the file's embedded YouTube ID."""
+def _adopt_provenance(
+    item: MediaItem, facts: FileFacts | None, metadata: ThemeAudioMetadata | None
+) -> None:
+    """Fill a missing selection from the file's embedded YouTube ID.
+
+    The file names the video it was made from, so it is that selection's
+    content.
+    """
+    theme = _theme(item)
     if (
-        metadata is None
+        facts is None
+        or metadata is None
         or not metadata.youtube_id
         or metadata.youtube_id_source is None
-        or item.youtube_id not in {None, metadata.youtube_id}
+        or theme.youtube_id not in {None, metadata.youtube_id}
     ):
         return
+    adopted = theme.youtube_id is None
     select_theme(
         item,
         metadata.youtube_id,
-        source=item.youtube_id_source or metadata.youtube_id_source,
-        title=item.youtube_title or metadata.title,
-        duration=item.youtube_duration
+        source=theme.youtube_id_source or metadata.youtube_id_source,
+        title=theme.youtube_title or metadata.title,
+        duration=theme.youtube_duration
         or (int(metadata.duration) if metadata.duration else None),
     )
+    if adopted:
+        record_content(item, ServerAsset.THEME, facts.content())
 
 
 async def refresh_theme(
@@ -122,16 +142,15 @@ async def refresh_theme(
     if item.id is None:
         return False
     item_id = item.id
-    before_columns = theme_file_columns(item)
-    before_selection = _selection(item)
+    before_file = local_file(_theme(item))
+    before_selection = _selection(_theme(item))
     before_folder = item.folder_path
-    before_cleared = item.theme_provenance_cleared
 
     inspection = await _inspect(item, asset_storage, listing)
     if inspection is None:
         return False
     facts, metadata = inspection
-    if theme_file_columns(facts) == before_columns and metadata is None:
+    if facts == before_file and metadata is None:
         return False
 
     async with database.write_session() as session:
@@ -141,17 +160,16 @@ async def refresh_theme(
         if (
             current is None
             or current.folder_path != before_folder
-            or current.theme_provenance_cleared != before_cleared
-            or theme_file_columns(current) != before_columns
-            or _selection(current) != before_selection
+            or local_file(_theme(current)) != before_file
+            or _selection(_theme(current)) != before_selection
         ):
             return False
-        record_theme_file(current, facts)
-        _adopt_provenance(current, metadata)
+        record_file(current, ServerAsset.THEME, facts, at=utc_now())
+        _adopt_provenance(current, facts, metadata)
         session.add(current)
         unmonitored = await auto_unmonitor_completed(session, current)
         return (
             unmonitored
-            or theme_file_columns(facts) != before_columns
-            or _selection(current) != before_selection
+            or facts != before_file
+            or _selection(_theme(current)) != before_selection
         )

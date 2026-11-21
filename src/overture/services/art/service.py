@@ -5,15 +5,15 @@ lazy from collections.abc import Sequence
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ... import protocols
-lazy from ...db.art_slots import (
-    ArtFileFacts,
-    clear_art_selection,
-    read_art_slot,
-    record_art_file,
+lazy from ...db.ledger import (
+    ContentFacts,
+    clear_selection,
+    read_asset,
+    record_content,
+    record_file,
     select_art,
     select_upload,
 )
-lazy from ...db.completion import holds_files
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.models.settings import get_app_settings
@@ -68,15 +68,9 @@ async def _require_art_target(
     return target
 
 
-def _forget(item: MediaItem, target: MediaItem | Season, art_type: ArtType) -> None:
-    """Forget a slot's selection; an item without a folder holds no other file.
-
-    A local file stays, with its recorded facts. An item without a folder
-    records only its uploaded image, which goes with the selection.
-    """
-    clear_art_selection(target, art_type)
-    if not holds_files(item):
-        record_art_file(target, art_type, None)
+def _forget(target: MediaItem | Season, art_type: ArtType) -> None:
+    """Forget an asset's selection and its content; a local file stays."""
+    clear_selection(target, art_type.server_asset)
 
 
 async def _art_owners(
@@ -171,7 +165,9 @@ class ArtService:
         )
         return ArtSourcesResponse(
             sources=sources.by_source,
-            current_url=read_art_slot(target, art_type).url if target else None,
+            current_url=read_asset(target, art_type.server_asset).url
+            if target
+            else None,
         )
 
     async def sources_for(
@@ -203,18 +199,21 @@ class ArtService:
                 media-server image, which only a download could record.
         """
         source = selection.source
-        upload = source if isinstance(source, ArtFileFacts) else None
+        kind = art_type.server_asset
+        upload = source if isinstance(source, ContentFacts) else None
+        folder = item.folder_path is not None
         if upload is not None:
-            select_upload(target, art_type, upload.file_hash)
+            select_upload(target, kind, upload.content_hash)
         elif selection.stored_url is not None:
-            select_art(target, art_type, selection.stored_url)
-        elif not holds_files(item):
+            select_art(target, kind, selection.stored_url)
+        elif not folder:
             raise PublicServiceError(
                 400, "Media server artwork needs an item with a local folder."
             )
         db.add(target)
-        if not holds_files(item):
-            record_art_file(target, art_type, upload)
+        if not folder:
+            if upload is not None:
+                record_content(target, kind, upload)
             await auto_unmonitor_completed(db, item)
             return None, False
         if item.id is None:
@@ -225,7 +224,7 @@ class ArtService:
                 item.id,
                 art_type,
                 source if isinstance(source, str) else None,
-                upload_hash=upload.file_hash if upload is not None else None,
+                upload_hash=upload.content_hash if upload is not None else None,
                 season_id=target.id if target is not item else None,
             ),
         )
@@ -299,9 +298,11 @@ class ArtService:
                 ):
                     for owner in group:
                         if removal.forget:
-                            _forget(item, owner, art_type)
+                            _forget(owner, art_type)
                         if (art_type, type(owner), owner.id) in deleted:
-                            record_art_file(owner, art_type, None)
+                            record_file(
+                                owner, art_type.server_asset, None, at=utc_now()
+                            )
                         db.add(owner)
                 if removal.forget:
                     await self._downloads.cancel_assets(

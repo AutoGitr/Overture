@@ -861,7 +861,10 @@ async def test_plex_serves_a_theme_without_its_version_and_unlocks_only_collecti
         await client.close()
 
     assert themes == [
-        ServerTheme(id="7", url="http://plex.local:32400/library/metadata/7/theme")
+        ServerTheme(
+            id="/library/metadata/7/theme/1791710511",
+            url="http://plex.local:32400/library/metadata/7/theme",
+        )
     ]
     assert [
         (request.method, request.url.path, dict(request.url.params))

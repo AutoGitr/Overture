@@ -56,6 +56,7 @@ lazy from .services.health import get_service_status
 lazy from .services.library.service import LibraryService
 lazy from .services.local_assets.service import LocalAssets
 lazy from .services.media_server_roster import MediaServerRoster
+lazy from .services.needs import AssetNeeds
 lazy from .services.notifications import (
     NotificationSettings,
     NotifyingPublisher,
@@ -65,6 +66,7 @@ lazy from .services.realtime import RealtimeSnapshotBuilder
 lazy from .services.removal import AssetRemover
 lazy from .services.scheduler import SchedulerService
 lazy from .services.server_audit.service import ServerAuditService
+lazy from .services.server_copies import ServerCopies
 lazy from .services.stats.service import StatsService
 lazy from .services.storage.assets import AssetStorage
 lazy from .services.storage.image_cache import ImageCache
@@ -126,6 +128,8 @@ class RuntimeServices:
     backups: BackupService
     assets: AssetsService
     catalog: CatalogService
+    #: Keeps assets' needs and collections' places in step with their inputs.
+    needs: AssetNeeds
     art: ArtService
     remover: AssetRemover
     library: LibraryService
@@ -229,6 +233,7 @@ class RuntimeServices:
         await MediaServerRoster(
             database=self.database, provider_registry=self.provider_registry
         ).reconcile()
+        await self.needs.apply_all()
         await interrupt_unfinished(self.database)
         runs = await latest_runs(self.database)
         for kind, job in self.job_slots.items():
@@ -483,6 +488,12 @@ def build_runtime(
         database=database,
     )
     art_uploads = ArtUploads(database=database, image_cache=image_cache, phash=phash)
+    server_copies = ServerCopies(
+        phash=phash,
+        image_clients=proxy_clients,
+        uploads=art_uploads,
+        config_dir=config_dir,
+    )
     art_selector = ArtSelector(
         app_config=app_config,
         database=database,
@@ -495,6 +506,7 @@ def build_runtime(
         database=database,
         asset_locks=asset_storage.asset_locks,
         matcher=art_matcher,
+        phash=phash,
         publisher=events,
         provider_registry=provider_registry,
         candidates=candidates,
@@ -503,6 +515,7 @@ def build_runtime(
         selector=art_selector,
         uploads=art_uploads,
         remover=remover,
+        server_copies=server_copies,
     )
     downloads = DownloadService(
         art_handler=DownloadArtHandler(
@@ -579,14 +592,15 @@ def build_runtime(
         provider_registry=provider_registry,
         local_assets=local_assets,
         phash=phash,
-        image_clients=proxy_clients,
         publisher=events,
-        app_config=app_config,
         database=database,
-        config_dir=config_dir,
         collection_art=art.collections,
+        server_copies=server_copies,
+        theme_handler=downloads.theme_handler,
     )
+    needs = AssetNeeds(database=database, provider_registry=provider_registry)
     collections = CollectionsService(
+        needs=needs,
         tmdb=tmdb,
         mdblist=MDBListClient(app_config=app_config),
         art=art.collections,
@@ -610,6 +624,7 @@ def build_runtime(
         local_assets=local_assets,
         config_dir=config_dir,
         groups=collections.groups,
+        server_copies=server_copies,
     )
     asset_manager = AssetManagerService(
         background_jobs=background_jobs,
@@ -632,6 +647,7 @@ def build_runtime(
         app_config=app_config,
         database=database,
         config_dir=config_dir,
+        needs=needs,
     )
 
     return RuntimeServices(
@@ -687,4 +703,5 @@ def build_runtime(
         ),
         asset_manager=asset_manager,
         stats=stats,
+        needs=needs,
     )

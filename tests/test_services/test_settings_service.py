@@ -17,6 +17,7 @@ lazy from overture.domain import (
 )
 lazy from overture.schemas.settings import AppSettingsUpdate
 lazy from overture.services import settings as module
+lazy from overture.services.needs import AssetNeeds
 lazy from overture.utils.errors import PublicServiceError
 lazy from tests.media_servers import attached_registry, configure
 lazy from tests.runtime_helpers import (
@@ -163,6 +164,10 @@ async def test_update_settings_creates_row_when_absent_and_applies_all_fields(
         app_config=app_config,
         database=database,
         provider_registry=attached_registry(app_config),
+        needs=AssetNeeds(
+            database=database,
+            provider_registry=attached_registry(app_config),
+        ),
     )
 
     assert result.auto_match_art is True
@@ -195,6 +200,10 @@ async def test_update_settings_with_no_fields_preserves_existing_row(
         app_config=app_config,
         database=database,
         provider_registry=attached_registry(app_config),
+        needs=AssetNeeds(
+            database=database,
+            provider_registry=attached_registry(app_config),
+        ),
     )
 
     assert result.workflow == "art_and_themes"
@@ -228,6 +237,10 @@ async def test_update_settings_rejects_min_greater_than_max_duration(
         app_config=app_config,
         database=database,
         provider_registry=attached_registry(app_config),
+        needs=AssetNeeds(
+            database=database,
+            provider_registry=attached_registry(app_config),
+        ),
     )
 
     with pytest.raises(PublicServiceError) as exc_info:
@@ -236,6 +249,10 @@ async def test_update_settings_rejects_min_greater_than_max_duration(
             app_config=app_config,
             database=database,
             provider_registry=attached_registry(app_config),
+            needs=AssetNeeds(
+                database=database,
+                provider_registry=attached_registry(app_config),
+            ),
         )
 
     assert exc_info.value.status_code == 400

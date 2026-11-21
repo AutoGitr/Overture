@@ -8,6 +8,7 @@ import { serverAuditState } from "../../../lib/stores/serverAuditState.svelte";
 import { sidebarState } from "../../../lib/stores/sidebarState.svelte";
 import { uiState } from "../../../lib/stores/uiState.svelte";
 import { renderWithQueryClient } from "../../helpers/render";
+import { assetScanEvent, serverAuditEvent } from "../../helpers/fixtures";
 
 const { getFolderRoots, startScan, startServerAudit, stopScan, stopServerAudit } = vi.hoisted(
   () => ({
@@ -75,7 +76,7 @@ describe.each([
     });
 
     it("shows a failed stop request without claiming the job stopped and permits retry", async () => {
-      state.handleStarted({});
+      state.handleStarted({ ...assetScanEvent(), ...serverAuditEvent() });
       stop.mockRejectedValueOnce(new ApiError("Stop unavailable", 503));
       renderWithQueryClient(OperationsPopup);
       await fireEvent.click(await screen.findByRole("button", { name: "Stop" }));

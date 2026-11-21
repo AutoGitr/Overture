@@ -9,25 +9,25 @@ lazy import pytest
 lazy from pydantic import SecretStr
 
 lazy from overture.config import Settings
-lazy from overture.db.models.art import ArtSlot
+lazy from overture.db.ledger import read_asset
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.media_item_copy import MediaItemCopy
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, MediaType, ServerType
+lazy from overture.domain import ArtType, MediaType, ServerAsset, ServerType
 lazy from overture.integrations.tmdb import TMDBClient, TmdbDetails, TmdbSeason
 lazy from overture.jobs.kinds import JobKind
 lazy from overture.jobs.lifecycle import ManagedJobLifecycle
 lazy from overture.jobs.progress_log import JobLogEntry
 lazy from overture.jobs.runner import run_managed_job
-lazy from overture.jobs.tally import SyncTally
+lazy from overture.jobs.tally import JobTally
 lazy from overture.media_servers.adapters import ServerItem, ServerSection
 lazy from overture.repositories.seasons import SeasonRepository
 lazy from overture.services.sync.reconciler import LibraryReconciler, SyncResult
 lazy from overture.services.sync.runner import run_sync
 lazy from overture.services.sync.tmdb_seasons import TmdbSeasonSync
-lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.time import utc_now
+lazy from tests.factories import seed_asset
 lazy from tests.media_servers import TEST_SERVER_ID, served_item
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
@@ -113,13 +113,14 @@ async def test_full_sync_without_server_refreshes_only_unconnected_shows(
             ]
         )
         await session.flush()
-        session.add(
-            ArtSlot(
-                season_id=1,
-                art_type=ArtType.SEASON_POSTER,
-                url=PublicArtUrl("https://image.tmdb.org/t/p/original/chosen.jpg"),
-            )
+        season = await session.get(Season, 1)
+        assert season is not None
+        seed_asset(
+            season,
+            ArtType.SEASON_POSTER,
+            url="https://image.tmdb.org/t/p/original/chosen.jpg",
         )
+        session.add(season)
 
     class EmptyServer:
         server_type = ServerType.PLEX
@@ -161,16 +162,20 @@ async def test_full_sync_without_server_refreshes_only_unconnected_shows(
         )
         _, result = probe.terminal()
         assert result["total"] == result["done"] == 2
-        assert result["errors"] == int(fail_first)
-        assert result["updated"] == (0 if run else 2 - int(fail_first))
-        assert result["unchanged"] == (2 - int(fail_first) if run else 0)
+        assert result["log_targets"].get("Error", 0) == int(fail_first)
+        assert result["log_targets"].get("Updated", 0) == (
+            0 if run else 2 - int(fail_first)
+        )
+        assert result["log_targets"].get("Unchanged", 0) == (
+            2 - int(fail_first) if run else 0
+        )
     # Shows are fetched concurrently, each once per run.
     assert sorted(client.calls) == [1, 1, 2, 2]
     async with database.read_session() as session:
         seasons = await SeasonRepository(session).map_by_number_for_item(2)
         assert set(seasons) == {0, 1, 2, 9}
         assert seasons[1].title == "Season One"
-        assert seasons[1].art_slots[0].url == (
+        assert read_asset(seasons[1], ServerAsset.SEASON_POSTER).url == (
             "https://image.tmdb.org/t/p/original/chosen.jpg"
         )
         assert all(season.file_count == 0 for season in seasons.values())
@@ -206,7 +211,7 @@ async def test_unconfigured_tmdb_and_show_linked_after_planning_are_skipped(
             )
         )
     probe = JobProbe(lifecycle=LIFECYCLE)
-    async with run_managed_job(probe.context, SyncTally()) as job:
+    async with run_managed_job(probe.context, JobTally()) as job:
         await job.started()
         await job.planned(1)
         await service.run([expected], job)

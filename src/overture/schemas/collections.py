@@ -6,16 +6,13 @@ lazy from typing import Annotated, Literal, Self
 
 lazy from pydantic import Field, TypeAdapter, field_validator, model_validator
 
-lazy from ..db.art_slots import flattened_art, read_art_slot
-lazy from ..db.completion import collection_art_completion, collection_theme_status
+lazy from ..db.ledger import Destination, combined_status, delivery, read_asset
 lazy from ..db.models.catalog import CatalogCollection
 lazy from ..db.models.collection_rule import CollectionRule
 lazy from ..db.models.media_collection import CollectionLibrary, MediaCollection
 lazy from ..domain import (
     SMART_CUSTOM_ORDER,
-    ArtSource,
     ArtStyle,
-    ArtType,
     AssetStatus,
     AutoArtSource,
     CollectionFiltering,
@@ -28,6 +25,7 @@ lazy from ..domain import (
     FilterOperator,
     MediaType,
     MetadataIssue,
+    ServerAsset,
     ServerType,
     SetDimension,
     SourceType,
@@ -51,6 +49,7 @@ lazy from ..utils.collection_formats import (
     SummaryFormat,
 )
 lazy from ..utils.hashing import text_digest
+lazy from .assets import AssetRead, TitleAssets, assets_read
 lazy from .base import PublicText, StrictBaseModel
 lazy from .catalog import CatalogSelections
 lazy from .common import StatusResponse
@@ -317,49 +316,6 @@ class FilterGroup(StrictBaseModel):
         ]
 
 
-class CollectionArtwork(StrictBaseModel):
-    """Selected collection artwork and its completion state."""
-
-    poster_url: str | None = None
-    background_url: str | None = None
-    poster_source: ArtSource | None = None
-    background_source: ArtSource | None = None
-    #: The OvertureDB poster the selected poster link is contributed as.
-    poster_style: CollectionPosterStyle | None = None
-    #: The cached image Overture last uploaded to the server, which views show.
-    poster_hash: str | None = None
-    background_hash: str | None = None
-    poster_phash: str | None = None
-    background_phash: str | None = None
-    poster_width: int | None = None
-    poster_height: int | None = None
-    background_width: int | None = None
-    background_height: int | None = None
-    poster_status: AssetStatus = AssetStatus.MISSING
-    background_status: AssetStatus = AssetStatus.MISSING
-    art_status: AssetStatus = AssetStatus.MISSING
-    #: Its policy wants a background; without one, a poster completes its art.
-    backgrounds: bool = True
-
-
-def collection_artwork(row: MediaCollection, *, backgrounds: bool) -> CollectionArtwork:
-    """Project the collection's art slots without exposing server URLs."""
-    completion = collection_art_completion(row, backgrounds=backgrounds)
-    poster = read_art_slot(row, ArtType.POSTER)
-    background = read_art_slot(row, ArtType.BACKGROUND)
-    return CollectionArtwork.model_validate(
-        {
-            **flattened_art(poster, "poster"),
-            **flattened_art(background, "background"),
-            "poster_style": poster.poster_style,
-            "poster_status": completion.poster_status,
-            "background_status": completion.background_status,
-            "art_status": completion.art_status,
-            "backgrounds": backgrounds,
-        }
-    )
-
-
 class CollectionCopyRead(StrictBaseModel):
     """One media server's collection holding the collection's members."""
 
@@ -371,10 +327,14 @@ class CollectionCopyRead(StrictBaseModel):
     library_ids: list[str]
 
 
-class CollectionRead(CollectionArtwork):
+class CollectionRead(StrictBaseModel):
     """Media-server collection response."""
 
     id: int
+    #: The poster, background and theme.
+    assets: TitleAssets
+    #: The poster and background taken together.
+    art_status: AssetStatus = AssetStatus.MISSING
     kind: CollectionKind = CollectionKind.REGULAR
     title: str
     summary: str | None = None
@@ -403,8 +363,8 @@ class CollectionRead(CollectionArtwork):
     last_rule_sync: datetime | None = None
     #: The collection set value the collection was created for.
     generated_value: str | None = None
-    #: Name the media server's current poster and background, as ``t`` of
-    #: their image route, so a replaced one is fetched anew; ``None`` without one.
+    #: Name the lead copy's current poster and background, as ``t`` of their
+    #: image route, so a replaced one is fetched anew; ``None`` without one.
     server_poster_version: str | None = None
     server_background_version: str | None = None
     child_count: int = 0
@@ -416,13 +376,6 @@ class CollectionRead(CollectionArtwork):
     #: Its collections on the configured servers, the lead first: the one
     #: whose images and link stand for it. None while it is withheld.
     copies: list[CollectionCopyRead] = Field(default_factory=list[CollectionCopyRead])
-    #: The media server holds a theme for the collection.
-    has_theme: bool = False
-    youtube_id: str | None = None
-    youtube_title: str | None = None
-    youtube_duration: int | None = None
-    theme_duration: int | None = None
-    theme_status: AssetStatus = AssetStatus.MISSING
     monitored: bool = True
     tmdb_collection_id: int | None = None
     #: The catalog has an OvertureDB theme for the collection's TMDB collection.
@@ -434,10 +387,6 @@ class CollectionRead(CollectionArtwork):
     catalog_selections: CatalogSelections | None = None
     #: The poster or background is outside the aspect ratio tolerance.
     has_incorrect_aspect_ratio: bool = False
-    #: OvertureDB says the collection has no theme music, so none is missing.
-    catalog_no_theme: bool = False
-    #: Its policy wants a theme; without one, its theme is complete as it is.
-    themes: bool = True
     #: What a poster chosen for it next is contributed to OvertureDB as.
     contributed_style: CollectionPosterStyle = CollectionPosterStyle.INDIVIDUAL
     #: Where Plex's Home lists it among promoted collections, lowest first.
@@ -465,15 +414,6 @@ class CollectionDetail(CollectionRead):
     youtube_id_themerrdb: str | None = None
 
 
-class CollectionThemeStatusResponse(StrictBaseModel):
-    """Collection theme status response."""
-
-    has_theme: bool
-    youtube_id: str | None = None
-    youtube_title: str | None = None
-    youtube_duration: int | None = None
-
-
 class SetCollectionThemeRequest(StrictBaseModel):
     """Validate the set collection theme request payload."""
 
@@ -486,30 +426,30 @@ class SetCollectionThemeResponse(StrictBaseModel):
     #: ``None`` when the collection is inactive: the sync that puts it back on
     #: the server downloads the theme.
     job_id: str | None
-    theme_status: AssetStatus
+    #: The theme as stored now; a queued video becomes it once downloaded.
+    theme: AssetRead
 
 
 class DeleteCollectionThemeResponse(StatusResponse):
-    """Collection theme delete response."""
+    """Collection theme delete response: the theme as it is now."""
 
-    has_theme: bool
-    theme_status: AssetStatus
-
-
-class CollectionThemeUpdatedEvent(StrictBaseModel):
-    """Collection theme state update."""
-
-    collection_id: int
-    has_theme: bool
-    youtube_id: str | None = None
-    youtube_title: str | None = None
-    youtube_duration: int | None = None
-    theme_status: AssetStatus
+    theme: AssetRead
 
 
-def _server_image_version(server_url: str | None) -> str | None:
-    """Name the server's image without revealing its URL."""
-    return text_digest(server_url, 16) if server_url else None
+def _server_image_version(
+    row: MediaCollection, kind: ServerAsset, lead: CollectionLibrary | None
+) -> str | None:
+    """Name the lead copy's current image without revealing its URL."""
+    found = (
+        delivery(
+            read_asset(row, kind),
+            Destination(lead.server_id, lead.server_item_id),
+        )
+        if lead
+        else None
+    )
+    ref = found.observed_ref if found else None
+    return text_digest(ref, 16) if ref else None
 
 
 def collection_metadata_issues(row: MediaCollection) -> list[MetadataIssue]:
@@ -528,20 +468,21 @@ def collection_read(
     *,
     copies: Sequence[CollectionLibrary],
     trust_no_theme: bool,
-    backgrounds: bool,
-    themes: bool,
 ) -> CollectionRead:
     """Map a stored collection, its catalog entry and its rule to public output.
 
     *copies* holds a part for each server copy on the configured servers, the
     lead first; *trust_no_theme* lets the catalog's No theme flag count as a
-    theme, and *backgrounds* and *themes* say whether its policy wants them.
+    theme.
     """
-    has_theme = _has_theme(row)
-    no_theme = catalog_says_no_theme(catalog, trust_no_theme=trust_no_theme)
+    lead = copies[0] if copies else None
     return CollectionRead(
-        **collection_artwork(row, backgrounds=backgrounds).model_dump(),
         id=row.id or 0,
+        assets=assets_read(row),
+        art_status=combined_status(
+            read_asset(row, kind).status
+            for kind in (ServerAsset.POSTER, ServerAsset.BACKGROUND)
+        ),
         kind=row.kind,
         title=row.title,
         summary=row.summary,
@@ -565,12 +506,10 @@ def collection_read(
         sync_failed=bool(rule and rule.last_error),
         last_rule_sync=rule.last_synced_at if rule else None,
         generated_value=row.generated_value,
-        # Without a server copy there is no server image to show, whatever
-        # the last copy had.
-        server_poster_version=_server_image_version(row.thumb_url) if copies else None,
-        server_background_version=_server_image_version(row.art_url)
-        if copies
-        else None,
+        server_poster_version=_server_image_version(row, ServerAsset.POSTER, lead),
+        server_background_version=_server_image_version(
+            row, ServerAsset.BACKGROUND, lead
+        ),
         child_count=row.child_count,
         media_types=row.media_types,
         library_ids=row.library_ids,
@@ -590,46 +529,13 @@ def collection_read(
             )
             for copy in copies
         ],
-        has_theme=has_theme,
-        youtube_id=row.youtube_id,
-        youtube_title=row.youtube_title,
-        youtube_duration=row.youtube_duration,
-        theme_duration=row.theme_file_duration or row.youtube_duration,
-        theme_status=collection_theme_status(
-            server_has_theme=has_theme,
-            youtube_id=row.youtube_id,
-            needed=themes and not no_theme,
-        ),
-        themes=themes,
-        catalog_no_theme=no_theme,
         monitored=row.monitored,
         tmdb_collection_id=row.tmdb_collection_id,
-        catalog_complete=bool(catalog and (catalog.youtube_id_overturedb or no_theme)),
+        catalog_complete=bool(
+            catalog
+            and (catalog.youtube_id_overturedb or (trust_no_theme and catalog.no_theme))
+        ),
         catalog_themerrdb=bool(catalog and catalog.youtube_id_themerrdb),
-    )
-
-
-def catalog_says_no_theme(
-    catalog: CatalogCollection | None, *, trust_no_theme: bool
-) -> bool:
-    """Whether OvertureDB's No theme flag counts as the collection's theme."""
-    return trust_no_theme and catalog is not None and catalog.no_theme
-
-
-def _has_theme(row: MediaCollection) -> bool:
-    """Whether the server holds the collection's theme, or its folder does."""
-    return row.server_theme_id is not None or row.theme_file_hash is not None
-
-
-def collection_theme_status_response(
-    row: MediaCollection,
-) -> CollectionThemeStatusResponse:
-    """Project synchronized collection theme state."""
-    return CollectionThemeStatusResponse(
-        has_theme=_has_theme(row),
-        youtube_id=row.youtube_id,
-        youtube_title=row.youtube_title,
-        youtube_duration=row.youtube_duration,
     )
 
 

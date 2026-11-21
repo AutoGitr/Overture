@@ -9,15 +9,15 @@ lazy from .. import protocols
 lazy from ..utils.job_events import build_job_payload
 lazy from ..utils.time import format_duration, parse_utc_datetime
 lazy from .kinds import JobKind, LifecycleStatus
-lazy from .progress_log import JobLogEntry
+lazy from .progress_log import JobLogEntry, JobOutcome
 
 logger = logging.getLogger(__name__)
 
 #: Statuses that end a run.
 _TERMINAL_STATUSES = frozenset(status for status in LifecycleStatus if status.terminal)
 
-#: Integer payload fields a run's end line does not list as counters: the
-#: progress it reports first, and the sizes of its persisted log and results.
+#: Integer payload fields a run's end line does not list: the progress it
+#: reports first, and the sizes of its persisted log and results.
 _NOT_SUMMARISED = frozenset({"done", "total", "log_total", "results_total"})
 
 
@@ -50,6 +50,12 @@ def _run_ending(status: str, payload: Mapping[str, Any]) -> str:
     if type(done := payload.get("done")) is int:
         total = payload.get("total")
         counts.append(f"{done}/{total} done" if type(total) is int else f"{done} done")
+    targets: Mapping[str, int] = payload.get("log_targets") or {}
+    counts += [
+        f"{outcome.lower()} {count}"
+        for outcome, count in targets.items()
+        if count and outcome != JobOutcome.STARTED
+    ]
     counts += [
         f"{key.replace('_', ' ')} {value}"
         for key, value in payload.items()

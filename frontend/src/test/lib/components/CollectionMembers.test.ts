@@ -2,7 +2,7 @@ import { fireEvent, screen } from "@testing-library/svelte";
 import { afterEach, describe, expect, it } from "vitest";
 import CollectionMembers from "../../../lib/components/CollectionMembers.svelte";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
-import type { CollectionEditor } from "../../../lib/utils/collectionForms.svelte";
+import type { CollectionEditor } from "../../../lib/utils/collectionEditor.svelte";
 import { appSettings, collectionDetail, mediaItem, mediaServers } from "../../helpers/fixtures";
 import { renderWithQueryClient } from "../../helpers/render";
 

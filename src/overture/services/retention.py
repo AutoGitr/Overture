@@ -14,7 +14,7 @@ lazy from datetime import timedelta
 lazy from sqlmodel import col, delete, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ..db.models.art import ArtSlot
+lazy from ..db.models.asset import Asset, AssetDelivery
 lazy from ..db.models.download_job import DownloadJob
 lazy from ..db.models.job_result import JobRun
 lazy from ..db.session import Database
@@ -83,11 +83,16 @@ async def prune_image_cache(*, database: Database, image_cache: ImageCache) -> i
         How many cached files were deleted.
     """
     async with database.read_session() as session:
+        contents = await session.exec(
+            select(Asset.content_hash).where(col(Asset.content_hash).is_not(None))
+        )
         files = await session.exec(
-            select(ArtSlot.file_hash).where(col(ArtSlot.file_hash).is_not(None))
+            select(AssetDelivery.observed_hash).where(
+                col(AssetDelivery.observed_hash).is_not(None)
+            )
         )
         uploads = await session.exec(
-            select(ArtSlot.upload_hash).where(col(ArtSlot.upload_hash).is_not(None))
+            select(Asset.upload_hash).where(col(Asset.upload_hash).is_not(None))
         )
         queued = await session.exec(
             select(DownloadJob.upload_hash).where(
@@ -95,7 +100,11 @@ async def prune_image_cache(*, database: Database, image_cache: ImageCache) -> i
                 col(DownloadJob.status).in_((JobStatus.PENDING, JobStatus.RUNNING)),
             )
         )
-        recorded = {file_hash for file_hash in (*files, *uploads, *queued) if file_hash}
+        recorded = {
+            file_hash
+            for file_hash in (*contents, *files, *uploads, *queued)
+            if file_hash
+        }
     return await image_cache.prune(
         recorded,
         older_than=(utc_now() - UNUSED_IMAGE_RETENTION).timestamp(),

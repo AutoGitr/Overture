@@ -10,16 +10,16 @@ lazy from PIL import Image
 lazy from sqlmodel import select, text
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from overture.db.art_slots import select_art
+lazy from overture.db.ledger import select_art
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, JobStatus, JobType, MediaType
+lazy from overture.domain import ArtType, JobStatus, JobType, MediaType, ServerAsset
 lazy from overture.services import retention
 lazy from overture.services.storage.image_cache import ImageCache
 lazy from overture.utils.art_urls import PublicArtUrl
-lazy from tests.factories import seed_art_slot
+lazy from tests.factories import seed_asset
 
 NOW = datetime(2026, 8, 1, tzinfo=UTC)
 
@@ -38,7 +38,7 @@ _TABLE_COUNT_QUERIES = frozendict(
     {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
         "media_items": text("select count(*) from media_items"),
         "seasons": text("select count(*) from seasons"),
-        "art_slots": text("select count(*) from art_slots"),
+        "assets": text("select count(*) from assets"),
         "download_jobs": text("select count(*) from download_jobs"),
     }
 )
@@ -125,8 +125,10 @@ async def test_long_removed_items_are_deleted_with_everything_they_own(
         )
     )
     await db_session.commit()
-    select_art(removed, ArtType.POSTER, PublicArtUrl("https://img.test/p.jpg"))
-    select_art(season, ArtType.SEASON_POSTER, PublicArtUrl("https://img.test/s.jpg"))
+    select_art(removed, ServerAsset.POSTER, PublicArtUrl("https://img.test/p.jpg"))
+    select_art(
+        season, ServerAsset.SEASON_POSTER, PublicArtUrl("https://img.test/s.jpg")
+    )
     db_session.add_all([removed, season])
     await db_session.commit()
 
@@ -136,7 +138,7 @@ async def test_long_removed_items_are_deleted_with_everything_they_own(
     assert result.media_items == 1
     assert await _count(db_session, "media_items") == 2
     assert await _count(db_session, "seasons") == 0
-    assert await _count(db_session, "art_slots") == 0
+    assert await _count(db_session, "assets") == 0
     assert await _count(db_session, "download_jobs") == 0
 
 
@@ -180,7 +182,7 @@ async def test_retention_pass_prunes_unreferenced_cached_images_after_grace_wind
         movie = MediaItem(id=1, media_type=MediaType.MOVIE, title="Movie")
         session.add(movie)
         await session.flush()
-        seed_art_slot(movie, ArtType.POSTER, file_hash=referenced.file_hash)
+        seed_asset(movie, ArtType.POSTER, file_hash=referenced.file_hash)
         session.add(movie)
 
     await retention.run_retention_pass(database=database, image_cache=image_cache)

@@ -85,10 +85,12 @@ lazy from overture.services.health import get_service_status
 lazy from overture.services.library.service import LibraryService
 lazy from overture.services.local_assets.service import LocalAssets
 lazy from overture.services.named_schedules import NamedSchedules
+lazy from overture.services.needs import AssetNeeds
 lazy from overture.services.notifications import NotificationSettings, RunNotifier
 lazy from overture.services.removal import AssetRemover
 lazy from overture.services.scheduler import SchedulerService
 lazy from overture.services.server_audit.service import ServerAuditService
+lazy from overture.services.server_copies import ServerCopies
 lazy from overture.services.stats.service import StatsService
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.storage.image_cache import ImageCache
@@ -186,6 +188,23 @@ def unused[T](protocol: type[T], label: str | None = None) -> T:
     return cast("T", _UnusedDependency(name))
 
 
+def make_server_copies(
+    *,
+    app_config: Settings,
+    image_clients: ProxyClientManager | None = None,
+    config_dir: Path | None = None,
+    uploads: ArtUploads | None = None,
+    phash: PhashService | None = None,
+) -> ServerCopies:
+    """Read server copies with whatever a test hands in; the rest is unused."""
+    return ServerCopies(
+        phash=phash or PhashService(app_config=app_config),
+        image_clients=image_clients or unused(ProxyClientManager),
+        uploads=uploads or unused(ArtUploads),
+        config_dir=config_dir or app_config.OVERTURE_CONFIG_DIR,
+    )
+
+
 def art_service(
     *,
     app_config: Settings,
@@ -224,6 +243,7 @@ def art_service(
             database=database,
             asset_locks=asset_storage.asset_locks,
             matcher=matcher,
+            phash=phash,
             publisher=publisher,
             provider_registry=provider_registry,
             candidates=candidates,
@@ -232,6 +252,12 @@ def art_service(
             selector=selector,
             uploads=uploads,
             remover=remover,
+            server_copies=make_server_copies(
+                app_config=app_config,
+                image_clients=image_clients,
+                uploads=uploads,
+                phash=phash,
+            ),
         ),
         remover=remover,
     )
@@ -341,6 +367,7 @@ class NoopDownloads(DownloadService):
 
     def __init__(self) -> None:
         self._asset_locks = KeyedLock[int | str]()
+        self.theme_handler = unused(DownloadThemeHandler)
 
     @property
     @override
@@ -693,22 +720,28 @@ def make_runtime(
     )
     server_audit = (
         ServerAuditService(
-            config_dir=config_dir,
             background_jobs=background_jobs,
             provider_registry=provider_registry,
             local_assets=local_assets,
             phash=phash,
-            image_clients=proxy_clients,
             publisher=events,
-            app_config=app_config,
             database=database,
             collection_art=art.collections,
+            server_copies=make_server_copies(
+                app_config=app_config,
+                image_clients=proxy_clients,
+                config_dir=config_dir,
+                phash=phash,
+            ),
+            theme_handler=downloads.theme_handler,
         )
         if server_audit is None
         else server_audit
     )
+    needs = AssetNeeds(database=database, provider_registry=provider_registry)
     collections = (
         CollectionsService(
+            needs=needs,
             tmdb=tmdb,
             mdblist=MDBListClient(app_config=app_config),
             art=art.collections,
@@ -785,10 +818,11 @@ def make_runtime(
             themes=themes,
             downloads=downloads,
             publisher=events,
-            catalog=CatalogBrowser(database=database, app_config=app_config),
+            catalog=CatalogBrowser(database=database),
         ),
         asset_manager=asset_manager,
         stats=stats,
+        needs=needs,
         config_dir=config_dir,
         connectivity_probe=connectivity_probe,
     )

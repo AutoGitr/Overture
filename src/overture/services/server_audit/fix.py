@@ -19,10 +19,10 @@ lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.session import Database
-lazy from ...domain import ArtType, ServerAsset
+lazy from ...domain import ServerAsset
 lazy from ...jobs.progress_log import JobOutcome, LogServer
 lazy from ...jobs.runner import JobContext, ManagedJob, run_managed_job
-lazy from ...jobs.tally import ServerAuditFixTally
+lazy from ...jobs.tally import JobTally
 lazy from ...media_servers.errors import MediaServerError
 lazy from ...media_servers.registry import log_server
 lazy from ...schemas.server_audit import (
@@ -32,7 +32,9 @@ lazy from ...schemas.server_audit import (
 lazy from ...utils.concurrency import in_order
 lazy from ...utils.errors import PublicServiceError
 lazy from ..art.targets import target_label
+lazy from ..downloads.collection_theme import reupload_collection_theme
 lazy from ..server_identity import resolve_owners
+lazy from ..themes.youtube_resolver import DownloadError
 lazy from .compare import (
     AUDIT_CONCURRENCY,
     AUDIT_ERRORS,
@@ -65,6 +67,14 @@ def audit_row_key(
             return ("collection", row.collection_id, None, row.art_type, row.server_id)
         case ServerAuditRefreshTarget():
             return ("art", row.item_id, row.season_id, row.art_type, row.server_id)
+        case ServerAuditThemeDeleteTarget() if row.collection_id is not None:
+            return (
+                "collection",
+                row.collection_id,
+                None,
+                ServerAsset.THEME,
+                row.server_id,
+            )
         case ServerAuditThemeDeleteTarget():
             return (
                 "theme",
@@ -156,18 +166,10 @@ class _Fix:
     difference: str = ""
 
     @property
-    def collection_slot(self) -> tuple[int, ArtType] | None:
-        """Return the collection and art slot fixed, for a collection's image."""
-        art_type = self.asset.art_type
-        if self.collection_id is None or art_type is None:
-            return None
-        return self.collection_id, art_type
-
-    @property
     def target(self) -> AuditWork:
         """Return the audit target that checks this fix."""
-        if (slot := self.collection_slot) is not None:
-            return CollectionAuditTarget(*slot)
+        if self.collection_id is not None:
+            return CollectionAuditTarget(self.collection_id, self.asset)
         return AuditTarget(self.item_id or 0, self.asset.art_type, self.season_id)
 
 
@@ -188,6 +190,19 @@ def _plan(
             rows=[key],
         )
     for target in themes:
+        if target.collection_id is not None:
+            key = audit_row_key(target)
+            fix = fixes.setdefault(
+                ("collection_theme", target.collection_id, target.server_id),
+                _Fix(
+                    None,
+                    ServerAsset.THEME,
+                    target.server_id,
+                    collection_id=target.collection_id,
+                ),
+            )
+            fix.rows.append(key)
+            continue
         fix = fixes.setdefault(
             ("theme", target.item_id, target.server_id),
             _Fix(
@@ -220,7 +235,9 @@ async def _label(fixes: Sequence[_Fix], database: Database) -> None:
             item.id: item
             for item in await session.exec(
                 select(MediaItem).where(
-                    col(MediaItem.id).in_({fix.item_id for fix in fixes})
+                    col(MediaItem.id).in_(
+                        {fix.item_id for fix in fixes if fix.item_id is not None}
+                    )
                 )
             )
         }
@@ -256,24 +273,42 @@ async def _label(fixes: Sequence[_Fix], database: Database) -> None:
 async def _apply(fixes: Sequence[_Fix], context: AuditContext) -> None:
     """Fix every selected finding not already failed, on the media server."""
     pending = [fix for fix in fixes if fix.error is None]
-    await _reupload(
-        [(fix, slot) for fix in pending if (slot := fix.collection_slot) is not None],
-        context,
-    )
+    await _reupload([fix for fix in pending if fix.collection_id is not None], context)
     await _refresh(
         [(fix, fix.item_id) for fix in pending if fix.item_id is not None], context
     )
 
 
-async def _reupload(
-    fixes: Sequence[tuple[_Fix, tuple[int, ArtType]]], context: AuditContext
-) -> None:
-    """Upload each collection image Overture kept to the server again."""
-    for fix, (collection_id, art_type) in fixes:
+async def _reupload(fixes: Sequence[_Fix], context: AuditContext) -> None:
+    """Upload each collection asset Overture holds to the server again."""
+    seen: dict[tuple[int, ServerAsset], str | None] = {}
+    for fix in fixes:
+        collection_id = fix.collection_id or 0
+        key = (collection_id, fix.asset)
+        if key in seen:
+            fix.error = seen[key]
+            continue
         try:
-            await context.collection_art.reupload(collection_id, art_type)
-        except (*AUDIT_ERRORS, MediaServerError, PublicServiceError) as exc:
+            if fix.asset is ServerAsset.THEME:
+                await reupload_collection_theme(
+                    collection_id,
+                    theme_handler=context.theme_handler,
+                    provider_registry=context.provider_registry,
+                    asset_storage=context.asset_storage,
+                    publisher=context.publisher,
+                    database=context.database,
+                )
+            elif (art_type := fix.asset.art_type) is not None:
+                await context.collection_art.reupload(collection_id, art_type)
+            seen[key] = None
+        except (
+            *AUDIT_ERRORS,
+            DownloadError,
+            MediaServerError,
+            PublicServiceError,
+        ) as exc:
             fix.error = str(exc)
+            seen[key] = fix.error
 
 
 async def _refresh(fixes: Sequence[tuple[_Fix, int]], context: AuditContext) -> None:
@@ -335,7 +370,7 @@ async def _difference(fix: _Fix, context: AuditContext) -> tuple[_Fix, str | Non
     return fix, differing[0].reason or differing[0].status
 
 
-async def _pause(job: ManagedJob[ServerAuditFixTally], seconds: float) -> None:
+async def _pause(job: ManagedJob[JobTally], seconds: float) -> None:
     """Wait *seconds*, or until the run is asked to stop."""
     with suppress(TimeoutError):
         await asyncio.wait_for(job.context.stop_event.wait(), seconds)
@@ -343,7 +378,7 @@ async def _pause(job: ManagedJob[ServerAuditFixTally], seconds: float) -> None:
 
 async def _verify(
     fixes: list[_Fix],
-    job: ManagedJob[ServerAuditFixTally],
+    job: ManagedJob[JobTally],
     context: AuditContext,
     mark: MarkRows,
 ) -> None:
@@ -417,7 +452,7 @@ async def run_audit_fix(
     Every targeted row is first marked pending, so an outcome from an earlier
     fix stops showing; each then settles as verified, unchanged or failed.
     """
-    tally = ServerAuditFixTally()
+    tally = JobTally()
     async with run_managed_job(job_context, tally, catch=AUDIT_ERRORS) as job:
         await job.started()
         audit_context = replace(

@@ -1,6 +1,9 @@
 """Focused database query boundaries."""
 
 lazy from .catalog import CatalogRepository as CatalogRepository
+lazy from .collection_items import (
+    CollectionItemRepository as CollectionItemRepository,
+)
 lazy from .collections import CollectionRepository as CollectionRepository
 lazy from .downloads import DownloadJobRepository as DownloadJobRepository
 lazy from .media_items import MediaItemRepository as MediaItemRepository

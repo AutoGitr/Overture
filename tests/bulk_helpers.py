@@ -1,5 +1,6 @@
 """Shared bulk-run fixtures and controlled collaborators."""
 
+lazy from dataclasses import dataclass, field
 lazy from pathlib import Path
 lazy from typing import Any, override
 
@@ -9,32 +10,33 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from overture.config import Settings
 lazy from overture.db.models.catalog import CatalogItem
 lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.schedule import TaskSchedule
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     ArtType,
     MediaType,
+    ServerAsset,
 )
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.jobs.kinds import JobKind
 lazy from overture.jobs.lifecycle import ManagedJobLifecycle
 lazy from overture.jobs.progress_log import JobLogEntry
 lazy from overture.jobs.runner import JobContext
-lazy from overture.services.art import bulk as art_bulk
-lazy from overture.services.art.bulk_work import ArtTarget, BulkArtWork
 lazy from overture.services.art.candidates import ArtCandidates
 lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.art.matcher import ArtMatcher
 lazy from overture.services.art.phash import PHASH_HEX_LENGTH, PhashService
-lazy from overture.services.bulk_common import AssetPlan
+lazy from overture.services.asset_runs import run as asset_run
+lazy from overture.services.asset_runs.plan import AssetPlan, Target, slot
+lazy from overture.services.asset_runs.sources import BatchFacts
 lazy from overture.services.catalog.index import CatalogIndex
 lazy from overture.services.downloads.service import DownloadService
+lazy from overture.services.schedule_store import CATALOG_SCHEDULE, save_schedule
 lazy from overture.services.storage.assets import AssetStorage
-lazy from overture.services.themes import bulk as theme_bulk
 lazy from overture.services.themes.youtube_resolver import YouTubeResolver
 lazy from overture.utils.audio import ThemeAudioMetadata
-lazy from tests.factories import seed_art_slot
+lazy from tests.factories import seed_asset
+lazy from tests.media_servers import served_item
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     JobProbe,
@@ -110,92 +112,112 @@ def art_matcher(*, app_config: Settings, database: Database) -> ArtMatcher:
 
 
 class RecordingStamper:
-    """Captures the targets a run stamps instead of writing to the database."""
+    """Captures the owners a run stamps instead of writing to the database."""
 
     def __init__(self) -> None:
         self.checked: list[int] = []
 
-    async def add(self, item_id: int, *, season_id: int | None = None) -> None:
-        self.checked.append(item_id)
+    async def add(
+        self,
+        *,
+        item_id: int | None = None,
+        season_id: int | None = None,
+        collection_id: int | None = None,
+    ) -> None:
+        checked = item_id if item_id is not None else collection_id
+        if checked is not None:
+            self.checked.append(checked)
 
     async def flush(self) -> None:
         pass
 
 
-def bind_stamper(monkeypatch: pytest.MonkeyPatch, module: Any) -> RecordingStamper:
+def bind_stamper(monkeypatch: pytest.MonkeyPatch) -> RecordingStamper:
     stamper = RecordingStamper()
 
     def _factory(*_args: object, **_kwargs: object) -> RecordingStamper:
         return stamper
 
-    monkeypatch.setattr(module, "CheckedStamper", _factory)
+    monkeypatch.setattr(asset_run, "CheckedStamper", _factory)
     return stamper
+
+
+@dataclass(frozen=True, slots=True)
+class BulkArtWork:
+    """One batch of art slots a test runs, and OvertureDB's entries for them."""
+
+    targets: list[tuple[MediaItem, ArtType, Season | None]]
+    public_index: CatalogIndex = field(default_factory=CatalogIndex.empty)
+
+
+@dataclass(frozen=True, slots=True)
+class BulkThemeWork:
+    """One batch of titles whose themes a test runs."""
+
+    items: list[MediaItem]
+    search_format: str
+    public_index: CatalogIndex = field(default_factory=CatalogIndex.empty)
+    #: YouTube IDs that failed to download before, by item ID.
+    failed_themes: dict[int, set[str]] = field(default_factory=dict[int, set[str]])
+
+
+def use_targets(
+    monkeypatch: pytest.MonkeyPatch, targets: list[Target], facts: BatchFacts
+) -> None:
+    """Run an Assets job over *targets* as its only planned batch."""
+    plan = AssetPlan()
+    by_owner: dict[int, tuple[MediaItem, list[Any]]] = {}
+    for target in targets:
+        title = target.title
+        assert title is not None
+        by_owner.setdefault(title.id or 0, (title, []))[1].append(slot(target))
+    for owner, slots in by_owner.values():
+        plan.visit(owner, slots)
+
+    async def planned(*_args: object, **_kwargs: object) -> AssetPlan:
+        return plan
+
+    async def loaded(
+        *_args: object, **_kwargs: object
+    ) -> tuple[list[Target], BatchFacts]:
+        return targets, facts
+
+    monkeypatch.setattr(asset_run, "plan_run", planned)
+    monkeypatch.setattr(asset_run, "_load", loaded)
 
 
 def use_art_work(monkeypatch: pytest.MonkeyPatch, work: BulkArtWork) -> None:
     """Run the art runner over *work* as its only planned batch."""
-    plan = AssetPlan[ArtTarget]()
-    by_item: dict[int, tuple[MediaItem, list[ArtTarget]]] = {}
-    for item, art_type, season in work.targets:
-        by_item.setdefault(item.id or 0, (item, []))[1].append(
-            (art_type, season.id if season else None)
-        )
-    for item, targets in by_item.values():
-        plan.visit(item, targets)
-
-    async def planned(*_args: object, **_kwargs: object) -> AssetPlan[ArtTarget]:
-        return plan
-
-    async def loaded(*_args: object, **_kwargs: object) -> BulkArtWork:
-        return work
-
-    monkeypatch.setattr(art_bulk, "plan_bulk_art", planned)
-    monkeypatch.setattr(art_bulk, "load_art_batch", loaded)
+    use_targets(
+        monkeypatch,
+        [
+            Target(season, art_type.server_asset, item)
+            if season is not None
+            else Target(item, art_type.server_asset)
+            for item, art_type, season in work.targets
+        ],
+        BatchFacts(work.public_index),
+    )
 
 
-def use_theme_work(
-    monkeypatch: pytest.MonkeyPatch, work: theme_bulk.BulkThemeWork
-) -> None:
+def use_theme_work(monkeypatch: pytest.MonkeyPatch, work: BulkThemeWork) -> None:
     """Run the theme runner over *work* as its only planned batch."""
-    plan = AssetPlan[theme_bulk.ThemeTarget]()
-    for item in work.items:
-        plan.visit(item, [None])
-
-    async def planned(
-        *_args: object, **_kwargs: object
-    ) -> AssetPlan[theme_bulk.ThemeTarget]:
-        return plan
-
-    async def loaded(*_args: object, **_kwargs: object) -> theme_bulk.BulkThemeWork:
-        return work
-
-    monkeypatch.setattr(theme_bulk, "plan_bulk_themes", planned)
-    monkeypatch.setattr(theme_bulk, "load_theme_batch", loaded)
+    use_targets(
+        monkeypatch,
+        [Target(item, ServerAsset.THEME) for item in work.items],
+        BatchFacts(work.public_index, work.failed_themes, work.search_format),
+    )
 
 
 async def enable_catalog(session: AsyncSession) -> None:
     """Switch OvertureDB on, as the user does with Enable OvertureDB."""
-    await session.merge(
-        TaskSchedule(
-            task_name="catalog",
-            enabled=True,
-            cron_expression="0 0 * * *",
-            payload={},
-        )
-    )
+    await save_schedule(session, CATALOG_SCHEDULE, enabled=True)
     await session.commit()
 
 
 async def disable_catalog(session: AsyncSession) -> None:
     """Switch OvertureDB off, which it is not unless the user says so."""
-    await session.merge(
-        TaskSchedule(
-            task_name="catalog",
-            enabled=False,
-            cron_expression="0 0 * * *",
-            payload={},
-        )
-    )
+    await save_schedule(session, CATALOG_SCHEDULE, enabled=False)
     await session.commit()
 
 
@@ -219,9 +241,9 @@ def movie_item(
         "last_matched_at": None,
     }
     defaults.update(overrides)
-    item = MediaItem(**defaults)
+    item = served_item(**defaults)
     for art_type, fields in (art or {}).items():
-        seed_art_slot(item, ArtType(art_type), **fields)
+        seed_asset(item, ArtType(art_type), **fields)
     return item
 
 

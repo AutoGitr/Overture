@@ -3,18 +3,18 @@
 lazy from dataclasses import replace
 lazy from datetime import timedelta
 lazy from pathlib import Path
-lazy from typing import override
+lazy from typing import Any, override
 
+lazy import httpx2
 lazy import pytest
 lazy from pydantic import SecretStr
 lazy from sqlmodel import select
 
 lazy from overture.config import MediaServerConfig, Settings
-lazy from overture.db.art_slots import (
-    ArtFileFacts,
-    art_file_facts,
-    read_art_slot,
-    record_art_file,
+lazy from overture.db.ledger import (
+    Destination,
+    delivery,
+    read_asset,
 )
 lazy from overture.db.models.catalog import CatalogCollection
 lazy from overture.db.models.download_job import DownloadJob
@@ -28,26 +28,35 @@ lazy from overture.db.models.settings import get_app_settings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     ArtType,
+    AssetStatus,
     CollectionKind,
+    DeliveryChannel,
     IncrementalThemeOrder,
     MediaType,
+    ServerAsset,
     ServerType,
     TermKind,
 )
+lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.integrations.tmdb import TMDBClient, TmdbFacts
 lazy from overture.jobs.kinds import JobKind
 lazy from overture.jobs.lifecycle import ManagedJobLifecycle
 lazy from overture.jobs.progress_log import JobOutcome
 lazy from overture.jobs.runner import run_managed_job
-lazy from overture.jobs.tally import SyncTally
+lazy from overture.jobs.tally import JobTally
 lazy from overture.media_servers.adapters import ServerCollection, UploadThemes
 lazy from overture.media_servers.jellyfin import JellyfinProvider
+lazy from overture.media_servers.registry import Provider
+lazy from overture.repositories.collection_items import CollectionItemRepository
 lazy from overture.repositories.collections import CollectionRepository
 lazy from overture.repositories.terms import TermRepository
+lazy from overture.services.art.phash import PHASH_HEX_LENGTH, PhashService
+lazy from overture.services.art.uploads import ArtUploads
 lazy from overture.services.collections.theme_files import (
     collection_folder,
     inspect_theme_file,
 )
+lazy from overture.services.server_copies import ServerCopies
 lazy from overture.services.sync.collection_sync import (
     CollectionSync,
     ListedCopy,
@@ -57,6 +66,12 @@ lazy from overture.services.sync.tmdb_enrichment import REFRESH_AFTER, TmdbEnric
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_catalog, make_bulk_downloads
 lazy from tests.collection_helpers import copy_id, managing_rule, stored_collection
+lazy from tests.factories import (
+    seed_asset,
+    seed_theme,
+    server_ref,
+    theme_of,
+)
 lazy from tests.media_servers import (
     TEST_SERVER,
     TEST_SERVER_ID,
@@ -108,9 +123,36 @@ class Server:
 
     def __init__(self, *collections: ServerCollection) -> None:
         self.listed = list(collections)
+        #: The fingerprint of the image at each URL; one missing is unreadable.
+        self.images: dict[str, str] = {}
 
     async def list_collections(self) -> list[ServerCollection]:
         return self.listed
+
+
+class ServedImages(ServerCopies):
+    """Server copies whose images are read from fingerprints, not the network."""
+
+    def __init__(self, images: dict[str, str], *, app_config: Settings) -> None:
+        super().__init__(
+            phash=PhashService(app_config=app_config),
+            image_clients=unused(ProxyClientManager),
+            uploads=unused(ArtUploads),
+            config_dir=unused(Path),
+        )
+        self._images = images
+
+    @override
+    async def collection_image(
+        self,
+        provider: Provider,
+        server_item_id: str,
+        art_type: ArtType,
+        server_url: str,
+    ) -> str:
+        if server_url not in self._images:
+            raise httpx2.ConnectError("server unreachable")
+        return self._images[server_url]
 
 
 def _collection(
@@ -164,11 +206,11 @@ async def _run(
             app_config=app_config, database=database, provider=server
         ),
         publisher=NullEventPublisher(),
-        app_config=app_config,
         database=database,
+        checks=ServedImages(getattr(server, "images", {}), app_config=app_config),
     )
     async with run_managed_job(
-        JobProbe(lifecycle=LIFECYCLE).context, SyncTally()
+        JobProbe(lifecycle=LIFECYCLE).context, JobTally()
     ) as job:
         await sync.run(
             job, registry.providers(), library_ids=library_ids, theme_order=theme_order
@@ -195,7 +237,7 @@ async def test_sync_stores_collections_with_members_and_their_tmdb_match(
     rows = await _rows(database)
     assert rows["saga"].tmdb_collection_id is None
     assert rows["saga"].child_count == 4
-    assert rows["saga"].server_theme_id == "/theme/1"
+    assert server_ref(rows["saga"], ServerAsset.THEME) == "/theme/1"
     assert rows["saga"].last_synced_at is not None
     assert rows["mixed"].tmdb_collection_id is None
     async with database.read_session() as session:
@@ -209,27 +251,30 @@ async def test_sync_stores_collections_with_members_and_their_tmdb_match(
     assert sorted(members) == sorted([ids["m0"], ids["m1"], ids["m2"]])
 
 
-async def test_sync_keeps_choices_but_drops_provenance_for_replaced_themes(
+def _uploaded_theme(server_item_id: str, ref: str, **fields: Any) -> MediaCollection:
+    """Return a collection whose theme Overture uploaded to its copy as *ref*."""
+    return seed_theme(
+        stored_collection(
+            server_item_id=server_item_id, media_type=MediaType.MOVIE, **fields
+        ),
+        "abcDEF12345",
+        destination=Destination(TEST_SERVER_ID, server_item_id, DeliveryChannel.UPLOAD),
+        uploaded_as=ref,
+    )
+
+
+async def test_sync_keeps_theme_choices_and_takes_content_only_from_changed_copies(
     *, app_config: Settings, database: Database
 ) -> None:
     await _seed_movies(database)
     async with database.write_session() as session:
         session.add_all(
             [
-                stored_collection(
-                    server_item_id="saga",
-                    media_type=MediaType.MOVIE,
-                    youtube_id="abcDEF12345",
-                    server_theme_id="/theme/old",
-                    monitored=False,
-                    tmdb_collection_id=99,
+                _uploaded_theme(
+                    "saga", "/theme/saga", monitored=False, tmdb_collection_id=99
                 ),
-                stored_collection(
-                    server_item_id="kept",
-                    media_type=MediaType.MOVIE,
-                    youtube_id="abcDEF12345",
-                    server_theme_id="/theme/kept",
-                ),
+                _uploaded_theme("kept", "/theme/kept"),
+                _uploaded_theme("unread", "/theme/unread"),
                 stored_collection(
                     server_item_id="gone",
                     media_type=MediaType.MOVIE,
@@ -240,21 +285,28 @@ async def test_sync_keeps_choices_but_drops_provenance_for_replaced_themes(
 
     await _run(
         Server(
-            _collection("saga", "m0", "m1", theme_id="/theme/new"),
+            _collection("saga", "m0", "m1"),
             _collection("kept", "m0", theme_id="/theme/kept"),
+            # Overture holds no fingerprint to compare a renamed theme with.
+            _collection("unread", "m2", theme_id="/theme/other"),
         ),
         database,
         app_config,
     )
 
     rows = await _rows(database)
-    assert set(rows) == {"saga", "kept"}
+    assert set(rows) == {"saga", "kept", "unread"}
     assert rows["saga"].monitored is False
-    assert rows["saga"].youtube_id is None
-    assert rows["saga"].server_theme_id == "/theme/new"
     # A manual match is the user's and outlives the members' majority.
     assert rows["saga"].tmdb_collection_id == 99
-    assert rows["kept"].youtube_id == "abcDEF12345"
+    themes = {key: theme_of(row).youtube_id for key, row in rows.items()}
+    assert themes == dict.fromkeys(rows, "abcDEF12345")
+    assert {key: theme_of(row).status for key, row in rows.items()} == {
+        "saga": AssetStatus.PARTIAL,
+        "kept": AssetStatus.COMPLETE,
+        "unread": AssetStatus.COMPLETE,
+    }
+    assert server_ref(rows["unread"], ServerAsset.THEME) == "/theme/unread"
 
 
 async def test_a_library_scoped_sync_leaves_other_libraries_collections(
@@ -320,9 +372,12 @@ async def test_jellyfin_collections_take_type_library_and_theme_from_disk(
     # A BoxSet stands outside the libraries, so it spans those its members are in.
     assert (row.media_types, row.library_ids) == ([MediaType.MOVIE], ["1:1", "1:2"])
     assert row.tmdb_collection_id == 77
-    assert row.server_theme_id is None
-    assert row.theme_file_hash is not None
-    assert row.theme_file_size == 3
+    assert server_ref(row, ServerAsset.THEME) is None
+    found = delivery(
+        theme_of(row), Destination(TEST_SERVER_ID, "box", DeliveryChannel.FILE)
+    )
+    assert found is not None
+    assert (found.observed_hash is not None, found.file_size) == (True, 3)
 
 
 def _facts(tmdb_id: int) -> TmdbFacts:
@@ -391,7 +446,7 @@ async def test_enrichment_reads_new_rematched_and_old_titles_once(
     )
 
     async with run_managed_job(
-        JobProbe(lifecycle=LIFECYCLE).context, SyncTally()
+        JobProbe(lifecycle=LIFECYCLE).context, JobTally()
     ) as job:
         assert await enrichment.run(job) == 4
         assert await enrichment.run(job) == 0
@@ -444,7 +499,7 @@ async def test_enrichment_reports_titles_tmdb_could_not_read(
     enrichment = TmdbEnrichment(
         app_config=app_config, database=database, tmdb_client=Tmdb()
     )
-    async with run_managed_job(probe.context, SyncTally()) as job:
+    async with run_managed_job(probe.context, JobTally()) as job:
         assert await enrichment.run(job) == 0
 
     [reason] = [
@@ -465,7 +520,7 @@ async def test_enrichment_does_nothing_without_a_tmdb_key(
         app_config=app_config, database=database, tmdb_client=unused(TMDBClient)
     )
     async with run_managed_job(
-        JobProbe(lifecycle=LIFECYCLE).context, SyncTally()
+        JobProbe(lifecycle=LIFECYCLE).context, JobTally()
     ) as job:
         assert await enrichment.run(job) == 0
 
@@ -506,7 +561,7 @@ async def test_enrichment_reads_the_titles_in_the_sync_scope(
     enrichment = TmdbEnrichment(
         app_config=app_config, database=database, tmdb_client=Tmdb()
     )
-    async with run_managed_job(probe.context, SyncTally()) as job:
+    async with run_managed_job(probe.context, JobTally()) as job:
         await enrichment.run(job, library_ids=library_ids)
 
     assert sorted(asked) == ([2] if library_ids else [1, 2, 3])
@@ -516,25 +571,26 @@ async def test_enrichment_reads_the_titles_in_the_sync_scope(
     )
 
 
-@pytest.mark.parametrize("unavailable_mount", [None, "missing"])
 async def test_an_unavailable_jellyfin_mount_preserves_theme_facts_and_provenance(
     tmp_path: Path,
     *,
-    unavailable_mount: str | None,
     app_config: Settings,
     database: Database,
 ) -> None:
     await _seed_movies(database)
     async with database.write_session() as session:
         session.add(
-            stored_collection(
-                server_item_id="box",
-                media_type=MediaType.MOVIE,
-                youtube_id="JG5OsfOuEy0",
-                theme_file_hash="known",
-                theme_file_size=3,
-                theme_file_mtime_ns=1234,
-                last_synced_at=utc_now(),
+            seed_theme(
+                stored_collection(
+                    server_item_id="box",
+                    media_type=MediaType.MOVIE,
+                    last_synced_at=utc_now(),
+                ),
+                "JG5OsfOuEy0",
+                file_hash="known",
+                file_size=3,
+                file_mtime_ns=1234,
+                destination=Destination(TEST_SERVER_ID, "box", DeliveryChannel.FILE),
             )
         )
 
@@ -545,7 +601,7 @@ async def test_an_unavailable_jellyfin_mount_preserves_theme_facts_and_provenanc
 
     configure(
         app_config,
-        collections_path=tmp_path / unavailable_mount if unavailable_mount else None,
+        collections_path=tmp_path / "missing",
     )
     await _run(
         Jellyfin(
@@ -557,7 +613,11 @@ async def test_an_unavailable_jellyfin_mount_preserves_theme_facts_and_provenanc
         app_config,
     )
     row = (await _rows(database))["box"]
-    assert (row.youtube_id, row.theme_file_hash, row.theme_file_size) == (
+    delivered = delivery(
+        theme_of(row), Destination(TEST_SERVER_ID, "box", DeliveryChannel.FILE)
+    )
+    assert delivered is not None
+    assert (theme_of(row).youtube_id, delivered.observed_hash, delivered.file_size) == (
         "JG5OsfOuEy0",
         "known",
         3,
@@ -698,38 +758,79 @@ async def test_unsynced_choices_and_members_survive_a_library_sync(
     server.listed = [replace(server.listed[0], thumb_url="https://server.test/new")]
     await _run(server, database, app_config)
     refreshed = (await _rows(database))["saga"]
-    assert (refreshed.title, refreshed.thumb_url) == (
+    assert (refreshed.title, server_ref(refreshed, ServerAsset.POSTER)) == (
         "Renamed",
         "https://server.test/new",
     )
     async with database.read_session() as session:
-        members = await CollectionRepository(session).members(refreshed.id or 0)
+        members = await CollectionItemRepository(session).members(refreshed.id or 0)
     assert [member.id for member in members] == [movies["m2"]]
 
 
-async def test_an_image_replaced_on_the_server_is_no_longer_the_one_overture_uploaded(
-    *, app_config: Settings, database: Database
+UPLOADED = "0" * PHASH_HEX_LENGTH
+OTHER = "f" * PHASH_HEX_LENGTH
+
+
+async def _uploaded_poster(
+    server: Server, database: Database, app_config: Settings
 ) -> None:
+    """Sync the server's "saga", then record the poster Overture uploaded to it."""
     await _seed_movies(database)
-    server = Server(_collection("saga", "m0"))
-    server.listed = [
-        replace(server.listed[0], thumb_url="https://server.test/uploaded")
-    ]
+    server.listed = [replace(server.listed[0], thumb_url="https://server.test/1")]
+    server.images["https://server.test/1"] = UPLOADED
     await _run(server, database, app_config)
-    facts = ArtFileFacts("a" * 64, "b" * 16, 200, 300, 1, 2)
     async with database.write_session() as session:
         row = (await _rows(database))["saga"]
-        record_art_file(row, ArtType.POSTER, facts)
+        seed_asset(
+            row,
+            ServerAsset.POSTER,
+            upload_hash="a" * 64,
+            file_hash="a" * 64,
+            fingerprint=UPLOADED,
+        )
         session.add(row)
 
-    await _run(server, database, app_config)
-    kept = (await _rows(database))["saga"]
-    assert art_file_facts(read_art_slot(kept, ArtType.POSTER)) == facts
 
-    server.listed = [replace(server.listed[0], thumb_url="https://server.test/other")]
+async def _poster_after_sync(
+    server: Server, database: Database, app_config: Settings, url: str | None
+) -> AssetStatus:
+    """Sync with the copy showing *url*, and return the poster's status."""
+    server.listed = [replace(server.listed[0], thumb_url=url)]
     await _run(server, database, app_config)
-    replaced = (await _rows(database))["saga"]
-    assert read_art_slot(replaced, ArtType.POSTER).file_hash is None
+    return read_asset((await _rows(database))["saga"], ServerAsset.POSTER).status
+
+
+async def test_an_upload_survives_syncs_while_the_server_still_shows_it(
+    *, app_config: Settings, database: Database
+) -> None:
+    """Plex's image URL carries the last edit, so a URL alone proves nothing."""
+    server = Server(_collection("saga", "m0"))
+    await _uploaded_poster(server, database, app_config)
+
+    for url in ("https://server.test/1", "https://server.test/edited"):
+        server.images[url] = UPLOADED
+        status = await _poster_after_sync(server, database, app_config, url)
+        assert status is AssetStatus.COMPLETE
+    saga = (await _rows(database))["saga"]
+    assert server_ref(saga, ServerAsset.POSTER) == "https://server.test/edited"
+
+    unreadable = await _poster_after_sync(
+        server, database, app_config, "https://server.test/unreadable"
+    )
+    assert unreadable is AssetStatus.COMPLETE
+
+
+@pytest.mark.parametrize("url", ["https://server.test/other", None])
+async def test_an_image_replaced_on_the_server_is_no_longer_the_one_overture_uploaded(
+    url: str | None, *, app_config: Settings, database: Database
+) -> None:
+    server = Server(_collection("saga", "m0"))
+    await _uploaded_poster(server, database, app_config)
+    server.images["https://server.test/other"] = OTHER
+
+    replaced = await _poster_after_sync(server, database, app_config, url)
+
+    assert replaced is AssetStatus.PARTIAL
 
 
 async def test_managed_collections_keep_overtures_choices_and_outlive_their_server_copy(
@@ -764,7 +865,7 @@ async def test_managed_collections_keep_overtures_choices_and_outlive_their_serv
         kept = await repo.get(saga.id or 0)
         assert kept is not None
         assert (copy_id(kept), kept.child_count) == (None, 0)
-        assert await repo.members(saga.id or 0) == []
+        assert await CollectionItemRepository(session).members(saga.id or 0) == []
         assert [row.title for row in await repo.list_all()] == ["Saga"]
 
 

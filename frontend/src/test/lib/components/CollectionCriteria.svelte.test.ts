@@ -1,4 +1,4 @@
-import type { PolicyData } from "../../../lib/utils/collectionForms.svelte";
+import type { PolicyData } from "../../../lib/utils/collectionFormShared.svelte";
 import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it } from "vitest";
 import type {
@@ -18,7 +18,7 @@ import { queryClient } from "../../../lib/rest/queryClient";
 import { goToCollectionView, navigate } from "../../../lib/router/routes";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
 import { emptyGroup } from "../../../lib/utils/collectionCriteria";
-import { defaultGenerator } from "../../../lib/utils/collectionForms.svelte";
+import { defaultGenerator } from "../../../lib/utils/collectionFormShared.svelte";
 import { mockFetchRoutes } from "../../helpers/fetch";
 import {
   appSettings,

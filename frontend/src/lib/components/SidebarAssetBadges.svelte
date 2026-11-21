@@ -1,7 +1,7 @@
 <script lang="ts">
   import Image from "@lucide/svelte/icons/image";
   import Music from "@lucide/svelte/icons/music";
-  import type { StatusTone } from "../utils/sidebarDomain";
+  import type { StatusTone } from "../utils/sidebarShared";
   let {
     title,
     artStatus = "danger",

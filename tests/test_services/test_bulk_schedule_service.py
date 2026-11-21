@@ -392,8 +392,8 @@ async def test_bulk_assets_schedule_runs_selected_jobs(
         started.append(("themes", params.library_ids[0]))
         await asyncio.sleep(0)
 
-    monkeypatch.setattr(module, "run_bulk_art_match", fake_run_art)
-    monkeypatch.setattr(module, "run_bulk_themes", fake_run_themes)
+    monkeypatch.setattr(module, "run_art", fake_run_art)
+    monkeypatch.setattr(module, "run_themes", fake_run_themes)
 
     schedule = await service.schedules.create(
         _assets_body("Assets", art=art, themes=themes, library_id="1:1")

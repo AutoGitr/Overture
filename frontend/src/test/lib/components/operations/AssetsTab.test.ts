@@ -10,7 +10,14 @@ import { downloadState } from "../../../../lib/stores/downloadState.svelte";
 import { settingsState } from "../../../../lib/stores/settingsState.svelte";
 import { uiState } from "../../../../lib/stores/uiState.svelte";
 import { renderWithQueryClient } from "../../../helpers/render";
-import { appSettings, bulkAssetsSchedule, mediaServers } from "../../../helpers/fixtures";
+import {
+  appSettings,
+  bulkArtEvent,
+  bulkAssetsSchedule,
+  bulkThemeEvent,
+  mediaServers,
+  syncEvent,
+} from "../../../helpers/fixtures";
 
 const startBulkAssets = vi.hoisted(() => vi.fn());
 const stopBulkAssets = vi.hoisted(() => vi.fn());
@@ -195,7 +202,9 @@ describe("AssetsPopup", () => {
     );
     await fireEvent.click(screen.getByRole("button", { name: "Run now" }));
     await waitFor(() => expect(themeJobState.running).toBe(true));
-    themeJobState.handleCompleted({ total: 2, done: 2, finished_at: "2026-09-09T12:00:00Z" });
+    themeJobState.handleCompleted(
+      bulkThemeEvent({ total: 2, done: 2, finished_at: "2026-09-09T12:00:00Z" }),
+    );
     popup.unmount();
 
     sidebarState.current = { type: "movie", itemIds: [25] };
@@ -257,7 +266,7 @@ describe("AssetsPopup", () => {
   });
 
   it("shows a failed stop request while retaining the running job for retry", async () => {
-    matchState.handleStarted({});
+    matchState.handleStarted(bulkArtEvent({}));
     stopBulkAssets.mockRejectedValueOnce(new ApiError("Stop unavailable", 503));
     renderWithQueryClient(OperationsPopup);
     await fireEvent.click(await screen.findByRole("button", { name: "Stop" }));
@@ -335,7 +344,7 @@ describe("AssetsPopup", () => {
   });
 
   it("stops only the running asset workflow", async () => {
-    matchState.handleStarted({ total: 1 });
+    matchState.handleStarted(bulkArtEvent({ total: 1 }));
     renderWithQueryClient(OperationsPopup);
 
     await screen.findByText("Running");
@@ -554,13 +563,13 @@ describe("AssetsPopup", () => {
     expect(screen.getByRole("button", { name: "Run now" })).toBeDisabled();
     expect(screen.getByRole("status")).toHaveTextContent("Wait for the full sync to finish.");
 
-    syncState.handleCompleted({});
+    syncState.handleCompleted(syncEvent({}));
     await waitFor(() => expect(screen.getByRole("button", { name: "Run now" })).toBeEnabled());
     expect(screen.queryByText("Wait for the full sync to finish.")).not.toBeInTheDocument();
   });
 
   it("keeps showing Stopping from the accepted stop until the run ends", async () => {
-    matchState.handleStarted({ total: 1 });
+    matchState.handleStarted(bulkArtEvent({ total: 1 }));
     renderWithQueryClient(OperationsPopup);
     await fireEvent.click(await screen.findByRole("button", { name: "Stop" }));
     await waitFor(() => expect(stopBulkAssets).toHaveBeenCalled());
@@ -571,7 +580,7 @@ describe("AssetsPopup", () => {
     expect(stopping).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Stop" })).not.toBeInTheDocument();
 
-    matchState.handleStopped({});
+    matchState.handleStopped(bulkArtEvent({}));
     expect(await screen.findByRole("button", { name: "Clear results" })).toBeEnabled();
   });
 

@@ -8,7 +8,7 @@ lazy from collections.abc import Sequence
 lazy from dataclasses import dataclass
 lazy from typing import Protocol
 
-lazy from ...db.art_slots import read_art_slot, saved_art
+lazy from ...db.ledger import missing_deliveries, read_asset, selection
 lazy from ...db.models.collection_rule import CollectionRule
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.settings import AppSettings, get_app_settings
@@ -18,20 +18,24 @@ lazy from ...domain import (
     ArtType,
     CollectionKind,
     MediaType,
+    ServerAsset,
     TermKind,
 )
-lazy from ...repositories.collections import (
+lazy from ...repositories.collection_items import (
     CollectionItem,
-    CollectionRepository,
+    CollectionItemRepository,
     TermSelection,
 )
+lazy from ...repositories.collections import CollectionRepository
 lazy from ...schemas.art import ArtCandidate, SaveCollectionArtRequest
 lazy from ...schemas.collections import SetCollectionThemeRequest
 lazy from ...utils.collection_formats import format_arr_tag, format_member_tag
 lazy from ...utils.errors import PublicServiceError
 lazy from ..art.collection_art import CollectionArtService, chosen_poster_style
+lazy from ..needs import apply_needs
 lazy from .access import CollectionAccess, catalog_collections
 lazy from .arr_requests import CollectionArr
+lazy from .destinations import place_collection
 lazy from .member_effects import MemberEffects
 lazy from .membership import Membership
 lazy from .policy import CollectionPolicy, resolve_policy
@@ -51,8 +55,6 @@ class SyncedCollection:
     settings: AppSettings
     #: The collection's libraries on Plex servers, which keep labels and Home rows.
     plex_libraries: frozenset[str]
-    #: The sync made a server copy the collection's saved assets are not on yet.
-    new_copies: bool = False
 
     @property
     def collection_id(self) -> int:
@@ -115,14 +117,13 @@ class AutoAssets:
         row, policy = synced.row, synced.policy
         collection_id = synced.collection_id
         for art_type in ITEM_ART_TYPES:
-            slot = read_art_slot(row, art_type)
-            saved = saved_art(slot)
-            if slot.generated_style is not None:
-                await self._art.regenerate(
-                    collection_id, art_type, resend=synced.new_copies
-                )
-            elif saved is not None:
-                if synced.new_copies:
+            asset = read_asset(row, art_type.server_asset)
+            # A copy without the content: new, or showing another image.
+            lacking = bool(missing_deliveries(asset))
+            if asset.generated_style is not None:
+                await self._art.regenerate(collection_id, art_type, resend=lacking)
+            elif selection(asset) is not None:
+                if lacking:
                     await self._art.reupload(collection_id, art_type)
             elif art_type is ArtType.BACKGROUND and not policy.backgrounds:
                 continue
@@ -189,22 +190,20 @@ class AutoAssets:
 
     async def _theme(self, synced: SyncedCollection) -> None:
         row, policy = synced.row, synced.policy
-        if row.youtube_id:
-            # A new copy, or a Jellyfin folder without the file, such as one
-            # made before its collections path was set, lacks the theme.
-            lacking = synced.new_copies or await self._themes.folder_lacks_theme(row)
-            if lacking and self._themes.unavailable() is None:
+        theme = read_asset(row, ServerAsset.THEME)
+        if theme.youtube_id:
+            # A copy without the theme: new, replaced, or a Jellyfin folder
+            # without the file, such as one made before its path was set.
+            if missing_deliveries(theme) and self._themes.unavailable() is None:
                 await self._themes.queue(
                     synced.collection_id,
-                    SetCollectionThemeRequest(youtube_id=row.youtube_id),
+                    SetCollectionThemeRequest(youtube_id=theme.youtube_id),
                 )
             return
         if not (policy.themes and policy.auto_match_theme and row.tmdb_collection_id):
             return
         async with self._access.database.read_session() as session:
-            catalog = await catalog_collections(
-                session, {row.tmdb_collection_id}, app_config=self._access.app_config
-            )
+            catalog = await catalog_collections(session, {row.tmdb_collection_id})
         entry = catalog.get(row.tmdb_collection_id)
         if entry and entry.youtube_id_overturedb and self._themes.unavailable() is None:
             await self._themes.queue(
@@ -304,7 +303,7 @@ class MemberTag:
                 and (template := resolve_policy(defaults, row.group, row.rule).arr_tag)
                 and _arr_tag(row, template) == tag
             ]
-            return await repo.members_of(sharing)
+            return await CollectionItemRepository(session).members_of(sharing)
 
 
 def _arr_tag(row: MediaCollection, template: str) -> str:
@@ -397,21 +396,27 @@ class PostSync:
         self._access = access
         self._steps = steps
 
-    async def run(self, collection_id: int, *, new_copies: bool = False) -> None:
+    async def run(self, collection_id: int) -> None:
         """Run what a sync does beyond membership, each step whatever the others do.
 
-        Members are already synced, so a failed step is recorded on the rule
-        and reported rather than undone.
+        The collection's assets are placed on the copies it has now, so each
+        step delivers to every copy that lacks its content. Members are already
+        synced, so a failed step is recorded on the rule and reported rather
+        than undone.
         """
+        async with self._access.database.write_session() as session:
+            row = await self._access.require(session, collection_id)
+            place_collection(row, self._access.provider_registry)
+            await apply_needs(session, collections=[row])
+            session.add(row)
         async with self._access.database.read_session() as session:
-            repo = CollectionRepository(session)
             row = await self._access.require(session, collection_id)
             rule = row.rule
             synced = SyncedCollection(
                 row=row,
                 rule=rule,
                 policy=await self._access.policy(session, row.group, rule),
-                members=await repo.members(collection_id),
+                members=await CollectionItemRepository(session).members(collection_id),
                 settings=await get_app_settings(session),
                 plex_libraries=frozenset(
                     part.library_id
@@ -419,7 +424,6 @@ class PostSync:
                     if self._access.configured(part.server_id)
                     and self._access.plex(part.library_id)
                 ),
-                new_copies=new_copies,
             )
         failures: list[str] = []
         for step in self._steps:

@@ -8,7 +8,6 @@ lazy from ...utils.progress import ProgressCallback
 lazy from ..storage.assets import AssetStorage, require_folder_path
 lazy from ..themes.youtube_resolver import DownloadError, YouTubeResolver
 lazy from .results import (
-    DownloadedCollectionTheme,
     DownloadedTheme,
     DownloadTarget,
     PreparedDownload,
@@ -41,6 +40,38 @@ class DownloadThemeHandler:
             trusted_root=folder_path,
         )
 
+    async def download_youtube(
+        self,
+        youtube_id: str,
+        progress_cb: ProgressCallback | None = None,
+    ) -> tuple[bytes, DownloadedTheme]:
+        """Download and transcode *youtube_id*, returning audio bytes and metadata.
+
+        Raises:
+            DownloadError: When *youtube_id* is empty or the download fails.
+        """
+        if not youtube_id:
+            raise DownloadError("No YouTube ID specified")
+
+        async with self._database.read_session() as session:
+            app_settings = await get_app_settings(session)
+        result = await self.youtube_resolver.download_audio(
+            youtube_id=youtube_id,
+            min_duration=app_settings.min_duration_seconds,
+            max_duration=app_settings.max_duration_seconds,
+            progress_callback=progress_cb,
+            normalize_loudness=app_settings.normalize_theme_loudness,
+        )
+        return (
+            result.audio_bytes,
+            DownloadedTheme(
+                youtube_id=youtube_id,
+                title=result.title,
+                duration=result.duration or None,
+                fingerprint=result.fingerprint,
+            ),
+        )
+
     async def download(
         self,
         job: DownloadJob,
@@ -54,61 +85,10 @@ class DownloadThemeHandler:
         in a transaction of its own once they are over.
 
         Raises:
-            DownloadError: When the job names no YouTube ID.
+            DownloadError: When the job names no YouTube ID or an item lacks a folder.
         """
         require_folder_path(item)
-        youtube_id = job.target_url
-        if not youtube_id:
-            raise DownloadError("No YouTube ID specified")
-
-        async with self._database.read_session() as session:
-            app_settings = await get_app_settings(session)
-        min_duration = app_settings.min_duration_seconds
-        max_duration = app_settings.max_duration_seconds
-
-        result = await self.youtube_resolver.download_audio(
-            youtube_id=youtube_id,
-            min_duration=min_duration,
-            max_duration=max_duration,
-            progress_callback=progress_cb,
-            normalize_loudness=app_settings.normalize_theme_loudness,
+        audio_bytes, downloaded = await self.download_youtube(
+            job.target_url or "", progress_cb
         )
-
-        return PreparedDownload(
-            data=result.audio_bytes,
-            result=DownloadedTheme(
-                youtube_id=youtube_id,
-                title=result.title,
-                duration=result.duration or None,
-            ),
-        )
-
-    async def download_collection_theme(
-        self,
-        job: DownloadJob,
-        progress_cb: ProgressCallback,
-    ) -> DownloadedCollectionTheme:
-        """Download one collection theme, returning its audio bytes and metadata."""
-        youtube_id = job.target_url
-        if not youtube_id:
-            raise DownloadError("No YouTube ID specified")
-
-        async with self._database.read_session() as session:
-            app_settings = await get_app_settings(session)
-        min_duration = app_settings.min_duration_seconds
-        max_duration = app_settings.max_duration_seconds
-
-        result = await self.youtube_resolver.download_audio(
-            youtube_id=youtube_id,
-            min_duration=min_duration,
-            max_duration=max_duration,
-            progress_callback=progress_cb,
-            normalize_loudness=app_settings.normalize_theme_loudness,
-        )
-
-        return DownloadedCollectionTheme(
-            youtube_id=youtube_id,
-            title=result.title,
-            duration=result.duration or None,
-            audio_bytes=result.audio_bytes,
-        )
+        return PreparedDownload(data=audio_bytes, result=downloaded)

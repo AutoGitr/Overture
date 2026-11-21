@@ -43,7 +43,7 @@ lazy from ..catalog.entries import (
 )
 lazy from ..catalog.lookup import build_candidate, get_art_candidates
 lazy from ..collections.policy import resolve_policy
-lazy from ..schedule_store import CATALOG_SCHEDULE, load_schedule
+lazy from ..schedule_store import catalog_enabled
 lazy from ..server_identity import resolve_art_owners
 
 logger = logging.getLogger(__name__)
@@ -240,7 +240,6 @@ class ArtCandidates:
                 item,
                 art_type,
                 season_num,
-                app_config=self._app_config,
             )
 
     async def gather_collection(
@@ -387,13 +386,10 @@ class ArtCandidates:
     ) -> tuple[CatalogCollection | None, tuple[CollectionPosterStyle, ...]]:
         """OvertureDB's entry for the collection, if enabled, and its poster styles."""
         async with self._database.read_session() as session:
-            schedule = await load_schedule(
-                session, CATALOG_SCHEDULE, timezone=self._app_config.TZ
-            )
             posters = resolve_policy(
                 await get_app_settings(session), collection.group, collection.rule
             ).overturedb_posters
-            if not schedule.enabled or not collection.tmdb_collection_id:
+            if not collection.tmdb_collection_id or not await catalog_enabled(session):
                 return None, posters
             entries = await CatalogRepository(session).collections_by_tmdb_id(
                 {collection.tmdb_collection_id}

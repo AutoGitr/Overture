@@ -7,18 +7,23 @@ lazy import pytest
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import select_art
+lazy from overture.db.ledger import select_art
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtBulkSource, ArtType, MediaType, ThemeBulkSource
+lazy from overture.domain import (
+    ArtBulkSource,
+    ArtType,
+    MediaType,
+    ServerAsset,
+    ThemeBulkSource,
+)
 lazy from overture.schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
-lazy from overture.services.art import bulk as art_bulk
 lazy from overture.services.art.collection_art import CollectionArtService
-lazy from overture.services.bulk_common import SAVED_SELECTION
+lazy from overture.services.asset_runs import run as asset_run
+lazy from overture.services.asset_runs.plan import SAVED_SELECTION
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.local_assets.service import LocalAssets
 lazy from overture.services.storage.assets import AssetStorage
-lazy from overture.services.themes import bulk as theme_bulk
 lazy from overture.services.themes.youtube_resolver import YouTubeResolver
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.hashing import compute_bytes_hash
@@ -31,7 +36,8 @@ lazy from tests.bulk_helpers import (
     no_tags,
     progress_logs,
 )
-lazy from tests.factories import seed_art_slot
+lazy from tests.factories import seed_asset, seed_theme
+lazy from tests.media_servers import served_item
 lazy from tests.runtime_helpers import make_local_assets, unused
 
 SAVED_URL = PublicArtUrl("https://saved.test/poster.jpg")
@@ -63,7 +69,7 @@ def _seed(
         path.write_bytes(REPLACED + b" again")
     elif case == "deleted":
         path.unlink()
-    item = MediaItem(
+    item = served_item(
         id=1, title="Movie", media_type=MediaType.MOVIE, folder_path=str(folder)
     )
     session.add(item)
@@ -95,12 +101,12 @@ def _capture_queue(monkeypatch: pytest.MonkeyPatch, module: object) -> list[str]
     return queued
 
 
-def _expected_lines(case: str, target: str, file: str) -> list[str]:
+def _expected_lines(case: str, target: str) -> list[str]:
+    """The same lines for art and themes, as one rule decides both."""
     if case == "unchanged":
-        noun = "art slot" if file == "file" else "item"
-        return [f"Skipped 1 {noun} - {SAVED_SELECTION}"]
+        return [f"Skipped 1 asset - {SAVED_SELECTION}"]
     how = "missing" if case == "deleted" else "replaced outside Overture"
-    return [f"Queued {target} - restores the saved selection; local {file} {how}"]
+    return [f"Queued {target} - restores the saved selection; local file {how}"]
 
 
 @pytest.mark.parametrize("case", CASES)
@@ -114,22 +120,22 @@ async def test_a_saved_poster_is_restored_unless_its_file_is_the_one_overture_wr
     database: Database,
 ) -> None:
     item, recorded = _seed(db_session, tmp_path / "Movie", "poster.jpg", case)
-    select_art(item, ArtType.POSTER, SAVED_URL)
-    seed_art_slot(
-        item, ArtType.POSTER, selection_hash=compute_bytes_hash(WRITTEN), **recorded
+    select_art(item, ServerAsset.POSTER, SAVED_URL)
+    seed_asset(
+        item, ArtType.POSTER, content_hash=compute_bytes_hash(WRITTEN), **recorded
     )
     await db_session.commit()
-    queued = _capture_queue(monkeypatch, art_bulk)
+    queued = _capture_queue(monkeypatch, asset_run)
 
     context = Context()
-    await art_bulk.run_bulk_art_match(
+    await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(
             source_order=[ArtBulkSource.LOCAL_ART_MATCHING],
             art_types=[ArtType.POSTER],
         ),
-        make_bulk_downloads(app_config=app_config, database=database),
-        art_matcher(app_config=app_config, database=database),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        art_matcher=art_matcher(app_config=app_config, database=database),
         art=unused(CollectionArtService),
         local_assets=_local_assets(
             monkeypatch, app_config=app_config, database=database
@@ -139,7 +145,7 @@ async def test_a_saved_poster_is_restored_unless_its_file_is_the_one_overture_wr
     )
 
     assert queued == ([] if case == "unchanged" else [SAVED_URL])
-    assert progress_logs(context) == _expected_lines(case, "Movie (poster)", "file")
+    assert progress_logs(context) == _expected_lines(case, "Movie (poster)")
 
 
 @pytest.mark.parametrize("case", CASES)
@@ -153,21 +159,22 @@ async def test_a_saved_theme_is_restored_unless_its_file_is_the_one_overture_wro
     database: Database,
 ) -> None:
     item, recorded = _seed(db_session, tmp_path / "Movie", "theme.mp3", case)
-    item.youtube_id = "savedVideo1"
-    item.theme_file_hash = recorded["file_hash"]
-    item.theme_file_mtime_ns = recorded["file_mtime_ns"]
-    item.theme_file_size = recorded["file_size"]
-    item.theme_file_duration = 30
-    item.theme_selection_hash = compute_bytes_hash(WRITTEN)
+    seed_theme(
+        item,
+        "savedVideo1",
+        content_hash=compute_bytes_hash(WRITTEN),
+        file_duration=30,
+        **recorded,
+    )
     await db_session.commit()
-    queued = _capture_queue(monkeypatch, theme_bulk)
+    queued = _capture_queue(monkeypatch, asset_run)
 
     context = Context()
-    await theme_bulk.run_bulk_themes(
+    await asset_run.run_themes(
         as_job_context(context),
         BulkThemeRequest(source_order=[ThemeBulkSource.YOUTUBE_SEARCH]),
-        make_bulk_downloads(app_config=app_config, database=database),
-        unused(YouTubeResolver),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        youtube_resolver=unused(YouTubeResolver),
         app_config=app_config,
         local_assets=_local_assets(
             monkeypatch, app_config=app_config, database=database
@@ -176,4 +183,4 @@ async def test_a_saved_theme_is_restored_unless_its_file_is_the_one_overture_wro
     )
 
     assert queued == ([] if case == "unchanged" else ["savedVideo1"])
-    assert progress_logs(context) == _expected_lines(case, "Movie", "theme file")
+    assert progress_logs(context) == _expected_lines(case, "Movie (theme)")

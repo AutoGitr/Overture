@@ -11,7 +11,14 @@ lazy from PIL import Image
 lazy from pydantic import SecretStr
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import ArtFileFacts, read_art_slot, record_art_file
+lazy from overture.db.ledger import (
+    Destination,
+    Evidence,
+    confirm_delivery,
+    missing_deliveries,
+    observe,
+    read_asset,
+)
 lazy from overture.db.models.catalog import CatalogCollection
 lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.settings import AppSettings
@@ -21,10 +28,13 @@ lazy from overture.domain import (
     ArtSource,
     ArtStyle,
     ArtType,
+    AssetStatus,
     CatalogMediaType,
     CollectionPosterStyle,
+    DeliveryChannel,
     ImageSize,
     MediaType,
+    ServerAsset,
     TmdbLanguageFilter,
 )
 lazy from overture.integrations.proxy import ProxyClientManager
@@ -32,7 +42,7 @@ lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.media_servers.adapters import ProviderImageRequest
 lazy from overture.repositories.collections import CollectionRepository
 lazy from overture.schemas.art import ArtCandidate, SaveCollectionArtRequest
-lazy from overture.schemas.collections import collection_artwork
+lazy from overture.schemas.assets import assets_read
 lazy from overture.schemas.removal import AssetRemoval
 lazy from overture.services.art.candidates import (
     MEMBER_BACKGROUNDS_TOTAL,
@@ -46,12 +56,18 @@ lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.removal import AssetRemover
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.storage.image_cache import ImageCache
+lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.generated_art import FONT_FILES, font_coverage, render_art
 lazy from overture.utils.image import THUMB_EXTENSION
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_catalog
-lazy from tests.collection_helpers import managing_rule, stored_collection
+lazy from tests.collection_helpers import (
+    managing_rule,
+    shown_on_server,
+    stored_collection,
+)
+lazy from tests.factories import seed_asset, server_ref
 lazy from tests.runtime_helpers import NoopProviderRegistry, art_service, unused
 lazy from tests.test_services.test_collection_management import Provider
 lazy from tests.test_services.test_collections_service import FakePublisher
@@ -87,7 +103,7 @@ class Matcher(ArtMatcher):
 
     @override
     async def annotate_perfect(
-        self, facts: ArtFileFacts, matches: list[ArtCandidate]
+        self, content_hash: str, matches: list[ArtCandidate]
     ) -> list[str]:
         for match in matches:
             match.perfect_match = True
@@ -193,7 +209,7 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
         database=database,
         asset_storage=AssetStorage(app_config=app_config),
         matcher=Matcher(),
-        phash=unused(PhashService),
+        phash=Hashes(),
         downloads=unused(DownloadService),
         publisher=publisher,
         provider_registry=NoopProviderRegistry(provider),
@@ -228,19 +244,17 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
         async with database.read_session() as session:
             row = await CollectionRepository(session).get(1)
             assert row is not None
-            slot = read_art_slot(row, ArtType.POSTER)
+            slot = read_asset(row, ServerAsset.POSTER)
             assert slot.url == URL
             assert slot.poster_style is CollectionPosterStyle.INDIVIDUAL
-            assert slot.phash == "a" * 64
-            assert (slot.width, slot.height, slot.file_size) == (
-                200,
-                300,
-                len(image_bytes),
-            )
+            assert (slot.fingerprint, slot.width, slot.height) == ("a" * 64, 200, 300)
             assert slot.collection_id == 1
             assert slot.media_item_id is None
             # The image route reads the path the server lists after the upload.
-            assert row.thumb_url == "https://plex.test/library/metadata/box/thumb/1"
+            assert (
+                server_ref(row, ServerAsset.POSTER)
+                == "https://plex.test/library/metadata/box/thumb/1"
+            )
         assert publisher.broadcasts[-1] == ("collection.updated", {"collection_id": 1})
         with pytest.raises(PublicServiceError, match="poster style"):
             await service.collections.save(
@@ -264,9 +278,11 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
         async with database.read_session() as session:
             cleared = await CollectionRepository(session).get(1)
             assert cleared is not None
-            assert read_art_slot(cleared, ArtType.POSTER).url is None
-            assert cleared.thumb_url is not None
-            assert read_art_slot(cleared, ArtType.POSTER).file_hash is not None
+            assert read_asset(cleared, ServerAsset.POSTER).url is None
+            # The copy still shows what it was last seen showing.
+            assert server_ref(cleared, ServerAsset.POSTER) is not None
+            [copy] = read_asset(cleared, ServerAsset.POSTER).deliveries
+            assert copy.observed_hash is not None
         assert len(provider.uploads) == 1
         with pytest.raises(PublicServiceError, match="posters and backgrounds"):
             await service.collections.sources(1, ArtType.SEASON_POSTER)
@@ -280,6 +296,89 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
             )
     finally:
         await images.client.aclose()
+
+
+@pytest.mark.parametrize("held", [False, True])
+async def test_adopting_a_collection_image_keeps_it_delivered_without_an_upload(
+    held: bool,
+    tmp_path: Path,
+    database: Database,
+    app_config: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without content of its own, the link becomes what the lead copy shows."""
+    data = BytesIO()
+    Image.new("RGB", (200, 300), "red").save(data, format="JPEG")
+    images = Images(data.getvalue())
+    provider = ArtProvider(app_config)
+
+    async def public(_url: str) -> bool:
+        return False
+
+    monkeypatch.setattr("overture.utils.image_fetch.is_private_url", public)
+    async with database.write_session() as session:
+        row = stored_collection(
+            id=1,
+            server_item_id="box",
+            media_type=MediaType.MOVIE,
+            title="Saga",
+            tmdb_collection_id=10,
+            last_synced_at=utc_now(),
+        )
+        shown_on_server(row, poster="/library/metadata/box/thumb/7")
+        if held:
+            seed_asset(
+                row,
+                ServerAsset.POSTER,
+                upload_hash="kept",
+                file_hash="kept",
+                fingerprint="a" * 64,
+            )
+            part = row.libraries[0]
+            confirm_delivery(
+                row,
+                ServerAsset.POSTER,
+                Destination(
+                    part.server_id, part.server_item_id, DeliveryChannel.UPLOAD
+                ),
+                ref="/library/metadata/box/thumb/7",
+            )
+        session.add(row)
+        await session.flush()
+        session.add(managing_rule(1))
+    service = art_service(
+        app_config=app_config,
+        database=database,
+        asset_storage=AssetStorage(app_config=app_config),
+        matcher=Matcher(),
+        phash=Hashes(),
+        downloads=unused(DownloadService),
+        publisher=FakePublisher(),
+        provider_registry=NoopProviderRegistry(provider),
+        candidates=Candidates(),
+        image_clients=images,
+        image_cache=ImageCache(tmp_path / "images", tmp_path / "uploads"),
+        remover=unused(AssetRemover),
+    )
+    try:
+        matched = await service.collections.match(1, ArtType.POSTER, 5)
+        assert matched.reference == ("local_file" if held else "media_server")
+        await service.collections.adopt(
+            1, ArtType.POSTER, PublicArtUrl(URL), CollectionPosterStyle.INDIVIDUAL
+        )
+    finally:
+        await images.client.aclose()
+
+    async with database.read_session() as session:
+        saved = await CollectionRepository(session).get(1)
+        assert saved is not None
+    poster = read_asset(saved, ServerAsset.POSTER)
+    assert poster.url == URL
+    assert poster.status is AssetStatus.COMPLETE
+    assert missing_deliveries(poster) == []
+    assert poster.content_hash == ("kept" if held else poster.content_hash)
+    assert server_ref(saved, ServerAsset.POSTER) == "/library/metadata/box/thumb/7"
+    assert provider.uploads == []
 
 
 async def test_an_uploaded_collection_image_is_shown_from_the_cache_and_sent_again(
@@ -329,12 +428,15 @@ async def test_an_uploaded_collection_image_is_shown_from_the_cache_and_sent_aga
     async with database.read_session() as session:
         row = await CollectionRepository(session).get(1)
         assert row is not None
-        artwork = collection_artwork(row, backgrounds=True)
-    assert (artwork.poster_source, artwork.poster_hash) == (
+        artwork = assets_read(row)
+    assert (
+        artwork.poster.source,
+        artwork.poster.content_hash,
+    ) == (
         ArtSource.UPLOAD,
         upload.upload_hash,
     )
-    assert artwork.poster_status == "complete"
+    assert artwork.poster.status == "complete"
     thumb = await service.collections.local_image(
         1, ArtType.POSTER, ImageSize.DISPLAY, upload.upload_hash
     )
@@ -350,16 +452,16 @@ async def test_an_uploaded_collection_image_is_shown_from_the_cache_and_sent_aga
     async with database.write_session() as session:
         row = await CollectionRepository(session).get(1)
         assert row is not None
-        record_art_file(row, ArtType.POSTER, None)
+        part = row.libraries[0]
+        copy = Destination(part.server_id, part.server_item_id, DeliveryChannel.UPLOAD)
+        observe(row, ServerAsset.POSTER, copy, Evidence.DIFFERENT, ref="/other")
         session.add(row)
     await service.collections.reupload(1, ArtType.POSTER)
     assert len(provider.uploads) == 3
     async with database.read_session() as session:
         row = await CollectionRepository(session).get(1)
         assert row is not None
-        assert collection_artwork(row, backgrounds=True).poster_hash == (
-            upload.upload_hash
-        )
+        assert assets_read(row).poster.content_hash == upload.upload_hash
 
 
 async def test_an_inactive_collection_records_its_art_for_the_sync_that_restores_it(
@@ -404,11 +506,11 @@ async def test_an_inactive_collection_records_its_art_for_the_sync_that_restores
     async with database.read_session() as session:
         row = await session.get(MediaCollection, 2)
     assert row is not None
-    slot = read_art_slot(row, ArtType.POSTER)
+    slot = read_asset(row, ServerAsset.POSTER)
     assert slot.generated_style is ArtStyle.DARK
     assert slot.upload_hash is not None
-    assert slot.file_hash == slot.upload_hash
-    assert row.thumb_url is None
+    assert slot.content_hash == slot.upload_hash
+    assert server_ref(row, ServerAsset.POSTER) is None
 
 
 async def test_collection_candidates_share_source_policy_and_catalog_toggle(
@@ -572,10 +674,7 @@ async def test_generated_art_is_offered_chosen_and_generated_again_for_a_new_tit
     async with database.read_session() as session:
         row = await CollectionRepository(session).get(1)
         assert row is not None
-        assert (
-            collection_artwork(row, backgrounds=True).poster_source
-            == ArtSource.GENERATED
-        )
+        assert assets_read(row).poster.source == ArtSource.GENERATED
 
     # Generated art is kept in the cache, which can be deleted: it is drawn again.
     assert not (tmp_path / "uploads").exists()
@@ -698,7 +797,7 @@ async def test_generated_backgrounds_never_show_text_and_title_only_posters_stay
     async with database.write_session() as session:
         row = await CollectionRepository(session).get(1)
         assert row is not None
-        slot = read_art_slot(row, ArtType.POSTER)
+        slot = read_asset(row, ServerAsset.POSTER)
         assert (slot.generated_style, slot.generated_title_only) == (
             ArtStyle.DARK,
             True,

@@ -5,8 +5,8 @@ lazy import os
 
 lazy from sqlmodel import col, select
 
-lazy from ...db.art_slots import ArtFileFacts
-lazy from ...db.models.art import ArtSlot
+lazy from ...db.ledger import ContentFacts
+lazy from ...db.models.asset import Asset
 lazy from ...db.models.download_job import DownloadJob
 lazy from ...db.session import Database
 lazy from ...schemas.art import ArtUploadResponse
@@ -23,7 +23,7 @@ UPLOAD_GONE = "The uploaded image is no longer kept; upload it again"
 
 
 class ArtUploads:
-    """Keep uploaded images and describe kept images to the slots that select them.
+    """Keep uploaded images and describe kept images to the assets that select them.
 
     An upload is kept under the hash of its bytes in the uploads folder, which
     Overture never prunes: it holds the only copy. Generated art is described
@@ -38,12 +38,12 @@ class ArtUploads:
         self._phash = phash
 
     async def adopt_from_cache(self) -> None:
-        """Move the uploads a slot or queued download selects out of the cache."""
+        """Move the uploads an asset or queued download selects out of the cache."""
         async with self._database.read_session() as session:
             slots = await session.exec(
-                select(ArtSlot.upload_hash).where(
-                    col(ArtSlot.upload_hash).is_not(None),
-                    col(ArtSlot.generated_style).is_(None),
+                select(Asset.upload_hash).where(
+                    col(Asset.upload_hash).is_not(None),
+                    col(Asset.generated_style).is_(None),
                 )
             )
             queued = await session.exec(
@@ -81,21 +81,19 @@ class ArtUploads:
             raise PublicServiceError(409, UPLOAD_GONE)
         return original, original.stat
 
-    async def facts(self, upload_hash: str) -> ArtFileFacts:
-        """Describe a kept upload or generated image as the file a slot records.
+    async def facts(self, upload_hash: str) -> ContentFacts:
+        """Describe a kept upload or generated image as the content it is.
 
         Raises:
             PublicServiceError: 409 when Overture does not hold it.
         """
-        original, stat = await self._original(upload_hash)
+        original, _ = await self._original(upload_hash)
         _, width, height = await owned_thread(inspect_saved_image, original.path)
-        return ArtFileFacts(
-            file_hash=original.file_hash,
-            phash=await self._phash.compute_from_file(str(original.path)),
+        return ContentFacts(
+            content_hash=original.file_hash,
+            fingerprint=await self._phash.compute_from_file(str(original.path)),
             width=width,
             height=height,
-            file_mtime_ns=stat.st_mtime_ns,
-            file_size=stat.st_size,
         )
 
     async def read(self, upload_hash: str) -> tuple[bytes, str]:

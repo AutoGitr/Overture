@@ -46,7 +46,6 @@ lazy from overture.db import metadata
 lazy from overture.db.models.catalog import CatalogItem
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.schedule import TaskSchedule
 lazy from overture.db.models.season import Season
 lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database, as_writer, configure_sqlite
@@ -66,9 +65,8 @@ lazy from tests.factories import (
     CatalogItemFactory,
     DownloadJobFactory,
     MediaItemFactory,
-    ScheduleFactory,
     SeasonFactory,
-    seed_art_slot,
+    seed_asset,
 )
 lazy from tests.media_servers import attach_servers, seed_test_server, served_item
 lazy from tests.pause_clock import PauseClock
@@ -439,7 +437,7 @@ def _apply_art[OwnerT: MediaItem | Season](
     ``file_mtime_ns``, ``file_size``); a ``file_hash`` records a local file.
     """
     for art_type, fields in (art or {}).items():
-        seed_art_slot(owner, ArtType(art_type), **fields)
+        seed_asset(owner, ArtType(art_type), **fields)
     return owner
 
 
@@ -497,21 +495,6 @@ def app_settings_factory() -> AppSettingsFactory:
         values: dict[str, Any] = {"id": 1}
         values.update(overrides)
         return AppSettings(**values)
-
-    return factory
-
-
-@pytest.fixture
-def schedule_factory() -> ScheduleFactory:
-    def factory(**overrides: Any) -> TaskSchedule:
-        values: dict[str, Any] = {
-            "task_name": "sync",
-            "enabled": False,
-            "cron_expression": "0 * * * *",
-            "payload": {},
-        }
-        values.update(overrides)
-        return TaskSchedule(**values)
 
     return factory
 

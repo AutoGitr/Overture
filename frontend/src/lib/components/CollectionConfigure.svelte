@@ -6,7 +6,8 @@
   } from "../../generated/rest/types.gen";
   import { route } from "../router/routes";
   import { revealSection } from "../utils/revealSection";
-  import { CollectionEditor, CollectionDraft } from "../utils/collectionForms.svelte";
+  import { CollectionDraft } from "../utils/collectionDraft.svelte";
+  import { CollectionEditor } from "../utils/collectionEditor.svelte";
   import CollectionDefinition from "./CollectionDefinition.svelte";
   import CollectionRulePanel from "./CollectionRulePanel.svelte";
   import CollectionSettings from "./CollectionSettings.svelte";

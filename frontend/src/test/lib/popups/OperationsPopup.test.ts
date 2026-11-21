@@ -9,7 +9,7 @@ import { matchState, themeJobState } from "../../../lib/stores/bulkJobState.svel
 import { uiState } from "../../../lib/stores/uiState.svelte";
 import { downloadState } from "../../../lib/stores/downloadState.svelte";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
-import { appSettings } from "../../helpers/fixtures";
+import { appSettings, bulkArtEvent, syncEvent } from "../../helpers/fixtures";
 import { renderWithQueryClient } from "../../helpers/render";
 
 vi.mock("../../../generated/rest/sdk.gen", () => ({
@@ -119,8 +119,8 @@ describe("OperationsPopup tab navigation", () => {
   });
 
   it("shows running spinner badges on tab buttons when jobs are active", async () => {
-    matchState.handleStarted({});
-    syncState.handleStarted({});
+    matchState.handleStarted(bulkArtEvent({}));
+    syncState.handleStarted(syncEvent({}));
 
     uiState.openOperations("renamer");
     renderWithQueryClient(OperationsPopup);

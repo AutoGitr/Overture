@@ -3,49 +3,27 @@ import type { CollectionRead, MediaItemRead } from "../../../generated/rest/type
 import { defaultFilters, type FilterState } from "../../../lib/stores/uiState.svelte";
 import {
   arrangeTmdbResults,
-  aspectDeviation,
-  CATALOG_FILTER_KEYS,
-  catalogStatus,
-  defaultCatalogFilters,
-  defaultSortDir,
-  FILTERS,
   filterCatalogEntries,
-  filterSections,
-  FILTER_GROUPS,
   filterSidebarCollections,
   filterSidebarItems,
-  hasThemeAttributes,
+} from "../../../lib/utils/sidebarDomain";
+import {
+  CATALOG_FILTER_KEYS,
+  FILTERS,
+  FILTER_GROUPS,
   activeFilterCount,
-  inCollectionGroup,
+  defaultCatalogFilters,
+  filterSections,
   metadataIssuesFor,
-  normalizeSortPreference,
-  collectionGroupRows,
-  preloadRowIndexes,
-  searchFieldGroups,
-  sortCollectionGroups,
+} from "../../../lib/utils/sidebarFilters";
+import { searchFieldGroups } from "../../../lib/utils/sidebarSearches";
+import {
+  aspectDeviation,
+  defaultSortDir,
   sortMenu,
   type SidebarSortField,
-  statusTone,
-} from "../../../lib/utils/sidebarDomain";
+} from "../../../lib/utils/sidebarSorts";
 import { catalogRow, collection, mediaItem } from "../../helpers/fixtures";
-
-describe("catalog badge status", () => {
-  it("uses the same selections for detail and sidebar tones", () => {
-    const entry = catalogRow({
-      media_type: "show",
-      poster_url: "https://images.test/poster.jpg",
-      background_url: "https://images.test/background.jpg",
-    });
-    expect(catalogStatus(entry).art).toBe("warning");
-    expect(catalogStatus({ ...entry, season_posters: 1 })).toEqual(
-      catalogStatus({
-        ...entry,
-        seasons: [{ season_num: 1, poster_url: "https://images.test/season.jpg" }],
-      }),
-    );
-    expect(catalogStatus({ ...entry, season_posters: 1 }).art).toBe("success");
-  });
-});
 
 function withFilters(patch: Partial<FilterState>): FilterState {
   return { ...defaultFilters(), ...patch };
@@ -86,31 +64,6 @@ describe("sidebar domain helpers", () => {
 
     expect(filterItems(items)).toEqual(["Heat", "The Matrix", "A Quiet Place"]);
   });
-
-  it("shows the backend's asset status as a tone, or downloading while a job runs", () => {
-    expect(statusTone("complete", false)).toBe("success");
-    expect(statusTone("partial", false)).toBe("warning");
-    expect(statusTone("missing", false)).toBe("danger");
-    expect(statusTone("complete", true)).toBe("downloading");
-  });
-
-  it("detects theme attributes presence independently of local files", () => {
-    expect(hasThemeAttributes(null)).toBe(false);
-    expect(hasThemeAttributes(undefined)).toBe(false);
-    expect(
-      hasThemeAttributes(
-        mediaItem({
-          theme_file_hash: "theme-hash",
-          youtube_id: null,
-          youtube_title: null,
-          youtube_duration: null,
-        }),
-      ),
-    ).toBe(false);
-    expect(hasThemeAttributes(mediaItem({ youtube_id: "abcDEF123_4" }))).toBe(true);
-    expect(hasThemeAttributes(mediaItem({ youtube_title: "Theme Song" }))).toBe(true);
-    expect(hasThemeAttributes(mediaItem({ youtube_duration: 120 }))).toBe(true);
-  });
 });
 
 describe("sidebar item filters", () => {
@@ -141,13 +94,13 @@ describe("sidebar item filters", () => {
       id: 1,
       title: "Complete",
       art_status: "complete",
-      theme_status: "complete",
+      assets: { theme: { status: "complete" } },
     });
     const incomplete = mediaItem({
       id: 2,
       title: "Incomplete",
       art_status: "partial",
-      theme_status: "partial",
+      assets: { theme: { status: "partial" } },
     });
 
     expect(
@@ -174,9 +127,17 @@ describe("sidebar item filters", () => {
 
   it("filters resolution by an inclusive width range and hides unmeasured artwork", () => {
     const items = [
-      mediaItem({ id: 1, title: "Large", poster_width: 2000, background_width: 1280 }),
-      mediaItem({ id: 2, title: "Medium", poster_width: 1000, background_width: 3840 }),
-      mediaItem({ id: 3, title: "Small", poster_width: 500 }),
+      mediaItem({
+        id: 1,
+        title: "Large",
+        assets: { poster: { width: 2000 }, background: { width: 1280 } },
+      }),
+      mediaItem({
+        id: 2,
+        title: "Medium",
+        assets: { poster: { width: 1000 }, background: { width: 3840 } },
+      }),
+      mediaItem({ id: 3, title: "Small", assets: { poster: { width: 500 } } }),
       mediaItem({ id: 4, title: "Unmeasured" }),
     ];
     const resolution = (patch: Partial<FilterState["resolution"]>) =>
@@ -195,8 +156,12 @@ describe("sidebar item filters", () => {
 
   it("filters items and collections by an inclusive theme length range", () => {
     const items = [
-      mediaItem({ id: 1, title: "Short", theme_duration: 45 }),
-      mediaItem({ id: 2, title: "Long", theme_duration: 240, youtube_duration: 30 }),
+      mediaItem({ id: 1, title: "Short", assets: { theme: { duration: 45 } } }),
+      mediaItem({
+        id: 2,
+        title: "Long",
+        assets: { theme: { duration: 240, youtube_duration: 30 } },
+      }),
       mediaItem({ id: 3, title: "Unknown" }),
     ];
 
@@ -210,8 +175,8 @@ describe("sidebar item filters", () => {
     expect(
       filterCollections(
         [
-          collection({ id: 1, title: "Short Set", theme_duration: 30 }),
-          collection({ id: 2, title: "Long Set", theme_duration: 300 }),
+          collection({ id: 1, title: "Short Set", assets: { theme: { duration: 30 } } }),
+          collection({ id: 2, title: "Long Set", assets: { theme: { duration: 300 } } }),
           collection({ id: 3, title: "No Theme" }),
         ],
         { filters: withFilters({ themeLength: { min: 120, max: 300 } }) },
@@ -221,9 +186,21 @@ describe("sidebar item filters", () => {
 
   it("filters by any selected theme source", () => {
     const items = [
-      mediaItem({ id: 1, title: "Downloaded", youtube_id_source: "download" }),
-      mediaItem({ id: 2, title: "Tagged", youtube_id_source: "embedded_id" }),
-      mediaItem({ id: 3, title: "Linked", youtube_id_source: "metadata_url" }),
+      mediaItem({
+        id: 1,
+        title: "Downloaded",
+        assets: { theme: { youtube_id_source: "download" } },
+      }),
+      mediaItem({
+        id: 2,
+        title: "Tagged",
+        assets: { theme: { youtube_id_source: "embedded_id" } },
+      }),
+      mediaItem({
+        id: 3,
+        title: "Linked",
+        assets: { theme: { youtube_id_source: "metadata_url" } },
+      }),
       mediaItem({ id: 4, title: "No Theme" }),
     ];
 
@@ -237,11 +214,14 @@ describe("sidebar item filters", () => {
       mediaItem({
         id: 1,
         title: "Curated",
-        poster_source: "plex",
-        background_source: "tmdb",
+        assets: { poster: { source: "plex" }, background: { source: "tmdb" } },
       }),
-      mediaItem({ id: 2, title: "Fan Art", poster_source: "tmdb", background_source: "fanart" }),
-      mediaItem({ id: 3, title: "Poster DB", poster_source: "tpdb" }),
+      mediaItem({
+        id: 2,
+        title: "Fan Art",
+        assets: { poster: { source: "tmdb" }, background: { source: "fanart" } },
+      }),
+      mediaItem({ id: 3, title: "Poster DB", assets: { poster: { source: "tpdb" } } }),
       mediaItem({ id: 4, title: "No Art" }),
     ];
     const bySource = (artType: "any" | "poster" | "background", sources: string[]) =>
@@ -401,10 +381,13 @@ describe("sidebar search", () => {
       mediaItem({
         id: 1,
         title: "Jaws",
-        youtube_id: "abcDEF123_4",
-        youtube_title: "Jaws Main Title",
+        assets: { theme: { youtube_id: "abcDEF123_4", youtube_title: "Jaws Main Title" } },
       }),
-      mediaItem({ id: 2, title: "Alien", youtube_id: "zyxWVU987_6", youtube_title: "Alien OST" }),
+      mediaItem({
+        id: 2,
+        title: "Alien",
+        assets: { theme: { youtube_id: "zyxWVU987_6", youtube_title: "Alien OST" } },
+      }),
     ];
     const search = (searchQuery: string) =>
       filterItems(items, { searchQuery, searchField: "youtube" });
@@ -454,9 +437,21 @@ describe("sidebar sorting", () => {
   });
 
   it.each([
-    ["poster_resolution", { poster_width: 1000 }, { poster_width: 2000 }],
-    ["background_resolution", { background_width: 1280 }, { background_width: 3840 }],
-    ["theme_length", { theme_duration: 30 }, { theme_duration: 200 }],
+    [
+      "poster_resolution",
+      { assets: { poster: { width: 1000 } } },
+      { assets: { poster: { width: 2000 } } },
+    ],
+    [
+      "background_resolution",
+      { assets: { background: { width: 1280 } } },
+      { assets: { background: { width: 3840 } } },
+    ],
+    [
+      "theme_length",
+      { assets: { theme: { duration: 30 } } },
+      { assets: { theme: { duration: 200 } } },
+    ],
     [
       "last_synced_at",
       { last_synced_at: "2026-01-01T00:00:00Z" },
@@ -515,8 +510,8 @@ describe("sidebar collections", () => {
 
   it("filters collections by the theme status the backend reports", () => {
     const collections = [
-      collection({ id: 1, title: "Themed", theme_status: "complete" }),
-      collection({ id: 2, title: "Server Only", has_theme: true, theme_status: "partial" }),
+      collection({ id: 1, title: "Themed", assets: { theme: { status: "complete" } } }),
+      collection({ id: 2, title: "Server Only", assets: { theme: { status: "partial" } } }),
     ];
 
     expect(
@@ -534,8 +529,7 @@ describe("sidebar collections", () => {
         withheld: true,
         metadata_issues: ["no_tmdb_id", "no_server_id"],
         has_incorrect_aspect_ratio: true,
-        poster_width: 500,
-        poster_source: "tpdb",
+        assets: { poster: { width: 500, source: "tpdb" } },
       }),
     ];
     expect(
@@ -612,7 +606,12 @@ describe("sidebar collections", () => {
         sort_title: "02_Alien",
       }),
       collection({ id: 2, title: "Batman", child_count: 9, sort_title: "01_Batman" }),
-      collection({ id: 3, title: "Cars", youtube_id: "abcdefghijk", child_count: 3 }),
+      collection({
+        id: 3,
+        title: "Cars",
+        child_count: 3,
+        assets: { theme: { youtube_id: "abcdefghijk" } },
+      }),
     ];
 
     expect(filterCollections(collections, { searchField: "group", searchQuery: "franch" })).toEqual(
@@ -661,56 +660,6 @@ describe("sidebar collections", () => {
     ).toBeGreaterThan(0);
     expect(activeFilterCount(withFilters({ collectionKind: "smart" }), false, "items")).toBe(0);
     expect(activeFilterCount(withFilters({ overtureDb: "complete" }), false, "items")).toBe(0);
-  });
-});
-
-describe("sidebar sort preferences", () => {
-  it.each(["library", "collections", "overturedb"] as const)(
-    "preserves every %s sort and rejects the others",
-    (scope) => {
-      for (const { id } of sortMenu(scope)) {
-        expect(normalizeSortPreference({ field: id, dir: "desc" }, scope)).toEqual({
-          field: id,
-          dir: "desc",
-        });
-      }
-      expect(normalizeSortPreference({ field: "child_count", dir: "desc" }, "library").field).toBe(
-        "title",
-      );
-    },
-  );
-
-  it.each([null, [], "invalid", {}, { field: 42, dir: "sideways" }])(
-    "defaults malformed preferences",
-    (value) => {
-      expect(normalizeSortPreference(value, "library")).toEqual({ field: "title", dir: "asc" });
-    },
-  );
-
-  it("offers each list its own sort fields", () => {
-    expect(sortMenu("overturedb").map((entry) => entry.id)).toEqual([
-      "title",
-      "year",
-      "completeness",
-      "has_draft",
-      "in_library",
-    ]);
-    expect(sortMenu("collections").map((entry) => entry.id)).toContain("child_count");
-    expect(sortMenu("library").map((entry) => entry.id)).not.toContain("child_count");
-  });
-});
-
-describe("sidebar thumbnail preloading", () => {
-  it("covers two screens past the mounted rows, below first, nearest first", () => {
-    // Rows 100-104 on screen, so rows 80-124 are mounted (20 overscan each way).
-    expect(preloadRowIndexes(100, 105, 1000)).toEqual([
-      125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 79, 78, 77, 76, 75, 74, 73, 72, 71, 70,
-    ]);
-  });
-
-  it("stays inside the list", () => {
-    expect(preloadRowIndexes(0, 10, 35)).toEqual([30, 31, 32, 33, 34]);
-    expect(preloadRowIndexes(0, 0, 0)).toEqual([]);
   });
 });
 
@@ -828,10 +777,10 @@ describe("sidebar registry", () => {
     expect(aspectDeviation(1000, 1500, "poster")).toBe(0);
     expect(aspectDeviation(null, 1500, "poster")).toBeNull();
     const items = [
-      mediaItem({ id: 1, title: "Exact", poster_width: 1000, poster_height: 1500 }),
-      mediaItem({ id: 2, title: "Square", poster_width: 1000, poster_height: 1000 }),
+      mediaItem({ id: 1, title: "Exact", assets: { poster: { width: 1000, height: 1500 } } }),
+      mediaItem({ id: 2, title: "Square", assets: { poster: { width: 1000, height: 1000 } } }),
       mediaItem({ id: 3, title: "Unmeasured" }),
-      mediaItem({ id: 4, title: "Close", poster_width: 1010, poster_height: 1500 }),
+      mediaItem({ id: 4, title: "Close", assets: { poster: { width: 1010, height: 1500 } } }),
     ];
     expect(
       filterItems(items, { sortField: "poster_aspect", sortDir: defaultSortDir("poster_aspect") }),
@@ -872,78 +821,6 @@ describe("sidebar registry", () => {
     expect(sorted("completeness")).toEqual(["Full", "Linked", "Bare"]);
     expect(sorted("has_draft")[0]).toBe("Full");
     expect(sorted("in_library")[0]).toBe("Linked");
-  });
-});
-
-describe("inCollectionGroup", () => {
-  it("puts collections without rules in the virtual Unmanaged group", () => {
-    const imported = { collection_group: "Weekend", managed: false };
-    const managed = { collection_group: "Weekend", managed: true };
-    expect(inCollectionGroup(imported, "Unmanaged")).toBe(true);
-    expect(inCollectionGroup(managed, "Unmanaged")).toBe(false);
-    expect(inCollectionGroup(imported, "Weekend")).toBe(false);
-    expect(inCollectionGroup(managed, "Weekend")).toBe(true);
-  });
-
-  it("lists only managed collections without a group at the top level", () => {
-    expect(inCollectionGroup({ collection_group: null, managed: true }, null)).toBe(true);
-    expect(inCollectionGroup({ collection_group: null, managed: false }, null)).toBe(false);
-    expect(inCollectionGroup({ collection_group: "Weekend", managed: true }, null)).toBe(false);
-  });
-});
-
-describe("collection and group sorts", () => {
-  const ids = (scope: Parameters<typeof sortMenu>[0], context?: Parameters<typeof sortMenu>[1]) =>
-    sortMenu(scope, context).map((entry) => entry.id);
-
-  it("offers collections only what they all have a value for", () => {
-    expect(ids("collections", { plex: true })).toEqual([
-      "title",
-      "sort_title",
-      "group",
-      "home_order",
-      "child_count",
-      "server_added_at",
-      "last_synced_at",
-    ]);
-  });
-
-  it("drops what says nothing about the list shown", () => {
-    expect(ids("collections", { inGroup: true })).not.toContain("group");
-    expect(ids("collections", { plex: false })).not.toContain("home_order");
-  });
-
-  it("sorts groups by what their collections add up to", () => {
-    expect(ids("groups")).toEqual([
-      "title",
-      "collection_count",
-      "child_count",
-      "server_added_at",
-      "last_synced_at",
-    ]);
-    const rows = collectionGroupRows(
-      ["Small", "Large", "Empty"],
-      [
-        collection({ id: 1, managed: true, collection_group: "Small", child_count: 1 }),
-        collection({ id: 2, managed: true, collection_group: "Large", child_count: 4 }),
-        collection({ id: 3, managed: true, collection_group: "Large", child_count: 5 }),
-      ],
-    );
-    expect(rows.map((row) => [row.title, row.collections, row.items])).toEqual([
-      ["Small", 1, 1],
-      ["Large", 2, 9],
-      ["Empty", 0, 0],
-    ]);
-    expect(sortCollectionGroups(rows, "child_count", "desc").map((row) => row.title)).toEqual([
-      "Large",
-      "Small",
-      "Empty",
-    ]);
-    expect(sortCollectionGroups(rows, "title", "desc").map((row) => row.title)).toEqual([
-      "Small",
-      "Large",
-      "Empty",
-    ]);
   });
 });
 

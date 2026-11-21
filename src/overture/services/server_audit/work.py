@@ -5,7 +5,7 @@ lazy from collections.abc import Collection
 lazy from dataclasses import dataclass
 lazy from pathlib import Path
 
-lazy from ...db.art_slots import find_art_slot
+lazy from ...db.ledger import read_asset
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.session import CHUNK_SIZE, Database
@@ -46,18 +46,13 @@ class AuditTarget:
 
 @dataclass(slots=True, frozen=True)
 class CollectionAuditTarget:
-    """One image Overture uploaded to a collection, which a server audit compares."""
+    """One asset Overture holds for a collection, which a server audit compares."""
 
     collection_id: int
-    art_type: ArtType
-
-    @property
-    def asset(self) -> ServerAsset:
-        """Return the media-server asset the target is compared with."""
-        return self.art_type.server_asset
+    asset: ServerAsset
 
 
-#: What a server audit compares: an item's local file, or a collection's image.
+#: What a server audit compares: an item's local file, or a collection's asset.
 type AuditWork = AuditTarget | CollectionAuditTarget
 
 
@@ -204,15 +199,22 @@ async def plan_audit(
 async def plan_collection_audit(
     params: ServerAuditRequest, *, database: Database
 ) -> list[CollectionAuditTarget]:
-    """Return each collection image Overture uploaded to the server, by title."""
+    """Return each collection image or theme Overture holds, by title."""
     async with database.read_session() as session:
         rows = await CollectionRepository(session).list_listed()
-    return [
-        CollectionAuditTarget(row.id, art_type)
-        for row in sorted(rows, key=lambda row: (row.title.casefold(), row.id))
-        if row.id is not None
-        for art_type in ITEM_ART_TYPES
-        if art_type in params.art_types
-        and (slot := find_art_slot(row, art_type)) is not None
-        and slot.file_hash is not None
-    ]
+    planned: list[CollectionAuditTarget] = []
+    for row in sorted(rows, key=lambda row: (row.title.casefold(), row.id or 0)):
+        if row.id is None:
+            continue
+        planned.extend(
+            CollectionAuditTarget(row.id, art_type.server_asset)
+            for art_type in ITEM_ART_TYPES
+            if art_type in params.art_types
+            and read_asset(row, art_type.server_asset).content_hash is not None
+        )
+        if (
+            params.check_themes
+            and read_asset(row, ServerAsset.THEME).content_hash is not None
+        ):
+            planned.append(CollectionAuditTarget(row.id, ServerAsset.THEME))
+    return planned

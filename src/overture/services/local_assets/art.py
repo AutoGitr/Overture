@@ -1,7 +1,7 @@
 """Inspect local artwork files and record what they contain.
 
-Every slot's file columns are written from an :class:`ArtFileFacts` taken here
-or by a finished download, never assembled field by field elsewhere. An
+What a file holds is recorded as :class:`~overture.db.ledger.FileFacts` taken
+here or by a finished download, through the ledger. An
 unchanged stat revision reuses the recorded facts, so a refresh only reads a
 file that has changed. Reading one keeps it in the image cache, and its
 fingerprint and size are taken from that copy, so the media folder is read once.
@@ -15,15 +15,7 @@ lazy from pathlib import Path
 
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ...db.art_slots import (
-    ArtFileColumns,
-    ArtFileFacts,
-    art_file_columns,
-    art_file_facts,
-    find_art_slot,
-    record_art_file,
-)
-lazy from ...db.completion import holds_files
+lazy from ...db.ledger import FileFacts, local_file, read_asset, record_file
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.session import Database
@@ -32,6 +24,7 @@ lazy from ...repositories.seasons import SeasonRepository
 lazy from ...utils.image import UnsupportedImageFormatError
 lazy from ...utils.path import same_revision
 lazy from ...utils.threads import owned_thread
+lazy from ...utils.time import utc_now
 lazy from ..art.phash import PhashService
 lazy from ..library.completion import auto_unmonitor_completed
 lazy from ..storage.assets import (
@@ -67,8 +60,8 @@ class _SlotChange:
     owner_type: type[MediaItem | Season]
     owner_id: int
     art_type: ArtType
-    before: ArtFileColumns
-    after: ArtFileFacts | None
+    before: FileFacts | None
+    after: FileFacts | None
 
 
 class LocalArtInspector:
@@ -85,8 +78,8 @@ class LocalArtInspector:
         self._image_cache = image_cache
 
     async def inspect(
-        self, path: Path, root: Path, known: ArtFileFacts | None
-    ) -> ArtFileFacts | _Unreadable:
+        self, path: Path, root: Path, known: FileFacts | None
+    ) -> FileFacts | _Unreadable:
         """Return the facts of the file at *path*, which lies inside *root*.
 
         Returns:
@@ -118,12 +111,14 @@ class LocalArtInspector:
         # The cached copy is read from the config directory, not the media folder.
         source = path if original is None else original.path
 
-        phash = (
-            known.phash if known is not None and known.file_hash == file_hash else None
+        fingerprint = (
+            known.fingerprint
+            if known is not None and known.file_hash == file_hash
+            else None
         )
-        if phash is None:
+        if fingerprint is None:
             try:
-                phash = await self._phash.compute_from_file(str(source))
+                fingerprint = await self._phash.compute_from_file(str(source))
             except (OSError, ValueError, RuntimeError) as exc:
                 # The file exists and its bytes are known; only the image could
                 # not be decoded. Record that rather than pretending it is gone.
@@ -134,24 +129,24 @@ class LocalArtInspector:
             return UNREADABLE
         if not same_revision(before, after):
             return UNREADABLE
-        return ArtFileFacts(
+        return FileFacts(
             file_hash=file_hash,
-            phash=phash,
-            width=(original.width or None) if original is not None else None,
-            height=(original.height or None) if original is not None else None,
             file_mtime_ns=before.st_mtime_ns,
             file_size=before.st_size,
+            fingerprint=fingerprint,
+            width=(original.width or None) if original is not None else None,
+            height=(original.height or None) if original is not None else None,
         )
 
-    def _unchanged(self, known: ArtFileFacts, stat: os.stat_result) -> bool:
+    def _unchanged(self, known: FileFacts, stat: os.stat_result) -> bool:
         """Return whether *known* still describes a file with this stat."""
         return (
             known.file_mtime_ns == stat.st_mtime_ns
             and known.file_size == stat.st_size
-            and known.phash is not None
+            and known.fingerprint is not None
         )
 
-    def _cached(self, known: ArtFileFacts) -> bool:
+    def _cached(self, known: FileFacts) -> bool:
         """Return whether an unchanged image's copy and thumbnail are in the cache."""
         return (
             known.width is None
@@ -206,9 +201,7 @@ class LocalArtInspector:
         owner = probe.owner
         if owner.id is None:
             return None
-        slot = find_art_slot(owner, probe.art_type)
-        before = art_file_columns(slot)
-        known = art_file_facts(slot) if slot is not None else None
+        before = known = local_file(read_asset(owner, probe.art_type.server_asset))
         if probe.path is None or probe.root is None:
             after = None
         elif (
@@ -225,7 +218,7 @@ class LocalArtInspector:
             after = known
         else:
             after = await self.inspect(probe.path, probe.root, known)
-        if isinstance(after, _Unreadable) or art_file_columns(after) == before:
+        if isinstance(after, _Unreadable) or after == before:
             return None
         return _SlotChange(type(owner), owner.id, probe.art_type, before, after)
 
@@ -249,7 +242,7 @@ class LocalArtInspector:
             Whether any recorded fact or season folder changed.
         """
         # An item without a folder has no files; it records only its uploads.
-        if item.id is None or not holds_files(item):
+        if item.id is None or item.folder_path is None:
             return False
         folders, probes = await owned_thread(self._probe, item, seasons, listing)
         changes = [change for probe in probes if (change := await self._observe(probe))]
@@ -309,11 +302,10 @@ async def _apply(
         if change.owner_type is Season and change.owner_id in moved:
             continue
         owner = seasons.get(change.owner_id) if change.owner_type is Season else parent
-        if owner is None or (
-            art_file_columns(find_art_slot(owner, change.art_type)) != change.before
-        ):
+        kind = change.art_type.server_asset
+        if owner is None or local_file(read_asset(owner, kind)) != change.before:
             continue
-        record_art_file(owner, change.art_type, change.after)
+        record_file(owner, kind, change.after, at=utc_now())
         session.add(owner)
         changed = True
     return changed

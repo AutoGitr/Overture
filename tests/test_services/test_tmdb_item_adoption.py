@@ -10,10 +10,11 @@ lazy from sqlmodel import select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import read_art_slot, select_art
+lazy from overture.db.ledger import read_asset, select_art
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, MediaType, ThemeIdSource
+lazy from overture.domain import ArtType, MediaType, ServerAsset, ThemeIdSource
+lazy from overture.jobs.progress_log import JobOutcome
 lazy from overture.media_servers.adapters import ServerItem
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.downloads.service import DownloadService
@@ -21,6 +22,7 @@ lazy from overture.services.sync.reconciler import LibraryReconciler
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.audio import ThemeAudioMetadata
 lazy from overture.utils.locks import KeyedLock
+lazy from tests.factories import file_hash_of, seed_theme, theme_file_hash, theme_of
 lazy from tests.media_servers import copy_ids
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import make_local_assets, row_id
@@ -76,14 +78,16 @@ async def test_adoption_keeps_the_choices_and_downloads_them(
     existing_files: bool,
 ) -> None:
     async with isolated_session_factory() as session:
-        item = MediaItem(
-            media_type=MediaType.MOVIE,
-            title="The Matrix",
-            tmdb_id=603,
-            youtube_id="abcDEF123_4",
-            youtube_id_source=ThemeIdSource.SELECTION,
+        item = seed_theme(
+            MediaItem(
+                media_type=MediaType.MOVIE,
+                title="The Matrix",
+                tmdb_id=603,
+            ),
+            "abcDEF123_4",
+            source=ThemeIdSource.SELECTION,
         )
-        select_art(item, ArtType.POSTER, PublicArtUrl(CHOSEN))
+        select_art(item, ServerAsset.POSTER, PublicArtUrl(CHOSEN))
         session.add(item)
         await session.commit()
         item_id = row_id(item)
@@ -113,21 +117,21 @@ async def test_adoption_keeps_the_choices_and_downloads_them(
         database=database,
     )
 
-    stats = await sync_full(reconciler, [_server_item(folder)])
+    _, outcomes = await sync_full(reconciler, [_server_item(folder)])
     # A later sync fills the slots the user left empty.
     await sync_full(reconciler, [_server_item(folder)])
 
-    assert stats.tally.errors == 0
+    assert outcomes[JobOutcome.ERROR] == 0, outcomes.lines
     async with isolated_session_factory() as session:
         (adopted,) = (await session.exec(select(MediaItem))).all()
         ids = await copy_ids(session)
     assert (adopted.id, ids[adopted.id or 0]) == (item_id, "plex-603")
     assert adopted.folder_path == str(folder)
-    assert read_art_slot(adopted, ArtType.POSTER).url == CHOSEN
-    assert bool(read_art_slot(adopted, ArtType.POSTER).file_hash) == existing_files
-    assert bool(adopted.theme_file_hash) == existing_files
+    assert read_asset(adopted, ServerAsset.POSTER).url == CHOSEN
+    assert bool(file_hash_of(read_asset(adopted, ServerAsset.POSTER))) == existing_files
+    assert bool(theme_file_hash(adopted)) == existing_files
     assert (
-        read_art_slot(adopted, ArtType.BACKGROUND).url
+        read_asset(adopted, ServerAsset.BACKGROUND).url
         == "https://image.tmdb.org/t/p/original/server-bg.jpg"
     )
     assert downloads.jobs == [
@@ -170,10 +174,10 @@ async def test_adoption_does_not_download_a_theme_discovered_in_the_local_file(
         database=database,
     )
 
-    stats = await sync_full(reconciler, [_server_item(tmp_path)])
+    _, outcomes = await sync_full(reconciler, [_server_item(tmp_path)])
 
-    assert stats.tally.errors == 0
+    assert outcomes[JobOutcome.ERROR] == 0, outcomes.lines
     assert downloads.jobs == []
     async with isolated_session_factory() as session:
         (adopted,) = (await session.exec(select(MediaItem))).all()
-        assert adopted.youtube_id == "other1234567"
+        assert theme_of(adopted).youtube_id == "other1234567"

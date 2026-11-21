@@ -17,6 +17,7 @@ export interface JobLogEvent {
   run_id?: string | null;
   log_total?: number | null;
   log_outcomes?: Partial<Record<JobOutcome, number>> | null;
+  log_targets?: Partial<Record<JobOutcome, number>> | null;
   log_servers?: Record<string, Partial<Record<JobOutcome, number>>> | null;
   log?: JobLogEntry | null;
 }
@@ -47,6 +48,8 @@ export class JobLogFeed {
   readonly hiddenServers = new SvelteSet<number>();
   /** The run's lines per outcome, as its latest event counts them. */
   counts = $state<Partial<Record<JobOutcome, number>>>({});
+  /** The targets the run's lines name per outcome; one line can sum up several. */
+  targets = $state<Partial<Record<JobOutcome, number>>>({});
   /** The run's lines about each media server, by its number, per outcome. */
   serverCounts = $state<Record<string, Partial<Record<JobOutcome, number>>>>({});
   private view: readonly [number, number] = [0, 0];
@@ -61,7 +64,7 @@ export class JobLogFeed {
     return OUTCOMES.filter((outcome) => this.counts[outcome]).map((outcome) => ({
       key: outcome,
       label: outcome,
-      count: this.counts[outcome] ?? 0,
+      count: this.targets[outcome] ?? 0,
       shown: !this.hidden.has(outcome),
       tone: OUTCOME_TONES[outcome],
     }));
@@ -106,6 +109,7 @@ export class JobLogFeed {
       this.runId = event.run_id;
     }
     if (event.log_outcomes) this.counts = event.log_outcomes;
+    if (event.log_targets) this.targets = event.log_targets;
     if (event.log_servers) this.serverCounts = event.log_servers;
     this.logTotal = Math.max(
       this.logTotal,
@@ -182,6 +186,7 @@ export class JobLogFeed {
   finish(event: JobLogEvent) {
     this.finished = true;
     if (event.log_outcomes) this.counts = event.log_outcomes;
+    if (event.log_targets) this.targets = event.log_targets;
     if (event.log_servers) this.serverCounts = event.log_servers;
     if (event.log_total != null) {
       this.logTotal = event.log_total;
@@ -203,6 +208,7 @@ export class JobLogFeed {
     this.total = 0;
     this.logTotal = 0;
     this.counts = {};
+    this.targets = {};
     this.serverCounts = {};
     this.error = "";
     this.view = [0, 0];

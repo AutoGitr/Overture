@@ -8,7 +8,7 @@ lazy from sqlmodel import select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import select_art
+lazy from overture.db.ledger import select_art
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.domain import ArtType, MediaType
@@ -78,7 +78,7 @@ def _patch_apply_provider_art_url(
             }
         )
         if url_val:
-            select_art(owner, art_type, PublicArtUrl(url_val))
+            select_art(owner, art_type.server_asset, PublicArtUrl(url_val))
             return True
         return False
 

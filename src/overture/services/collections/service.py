@@ -10,8 +10,10 @@ lazy from ...integrations.tmdb import TMDBClient
 lazy from ...media_servers.registry import ProviderRegistry
 lazy from ..art.collection_art import CollectionArtService
 lazy from ..downloads.service import DownloadService
+lazy from ..needs import AssetNeeds
 lazy from ..removal import AssetRemover
 lazy from .access import CollectionAccess
+lazy from .adoption import CollectionAdoption
 lazy from .arr_requests import CollectionArr
 lazy from .bulk import CollectionBulk
 lazy from .discovery import CollectionDiscovery
@@ -59,6 +61,7 @@ class CollectionsService:
         mdblist: MDBListClient,
         art: CollectionArtService,
         remover: AssetRemover,
+        needs: AssetNeeds,
         radarr: ArrClient | None = None,
         sonarr: ArrClient | None = None,
     ) -> None:
@@ -76,6 +79,7 @@ class CollectionsService:
             publisher=publisher,
             asset_locks=downloads.asset_locks,
             app_config=app_config,
+            needs=needs,
         )
         validator = CollectionValidator(access=access, sources=self._sources)
         membership = Membership(access=access, sources=self._sources)
@@ -94,6 +98,12 @@ class CollectionsService:
             display=CollectionDisplay(access=access),
             reader=self.reader,
             downloads=downloads,
+        )
+        self.adoption = CollectionAdoption(
+            access=access,
+            membership=membership,
+            reader=self.reader,
+            save_rule=self.editor.save_rule_locked,
         )
         self.themes = CollectionThemes(
             access=access, downloads=downloads, remover=remover
@@ -127,6 +137,7 @@ class CollectionsService:
             access=access,
             validator=validator,
             editor=self.editor,
+            adoption=self.adoption,
             sets=self.sets,
             rules=self.rules,
             separators=CollectionSeparators(
@@ -134,7 +145,11 @@ class CollectionsService:
             ),
         )
         self.bulk = CollectionBulk(
-            access=access, editor=self.editor, art=art, themes=self.themes
+            access=access,
+            editor=self.editor,
+            adoption=self.adoption,
+            art=art,
+            themes=self.themes,
         )
         self.library_filters = LibraryFilters(
             access=access,

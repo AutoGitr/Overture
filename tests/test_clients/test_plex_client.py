@@ -136,7 +136,7 @@ async def test_an_item_plays_its_theme_from_the_server_origin(
     client, _ = plex
 
     assert await client.get_theme_songs("10") == [
-        ServerTheme(id="10", url="http://plex.test:32400/library/metadata/10/theme")
+        ServerTheme(id="/t/1", url="http://plex.test:32400/library/metadata/10/theme")
     ]
     assert await client.get_theme_songs("11") == []
 

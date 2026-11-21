@@ -34,10 +34,12 @@ _FAILED_SYNC = {
 }
 
 
-def _completed(outcomes: dict[str, int], *, schedule: str | None = None) -> object:
+def _completed(
+    outcomes: dict[str, int], *, schedule: str | None = None
+) -> dict[str, object]:
     return {
         "job": {"kind": "sync", "status": "completed"},
-        "log_outcomes": outcomes,
+        "log_targets": outcomes,
         "schedule": schedule,
     }
 
@@ -118,6 +120,23 @@ async def test_a_completed_run_is_sent_when_its_condition_holds(
         body = json.loads(sent[0].content)
         assert body["title"] == "Library sync completed"
         assert body["type"] == ("warning" if "Error" in outcomes else "success")
+
+
+async def test_a_summary_counts_the_targets_a_line_sums_up(
+    sent: list[httpx2.Request], *, app_config: Settings, database: Database
+) -> None:
+    """One line can stand for 94 titles; the notice says 94."""
+    app_config.NOTIFY_URL = SecretStr("http://apprise.test/notify")
+    notifier = RunNotifier(app_config=app_config, database=database)
+    await _save(database, notifier, completed=NotifyCompleted.ALWAYS)
+
+    notifier.observe(
+        "sync.completed",
+        {**_completed({"Skipped": 94}), "log_outcomes": {"Skipped": 1}},
+    )
+    await notifier.close()
+
+    assert json.loads(sent[0].content)["body"] == "Skipped 94"
 
 
 async def test_scheduled_only_rules_skip_runs_started_by_hand(

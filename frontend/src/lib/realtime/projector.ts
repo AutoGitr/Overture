@@ -40,7 +40,6 @@ const PROJECTION_HANDLERS: WebSocketHandlerMap = {
     downloadState.handleFailed(data);
     artPreviewState.jobEnded(data.job.id);
   },
-  "collection.theme.updated": () => {},
   "library.item.upserted": () => {},
   "library.item.removed": () => {},
   "library.items.changed": () => {},

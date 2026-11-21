@@ -86,7 +86,10 @@ async def test_concurrent_progress_keeps_every_line_and_persists_before_completi
     progress = probe.publisher.payloads("match.progress")
     assert [payload["log_total"] for payload in progress] == [1, 2]
     terminal = probe.terminal()[1]
-    assert (terminal["adopted"], terminal["downloaded"]) == (1, 1)
+    assert (
+        terminal["log_targets"].get("Adopted", 0),
+        terminal["log_targets"].get("Downloaded", 0),
+    ) == (1, 1)
 
 
 def _tally() -> BulkAssetTally:
@@ -211,38 +214,18 @@ def test_every_outcome_has_a_container_log_level() -> None:
 # --- JobTally ----------------------------------------------------------------
 
 
-def test_counters_start_at_zero_and_accumulate() -> None:
-    tally = _tally()
-
-    assert tally.done == 0
-    tally.done += 1
-    tally.queued += 3
-
-    assert tally.done == 1
-    assert tally.queued == 3
-
-
-def test_every_tally_reports_the_shared_lifecycle_counters() -> None:
-    """done/total/errors are what run_managed_job and the clients rely on."""
+def test_every_tally_reports_progress_and_no_outcome_counts() -> None:
+    """Outcome counts come from the log alone; a tally keeps progress."""
     for tally in (BulkAssetTally(), AssetScanTally(), ServerAuditTally()):
-        assert {"done", "total", "errors"} <= set(tally.counters())
+        assert {"done", "total"} <= set(tally.counters())
+        assert not set(tally.counters()) & {"errors", "queued", "added"}
 
 
 def test_as_payload_returns_every_declared_counter() -> None:
     tally = _tally()
     tally.done = 2
 
-    assert tally.as_payload() == {
-        "done": 2,
-        "total": None,
-        "errors": 0,
-        "queued": 0,
-        "downloaded": 0,
-        "adopted": 0,
-        "skipped": 0,
-        "no_match": 0,
-        "settled": 0,
-    }
+    assert tally.as_payload() == {"done": 2, "total": None, "settled": 0}
 
 
 def test_as_payload_merges_extras_over_counters() -> None:
@@ -300,9 +283,7 @@ async def test_completed_is_published_once_with_counters_and_timestamp() -> None
     async with run_managed_job(probe.context, tally) as job:
         await job.started()
         await job.planned(2)
-        tally.done = 2
-        tally.queued = 1
-        await job.progress(log=log_entry(JobOutcome.QUEUED, "A", "queued"))
+        await job.report(JobOutcome.QUEUED, "A", "queued", count=2)
 
     assert probe.names() == [
         "match.started",
@@ -315,7 +296,7 @@ async def test_completed_is_published_once_with_counters_and_timestamp() -> None
     event, payload = probe.terminal()
     assert event == "match.completed"
     assert payload["done"] == 2
-    assert payload["queued"] == 1
+    assert payload["log_targets"] == {JobOutcome.QUEUED: 2}
     assert payload["finished_at"]
     assert payload["job"] == {"kind": "bulk_art", "status": "completed"}
 
@@ -348,7 +329,12 @@ async def test_report_counts_exactly_the_lines_it_logs(
         "Downloaded A (poster) - written to disk",
         "Error B (poster) - lookup failed",
     ]
-    assert (tally.queued, tally.skipped, tally.downloaded, tally.errors) == (1, 3, 1, 1)
+    assert probe.terminal()[1]["log_targets"] == {
+        JobOutcome.QUEUED: 1,
+        JobOutcome.SKIPPED: 3,
+        JobOutcome.DOWNLOADED: 1,
+        JobOutcome.ERROR: 1,
+    }
     assert tally.done == 5
     # The container log carries the same lines, word for word.
     logged = [record.getMessage() for record in caplog.records]
@@ -383,24 +369,12 @@ async def test_failure_publishes_failed_counts_the_error_and_is_swallowed() -> N
 
     _, payload = probe.terminal()
     assert payload["job"]["status"] == "failed"
-    assert payload["errors"] == 1
+    assert payload["log_targets"] == {JobOutcome.ERROR: 1}
     assert payload["job"]["error"]["message"] == "work blew up"
     assert (
         JobLogEntry.model_validate(payload["log"]).format()
         == "Error Assets art run - work blew up"
     )
-
-
-async def test_failure_adds_to_an_error_count_the_body_already_raised() -> None:
-    probe = JobProbe(lifecycle=ManagedJobLifecycle(JobKind.BULK_ART))
-    tally = _tally()
-
-    async with run_managed_job(probe.context, tally):
-        tally.errors = 3
-        raise OSError("disk gone")
-
-    _, payload = probe.terminal()
-    assert payload["errors"] == 4
 
 
 async def test_unexpected_exception_fails_the_owned_job() -> None:
@@ -461,7 +435,7 @@ async def test_terminal_extras_are_added_to_the_final_event_only() -> None:
         terminal_extras=lambda t: {"total_folders": t.total},
     ) as job:
         tally.total = 5
-        await job.progress(log=log_entry(JobOutcome.CHECKED, "Folder", "scanning"))
+        await job.report(JobOutcome.CHECKED, "Folder", "scanning", finished=False)
 
     progress = probe.publisher.payloads("assets.scan.progress")[0]
     assert "total_folders" not in progress
@@ -507,7 +481,7 @@ async def test_running_events_are_saved_as_resume_snapshots() -> None:
 
     async with run_managed_job(probe.context, tally) as job:
         await job.started(total=1)
-        await job.progress(log=log_entry(JobOutcome.QUEUED, "A", "working"))
+        await job.report(JobOutcome.QUEUED, "A", "working", finished=False)
 
     assert [event for event, _ in probe.resume_snapshots] == [
         "match.progress",

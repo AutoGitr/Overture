@@ -9,12 +9,12 @@ lazy from sqlalchemy.ext.asyncio import async_sessionmaker
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import read_art_slot
+lazy from overture.db.ledger import read_asset
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, AspectRatioTolerance, MediaType
+lazy from overture.domain import ArtType, AspectRatioTolerance, MediaType, ServerAsset
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.schemas.art import ArtCandidate, ArtMatchResponse
 lazy from overture.services.art.candidates import (
@@ -32,7 +32,7 @@ lazy from overture.services.art.phash import PHASH_HEX_LENGTH, PhashService
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.utils.hashing import compute_bytes_hash
 lazy from overture.utils.image_fetch import FetchedImage
-lazy from tests.factories import seed_art_slot
+lazy from tests.factories import file_hash_of, file_of, seed_asset
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     make_local_assets,
@@ -59,11 +59,11 @@ async def test_match_refreshes_the_local_record_and_compares_its_bytes(
         id=1, title="Changed", media_type=MediaType.MOVIE, folder_path=str(tmp_path)
     )
     # A stale record of an earlier file: the match must not trust it.
-    seed_art_slot(
+    seed_asset(
         item,
         ArtType.POSTER,
         file_hash=compute_bytes_hash(b"old-image"),
-        phash="0" * PHASH_HEX_LENGTH,
+        fingerprint="0" * PHASH_HEX_LENGTH,
         file_mtime_ns=1,
         file_size=9,
     )
@@ -95,11 +95,11 @@ async def test_match_refreshes_the_local_record_and_compares_its_bytes(
     facts = result.local_file
     assert facts is not None
     assert facts.file_hash == compute_bytes_hash(local)
-    assert references == [facts.phash]
+    assert references == [facts.fingerprint]
     await db_session.refresh(item)
-    slot = read_art_slot(item, ArtType.POSTER)
-    assert slot.file_hash == compute_bytes_hash(local)
-    assert slot.file_size == len(local)
+    slot = read_asset(item, ServerAsset.POSTER)
+    assert file_hash_of(slot) == compute_bytes_hash(local)
+    assert file_of(slot).file_size == len(local)
 
 
 class UnknownToTheServer:
@@ -245,7 +245,7 @@ async def test_match_item_art_compares_the_gathered_candidates_under_saved_setti
         item = MediaItem(id=1, media_type=MediaType.MOVIE, title="Movie")
         session.add(item)
         await session.flush()
-        seed_art_slot(item, ArtType.POSTER, phash="0" * PHASH_HEX_LENGTH)
+        seed_asset(item, ArtType.POSTER, fingerprint="0" * PHASH_HEX_LENGTH)
         session.add(
             AppSettings(id=1, aspect_ratio_tolerance=AspectRatioTolerance.LENIENT)
         )

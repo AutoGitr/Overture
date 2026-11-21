@@ -24,6 +24,7 @@ lazy from overture.schemas.sync import (
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.local_assets.service import LocalAssets
 lazy from overture.services.scheduler import SchedulerService
+lazy from overture.services.server_copies import ServerCopies
 lazy from overture.services.sync.engine import SyncEngine
 lazy from overture.utils.errors import PublicServiceError
 lazy from tests.publishers import NullEventPublisher
@@ -189,6 +190,7 @@ def _engine(
         app_config=app_config,
         database=database,
         groups=unused(CollectionGroups),
+        server_copies=unused(ServerCopies),
     )
 
 

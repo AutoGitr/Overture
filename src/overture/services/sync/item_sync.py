@@ -5,15 +5,14 @@ lazy from dataclasses import dataclass
 lazy from sqlmodel import col, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ...db.art_slots import read_art_slot, record_art_file
+lazy from ...db.ledger import local_file, place_local, read_asset, selection
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.media_item_copy import MediaItemCopy
-lazy from ...db.theme_file import record_theme_file
 lazy from ...domain import (
-    ITEM_ART_TYPES,
-    ArtType,
+    ITEM_ASSETS,
     AutoUnmonitor,
     MediaType,
+    ServerAsset,
     TermKind,
     guid_int,
     guid_text,
@@ -23,6 +22,7 @@ lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...repositories.terms import TermRepository
 lazy from ...utils.time import utc_now
 lazy from ..library.completion import auto_unmonitor_completed
+lazy from ..needs import apply_needs
 lazy from .art_urls import ResolvedArtUrls, apply_provider_art_urls
 lazy from .season_sync import SeasonSynchronizer
 lazy from .tmdb_enrichment import record_tmdb_facts
@@ -74,8 +74,7 @@ class ItemReconciler:
             return (self.visible_item_fields(item), (), (), ())
         return (
             self.visible_item_fields(item),
-            *(_art_slot_fingerprint(item, art_type) for art_type in ITEM_ART_TYPES),
-            (item.youtube_id, item.theme_file_hash),
+            *(_asset_fingerprint(item, kind) for kind in ITEM_ASSETS),
         )
 
     async def sync_item(
@@ -190,6 +189,7 @@ class ItemReconciler:
         )
         session.add(item)
         await session.flush()
+        place_local(item, ITEM_ASSETS, folder=item.folder_path is not None)
         await record_copy(session, item, place.server_id, server_item)
         await apply_server_metadata(session, item, server_item)
         await apply_provider_collection(session, item, server_item)
@@ -206,6 +206,7 @@ class ItemReconciler:
                 lead=True,
                 only_missing_art=False,
             )
+        await apply_needs(session, items=[item])
         await auto_unmonitor_completed(session, item, policy=auto_unmonitor)
 
         session.add(item)
@@ -257,12 +258,9 @@ class ItemReconciler:
                 )
             session.add(item)
             return False, False, copy.left
-        if item.folder_path != server_item.folder_path:
-            # Changing folder path invalidates local asset records until refreshed.
-            item.folder_path = server_item.folder_path
-            record_theme_file(item, None)
-            for art_type in ITEM_ART_TYPES:
-                record_art_file(item, art_type, None)
+        moved = item.folder_path != server_item.folder_path
+        item.folder_path = server_item.folder_path
+        place_local(item, ITEM_ASSETS, folder=item.folder_path is not None, moved=moved)
 
         if server_item.title:
             item.title = server_item.title
@@ -288,8 +286,10 @@ class ItemReconciler:
                 server_id=place.server_id,
                 lead=place.lead,
                 only_missing_art=not copy.replaced,
+                moved=moved,
             )
 
+        await apply_needs(session, items=[item])
         await auto_unmonitor_completed(session, item, policy=auto_unmonitor)
         session.add(item)
         return art_pulled, TermKind.DIRECTOR in changed, copy.left
@@ -407,12 +407,10 @@ async def apply_provider_collection(
         item.tmdb_collection_id = collection_id
 
 
-def _art_slot_fingerprint(
-    item: MediaItem, art_type: ArtType
-) -> tuple[str | None, str | None, str | None]:
-    """Return the change-detection fingerprint for one item artwork slot."""
-    slot = read_art_slot(item, art_type)
-    return (slot.url, slot.upload_hash, slot.file_hash)
+def _asset_fingerprint(item: MediaItem, kind: ServerAsset) -> tuple[object, ...]:
+    """Return the change-detection fingerprint of one of an item's assets."""
+    asset = read_asset(item, kind)
+    return (asset.status, selection(asset), local_file(asset))
 
 
 def _has_metadata_conflict(item: MediaItem, server_item: ServerItem) -> bool:

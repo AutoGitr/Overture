@@ -14,7 +14,7 @@
   import { goToCatalogEntry, goToItem } from "../router/routes";
   import { itemArtDisplayUrl, remotePosterUrl } from "../utils/artDisplay";
   import { MEDIA_ICONS } from "../utils/mediaIcons";
-  import type { CollectionEditor } from "../utils/collectionForms.svelte";
+  import type { CollectionEditor } from "../utils/collectionEditor.svelte";
   import { librariesByServer } from "../utils/libraries.svelte";
   import ServerBadge from "./ServerBadge.svelte";
   import ImageGrid from "./ImageGrid.svelte";

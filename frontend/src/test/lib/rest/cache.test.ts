@@ -25,6 +25,7 @@ import {
   invalidateSeasons,
   patchCollection,
   patchCollectionRule,
+  patchCollectionTheme,
   storeCatalogDetail,
   refreshItem,
   removeLibraryItem,
@@ -34,6 +35,7 @@ import { queryClient } from "../../../lib/rest/queryClient";
 import { goToItem, navigate, route } from "../../../lib/router/routes";
 import { mockFetch } from "../../helpers/fetch";
 import {
+  asset,
   collection as fixtureCollection,
   collectionDetail,
   collectionRule,
@@ -106,12 +108,12 @@ describe("REST cache helpers", () => {
   it.each(["artwork", "themes"] as const)(
     "refetches lists, details and seasons after clearing %s, whose status the server computes",
     (operation) => {
-      const item = { ...show, poster_url: "poster", art_status: "complete" as const };
+      const item = { ...show, art_status: "complete" as const };
       seedLibrary([movie], [item]);
       const detailKey = getItemOptions({ path: { item_id: item.id } }).queryKey;
       const seasonsKey = getSeasonsOptions({ path: { item_id: item.id } }).queryKey;
       queryClient.setQueryData(detailKey, item);
-      queryClient.setQueryData(seasonsKey, [fixtureSeason({ poster_url: "season" })]);
+      queryClient.setQueryData(seasonsKey, [fixtureSeason({ poster: { url: "season" } })]);
       mockFetch({ items: [], total: 0 });
 
       applyBulkItemOperation({ item_ids: [item.id], operation });
@@ -278,21 +280,22 @@ describe("REST cache helpers", () => {
     ).toEqual([true, false, true]);
   });
 
-  it("patches collection lists", () => {
+  it("patches collection lists, a theme without the rest of its assets", () => {
     const collection = fixtureCollection({
       id: 1,
       title: "Action",
       monitored: false,
-      has_theme: false,
+      assets: { poster: { url: "https://img.test/p.jpg" } },
     });
     const key = listCollectionsOptions().queryKey;
     queryClient.setQueryData(key, [collection]);
+    const theme = asset("theme", { youtube_id: "abc123", status: "partial" });
 
-    patchCollection(collection.id, { has_theme: true, youtube_id: "abc123" });
+    patchCollectionTheme(collection.id, theme);
     patchCollection(collection.id, { monitored: true });
 
     expect(queryClient.getQueryData<CollectionRead[]>(key)).toMatchObject([
-      { monitored: true, has_theme: true, youtube_id: "abc123" },
+      { monitored: true, assets: { poster: collection.assets.poster, theme } },
     ]);
   });
 
@@ -310,7 +313,7 @@ describe("REST cache helpers", () => {
       reason: null,
     });
 
-    patchCollection(1, { youtube_id: "abc123" });
+    patchCollection(1, { title: "Renamed" });
 
     expect(queryClient.getQueryState(issueKey(1))?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(issueKey(2))?.isInvalidated).toBe(false);

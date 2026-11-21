@@ -13,9 +13,9 @@ lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
 lazy from ...domain import MediaType, TermKind
 lazy from ...integrations.tmdb import TMDBClient, TmdbFacts
-lazy from ...jobs.progress_log import JobOutcome, log_entry
+lazy from ...jobs.progress_log import JobOutcome
 lazy from ...jobs.runner import ManagedJob
-lazy from ...jobs.tally import SyncTally
+lazy from ...jobs.tally import JobTally
 lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...repositories.terms import TermRepository
 lazy from ...utils.security import sanitise_error
@@ -75,7 +75,7 @@ class TmdbEnrichment:
         self._tmdb = tmdb_client
 
     async def run(
-        self, job: ManagedJob[SyncTally], *, library_ids: list[str] | None = None
+        self, job: ManagedJob[JobTally], *, library_ids: list[str] | None = None
     ) -> int:
         """Look up unchecked and outdated titles, reporting each bounded batch."""
         if not self._config.tmdb_configured or job.stop_requested():
@@ -99,7 +99,7 @@ class TmdbEnrichment:
     async def _read(
         self,
         targets: list[tuple[int, MediaType, int]],
-        job: ManagedJob[SyncTally] | None,
+        job: ManagedJob[JobTally] | None,
     ) -> int:
         async with self._database.read_session() as session:
             region = (await get_app_settings(session)).tmdb_region
@@ -109,13 +109,12 @@ class TmdbEnrichment:
             if job is not None:
                 if job.stop_requested():
                     break
-                await job.progress(
-                    log=log_entry(
-                        JobOutcome.STARTED,
-                        "TMDB",
-                        f"reading details {index * _CONCURRENCY + 1}"
-                        f"-{index * _CONCURRENCY + len(chunk)} of {len(targets)}",
-                    )
+                await job.report(
+                    JobOutcome.STARTED,
+                    "TMDB",
+                    f"reading details {index * _CONCURRENCY + 1}"
+                    f"-{index * _CONCURRENCY + len(chunk)} of {len(targets)}",
+                    finished=False,
                 )
             results = await asyncio.gather(
                 *(

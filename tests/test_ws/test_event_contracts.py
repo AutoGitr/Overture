@@ -57,15 +57,11 @@ def test_sync_events_use_domain_specific_contract() -> None:
             "job": {"kind": "sync", "status": "progress"},
             "done": 1,
             "total": 2,
-            "added": 1,
-            "updated": 0,
-            "unchanged": 0,
-            "removed": 0,
-            "errors": 0,
+            "log_targets": {"Added": 1},
         },
     )
-    assert payload["job"] == {"kind": "sync", "status": "progress"}
-    assert payload["added"] == 1
+    assert (payload["job"]["kind"], payload["job"]["status"]) == ("sync", "progress")
+    assert payload["log_targets"] == {"Added": 1}
 
     with pytest.raises(ValidationError):
         validate_event_payload("sync.progress", {"unexpected": True})
@@ -93,7 +89,7 @@ def test_bulk_events_point_at_their_persisted_log() -> None:
             "job": {"kind": "bulk_art", "status": "progress"},
             "done": 1,
             "total": 2,
-            "adopted": 1,
+            "log_targets": {"Adopted": 1},
             "run_id": "run-1",
             "log_total": 3,
         },
@@ -142,7 +138,6 @@ def test_asset_scan_payload_contract_accepts_snapshots() -> None:
                 }
             ],
             "total_folders": 1,
-            "errors": 0,
             "finished_at": "2026-05-21T00:00:00+00:00",
         },
     )
@@ -173,16 +168,13 @@ _EXACT_SAMPLE_PAYLOADS: frozendict[str, dict[str, Any]] = frozendict(
             ],
             "app_version": "1.0.0",
         },
-        "collection.theme.updated": {
-            "collection_id": 1,
-            "has_theme": True,
-            "theme_status": "partial",
-        },
         "collections.changed": {},
         "collection.updated": {"collection_id": 1},
         "collection.monitored": {"collection_id": 1, "monitored": True},
         "library.item.upserted": {
-            "item": {"id": 1, "media_type": "movie", "title": "Movie"}
+            "item": media_item_read_from_model(
+                MediaItem(id=1, media_type=MediaType.MOVIE, title="Movie"), seasons=[]
+            ).model_dump(mode="json")
         },
         "library.item.removed": {"media_item_id": 1},
         "library.items.changed": {"item_ids": [1, 2], "operation": "artwork"},
@@ -252,9 +244,35 @@ def _sample_payload(event_name: str) -> dict[str, Any]:
     raise AssertionError(f"Missing sample payload for {event_name}")
 
 
-# Job events omit null fields to keep progress payloads small. Events whose
-# payload *is* a read model must not: the client writes those straight into its
-# REST query cache, so a partial object would blank out fields it already knows.
+def test_every_event_carries_every_field_of_its_payload() -> None:
+    """The generated types name every field, so none is left out, null or not."""
+    for event_name, definition in EVENT_REGISTRY.items():
+        if definition.payload_model is None:
+            continue
+        payload = _validated_payload(event_name, _sample_payload(event_name))
+        assert set(payload) == set(definition.payload_model.model_fields), event_name
+
+
+def test_a_download_event_names_the_step_it_has_not_reached() -> None:
+    payload = _validated_payload(
+        "download.started",
+        {
+            "job": {
+                "kind": "download",
+                "status": "started",
+                "id": "1",
+                "target": {
+                    "target_type": "collection",
+                    "collection_id": 1,
+                    "title": "Saga",
+                    "job_type": "collection_art",
+                    "art_type": "poster",
+                },
+            }
+        },
+    )
+
+    assert (payload["step"], payload["steps"]) == (None, None)
 
 
 def test_library_item_event_carries_every_field_including_nulls() -> None:
@@ -270,8 +288,9 @@ def test_library_item_event_carries_every_field_including_nulls() -> None:
     item = payload["item"]
     assert isinstance(item, dict)
     assert set(item) == set(type(read).model_fields)
-    assert item["poster_url"] is None
     assert item["year"] is None
+    assert read.assets.poster.url is None
+    assert item["assets"] == read.assets.model_dump(mode="json")
 
 
 def test_catalog_event_carries_every_field_including_nulls() -> None:
@@ -287,15 +306,3 @@ def test_catalog_event_carries_every_field_including_nulls() -> None:
     assert payload is not None
     assert set(payload) == set(CatalogStatus.model_fields)
     assert payload["last_synced_at"] is None
-
-
-def test_job_events_omit_their_null_fields() -> None:
-    """Progress payloads stay small; the frontend treats absent as unchanged."""
-    payload = validate_event_payload(
-        "match.progress",
-        {"job": {"kind": "bulk_art", "status": "progress"}, "done": 1},
-    )
-
-    assert payload is not None
-    assert "adopted" not in payload
-    assert payload["done"] == 1

@@ -6,14 +6,12 @@
   import Funnel from "@lucide/svelte/icons/funnel";
   import Search from "@lucide/svelte/icons/search";
   import X from "@lucide/svelte/icons/x";
+  import type { SidebarSearchField, SearchFieldGroup } from "../utils/sidebarSearches";
+  import type { MenuEntry, SidebarSortDir } from "../utils/sidebarShared";
   import {
     defaultSortDir,
-    type MenuEntry,
-    type SearchFieldGroup,
-    type SidebarSearchField,
-    type SidebarSortDir,
     type SidebarSortField,
-  } from "../utils/sidebarDomain";
+  } from "../utils/sidebarSorts";
   import MenuButton from "./MenuButton.svelte";
   import MenuOption from "./MenuOption.svelte";
 

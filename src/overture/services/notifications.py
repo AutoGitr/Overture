@@ -84,7 +84,7 @@ def message_for(
         return None
     error = envelope.job.error.message if envelope.job and envelope.job.error else None
     detail = sanitise_error(error, secrets=secrets) if error else None
-    outcomes = envelope.log_outcomes or {}
+    outcomes = envelope.log_targets or {}
     errors = outcomes.get(JobOutcome.ERROR, 0)
     match status:
         case LifecycleStatus.FAILED if rule.failed:

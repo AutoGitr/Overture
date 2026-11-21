@@ -4,7 +4,7 @@ lazy import stat
 lazy from pathlib import Path
 
 lazy from ...config import MediaServerConfig
-lazy from ...db.theme_file import ThemeFileFacts
+lazy from ...db.ledger import FileFacts
 lazy from ...media_servers.adapters import server_path
 lazy from ...utils.assets import THEME_FILENAME
 lazy from ...utils.hashing import compute_file_hash
@@ -46,8 +46,8 @@ def collection_folder(server: MediaServerConfig, collection_path: str | None) ->
 
 
 def inspect_theme_file(
-    folder: Path, known: ThemeFileFacts | None = None
-) -> ThemeFileFacts | None:
+    folder: Path, known: FileFacts | None = None
+) -> FileFacts | None:
     """Read stable file facts, reusing the hash of an unchanged revision."""
     path = folder / THEME_FILENAME
     if path.resolve().parent != folder:
@@ -67,9 +67,9 @@ def inspect_theme_file(
     file_hash = compute_file_hash(path)
     if file_hash is None or not same_revision(before, path.stat()):
         raise ValueError("Collection theme changed while it was inspected")
-    return ThemeFileFacts(
+    return FileFacts(
         file_hash,
         before.st_mtime_ns,
         before.st_size,
-        known.duration if known and known.file_hash == file_hash else None,
+        duration=known.duration if known and known.file_hash == file_hash else None,
     )

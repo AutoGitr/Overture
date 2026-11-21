@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { projectRealtimeMessage } from "../../../lib/realtime/projector";
 import { artPreviewState } from "../../../lib/stores/artPreviewState.svelte";
-import { itemDownload, mediaItem, wsMessage } from "../../helpers/fixtures";
+import { assetFile, itemDownload, mediaItem, withAsset, wsMessage } from "../../helpers/fixtures";
 
-const before = mediaItem({ id: 1, folder_path: "/movies/A", poster_hash: "old" });
+const before = mediaItem({
+  id: 1,
+  folder_path: "/movies/A",
+  assets: { poster: { file: assetFile("old") } },
+});
 const preview = "https://images.test/preview.jpg";
 
 type DownloadEnd = "download.completed" | "download.failed" | "download.cancelled";
@@ -33,7 +37,7 @@ describe("art previews", () => {
     artPreviewState.itemUpdated({ ...before, title: "Renamed" });
     expect(artPreviewState.previewFor(before, "poster")).toBe(preview);
 
-    const downloaded = { ...before, poster_hash: "new" };
+    const downloaded = withAsset(before, "poster", { file: assetFile("new") });
     artPreviewState.itemUpdated(downloaded);
     expect(artPreviewState.previewFor(downloaded, "poster")).toBeNull();
     // Gone for good: art that later returns to the old file is the file.
@@ -43,7 +47,9 @@ describe("art previews", () => {
   it("is never shown over art the item already moved on from", () => {
     artPreviewState.show(before, "poster", preview, "job-1");
 
-    expect(artPreviewState.previewFor({ ...before, poster_hash: "new" }, "poster")).toBeNull();
+    expect(
+      artPreviewState.previewFor(withAsset(before, "poster", { file: assetFile("new") }), "poster"),
+    ).toBeNull();
   });
 
   it.each([

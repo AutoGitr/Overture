@@ -17,7 +17,7 @@
   import { createNotifier } from "../stores/notificationState.svelte";
   import { getSectionView, sectionState } from "../stores/sectionState.svelte";
   import { settingsState } from "../stores/settingsState.svelte";
-  import { defaultGenerator, type SetGenerator } from "../utils/collectionForms.svelte";
+  import { defaultGenerator, type SetGenerator } from "../utils/collectionFormShared.svelte";
   import { errorMessage } from "../utils/errors";
   import { openSync } from "../utils/syncShortcut";
   import { CollectionOptions } from "../utils/libraries.svelte";

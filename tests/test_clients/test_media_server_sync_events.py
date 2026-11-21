@@ -17,17 +17,17 @@ lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.media_item_copy import MediaItemCopy
 lazy from overture.db.session import Database
 lazy from overture.domain import MediaType, ServerAsset, ServerType, TermKind
-lazy from overture.jobs.progress_log import JobLogEntry
-lazy from overture.jobs.tally import SyncTally
+lazy from overture.jobs.progress_log import JobOutcome
 lazy from overture.media_servers.adapters import ServerItem, SyncItemResult
 lazy from overture.media_servers.jellyfin import JellyfinProvider
 lazy from overture.repositories.terms import TermRepository
 lazy from overture.services.sync.reconciler import LibraryReconciler, ServerTurn
 lazy from overture.utils.audio import ThemeAudioMetadata
+lazy from tests.factories import theme_file_hash
 lazy from tests.media_servers import TEST_SERVER_ID, copy_ids, served_item, server_of
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import NoopDownloads, make_local_assets
-lazy from tests.sync_helpers import sync_full
+lazy from tests.sync_helpers import RecordedReport, sync_full
 lazy from tests.term_helpers import assign
 
 
@@ -234,8 +234,13 @@ async def test_sync_progress_and_result_share_partial_counters(
         app_config=app_config,
         database=database,
     )
-    tally = SyncTally()
-    progress: list[dict[str, int | None]] = []
+    progress: list[tuple[int, dict[JobOutcome, int]]] = []
+
+    class Recording(RecordedReport):
+        @override
+        async def __call__(self, *args: Any, **kwargs: Any) -> None:
+            await super().__call__(*args, **kwargs)
+            progress.append((self.done, dict(self.counts.targets)))
 
     async def reconcile(
         item: ServerItem, _turn: ServerTurn, _seen: set[int], **_kwargs: object
@@ -248,28 +253,20 @@ async def test_sync_progress_and_result_share_partial_counters(
             created=item.id == "a",
         )
 
-    async def record_progress(_entry: JobLogEntry) -> None:
-        progress.append(tally.counters())
-
     monkeypatch.setattr(reconciler, "_reconcile_one", reconcile)
-    result = await sync_full(
+    report = Recording()
+    result, _ = await sync_full(
         reconciler,
         [_server_item(key, key) for key in ("a", "b", "c")],
-        tally=tally,
-        progress_cb=record_progress,
-        stop_check=lambda: stop_after is not None and tally.done >= stop_after,
+        report=report,
+        stop_check=lambda: stop_after is not None and report.done >= stop_after,
     )
-    assert result.tally is tally
     assert result.created_item_ids == [42]
-    assert [step["done"] for step in progress] == ([1, 2] if stop_after else [1, 2, 3])
-    assert progress[-1] == {
-        "done": 2 if stop_after else 3,
-        "total": 3,
-        "errors": 1,
-        "added": 1,
-        "updated": 0,
-        "unchanged": 0 if stop_after else 1,
-        "removed": 0,
+    assert [done for done, _ in progress] == ([1, 2] if stop_after else [1, 2, 3])
+    assert progress[-1][1] == {
+        JobOutcome.ADDED: 1,
+        JobOutcome.ERROR: 1,
+        **({} if stop_after else {JobOutcome.UNCHANGED: 1}),
     }
 
 
@@ -284,10 +281,7 @@ async def test_recent_sync_processes_movies_then_shows_in_title_order(
         database=database,
     )
 
-    lines: list[str] = []
-
-    async def record(entry: JobLogEntry) -> None:
-        lines.append(entry.format())
+    report = RecordedReport()
 
     # A full sync takes the server's listing order, which lists movie
     # libraries first; recent items arrive in any order and are sorted alike.
@@ -299,10 +293,10 @@ async def test_recent_sync_processes_movies_then_shows_in_title_order(
             _server_item("movie-a", "Alpha Movie"),
         ],
         ServerTurn(TEST_SERVER_ID),
-        progress_cb=record,
+        report=report,
     )
 
-    assert lines == [
+    assert report.lines == [
         "Added Alpha Movie - new library item",
         "Added Zulu Movie - new library item",
         "Added Alpha Show - new library item",
@@ -332,7 +326,7 @@ async def test_sync_keeps_distinct_server_items_with_identical_titles(
         database=database,
     )
     server_items = [item async for page in provider.iter_items() for item in page]
-    stats = await sync_full(reconciler, server_items)
+    _, outcomes = await sync_full(reconciler, server_items)
 
     async with isolated_session_factory() as session:
         items = list(
@@ -345,8 +339,7 @@ async def test_sync_keeps_distinct_server_items_with_identical_titles(
             ).all()
         )
 
-    assert stats.tally.added == 2
-    assert stats.tally.unchanged == 0
+    assert (outcomes[JobOutcome.ADDED], outcomes[JobOutcome.UNCHANGED]) == (2, 0)
     async with database.read_session() as session:
         ids = await copy_ids(session)
     assert {ids[item.id or 0] for item in items} == {"original", "remake"}
@@ -452,14 +445,8 @@ async def test_sync_emits_targeted_upserts_and_removals(
     )
     pages = provider.iter_items(["1:lib1"])
     server_items = [item async for page in pages for item in page]
-    lines: list[str] = []
-
-    async def record(entry: JobLogEntry) -> None:
-        lines.append(entry.format())
-
-    stats = await sync_full(
-        reconciler, server_items, library_ids=["1:lib1"], progress_cb=record
-    )
+    stats, outcomes = await sync_full(reconciler, server_items, library_ids=["1:lib1"])
+    lines = outcomes.lines
 
     async with isolated_session_factory() as session:
         removed = await session.get(MediaItem, 1)
@@ -471,8 +458,7 @@ async def test_sync_emits_targeted_upserts_and_removals(
             [3, 6], TermKind.DIRECTOR
         )
 
-    assert stats.tally.added == 1
-    assert stats.tally.errors == 0
+    assert (outcomes[JobOutcome.ADDED], outcomes[JobOutcome.ERROR]) == (1, 0)
     assert stats.created_item_ids
     # Every outcome is one line, and each counter counts exactly its lines.
     assert sorted(lines) == [
@@ -484,12 +470,12 @@ async def test_sync_emits_targeted_upserts_and_removals(
         "Updated Revived - changed: metadata",
     ]
     assert (
-        stats.tally.added,
-        stats.tally.updated,
-        stats.tally.unchanged,
-        stats.tally.removed,
+        outcomes[JobOutcome.ADDED],
+        outcomes[JobOutcome.UPDATED],
+        outcomes[JobOutcome.UNCHANGED],
+        outcomes[JobOutcome.REMOVED],
     ) == (1, 2, 2, 1)
-    assert stats.tally.done == stats.tally.total == 5
+    assert outcomes.done == len(server_items) == 5
     assert provider.refresh_calls == []
     assert removed is not None
     assert removed.server_removed_at is not None
@@ -593,9 +579,9 @@ async def test_sync_emits_upsert_when_only_asset_state_changes(
     )
     pages = provider.iter_items(["1:lib1"])
     server_items = [item async for page in pages for item in page]
-    stats = await sync_full(reconciler, server_items, library_ids=["1:lib1"])
+    _, outcomes = await sync_full(reconciler, server_items, library_ids=["1:lib1"])
 
-    assert stats.tally.errors == 0
+    assert outcomes[JobOutcome.ERROR] == 0, outcomes.lines
     upserts: list[dict[str, Any]] = [
         payload
         for event, payload in events
@@ -606,24 +592,26 @@ async def test_sync_emits_upsert_when_only_asset_state_changes(
     assert isinstance(raw_item, dict)
     item_payload = cast("dict[str, Any]", raw_item)
     # Local files without a recorded link or video are only partly complete.
+    assets = item_payload["assets"]
     assert item_payload["art_status"] == "partial"
-    assert item_payload["theme_status"] == "partial"
-    assert item_payload["poster_hash"]
-    original_hash = item_payload["theme_file_hash"]
+    assert assets["theme"]["status"] == "partial"
+    assert assets["poster"]["file"]["hash"]
+    original_hash = assets["theme"]["file"]["hash"]
     assert original_hash
 
     # Replacing only the theme must publish its new hash, even when presence
     # and saved provenance have not changed.
     events.clear()
     (movie_dir / "theme.mp3").write_bytes(b"replacement theme audio")
-    stats = await sync_full(reconciler, server_items, library_ids=["1:lib1"])
-    assert stats.tally.errors == 0
+    _, outcomes = await sync_full(reconciler, server_items, library_ids=["1:lib1"])
+    assert outcomes[JobOutcome.ERROR] == 0, outcomes.lines
     replacements = [
         payload for event, payload in events if event == "library.item.upserted"
     ]
     assert len(replacements) == 1
     replacement = cast("dict[str, Any]", replacements[0])
-    assert replacement["item"]["theme_file_hash"] != original_hash
+    replaced_hash = replacement["item"]["assets"]["theme"]["file"]["hash"]
+    assert replaced_hash != original_hash
 
     events.clear()
     await sync_full(reconciler, server_items, library_ids=["1:lib1"])
@@ -638,12 +626,13 @@ async def test_sync_emits_upsert_when_only_asset_state_changes(
     os.utime(moved_theme, ns=(old_stat.st_atime_ns, old_stat.st_mtime_ns))
     moved_server_item = _server_item("movie", "Movie", folder_path=str(moved_dir))
     moved_server_item.guids = {"tmdb": "123"}
-    await sync_full(
+    _, outcomes = await sync_full(
         reconciler,
         [moved_server_item],
         library_ids=["1:lib1"],
     )
+    assert outcomes[JobOutcome.ERROR] == 0, outcomes.lines
     async with database.read_session() as session:
         moved_item = await session.get(MediaItem, 10)
         assert moved_item is not None
-        assert moved_item.theme_file_hash != replacement["item"]["theme_file_hash"]
+        assert theme_file_hash(moved_item) != replaced_hash

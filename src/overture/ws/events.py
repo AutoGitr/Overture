@@ -12,7 +12,6 @@ lazy from ..schemas.bulk import BulkArtJobEvent, BulkThemeJobEvent
 lazy from ..schemas.catalog import CatalogStatus, CatalogSyncEvent
 lazy from ..schemas.collections import (
     CollectionMonitoredEvent,
-    CollectionThemeUpdatedEvent,
     CollectionUpdatedEvent,
 )
 lazy from ..schemas.common import JsonValue
@@ -38,11 +37,6 @@ class WebSocketEventDefinition:
     name: str
     payload_model: type[BaseModel] | None
     snapshot: bool = False
-    #: Job events omit their null fields to keep progress payloads small.
-    #: Events whose payload *is* a read model must not, because the client
-    #: stores them directly in the REST cache and a partial object would
-    #: blank out fields that are already known.
-    exclude_none: bool = True
 
 
 def _lifecycle_events(
@@ -69,9 +63,7 @@ EVENT_REGISTRY: frozendict[str, WebSocketEventDefinition] = frozendict(
     {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
         "ping": WebSocketEventDefinition("ping", None),
         "realtime.snapshot": WebSocketEventDefinition(
-            "realtime.snapshot",
-            RealtimeSnapshot,
-            exclude_none=False,
+            "realtime.snapshot", RealtimeSnapshot
         ),
         **_lifecycle_events(JobKind.SYNC, SyncJobEvent),
         **_lifecycle_events(JobKind.BULK_ART, BulkArtJobEvent),
@@ -94,9 +86,6 @@ EVENT_REGISTRY: frozendict[str, WebSocketEventDefinition] = frozendict(
         "download.cancelled": WebSocketEventDefinition(
             "download.cancelled", DownloadJobEvent
         ),
-        "collection.theme.updated": WebSocketEventDefinition(
-            "collection.theme.updated", CollectionThemeUpdatedEvent
-        ),
         "collections.changed": WebSocketEventDefinition("collections.changed", None),
         "collection.updated": WebSocketEventDefinition(
             "collection.updated", CollectionUpdatedEvent
@@ -107,9 +96,7 @@ EVENT_REGISTRY: frozendict[str, WebSocketEventDefinition] = frozendict(
         **_lifecycle_events(JobKind.CATALOG_SYNC, CatalogSyncEvent),
         **_lifecycle_events(JobKind.BACKUP, BackupJobEvent),
         "library.item.upserted": WebSocketEventDefinition(
-            "library.item.upserted",
-            LibraryItemUpsertedEvent,
-            exclude_none=False,
+            "library.item.upserted", LibraryItemUpsertedEvent
         ),
         "library.item.removed": WebSocketEventDefinition(
             "library.item.removed", LibraryItemRemovedEvent
@@ -117,11 +104,7 @@ EVENT_REGISTRY: frozendict[str, WebSocketEventDefinition] = frozendict(
         "library.items.changed": WebSocketEventDefinition(
             "library.items.changed", BulkItemOperationResult
         ),
-        "catalog.updated": WebSocketEventDefinition(
-            "catalog.updated",
-            CatalogStatus,
-            exclude_none=False,
-        ),
+        "catalog.updated": WebSocketEventDefinition("catalog.updated", CatalogStatus),
         "item.updated": WebSocketEventDefinition("item.updated", ItemUpdatedEvent),
         "job.snapshot.cleared": WebSocketEventDefinition(
             "job.snapshot.cleared", JobSnapshotClearedEvent
@@ -130,7 +113,7 @@ EVENT_REGISTRY: frozendict[str, WebSocketEventDefinition] = frozendict(
             "schedules.changed", SchedulesChangedEvent
         ),
         "media-server.status": WebSocketEventDefinition(
-            "media-server.status", MediaServerStatus, exclude_none=False
+            "media-server.status", MediaServerStatus
         ),
     }
 )
@@ -147,10 +130,5 @@ def validate_event_payload(event: str, payload: Any) -> dict[str, JsonValue] | N
         model = payload
     else:
         model = definition.payload_model.model_validate(payload)
-    return cast(
-        "dict[str, JsonValue]",
-        model.model_dump(
-            mode="json",
-            exclude_none=definition.exclude_none,
-        ),
-    )
+    # Every field is sent, null or not: the generated types name them all.
+    return cast("dict[str, JsonValue]", model.model_dump(mode="json"))

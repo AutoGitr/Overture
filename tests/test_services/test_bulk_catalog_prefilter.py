@@ -18,22 +18,22 @@ lazy from overture.domain import (
     JobType,
     MediaType,
     RecentUnit,
+    ServerAsset,
     ThemeBulkSource,
 )
 lazy from overture.jobs.progress_log import JobOutcome
 lazy from overture.schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
-lazy from overture.services import bulk_common
-lazy from overture.services.art import bulk_work
-lazy from overture.services.bulk_common import AssetPlan
-lazy from overture.services.themes import bulk as theme_bulk
+lazy from overture.services.asset_runs.plan import AssetPlan, Slot, plan_run
+lazy from overture.services.asset_runs.support import CheckedStamper
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import disable_catalog, enable_catalog
 lazy from tests.factories import (
     CatalogItemFactory,
     MediaItemFactory,
     SeasonFactory,
+    seed_theme,
 )
-lazy from tests.runtime_helpers import make_local_assets, row_id
+lazy from tests.runtime_helpers import row_id
 
 NO_ENTRY = (JobOutcome.NO_MATCH, "OvertureDB has no entry for it")
 DISABLED = (JobOutcome.SKIPPED, "OvertureDB is disabled")
@@ -57,12 +57,21 @@ def differs(label: str) -> tuple[JobOutcome, str]:
     )
 
 
-def visits[TargetT](plan: AssetPlan[TargetT]) -> dict[int, tuple[TargetT, ...]]:
-    """Return every planned visit, keyed by item ID."""
+def visits(plan: AssetPlan) -> dict[int, tuple[Slot, ...]]:
+    """Return every planned visit, keyed by owner ID."""
     return {
-        item_id: targets
+        owner_id: slots
         for batch in plan.batches()
-        for item_id, targets in batch.items()
+        for owner_id, slots in batch.visits.items()
+    }
+
+
+def decided(plan: AssetPlan) -> dict[tuple[JobOutcome, str], int]:
+    """Return what planning decided for titles, by outcome and reason."""
+    return {
+        (outcome, reason): count
+        for (collection, outcome, reason), count in plan.decided.items()
+        if not collection
     }
 
 
@@ -104,22 +113,11 @@ async def test_overturedb_only_drops_targets_the_catalog_cannot_serve(
     params = BulkMatchArtRequest(
         art_types=[ArtType.POSTER], source_order=[ArtBulkSource.OVERTUREDB]
     )
-    plan = await bulk_work.plan_bulk_art(
-        params, app_config=app_config, database=database
-    )
+    plan = await plan_run(params, database=database)
 
     assert visits(plan) == {row_id(served): ((ArtType.POSTER, None),)}
-    assert plan.decided == {no_art(ArtType.POSTER): 1, NO_ENTRY: 1}
+    assert decided(plan) == {no_art(ArtType.POSTER): 1, NO_ENTRY: 1}
     assert plan.total == 3
-    work = await bulk_work.load_art_batch(
-        params,
-        visits(plan),
-        local_assets=make_local_assets(app_config=app_config, database=database),
-        app_config=app_config,
-        database=database,
-    )
-    assert [item.title for item, _art_type, _season in work.targets] == ["Served"]
-    assert work.public_index.art_url(served, ArtType.POSTER) == "https://db.test/p.jpg"
 
 
 @pytest.mark.parametrize("missing", [False, True])
@@ -153,18 +151,17 @@ async def test_saved_url_is_skipped_unless_its_file_is_missing(
         )
     await db_session.commit()
 
-    plan = await bulk_work.plan_bulk_art(
+    plan = await plan_run(
         BulkMatchArtRequest(
             art_types=[ArtType.POSTER],
             source_order=[ArtBulkSource.OVERTUREDB],
         ),
-        app_config=app_config,
         database=database,
     )
 
     assert len(visits(plan)) == int(missing)
     skipped = differs("OvertureDB artwork") if served else NO_ENTRY
-    assert plan.decided == ({} if missing else {skipped: 1})
+    assert decided(plan) == ({} if missing else {skipped: 1})
 
 
 async def test_partial_catalog_entry_drops_only_the_slots_it_lacks(
@@ -215,13 +212,12 @@ async def test_partial_catalog_entry_drops_only_the_slots_it_lacks(
     )
     await db_session.commit()
 
-    plan = await bulk_work.plan_bulk_art(
+    plan = await plan_run(
         BulkMatchArtRequest(
             art_types=list(ArtType),
             source_order=[ArtBulkSource.OVERTUREDB],
             overwrite_existing=True,
         ),
-        app_config=app_config,
         database=database,
     )
     assert visits(plan) == {
@@ -230,22 +226,21 @@ async def test_partial_catalog_entry_drops_only_the_slots_it_lacks(
             (ArtType.SEASON_POSTER, row_id(seasons[0])),
         )
     }
-    assert plan.decided == {
+    assert decided(plan) == {
         no_art(ArtType.BACKGROUND): 1,
         no_art(ArtType.SEASON_POSTER): 1,
     }
 
-    plan = await bulk_work.plan_bulk_art(
+    plan = await plan_run(
         BulkMatchArtRequest(
             art_types=list(ArtType), source_order=[ArtBulkSource.OVERTUREDB]
         ),
-        app_config=app_config,
         database=database,
     )
     assert visits(plan) == {
         row_id(show): ((ArtType.SEASON_POSTER, row_id(seasons[0])),)
     }
-    assert plan.decided == {
+    assert decided(plan) == {
         differs("OvertureDB artwork"): 1,
         no_art(ArtType.BACKGROUND): 1,
         no_art(ArtType.SEASON_POSTER): 1,
@@ -266,19 +261,18 @@ async def test_missing_catalog_entry_takes_precedence_over_recent_check(
     )
     await db_session.commit()
 
-    plan = await bulk_work.plan_bulk_art(
+    plan = await plan_run(
         BulkMatchArtRequest(
             art_types=[ArtType.POSTER],
             source_order=[ArtBulkSource.OVERTUREDB],
             skip_recent_val=1,
             skip_recent_unit=RecentUnit.DAYS,
         ),
-        app_config=app_config,
         database=database,
     )
 
     assert visits(plan) == {}
-    assert plan.decided == {NO_ENTRY: 1}
+    assert decided(plan) == {NO_ENTRY: 1}
 
 
 async def test_a_second_source_keeps_every_target(
@@ -294,17 +288,16 @@ async def test_a_second_source_keeps_every_target(
     db_session.add(_movie(media_item_factory, "Unknown", tmdb_id=6))
     await db_session.commit()
 
-    plan = await bulk_work.plan_bulk_art(
+    plan = await plan_run(
         BulkMatchArtRequest(
             art_types=[ArtType.POSTER],
             source_order=[ArtBulkSource.OVERTUREDB, ArtBulkSource.LOCAL_ART_MATCHING],
         ),
-        app_config=app_config,
         database=database,
     )
 
     assert len(visits(plan)) == 1
-    assert plan.decided == {}
+    assert decided(plan) == {}
 
 
 async def test_season_posters_are_matched_by_season_num(
@@ -340,18 +333,17 @@ async def test_season_posters_are_matched_by_season_num(
     )
     await db_session.commit()
 
-    plan = await bulk_work.plan_bulk_art(
+    plan = await plan_run(
         BulkMatchArtRequest(
             art_types=[ArtType.SEASON_POSTER], source_order=[ArtBulkSource.OVERTUREDB]
         ),
-        app_config=app_config,
         database=database,
     )
 
     assert visits(plan) == {
         row_id(show): ((ArtType.SEASON_POSTER, row_id(seasons[1])),)
     }
-    assert plan.decided == {no_art(ArtType.SEASON_POSTER): 1}
+    assert decided(plan) == {no_art(ArtType.SEASON_POSTER): 1}
 
 
 async def test_a_disabled_catalog_drops_every_target(
@@ -371,16 +363,15 @@ async def test_a_disabled_catalog_drops_every_target(
     )
     await db_session.commit()
 
-    plan = await bulk_work.plan_bulk_art(
+    plan = await plan_run(
         BulkMatchArtRequest(
             art_types=[ArtType.POSTER], source_order=[ArtBulkSource.OVERTUREDB]
         ),
-        app_config=app_config,
         database=database,
     )
 
     assert visits(plan) == {}
-    assert plan.decided == {(JobOutcome.SKIPPED, "OvertureDB is disabled"): 1}
+    assert decided(plan) == {(JobOutcome.SKIPPED, "OvertureDB is disabled"): 1}
 
 
 async def test_theme_run_drops_items_without_a_catalog_video_id(
@@ -395,19 +386,15 @@ async def test_theme_run_drops_items_without_a_catalog_video_id(
 
     served = _movie(media_item_factory, "Served", tmdb_id=9)
     absent = _movie(media_item_factory, "Absent", tmdb_id=10)
-    saved = _movie(
-        media_item_factory,
-        "Saved",
-        tmdb_id=11,
-        youtube_id="already-known",
-        theme_file_hash="recorded",
+    saved = seed_theme(
+        _movie(media_item_factory, "Saved", tmdb_id=11),
+        "already-known",
+        file_hash="recorded",
     )
-    saved_absent = _movie(
-        media_item_factory,
-        "SavedAbsent",
-        tmdb_id=14,
-        youtube_id="already-known",
-        theme_file_hash="recorded",
+    saved_absent = seed_theme(
+        _movie(media_item_factory, "SavedAbsent", tmdb_id=14),
+        "already-known",
+        file_hash="recorded",
     )
     db_session.add_all([served, absent, saved, saved_absent])
     db_session.add_all(
@@ -422,28 +409,14 @@ async def test_theme_run_drops_items_without_a_catalog_video_id(
     await db_session.commit()
 
     params = BulkThemeRequest(source_order=[ThemeBulkSource.OVERTUREDB])
-    plan = await theme_bulk.plan_bulk_themes(
-        params, app_config=app_config, database=database
-    )
+    plan = await plan_run(params, database=database)
 
-    assert visits(plan) == {row_id(served): (None,)}
-    assert plan.decided == {
+    assert visits(plan) == {row_id(served): ((ServerAsset.THEME, None),)}
+    assert decided(plan) == {
         differs("OvertureDB theme"): 1,
         NO_ENTRY: 1,
         (JobOutcome.NO_MATCH, "OvertureDB has no theme for it"): 1,
     }
-    work = await theme_bulk.load_theme_batch(
-        params,
-        list(visits(plan)),
-        local_assets=make_local_assets(app_config=app_config, database=database),
-        app_config=app_config,
-        database=database,
-    )
-    assert [item.title for item in work.items] == ["Served"]
-    assert (
-        work.public_index.theme(served, [ThemeBulkSource.OVERTUREDB]).value
-        == "yt-served"
-    )
 
 
 async def test_checked_stamper_writes_items_and_seasons_in_one_batch(
@@ -463,9 +436,9 @@ async def test_checked_stamper_writes_items_and_seasons_in_one_batch(
     db_session.add(season)
     await db_session.commit()
 
-    stamper = bulk_common.CheckedStamper(database=database)
-    await stamper.add(row_id(item), season_id=row_id(season))
-    await stamper.add(row_id(item))
+    stamper = CheckedStamper(database=database)
+    await stamper.add(item_id=row_id(item), season_id=row_id(season))
+    await stamper.add(item_id=row_id(item))
 
     assert item.last_matched_at is None
 
@@ -499,15 +472,14 @@ async def test_saved_selection_that_is_the_catalog_choice_says_so(
     db_session.add(catalog_item_factory(id=None, tmdb_id=15, poster_url=url))
     await db_session.commit()
 
-    plan = await bulk_work.plan_bulk_art(
+    plan = await plan_run(
         BulkMatchArtRequest(
             art_types=[ArtType.POSTER], source_order=[ArtBulkSource.OVERTUREDB]
         ),
-        app_config=app_config,
         database=database,
     )
 
-    assert plan.decided == {
+    assert decided(plan) == {
         (
             JobOutcome.SKIPPED,
             "saved selection is already the OvertureDB artwork",
@@ -528,13 +500,15 @@ async def test_a_disabled_catalog_skips_all_but_saved_restores(
     """Nothing is a no match while the catalog is off; restoring needs no catalog."""
     await disable_catalog(db_session)
     recorded = {} if mode == "missing" else RECORDED
-    saved = _movie(
-        media_item_factory,
-        "Saved",
-        tmdb_id=16,
-        youtube_id="saved-video",
-        theme_file_hash=recorded.get("file_hash"),
-        art={"poster": {"url": "https://saved.test/p.jpg", **recorded}},
+    saved = seed_theme(
+        _movie(
+            media_item_factory,
+            "Saved",
+            tmdb_id=16,
+            art={"poster": {"url": "https://saved.test/p.jpg", **recorded}},
+        ),
+        "saved-video",
+        file_hash=None if mode == "missing" else "recorded",
     )
     db_session.add_all([saved, _movie(media_item_factory, "Unsaved", tmdb_id=17)])
     db_session.add(
@@ -548,18 +522,16 @@ async def test_a_disabled_catalog_skips_all_but_saved_restores(
     await db_session.commit()
     options: dict[str, Any] = {"overwrite_existing": mode == "overwrite"}
 
-    art = await bulk_work.plan_bulk_art(
+    art = await plan_run(
         BulkMatchArtRequest(
             art_types=[ArtType.POSTER],
             source_order=[ArtBulkSource.OVERTUREDB],
             **options,
         ),
-        app_config=app_config,
         database=database,
     )
-    themes = await theme_bulk.plan_bulk_themes(
+    themes = await plan_run(
         BulkThemeRequest(source_order=[ThemeBulkSource.OVERTUREDB], **options),
-        app_config=app_config,
         database=database,
     )
 
@@ -567,8 +539,10 @@ async def test_a_disabled_catalog_skips_all_but_saved_restores(
     assert visits(art) == (
         {row_id(saved): ((ArtType.POSTER, None),)} if restored else {}
     )
-    assert visits(themes) == ({row_id(saved): (None,)} if restored else {})
-    assert art.decided == themes.decided == {DISABLED: 1 if restored else 2}
+    assert visits(themes) == (
+        {row_id(saved): ((ServerAsset.THEME, None),)} if restored else {}
+    )
+    assert decided(art) == decided(themes) == {DISABLED: 1 if restored else 2}
 
 
 async def test_themerrdb_only_run_names_the_switch_it_needs(
@@ -582,13 +556,12 @@ async def test_themerrdb_only_run_names_the_switch_it_needs(
     db_session.add(_movie(media_item_factory, "Movie", tmdb_id=18))
     await db_session.commit()
 
-    plan = await theme_bulk.plan_bulk_themes(
+    plan = await plan_run(
         BulkThemeRequest(source_order=[ThemeBulkSource.THEMERRDB]),
-        app_config=app_config,
         database=database,
     )
 
-    assert plan.decided == {
+    assert decided(plan) == {
         (JobOutcome.SKIPPED, "ThemerrDB needs OvertureDB enabled"): 1
     }
 
@@ -620,15 +593,14 @@ async def test_a_theme_that_failed_before_is_planned_as_no_match(
     )
     await db_session.commit()
 
-    plan = await theme_bulk.plan_bulk_themes(
+    plan = await plan_run(
         BulkThemeRequest(
             source_order=[ThemeBulkSource.OVERTUREDB, ThemeBulkSource.THEMERRDB]
         ),
-        app_config=app_config,
         database=database,
     )
 
-    assert plan.decided == {
+    assert decided(plan) == {
         (
             JobOutcome.NO_MATCH,
             (
@@ -671,10 +643,9 @@ async def test_a_theme_that_succeeded_after_failing_is_planned_again(
         )
     await db_session.commit()
 
-    plan = await theme_bulk.plan_bulk_themes(
+    plan = await plan_run(
         BulkThemeRequest(source_order=[ThemeBulkSource.OVERTUREDB]),
-        app_config=app_config,
         database=database,
     )
 
-    assert plan.decided == {}
+    assert decided(plan) == {}

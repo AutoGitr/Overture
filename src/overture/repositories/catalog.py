@@ -8,8 +8,7 @@ lazy from sqlmodel import and_, col, delete, or_, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ..catalog_contract.contract import IDENTITY_FIELDS, catalog_art_url
-lazy from ..db.art_slots import FILE_HOLDS_SELECTION
-lazy from ..db.models.art import ArtSlot
+lazy from ..db.models.asset import Asset, AssetDelivery
 lazy from ..db.models.catalog import (
     CatalogCollection,
     CatalogItem,
@@ -17,7 +16,7 @@ lazy from ..db.models.catalog import (
 )
 lazy from ..db.models.media_item import MediaItem
 lazy from ..db.session import CHUNK_SIZE
-lazy from ..domain import MediaType
+lazy from ..domain import AssetStatus, MediaType
 
 #: One external identifier: media type, ID field name, and its value.
 type _ExternalId = tuple[str, str, int | str]
@@ -190,21 +189,32 @@ class CatalogRepository:
     async def local_art(
         self, *, collections: bool, owner_ids: Collection[int]
     ) -> dict[int, dict[str, str]]:
-        """The local files of the library's selected catalog art, by owner.
+        """The content Overture holds for the library's selected catalog art, by owner.
 
-        Each item's (or, with *collections*, collection's) art whose file
-        holds its selected catalog link, as the file's hash by the link's
-        canonical form.
+        Each item's (or, with *collections*, collection's) art that selects a
+        catalog link and holds its content, as the content's hash by the
+        link's canonical form. A title's content counts only while the file in
+        its folder holds it, which its complete status says of a title with a
+        folder: a file replaced outside Overture is other art.
         """
-        owner = col(ArtSlot.collection_id if collections else ArtSlot.media_item_id)
+        owner = col(Asset.collection_id if collections else Asset.media_item_id)
+        in_folder = (
+            select(AssetDelivery.id)
+            .where(
+                col(AssetDelivery.asset_id) == col(Asset.id),
+                col(AssetDelivery.server_id).is_(None),
+            )
+            .exists()
+        )
+        on_disk = and_(col(Asset.status) == AssetStatus.COMPLETE, in_folder)
         found: dict[int, dict[str, str]] = {}
         for chunk in batched(owner_ids, CHUNK_SIZE, strict=False):
             result = await self.session.exec(
-                select(owner, ArtSlot.url, ArtSlot.file_hash).where(
+                select(owner, Asset.url, Asset.content_hash).where(
                     owner.in_(chunk),
-                    col(ArtSlot.url).is_not(None),
-                    col(ArtSlot.file_hash).is_not(None),
-                    FILE_HOLDS_SELECTION,
+                    col(Asset.url).is_not(None),
+                    col(Asset.content_hash).is_not(None),
+                    *(() if collections else (on_disk,)),
                 )
             )
             for owner_id, url, file_hash in result.all():

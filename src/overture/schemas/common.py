@@ -141,6 +141,15 @@ class JobEnvelope(StrictBaseModel):
     """Optional top-level job envelope for long-running work events."""
 
     job: JobMetadata | None = None
+    done: int | None = Field(
+        default=None, description="Targets the run has finished with."
+    )
+    total: int | None = Field(
+        default=None,
+        description="Targets the run will report on; unset while it plans.",
+    )
+    started_at: str | None = None
+    finished_at: str | None = None
     log: JobLogEntry | None = Field(
         default=None, description="The entry this event adds to the job's log."
     )
@@ -159,6 +168,11 @@ class JobEnvelope(StrictBaseModel):
     log_outcomes: dict[JobOutcome, int] | None = Field(
         default=None,
         description="The run's log lines per outcome, with the one this event adds.",
+    )
+    log_targets: dict[JobOutcome, int] | None = Field(
+        default=None,
+        description="The targets the run's log lines name per outcome, with the "
+        "ones this event adds; a line can sum up several.",
     )
     log_servers: dict[int, dict[JobOutcome, int]] | None = Field(
         default=None,

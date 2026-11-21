@@ -87,14 +87,13 @@ test("a collection theme badge opens its theme view", async ({ page }) => {
 });
 
 test("a ten-thousand-item library stays virtualized and interactive", async ({ page }) => {
-  const items = Array.from({ length: 10_000 }, (_, index) => ({
-    id: index + 1,
-    title: `Movie ${String(index).padStart(5, "0")}`,
-    media_type: "movie",
-    year: 2000 + (index % 25),
-    monitored: true,
-    copies: [],
-  }));
+  const items = Array.from({ length: 10_000 }, (_, index) =>
+    mediaItem({
+      id: index + 1,
+      title: `Movie ${String(index).padStart(5, "0")}`,
+      year: 2000 + (index % 25),
+    }),
+  );
   await page.route("**/api/library/items*", async (route) => {
     const url = new URL(route.request().url());
     const mediaType = url.searchParams.get("media_type");

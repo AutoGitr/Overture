@@ -15,10 +15,9 @@ lazy import pytest
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import ArtFileFacts, select_art
+lazy from overture.db.ledger import ContentFacts, record_content, select_art
 lazy from overture.db.models.catalog import CatalogItem
 lazy from overture.db.models.download_job import DownloadJob
-lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
@@ -27,19 +26,19 @@ lazy from overture.domain import (
     JobStatus,
     JobType,
     MediaType,
+    ServerAsset,
     ThemeBulkSource,
 )
 lazy from overture.jobs.progress_log import JobOutcome
 lazy from overture.schemas.art import ArtCandidate, ArtMatchResponse
 lazy from overture.schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
 lazy from overture.schemas.themes import ThemeSearchResult
-lazy from overture.services.art import bulk as art_bulk
 lazy from overture.services.art.collection_art import CollectionArtService
-lazy from overture.services.art.matcher import ArtMatchOutcome, LocalComparison
-lazy from overture.services.bulk_common import SAVED_SELECTION
+lazy from overture.services.art.matcher import ArtMatchOutcome, ImageComparison
+lazy from overture.services.asset_runs import run as asset_run
+lazy from overture.services.asset_runs.plan import SAVED_SELECTION
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.storage.assets import AssetStorage
-lazy from overture.services.themes import bulk as theme_bulk
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.hashing import compute_bytes_hash
 lazy from overture.utils.time import utc_now
@@ -56,6 +55,8 @@ lazy from tests.bulk_helpers import (
     progress_logs,
     write_existing_asset,
 )
+lazy from tests.factories import seed_theme
+lazy from tests.media_servers import served_item
 lazy from tests.runtime_helpers import make_local_assets, unused
 
 CATALOG_URL = "https://public.test/image.jpg"
@@ -64,7 +65,7 @@ LOCAL_URL = "https://local.test/image.jpg"
 RECENT = "checked within the last 1 hour"
 
 #: A line planning wrote for several targets at once.
-PLANNED_LINE = re.compile(r"(Skipped|No match) (\d+) (?:items?|art slots?) - (.*)")
+PLANNED_LINE = re.compile(r"(Skipped|No match) (\d+) (?:items?|assets?) - (.*)")
 
 
 def orders[T](sources: tuple[T, ...]) -> list[tuple[T, ...]]:
@@ -147,11 +148,11 @@ def assert_run(
     outcomes = Counter(result.outcome for result in expected.values())
     completed = context.events[-1][1]
     assert completed["total"] == completed["done"] == len(expected)
-    assert completed["queued"] == outcomes[JobOutcome.QUEUED]
-    assert completed["adopted"] == outcomes[JobOutcome.ADOPTED]
-    assert completed["skipped"] == outcomes[JobOutcome.SKIPPED]
-    assert completed["no_match"] == outcomes[JobOutcome.NO_MATCH]
-    assert completed["errors"] == 0
+    assert completed["log_targets"].get("Queued", 0) == outcomes[JobOutcome.QUEUED]
+    assert completed["log_targets"].get("Adopted", 0) == outcomes[JobOutcome.ADOPTED]
+    assert completed["log_targets"].get("Skipped", 0) == outcomes[JobOutcome.SKIPPED]
+    assert completed["log_targets"].get("No match", 0) == outcomes[JobOutcome.NO_MATCH]
+    assert completed["log_targets"].get("Error", 0) == 0
 
 
 class ArtCase(NamedTuple):
@@ -238,7 +239,7 @@ def visited_art(
         elif offer is None:
             empty.append(miss)
         elif on_disk and case.saved == offer:
-            return Expected(JobOutcome.SKIPPED, art_bulk.ALREADY_ON_DISK)
+            return Expected(JobOutcome.SKIPPED, asset_run.ALREADY_IN_PLACE)
         elif not on_disk or overwrite:
             return Expected(
                 JobOutcome.QUEUED, f"OvertureDB artwork{replaces}", queued=offer
@@ -285,7 +286,7 @@ async def test_art_source_matrix(
         )
         folder = tmp_path / title
         folder.mkdir()
-        item = MediaItem(
+        item = served_item(
             id=number,
             title=title,
             media_type=MediaType.MOVIE,
@@ -294,7 +295,13 @@ async def test_art_source_matrix(
             last_matched_at=utc_now() if case.recent else None,
         )
         if case.saved:
-            select_art(item, ArtType.POSTER, PublicArtUrl(case.saved))
+            select_art(item, ServerAsset.POSTER, PublicArtUrl(case.saved))
+            if case.disk != "none":
+                # The file on disk is the saved selection, as downloaded.
+                on_disk = CATALOG_BYTES if case.disk == "same" else b"existing artwork"
+                record_content(
+                    item, ServerAsset.POSTER, ContentFacts(compute_bytes_hash(on_disk))
+                )
         db_session.add(item)
         if case.disk != "none":
             write_existing_asset(
@@ -317,11 +324,11 @@ async def test_art_source_matrix(
         queued[f"Case {target.media_item_id:03d}"] = target.target_url
         return True
 
-    async def compare_with_local(url: str, facts: ArtFileFacts) -> LocalComparison:
-        same = url == CATALOG_URL and facts.file_hash == compute_bytes_hash(
-            CATALOG_BYTES
-        )
-        return LocalComparison(distance=0 if same else 30, identical=same)
+    async def compare(
+        url: str, *, fingerprint: str | None, content_hash: str | None
+    ) -> ImageComparison:
+        same = url == CATALOG_URL and content_hash == compute_bytes_hash(CATALOG_BYTES)
+        return ImageComparison(distance=0 if same else 30, identical=same)
 
     async def match_item_art(
         item_id: int, art_type: ArtType, *_args: Any, **_kwargs: Any
@@ -338,12 +345,12 @@ async def test_art_source_matrix(
             )
         )
 
-    monkeypatch.setattr(art_bulk, "queue_download", queue)
+    monkeypatch.setattr(asset_run, "queue_download", queue)
     matcher = art_matcher(app_config=app_config, database=database)
-    monkeypatch.setattr(matcher, "compare_with_local", compare_with_local)
+    monkeypatch.setattr(matcher, "compare", compare)
     monkeypatch.setattr(matcher, "match_item_art", match_item_art)
     context = Context()
-    await art_bulk.run_bulk_art_match(
+    await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(
             source_order=list(order),
@@ -352,8 +359,8 @@ async def test_art_source_matrix(
             skip_recent_val=1,
             overwrite_existing=overwrite,
         ),
-        make_bulk_downloads(app_config=app_config, database=database),
-        matcher,
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        art_matcher=matcher,
         art=unused(CollectionArtService),
         local_assets=make_local_assets(
             app_config=app_config,
@@ -462,15 +469,15 @@ def expected_theme(
             return Expected(JobOutcome.SKIPPED, SAVED_SELECTION)
         return Expected(
             JobOutcome.QUEUED,
-            "restores the saved selection; local theme file missing",
+            "restores the saved selection; local file missing",
             queued=ids["saved"],
         )
     if case.disk and not overwrite:
         return Expected(
             JobOutcome.SKIPPED,
-            "kept the local theme file (Replace existing would replace it)",
+            "kept the theme in place (Replace existing would replace it)",
         )
-    replaces = "; replaces the local theme file" if case.disk else ""
+    replaces = "; replaces the local file" if case.disk else ""
     notes: list[str] = []
     for source in order:
         if source is ThemeBulkSource.YOUTUBE_SEARCH:
@@ -484,6 +491,9 @@ def expected_theme(
             query = query.replace("{year}", "").strip()
             notes.append(f"YouTube search: no result for {query!r}")
         elif (miss := theme_miss(source, case, enabled=enabled)) is None:
+            # The theme on disk already is the source's: nothing to replace.
+            if case.disk and ids["saved"] == ids[source.value]:
+                return Expected(JobOutcome.SKIPPED, asset_run.ALREADY_IN_PLACE)
             return Expected(
                 JobOutcome.QUEUED,
                 f"{source.label} theme{replaces}",
@@ -536,14 +546,20 @@ async def test_theme_source_matrix(
         if case.disk:
             (folder / "theme.mp3").write_bytes(b"existing theme")
         db_session.add(
-            MediaItem(
-                id=number,
-                title=title,
-                media_type=MediaType.MOVIE,
-                tmdb_id=number,
-                folder_path=str(folder),
-                youtube_id=ids["saved"],
-                last_matched_at=utc_now() if case.recent else None,
+            seed_theme(
+                served_item(
+                    id=number,
+                    title=title,
+                    media_type=MediaType.MOVIE,
+                    tmdb_id=number,
+                    folder_path=str(folder),
+                    last_matched_at=utc_now() if case.recent else None,
+                ),
+                ids["saved"],
+                # The file on disk is the saved selection, as downloaded.
+                content_hash=compute_bytes_hash(b"existing theme")
+                if ids["saved"] and case.disk
+                else None,
             )
         )
         if case.overturedb != "absent" or case.themerrdb != "none":
@@ -580,23 +596,23 @@ async def test_theme_source_matrix(
         queued[f"Case {target.media_item_id:03d}"] = target.target_url
         return True
 
-    monkeypatch.setattr(theme_bulk, "queue_download", queue)
+    monkeypatch.setattr(asset_run, "queue_download", queue)
     monkeypatch.setattr(
         "overture.services.local_assets.theme.ffprobe_theme_metadata", no_tags
     )
     context = Context()
-    await theme_bulk.run_bulk_themes(
+    await asset_run.run_themes(
         as_job_context(context),
         BulkThemeRequest(
             source_order=list(order),
             skip_recent_val=1,
             overwrite_existing=overwrite,
         ),
-        make_bulk_downloads(app_config=app_config, database=database),
-        cast("Any", FakeSearch(cases)),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        youtube_resolver=cast("Any", FakeSearch(cases)),
         app_config=app_config,
         local_assets=make_local_assets(app_config=app_config, database=database),
         database=database,
     )
 
-    assert_run(context, expected, queued, "{title}")
+    assert_run(context, expected, queued, "{title} (theme)")

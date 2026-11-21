@@ -6,7 +6,7 @@
     CollectionCapabilities,
     LibrarySectionRead,
   } from "../../generated/rest/types.gen";
-  import { withDimension, type SetGenerator } from "../utils/collectionForms.svelte";
+  import { withDimension, type SetGenerator } from "../utils/collectionFormShared.svelte";
   import { emptyGroup, splitList } from "../utils/collectionCriteria";
   import { errorMessage } from "../utils/errors";
   import { inLibraryOrder, libraryScope } from "../utils/libraries.svelte";

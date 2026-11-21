@@ -12,17 +12,12 @@ describe("database record field formatting", () => {
   });
 
   it("flattens nested objects on records that still contain them", () => {
-    const fields = dbRecordFields(
-      fixtureSeason({
-        poster_height: 1500,
-        poster_width: 1000,
-      }),
-    );
+    const fields = dbRecordFields(fixtureSeason({ poster: { height: 1500, width: 1000 } }));
 
     expect(fields).toEqual(
       expect.arrayContaining([
-        { key: "poster_height", value: "1500" },
-        { key: "poster_width", value: "1000" },
+        { key: "poster.height", value: "1500" },
+        { key: "poster.width", value: "1000" },
       ]),
     );
     expect(fields.some((field) => field.value === "[object Object]")).toBe(false);

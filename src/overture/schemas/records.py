@@ -4,12 +4,11 @@ lazy from collections.abc import Mapping, Sequence
 
 lazy from pydantic import BaseModel, Field
 
-lazy from ..db.art_slots import flattened_art_names
-lazy from ..db.models.art import ArtSlot
+lazy from ..db.models.asset import Asset, AssetDelivery
 lazy from ..db.models.media_collection import CollectionLibrary
 lazy from ..db.models.media_item_copy import MediaItemCopy
 lazy from ..db.models.season import Season
-lazy from ..domain import ArtType, TermKind
+lazy from ..domain import TermKind
 lazy from ..utils.types import JsonValue
 lazy from .base import StrictBaseModel
 
@@ -28,7 +27,7 @@ class DatabaseRecord(StrictBaseModel):
 
     ``stored`` is the record's own row first, then every row that refers to
     it through a foreign key, and theirs in turn. ``derived`` holds what the
-    API shows that no column stores, so not the fields copied from artwork rows.
+    API shows that no column stores, so not the assets the asset rows hold.
     """
 
     stored: list[StoredRow]
@@ -63,9 +62,8 @@ class DatabaseRecord(StrictBaseModel):
             for table, values in rows
         ]
         shown = set(stored[0].values) if stored else set[str]()
-        for row in stored:
-            if row.table == ArtSlot.__tablename__:
-                shown |= flattened_art_names(str(row.values["art_type"]))
+        if any(row.table == Asset.__tablename__ for row in stored):
+            shown.add("assets")
         return cls(
             stored=stored,
             values={str(kind): names for kind, names in (values or {}).items()},
@@ -89,9 +87,12 @@ def _title(
         return f"Copy in {libraries.get(library, library)}"
     if table == Season.__tablename__:
         return f"Season {values['season_num']}"
-    if table == ArtSlot.__tablename__:
-        label = ArtType(str(values["art_type"])).label.capitalize()
+    if table == Asset.__tablename__:
+        label = str(values["kind"]).replace("_", " ").capitalize()
         season = season_nums.get(values["season_id"])
         return label if season is None else f"Season {season} poster"
+    if table == AssetDelivery.__tablename__:
+        server = values["server_id"]
+        return "Local file" if server is None else f"Copy on server {server}"
     key = values.get("id")
     return table if key is None else f"{table} {key}"

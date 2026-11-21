@@ -6,6 +6,7 @@ lazy from fastapi import APIRouter, Depends, Query
 lazy from fastapi.responses import Response
 
 lazy from ..dependencies import (
+    CollectionAdoptionDep,
     CollectionArrDep,
     CollectionArtDep,
     CollectionBulkDep,
@@ -29,6 +30,7 @@ lazy from ..schemas.art import (
     ArtSourcesResponse,
     SaveCollectionArtRequest,
 )
+lazy from ..schemas.assets import AssetRead
 lazy from ..schemas.collections import (
     ArrTagRead,
     BulkCollectionMonitorUpdate,
@@ -60,7 +62,6 @@ lazy from ..schemas.collections import (
     CollectionSetEntry,
     CollectionSetPreview,
     CollectionSetSummary,
-    CollectionThemeStatusResponse,
     DeleteCollectionThemeResponse,
     KindRecommendation,
     MdblistListRead,
@@ -294,7 +295,7 @@ async def request_collection_missing(
 async def get_collection_theme(
     collection_id: CollectionIdPath,
     themes: CollectionThemesDep,
-) -> CollectionThemeStatusResponse:
+) -> AssetRead:
     """Return the current theme status for a collection."""
     return await themes.status(collection_id)
 
@@ -412,29 +413,29 @@ async def save_collection_rule(
 @router.get("/{collection_id}/adopt")
 async def plan_collection_adoption(
     collection_id: CollectionIdPath,
-    editor: CollectionEditorDep,
+    adoption: CollectionAdoptionDep,
 ) -> CollectionAdoptionPlan:
     """Show the rule adopting a collection would save, changing nothing."""
-    return await editor.adoption_plan(collection_id)
+    return await adoption.adoption_plan(collection_id)
 
 
 @router.post("/{collection_id}/adopt")
 async def adopt_collection(
     collection_id: CollectionIdPath,
     body: CollectionAdoption,
-    editor: CollectionEditorDep,
+    adoption: CollectionAdoptionDep,
 ) -> CollectionDetail:
     """Let Overture manage a collection made outside it, keeping what it holds."""
-    return await editor.adopt(collection_id, body)
+    return await adoption.adopt(collection_id, body)
 
 
 @router.post("/{collection_id}/orphan")
 async def orphan_collection(
     collection_id: CollectionIdPath,
-    editor: CollectionEditorDep,
+    adoption: CollectionAdoptionDep,
 ) -> CollectionDetail:
     """Stop managing a collection; the server keeps it, listed as unmanaged."""
-    return await editor.orphan(collection_id)
+    return await adoption.orphan(collection_id)
 
 
 @router.delete("/{collection_id}/art")

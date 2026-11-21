@@ -9,18 +9,20 @@ lazy from PIL import Image
 lazy from sqlmodel import select
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import find_art_slot
-lazy from overture.db.models.art import ArtSlot
+lazy from overture.db.ledger import find_asset, select_upload
+lazy from overture.db.models.asset import Asset
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
 lazy from overture.domain import (
+    ArtGeneration,
     ArtSource,
     ArtStyle,
     ArtType,
     AssetStatus,
     JobType,
     MediaType,
+    ServerAsset,
 )
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.integrations.tmdb import TMDBClient
@@ -40,6 +42,7 @@ lazy from overture.services.storage.image_cache import ImageCache
 lazy from overture.services.themes.youtube_resolver import YouTubeResolver
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
+lazy from tests.factories import file_hash_of, seed_asset
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
@@ -118,11 +121,11 @@ async def _item(database: Database, folder: Path | None) -> int:
         return item.id
 
 
-async def _slot(database: Database, item_id: int) -> ArtSlot | None:
+async def _slot(database: Database, item_id: int) -> Asset | None:
     async with database.read_session() as session:
         item = await session.get(MediaItem, item_id)
         assert item is not None
-        return find_art_slot(item, ArtType.POSTER)
+        return find_asset(item, ServerAsset.POSTER)
 
 
 async def test_an_upload_must_be_a_jpeg_or_png(
@@ -164,7 +167,7 @@ async def test_an_upload_is_selected_then_written_beside_the_media(
 
     slot = await _slot(database, item_id)
     assert slot is not None
-    assert (slot.url, slot.upload_hash, slot.file_hash) == (
+    assert (slot.url, slot.upload_hash, file_hash_of(slot)) == (
         None,
         upload.upload_hash,
         None,
@@ -178,13 +181,16 @@ async def test_an_upload_is_selected_then_written_beside_the_media(
 
     slot = await _slot(database, item_id)
     assert slot is not None
-    assert slot.file_hash == upload.upload_hash
+    assert file_hash_of(slot) == upload.upload_hash
     assert (folder / "poster.png").read_bytes() == _poster()
     async with database.read_session() as session:
         item = await session.get(MediaItem, item_id)
         assert item is not None
         read = media_item_read_from_model(item, seasons=[])
-    assert (read.poster_status, read.poster_source) == (
+    assert (
+        read.assets.poster.status,
+        read.assets.poster.source,
+    ) == (
         AssetStatus.COMPLETE,
         ArtSource.UPLOAD,
     )
@@ -206,10 +212,12 @@ async def test_an_item_without_a_folder_keeps_its_upload_as_its_file(
     )
 
     assert response.selection.job_id is None
-    assert response.item.poster_hash == upload.upload_hash
-    assert response.item.poster_status is AssetStatus.COMPLETE
+    assert response.item.assets.poster.content_hash == upload.upload_hash
+    assert response.item.assets.poster.status is AssetStatus.COMPLETE
     await service.remove(item_id, ArtType.POSTER, AssetRemoval())
-    assert await _slot(database, item_id) is None
+    removed = await _slot(database, item_id)
+    assert removed is not None
+    assert removed.status is AssetStatus.MISSING
 
 
 async def test_an_upload_the_cache_no_longer_keeps_is_refused(
@@ -265,21 +273,16 @@ async def test_uploads_in_the_cache_move_to_the_uploads_folder(
     await legacy.thumb(generated)
     item_id = await _item(database, None)
     async with database.write_session() as session:
-        session.add(
-            ArtSlot(
-                media_item_id=item_id,
-                art_type=ArtType.POSTER,
-                upload_hash=selected.file_hash,
-            )
+        item = await session.get(MediaItem, item_id)
+        assert item is not None
+        seed_asset(item, ArtType.POSTER, upload_hash=selected.file_hash)
+        select_upload(
+            item,
+            ServerAsset.BACKGROUND,
+            generated.file_hash,
+            generated=ArtGeneration(ArtStyle.DARK, title_only=False),
         )
-        session.add(
-            ArtSlot(
-                media_item_id=item_id,
-                art_type=ArtType.BACKGROUND,
-                upload_hash=generated.file_hash,
-                generated_style=ArtStyle.DARK,
-            )
-        )
+        session.add(item)
         session.add(
             DownloadJob(
                 media_item_id=item_id,

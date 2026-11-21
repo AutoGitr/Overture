@@ -22,6 +22,7 @@ lazy from overture.services import sync as sync_package
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.local_assets.service import LocalAssets
 lazy from overture.services.scheduler import SchedulerService
+lazy from overture.services.server_copies import ServerCopies
 lazy from overture.services.sync.engine import SyncEngine
 lazy from overture.utils.errors import PublicServiceError
 lazy from tests.publishers import NullEventPublisher
@@ -68,6 +69,7 @@ class FakeSyncEngine(SyncEngine):
             app_config=app_config,
             database=database,
             groups=unused(CollectionGroups),
+            server_copies=unused(ServerCopies),
         )
         self.can_start = can_start
         self.started_with: SyncRunRequest | None = None

@@ -3,7 +3,7 @@
   import { settingsState } from "../stores/settingsState.svelte";
   import { uiState } from "../stores/uiState.svelte";
   import { MEDIA_ICONS, type MediaIcon } from "../utils/mediaIcons";
-  import type { SidebarTab } from "../utils/sidebarDomain";
+  import type { SidebarTab } from "../utils/sidebarShared";
 
   let {
     totalMovies,

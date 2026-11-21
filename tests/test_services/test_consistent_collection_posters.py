@@ -8,17 +8,18 @@ lazy import pytest
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import select_art
+lazy from overture.db.ledger import select_art
 lazy from overture.db.models.catalog import CatalogCollection
 lazy from overture.db.models.settings import SETTINGS_ROW_ID, AppSettings
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, CollectionPosterStyle
+lazy from overture.domain import ArtType, CollectionPosterStyle, ServerAsset
 lazy from overture.services.catalog.export import REPORT_NAME, export_selections
 lazy from overture.services.catalog.index import CatalogIndex
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_catalog
 lazy from tests.collection_helpers import stored_collection
+lazy from tests.factories import seed_theme
 
 INDIVIDUAL = "https://image.tmdb.org/t/p/original/own.jpg"
 MATTE = "https://theposterdb.com/api/assets/668235"
@@ -62,9 +63,7 @@ async def test_a_collection_takes_the_poster_the_setting_chooses(
     await db_session.commit()
     await db_session.refresh(row, ["group", "rule"])
 
-    index = await CatalogIndex.build_collections(
-        db_session, [row], app_config=app_config
-    )
+    index = await CatalogIndex.build_collections(db_session, [row])
 
     assert index.collection_art(row, ArtType.POSTER).value == expected
 
@@ -93,9 +92,7 @@ async def test_a_collection_takes_the_first_style_in_order_that_overturedb_holds
     await db_session.commit()
     await db_session.refresh(row, ["group", "rule"])
 
-    index = await CatalogIndex.build_collections(
-        db_session, [row], app_config=app_config
-    )
+    index = await CatalogIndex.build_collections(db_session, [row])
 
     assert index.collection_art(row, ArtType.POSTER).value == expected
     assert index.collection_poster_style(row, ArtType.POSTER) == (
@@ -124,9 +121,7 @@ async def test_a_group_chooses_its_collections_posters_over_the_global_choice(
     await db_session.commit()
     await db_session.refresh(row, ["group", "rule"])
 
-    index = await CatalogIndex.build_collections(
-        db_session, [row], app_config=app_config
-    )
+    index = await CatalogIndex.build_collections(db_session, [row])
 
     assert index.collection_art(row, ArtType.POSTER).value == MATTE
 
@@ -138,15 +133,17 @@ async def test_a_consistent_poster_is_contributed_as_one_from_tmdb_or_theposterd
         (10, OVERLAY),
         (11, "https://assets.fanart.tv/fanart/a.jpg"),
     ):
-        row = stored_collection(
-            title=f"Saga {tmdb_id}",
-            tmdb_collection_id=tmdb_id,
-            youtube_id="dQw4w9WgXcQ",
-            last_synced_at=utc_now(),
+        row = seed_theme(
+            stored_collection(
+                title=f"Saga {tmdb_id}",
+                tmdb_collection_id=tmdb_id,
+                last_synced_at=utc_now(),
+            ),
+            "dQw4w9WgXcQ",
         )
         select_art(
             row,
-            ArtType.POSTER,
+            ServerAsset.POSTER,
             PublicArtUrl(url),
             poster_style=CollectionPosterStyle.OVERLAY,
         )
@@ -177,7 +174,7 @@ async def test_a_poster_is_contributed_as_the_style_it_was_selected_as(
     )
     select_art(
         row,
-        ArtType.POSTER,
+        ServerAsset.POSTER,
         PublicArtUrl(INDIVIDUAL),
         poster_style=CollectionPosterStyle.INDIVIDUAL,
     )

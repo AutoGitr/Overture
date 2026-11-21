@@ -2,10 +2,10 @@
 
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ...db.completion import art_completion, theme_status
+lazy from ...db.ledger import item_art_status, read_asset
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.settings import get_app_settings
-lazy from ...domain import AssetStatus, AutoUnmonitor, MediaType
+lazy from ...domain import AssetStatus, AutoUnmonitor, MediaType, ServerAsset
 lazy from ...repositories.seasons import SeasonRepository
 
 
@@ -18,7 +18,7 @@ async def auto_unmonitor_completed(
     """Unmonitor a completed item; return whether monitoring changed.
 
     Call after recording assets, before committing and publishing the item.
-    Completeness follows :mod:`overture.db.completion`, as the library shows it.
+    Completeness is the assets' stored status, as the library shows it.
     A caller visiting many items passes the *policy* it read once; otherwise
     it is read from the settings here.
     """
@@ -29,7 +29,7 @@ async def auto_unmonitor_completed(
     if policy is AutoUnmonitor.OFF:
         return False
 
-    theme_complete = theme_status(item) is AssetStatus.COMPLETE
+    theme_complete = read_asset(item, ServerAsset.THEME).status is AssetStatus.COMPLETE
     art_complete = False
     if policy is not AutoUnmonitor.THEME:
         seasons = (
@@ -37,7 +37,7 @@ async def auto_unmonitor_completed(
             if item.media_type == MediaType.SHOW
             else []
         )
-        art_complete = art_completion(item, seasons).art_status is AssetStatus.COMPLETE
+        art_complete = item_art_status(item, seasons).art is AssetStatus.COMPLETE
 
     match policy:
         case AutoUnmonitor.ART:

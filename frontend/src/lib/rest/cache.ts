@@ -9,6 +9,7 @@ import {
   listSyncSchedulesQueryKey,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type {
+  AssetRead,
   BulkItemOperation,
   CatalogEntryDetail,
   CatalogMediaType,
@@ -169,25 +170,39 @@ export function invalidateSeasons(itemId: number | string): Promise<void> {
   });
 }
 
-export function patchCollection(collectionId: number, update: Partial<CollectionRead>): void {
+export function patchCollection(
+  collectionId: number,
+  update: Partial<CollectionRead> | ((collection: CollectionRead) => Partial<CollectionRead>),
+): void {
+  const apply = <T extends CollectionRead>(collection: T): T => ({
+    ...collection,
+    ...(typeof update === "function" ? update(collection) : update),
+  });
   queryClient.setQueriesData<CollectionRead[]>(
     {
       predicate: ({ queryKey }) => isTaggedQuery(queryKey, "listCollections"),
     },
     (collections) =>
       collections?.map((collection) =>
-        collection.id === collectionId ? { ...collection, ...update } : collection,
+        collection.id === collectionId ? apply(collection) : collection,
       ),
   );
   queryClient.setQueriesData<CollectionDetail>(
     { predicate: ({ queryKey }) => isTaggedQuery(queryKey, "getCollection") },
-    (collection) => (collection?.id === collectionId ? { ...collection, ...update } : collection),
+    (collection) => (collection?.id === collectionId ? apply(collection) : collection),
   );
   // The issue contributing the collection carries its art and theme.
   void queryClient.invalidateQueries({
     queryKey: getCatalogCollectionIssueQueryKey({ path: { collection_id: collectionId } }),
     exact: true,
   });
+}
+
+/** Apply a collection's theme as a response returned it. */
+export function patchCollectionTheme(collectionId: number, theme: AssetRead): void {
+  patchCollection(collectionId, (collection) => ({
+    assets: { ...collection.assets, theme },
+  }));
 }
 
 /** Apply a rule response without overwriting newer collection metadata. */

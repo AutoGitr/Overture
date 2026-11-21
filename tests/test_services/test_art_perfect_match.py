@@ -6,12 +6,10 @@ lazy import httpx2
 lazy import pytest
 
 lazy from overture.config import MediaServerConfig, Settings
-lazy from overture.db.art_slots import ArtFileFacts
 lazy from overture.schemas.art import ArtCandidate
 lazy from overture.services.art import matcher_cache
 lazy from overture.services.art import perfect_match as module
 lazy from overture.services.art.matcher_cache import ArtMatcherCache
-lazy from overture.services.art.phash import PHASH_HEX_LENGTH
 lazy from overture.utils.hashing import compute_bytes_hash
 lazy from overture.utils.image_fetch import FetchedImage
 lazy from tests.media_servers import configure, server_of
@@ -20,15 +18,8 @@ lazy from tests.runtime_helpers import NoopProviderRegistry, StaticImageClients
 LOCAL_BYTES = b"identical-bytes"
 
 
-def _local_facts(data: bytes = LOCAL_BYTES) -> ArtFileFacts:
-    return ArtFileFacts(
-        file_hash=compute_bytes_hash(data),
-        phash="0" * PHASH_HEX_LENGTH,
-        width=1000,
-        height=1500,
-        file_mtime_ns=1,
-        file_size=len(data),
-    )
+#: The hash of the bytes Overture holds.
+LOCAL_HASH = compute_bytes_hash(LOCAL_BYTES)
 
 
 class FakeCache(ArtMatcherCache):
@@ -61,7 +52,7 @@ async def test_close_matches_are_compared_with_the_original_bytes(
         )
     ]
 
-    errors = await module.annotate_perfect_matches(_local_facts(), matches, cache=cache)
+    errors = await module.annotate_perfect_matches(LOCAL_HASH, matches, cache=cache)
 
     assert errors == []
     assert bool(matches[0].perfect_match) == (remote == LOCAL_BYTES)
@@ -75,16 +66,16 @@ async def test_distant_and_urlless_matches_are_never_fetched() -> None:
         ArtCandidate(hamming=0, url=""),
     ]
 
-    await module.annotate_perfect_matches(_local_facts(), matches, cache=cache)
+    await module.annotate_perfect_matches(LOCAL_HASH, matches, cache=cache)
 
     assert cache.fetched == []
     assert all(match.perfect_match is None for match in matches)
 
 
-async def test_a_different_size_is_not_identical() -> None:
+async def test_different_bytes_are_not_identical() -> None:
     assert not await module.remote_matches_file(
         "https://example.test/a.jpg",
-        _local_facts(),
+        LOCAL_HASH,
         cache=FakeCache(LOCAL_BYTES + b"!"),
     )
 
@@ -95,7 +86,7 @@ async def test_fetch_failure_is_reported_not_annotated() -> None:
     ]
 
     errors = await module.annotate_perfect_matches(
-        _local_facts(), matches, cache=FakeCache(httpx2.ConnectError("offline"))
+        LOCAL_HASH, matches, cache=FakeCache(httpx2.ConnectError("offline"))
     )
 
     assert matches[0].perfect_match is None

@@ -111,9 +111,11 @@ export function collectionRecord(row: CollectionRead): AdvanceRecord {
   return {
     key: collectionKey(row.id),
     slots: [
-      { slot: "poster", complete: row.poster_status === "complete" },
-      { slot: "background", complete: row.background_status === "complete" },
-      ...(themes ? [{ slot: "theme" as const, complete: row.theme_status === "complete" }] : []),
+      { slot: "poster", complete: row.assets.poster.status === "complete" },
+      { slot: "background", complete: row.assets.background.status === "complete" },
+      ...(themes
+        ? [{ slot: "theme" as const, complete: row.assets.theme.status === "complete" }]
+        : []),
     ],
     open: (slot) =>
       goToCollectionView(

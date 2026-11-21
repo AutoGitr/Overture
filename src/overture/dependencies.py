@@ -20,6 +20,7 @@ lazy from .services.assets import AssetsService
 lazy from .services.auth import AuthService
 lazy from .services.backup.service import BackupService
 lazy from .services.catalog.service import CatalogService
+lazy from .services.collections.adoption import CollectionAdoption
 lazy from .services.collections.arr_requests import CollectionArr
 lazy from .services.collections.bulk import CollectionBulk
 lazy from .services.collections.discovery import CollectionDiscovery
@@ -31,6 +32,7 @@ lazy from .services.collections.saved_filters import SavedFilters
 lazy from .services.collections.set_runner import CollectionSets
 lazy from .services.collections.themes import CollectionThemes
 lazy from .services.library.service import LibraryService
+lazy from .services.needs import AssetNeeds
 lazy from .services.notifications import NotificationSettings
 lazy from .services.realtime import RealtimeSnapshotBuilder
 lazy from .services.removal import AssetRemover
@@ -124,6 +126,11 @@ def get_collection_editor(runtime: RuntimeDep) -> CollectionEditor:
     return runtime.collections.editor
 
 
+def get_collection_adoption(runtime: RuntimeDep) -> CollectionAdoption:
+    """Resolve the collections' adoption component."""
+    return runtime.collections.adoption
+
+
 def get_collection_groups(runtime: RuntimeDep) -> CollectionGroups:
     """Resolve the collections' groups component."""
     return runtime.collections.groups
@@ -204,6 +211,11 @@ def get_stats(runtime: RuntimeDep) -> StatsService:
     return runtime.stats
 
 
+def get_needs(runtime: RuntimeDep) -> AssetNeeds:
+    """Resolve what keeps assets' needs in step with their settings."""
+    return runtime.needs
+
+
 def get_provider_registry(runtime: RuntimeDep) -> ProviderRegistry:
     """Resolve the media server provider registry."""
     return runtime.provider_registry
@@ -241,6 +253,7 @@ CollectionDiscoveryDep = Annotated[
     CollectionDiscovery, Depends(get_collection_discovery)
 ]
 CollectionEditorDep = Annotated[CollectionEditor, Depends(get_collection_editor)]
+CollectionAdoptionDep = Annotated[CollectionAdoption, Depends(get_collection_adoption)]
 CollectionGroupsDep = Annotated[CollectionGroups, Depends(get_collection_groups)]
 CollectionSetsDep = Annotated[CollectionSets, Depends(get_collection_sets)]
 CollectionBulkDep = Annotated[CollectionBulk, Depends(get_collection_bulk)]
@@ -257,6 +270,7 @@ AssetManagerDep = Annotated[AssetManagerService, Depends(get_asset_manager)]
 StatsDep = Annotated[StatsService, Depends(get_stats)]
 NotificationsDep = Annotated[NotificationSettings, Depends(get_notifications)]
 ProviderRegistryDep = Annotated[ProviderRegistry, Depends(get_provider_registry)]
+NeedsDep = Annotated[AssetNeeds, Depends(get_needs)]
 TmdbDep = Annotated[TMDBClient, Depends(get_tmdb)]
 WebSocketsDep = Annotated[ConnectionManager, Depends(get_websockets)]
 JobSlotsDep = Annotated[dict[JobKind, ManagedBackgroundJob], Depends(get_job_slots)]

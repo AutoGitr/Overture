@@ -9,9 +9,9 @@ lazy from pathlib import Path
 
 lazy from ... import protocols
 lazy from ...domain import MediaType, library_parts
-lazy from ...jobs.progress_log import JobLogEntry, JobOutcome, LogServer, log_entry
+lazy from ...jobs.progress_log import JobOutcome
 lazy from ...jobs.runner import JobContext, ManagedJob, run_managed_job
-lazy from ...jobs.tally import SyncTally
+lazy from ...jobs.tally import JobTally
 lazy from ...media_servers.errors import MediaServerError
 lazy from ...media_servers.registry import Provider, ProviderRegistry, log_server
 lazy from ...schemas.collections import CollectionGroupSyncResult
@@ -51,8 +51,7 @@ async def run_sync(
     failed) through the managed job context, which also owns snapshot
     persistence for reconnect restore.
     """
-    tally = SyncTally()
-    async with run_managed_job(context, tally) as job:
+    async with run_managed_job(context, JobTally()) as job:
         await job.started()
         if job.stop_requested():
             return
@@ -110,7 +109,7 @@ async def run_sync(
 
 
 async def _sync_groups(
-    job: ManagedJob[SyncTally],
+    job: ManagedJob[JobTally],
     groups: protocols.CollectionGroups,
     names: list[str] | None,
     library_ids: list[str] | None,
@@ -137,23 +136,22 @@ async def _sync_groups(
 
 
 async def _report(
-    job: ManagedJob[SyncTally], subject: str, result: CollectionGroupSyncResult
+    job: ManagedJob[JobTally], subject: str, result: CollectionGroupSyncResult
 ) -> None:
     """Log what syncing a group or chosen collections did, and each failure."""
     for title, error in result.errors.items():
         await job.report(JobOutcome.ERROR, title, error, finished=False)
-    await job.progress(
-        log=log_entry(
-            JobOutcome.STARTED,
-            subject,
-            f"{result.synced} synced, {len(result.created)} created, "
-            f"{len(result.withheld)} taken off the server",
-        )
+    await job.report(
+        JobOutcome.STARTED,
+        subject,
+        f"{result.synced} synced, {len(result.created)} created, "
+        f"{len(result.withheld)} taken off the server",
+        finished=False,
     )
 
 
 async def _reachable(
-    job: ManagedJob[SyncTally],
+    job: ManagedJob[JobTally],
     provider_registry: ProviderRegistry,
     library_ids: list[str] | None,
 ) -> list[Provider]:
@@ -194,15 +192,8 @@ async def _reachable(
     return reachable
 
 
-async def _on_server(
-    job: ManagedJob[SyncTally], server: LogServer, entry: JobLogEntry
-) -> None:
-    """Log one line of a server's reconcile as about that server."""
-    await job.progress(log=server.on(entry))
-
-
 async def _sync_with_providers(
-    job: ManagedJob[SyncTally],
+    job: ManagedJob[JobTally],
     providers: Sequence[Provider],
     server_order: Sequence[int],
     reconciler: LibraryReconciler,
@@ -222,13 +213,12 @@ async def _sync_with_providers(
         listings: list[tuple[Provider, StagedListing]] = []
         async with AsyncExitStack() as staged:
             for provider in providers:
-                await job.progress(
-                    log=log_entry(
-                        JobOutcome.STARTED,
-                        "Sync",
-                        f"reading libraries from {provider.server.title}",
-                        server=log_server(provider),
-                    ),
+                await job.report(
+                    JobOutcome.STARTED,
+                    "Sync",
+                    f"reading libraries from {provider.server.title}",
+                    server=log_server(provider),
+                    finished=False,
                 )
                 await reconciler.record_libraries(
                     provider.server_id, await provider.get_sections()
@@ -250,8 +240,7 @@ async def _sync_with_providers(
                     listing,
                     ServerTurn(provider.server_id, frozenset(server_order[:position])),
                     library_ids=library_ids,
-                    tally=job.tally,
-                    progress_cb=partial(_on_server, job, log_server(provider)),
+                    report=partial(job.report, server=log_server(provider)),
                     stop_check=job.stop_requested,
                 )
                 moves += result.library_moves
@@ -259,11 +248,10 @@ async def _sync_with_providers(
                     # A stopped run saw only some of the moves.
                     return
     for library_id, successor in await reconciler.follow_moved_libraries(moves):
-        await job.progress(
-            log=log_entry(
-                JobOutcome.STARTED,
-                "Libraries",
-                f"collections, sets and schedules of library {library_id} "
-                f"now use {successor}, which holds its titles",
-            )
+        await job.report(
+            JobOutcome.STARTED,
+            "Libraries",
+            f"collections, sets and schedules of library {library_id} "
+            f"now use {successor}, which holds its titles",
+            finished=False,
         )

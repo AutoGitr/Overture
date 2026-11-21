@@ -20,7 +20,7 @@ lazy from overture.jobs.kinds import INTERRUPTED_MESSAGE, JobKind
 lazy from overture.jobs.lifecycle import ManagedJobLifecycle
 lazy from overture.jobs.runner import JobContext, run_managed_job
 lazy from overture.jobs.slot import ManagedBackgroundJob
-lazy from overture.jobs.tally import SyncTally
+lazy from overture.jobs.tally import JobTally
 lazy from overture.ws.events import validate_event_payload
 lazy from tests.runtime_helpers import RecordingPublisher
 
@@ -96,7 +96,7 @@ async def test_a_cooperative_body_publishes_one_stopped_event() -> None:
     slot = _slot(publisher)
 
     async def body(context: JobContext) -> None:
-        async with run_managed_job(context, SyncTally()) as job:
+        async with run_managed_job(context, JobTally()) as job:
             await job.started(total=2)
             running.set()
             await context.stop_event.wait()
@@ -127,7 +127,7 @@ async def test_a_body_that_ignores_the_stop_flag_is_cancelled_and_still_reports(
     slot = _slot(publisher)
 
     async def body(context: JobContext) -> None:
-        async with run_managed_job(context, SyncTally()) as job:
+        async with run_managed_job(context, JobTally()) as job:
             await job.started()
             await job.planned(4)
             job.tally.done = 1
@@ -177,7 +177,7 @@ async def test_a_run_that_ended_on_its_own_is_not_reported_twice() -> None:
     slot = _slot(publisher)
 
     async def body(context: JobContext) -> None:
-        async with run_managed_job(context, SyncTally()) as job:
+        async with run_managed_job(context, JobTally()) as job:
             await job.started(total=0)
 
     assert slot.start_with_context(body) is True

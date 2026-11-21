@@ -14,25 +14,22 @@ lazy from sqlmodel import (
 )
 
 lazy from ...domain import (
-    ArtType,
     CollectionFiltering,
     CollectionKind,
     CollectionMode,
     CollectionOrder,
     MediaType,
-    ThemeBulkSource,
 )
 lazy from ..columns import enum_type, typed_columns
-lazy from .art import ArtSlot
+lazy from .asset import Asset
 lazy from .collection_group import CollectionGroup
 lazy from .collection_rule import CollectionRule
 lazy from .download_job import DownloadJob
 lazy from .library import Library
 lazy from .media_item import MediaItem
-lazy from .shared import ThemeColumns
 
 
-class MediaCollection(ThemeColumns, table=True):
+class MediaCollection(SQLModel, table=True):
     """One collection as Overture shows it, across every library it spans."""
 
     __tablename__: ClassVar[Any] = "media_collections"
@@ -71,10 +68,6 @@ class MediaCollection(ThemeColumns, table=True):
     active_end_mmdd: str | None = None
     delete_when_inactive: bool | None = None
     child_count: int = Field(default=0, nullable=False)
-    # The lead server copy's image URLs; only their hash leaves the backend, as a
-    # cache version.
-    thumb_url: str | None = None
-    art_url: str | None = None
     server_added_at: datetime | None = None
 
     # TMDB collection ID the server itself names, such as a BoxSet's.
@@ -83,13 +76,6 @@ class MediaCollection(ThemeColumns, table=True):
     #: The value its group's collection set created it for.
     generated_value: str | None = None
 
-    #: Where the theme Overture installed was found.
-    youtube_id_source: ThemeBulkSource | None = Field(
-        default=None, sa_type=enum_type(ThemeBulkSource)
-    )
-
-    # Plex's uploaded theme identity. Folder themes use local file facts.
-    server_theme_id: str | None = None
     last_matched_at: datetime | None = None
 
     # Whether the collection is included in theme workflows.
@@ -114,7 +100,7 @@ class MediaCollection(ThemeColumns, table=True):
         cascade_delete=True,
         sa_relationship_kwargs={"lazy": "joined", "uselist": False},
     )
-    art_slots: list["ArtSlot"] = Relationship(
+    assets: list["Asset"] = Relationship(
         back_populates="collection",
         cascade_delete=True,
         sa_relationship_kwargs={"lazy": "selectin"},
@@ -137,6 +123,12 @@ class MediaCollection(ThemeColumns, table=True):
             "order_by": "MediaCollectionMember.position",
         },
     )
+
+    def __init__(self, **data: Any) -> None:
+        super().__init__(**data)
+        # A new row holds no assets, so reading them never loads from the database.
+        if "assets" not in data:
+            self.assets = []
 
     @property
     def group_name(self) -> str | None:
@@ -169,10 +161,6 @@ class MediaCollection(ThemeColumns, table=True):
     @property
     def library_ids(self) -> list[str]:
         return [part.library_id for part in self.libraries]
-
-    def server_image_url(self, art_type: ArtType) -> str | None:
-        """The server's current poster or background, as sync last saw it."""
-        return self.thumb_url if art_type is ArtType.POSTER else self.art_url
 
 
 class CollectionLibrary(SQLModel, table=True):

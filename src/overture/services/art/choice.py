@@ -1,4 +1,4 @@
-"""Validating a chosen artwork link before any slot records it."""
+"""Validating a chosen artwork link before any asset records it."""
 
 lazy from dataclasses import dataclass
 
@@ -6,7 +6,7 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ...catalog_contract.contract import canonical_art_url
 lazy from ...config import Settings
-lazy from ...db.art_slots import ArtFileFacts
+lazy from ...db.ledger import ContentFacts
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
 lazy from ...domain import ArtType
@@ -71,7 +71,7 @@ class ArtSelection:
     records the slot when it lands.
     """
 
-    source: str | ArtFileFacts
+    source: str | ContentFacts
     stored_url: PublicArtUrl | None = None
 
 

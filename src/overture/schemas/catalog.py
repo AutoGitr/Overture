@@ -68,8 +68,6 @@ class CatalogStatus(StrictBaseModel):
 class CatalogSyncEvent(JobEnvelope):
     """WebSocket payload for catalog sync lifecycle events."""
 
-    started_at: str | None = None
-    finished_at: str | None = None
     stats: CatalogSyncStats = Field(default_factory=CatalogSyncStats)
 
 

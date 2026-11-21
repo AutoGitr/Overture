@@ -2,13 +2,9 @@ import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import { describe, expect, it, vi } from "vitest";
 import type { ComponentProps } from "svelte";
 import SidebarControls from "../../../lib/components/SidebarControls.svelte";
-import {
-  searchFieldGroups,
-  searchPlaceholder,
-  sortMenu,
-  type SidebarMode,
-  type SidebarTab,
-} from "../../../lib/utils/sidebarDomain";
+import { searchFieldGroups, searchPlaceholder } from "../../../lib/utils/sidebarSearches";
+import type { SidebarMode, SidebarTab } from "../../../lib/utils/sidebarShared";
+import { sortMenu } from "../../../lib/utils/sidebarSorts";
 
 interface ListOptions {
   mode?: SidebarMode;

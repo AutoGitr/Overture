@@ -8,7 +8,6 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ... import protocols
 lazy from ...config import Settings
-lazy from ...db.completion import collection_theme_status
 lazy from ...db.models.catalog import CatalogCollection
 lazy from ...db.models.collection_group import CollectionGroup
 lazy from ...db.models.media_collection import CollectionLibrary, MediaCollection
@@ -16,7 +15,6 @@ lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
 lazy from ...domain import (
     UNMANAGED_REFUSAL,
-    AssetStatus,
     MediaType,
     ServerType,
     TermKind,
@@ -24,23 +22,24 @@ lazy from ...domain import (
 )
 lazy from ...media_servers.registry import CollectionProvider, ProviderRegistry
 lazy from ...repositories.catalog import CatalogRepository
-lazy from ...repositories.collections import (
+lazy from ...repositories.collection_items import (
     CollectionItem,
-    CollectionRepository,
+    CollectionItemRepository,
     TermSelection,
 )
+lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.libraries import LibraryRepository
 lazy from ...schemas.collections import (
     CollectionLibraryCriteria,
     FilterGroup,
-    catalog_says_no_theme,
 )
 lazy from ...utils.collection_fields import PLEX_COLLECTION_KEY
 lazy from ...utils.collection_formats import is_within_active_window
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.locks import KeyedLock
 lazy from ...utils.time import local_now
-lazy from ..schedule_store import CATALOG_SCHEDULE, load_schedule
+lazy from ..needs import AssetNeeds
+lazy from ..schedule_store import catalog_enabled
 lazy from . import COLLECTIONS_LOCK
 lazy from .copies import ServerCopy, held_copies, lead_part, server_copies
 lazy from .criteria import criteria_terms
@@ -61,11 +60,10 @@ class LibraryScope:
 
 
 async def catalog_collections(
-    session: AsyncSession, tmdb_ids: set[int], *, app_config: Settings
+    session: AsyncSession, tmdb_ids: set[int]
 ) -> dict[int, CatalogCollection]:
     """Return the catalog's entries for these TMDB collections, if it is enabled."""
-    schedule = await load_schedule(session, CATALOG_SCHEDULE, timezone=app_config.TZ)
-    if not schedule.enabled or not tmdb_ids:
+    if not tmdb_ids or not await catalog_enabled(session):
         return {}
     return await CatalogRepository(session).collections_by_tmdb_id(tmdb_ids)
 
@@ -81,8 +79,11 @@ class CollectionAccess:
         publisher: protocols.EventPublisher,
         asset_locks: KeyedLock[int | str],
         app_config: Settings,
+        needs: AssetNeeds,
     ) -> None:
         self.database = database
+        #: Keeps assets' needs in step with the policies that decide them.
+        self.needs = needs
         self.app_config = app_config
         self.asset_locks = asset_locks
         #: The configured servers' providers.
@@ -239,35 +240,6 @@ class CollectionAccess:
     ) -> CollectionPolicy:
         return resolve_policy(await get_app_settings(session), group, rule)
 
-    async def theme_status(
-        self,
-        session: AsyncSession,
-        row: MediaCollection,
-        *,
-        server_has_theme: bool,
-        youtube_id: str | None,
-    ) -> AssetStatus:
-        """Return the collection's theme status, given what it holds.
-
-        Its policy and OvertureDB's No theme flag decide whether it needs one.
-        """
-        settings = await get_app_settings(session)
-        entries = await catalog_collections(
-            session,
-            {row.tmdb_collection_id} if row.tmdb_collection_id else set(),
-            app_config=self.app_config,
-        )
-        no_theme = catalog_says_no_theme(
-            entries.get(row.tmdb_collection_id or 0),
-            trust_no_theme=settings.overturedb_no_theme,
-        )
-        return collection_theme_status(
-            server_has_theme=server_has_theme,
-            youtube_id=youtube_id,
-            needed=resolve_policy(settings, row.group, row.rule).themes
-            and not no_theme,
-        )
-
     async def library_types(self, library_ids: Iterable[str]) -> dict[str, MediaType]:
         """What each of the servers' libraries holds.
 
@@ -300,7 +272,7 @@ class CollectionAccess:
         """The stored items of one of the server's libraries of this media type."""
         await self._require_type(library_id, media_type)
         async with self.database.read_session() as session:
-            return await CollectionRepository(session).library_items(
+            return await CollectionItemRepository(session).library_items(
                 media_type, library_id, terms
             )
 
@@ -309,7 +281,7 @@ class CollectionAccess:
     ) -> list[CollectionItem]:
         """The stored items of a library a collection spans, listed or not."""
         async with self.database.read_session() as session:
-            return await CollectionRepository(session).library_items(
+            return await CollectionItemRepository(session).library_items(
                 part.media_type, part.library_id, terms
             )
 
@@ -319,13 +291,13 @@ class CollectionAccess:
         """How many of the items of one of the server's libraries hold each value."""
         await self._require_type(library_id, media_type)
         async with self.database.read_session() as session:
-            return await CollectionRepository(session).term_counts(
+            return await CollectionItemRepository(session).term_counts(
                 media_type, library_id, kind
             )
 
     async def scope(
         self,
-        repo: CollectionRepository,
+        repo: CollectionItemRepository,
         library_id: str,
         media_type: MediaType,
         criteria: FilterGroup,
@@ -358,7 +330,7 @@ class CollectionAccess:
         """Each library's criteria with the items it selects from."""
         types = await self.library_types(entry.library_id for entry in libraries)
         async with self.database.read_session() as session:
-            repo = CollectionRepository(session)
+            repo = CollectionItemRepository(session)
             return [
                 await self.scope(
                     repo,
@@ -376,7 +348,7 @@ class CollectionAccess:
     ) -> dict[int, list[str]]:
         """The IDs of the collections each item of a library belongs to."""
         async with self.database.read_session() as session:
-            return await CollectionRepository(session).memberships_by_item(
+            return await CollectionItemRepository(session).memberships_by_item(
                 library_id, excluding
             )
 

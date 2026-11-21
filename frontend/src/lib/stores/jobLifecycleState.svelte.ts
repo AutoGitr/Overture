@@ -1,3 +1,4 @@
+import type { JobOutcome } from "../../generated/ws";
 import { serverClock } from "../realtime/serverClock";
 import { jobEventErrorMessage } from "../utils/errors";
 import { JobLogFeed, type JobLogEvent } from "./jobLogFeed.svelte";
@@ -8,37 +9,30 @@ export interface JobLifecycleEvent extends JobLogEvent {
   job?: { id?: string | null; error?: { message?: string | null } | null } | null;
   done?: number | null;
   total?: number | null;
-  errors?: number | null;
   started_at?: string | null;
   finished_at?: string | null;
   schedule?: string | null;
 }
 
 /** How one job's events are read. */
-export interface JobLifecycleConfig<C extends string> {
+export interface JobLifecycleConfig {
   /** Message shown when the job fails without one. */
   failureMessage: string;
-  /**
-   * Counters the job's events carry besides done, total and errors. Each one
-   * equals the number of log lines that start with its outcome word.
-   */
-  counters?: readonly C[];
 }
 
 /**
  * One background job as its realtime events describe it.
  *
  * Every job publishes the same lifecycle (started, progress, completed,
- * stopped, failed), so the handlers live here and a job only names its
- * counters; a job that also collects findings extends this class.
+ * stopped, failed), so the handlers live here; a job that also collects
+ * findings extends this class. What the run did is counted from its log
+ * alone (`count`), so the figures always match the log's filters.
  */
-export class JobLifecycleState<T extends JobLifecycleEvent, C extends string = never> {
+export class JobLifecycleState<T extends JobLifecycleEvent> {
   status = $state<JobStatus>("idle");
   done = $state(0);
   /** Every target the run will report on; `null` until the run has planned them. */
   total = $state<number | null>(null);
-  errors = $state(0);
-  counters: Record<C, number>;
   readonly log = new JobLogFeed();
   started_at = $state<string | null>(null);
   finished_at = $state<string | null>(null);
@@ -48,11 +42,15 @@ export class JobLifecycleState<T extends JobLifecycleEvent, C extends string = n
   /** A stop was accepted and the run has not ended yet. */
   stopping = $state(false);
 
-  protected readonly config: JobLifecycleConfig<C>;
+  protected readonly config: JobLifecycleConfig;
 
-  constructor(config: JobLifecycleConfig<C>) {
+  constructor(config: JobLifecycleConfig) {
     this.config = config;
-    this.counters = $state(this.zeroCounters());
+  }
+
+  /** The targets the run's log reported with `outcome`. */
+  count(outcome: JobOutcome): number {
+    return this.log.targets[outcome] ?? 0;
   }
 
   get running(): boolean {
@@ -124,13 +122,11 @@ export class JobLifecycleState<T extends JobLifecycleEvent, C extends string = n
     this.resetLifecycle();
   }
 
-  /** Forget the lifecycle and counters; a subclass keeps what it collects. */
+  /** Forget the lifecycle; a subclass keeps what it collects. */
   protected resetLifecycle() {
     this.status = "idle";
     this.done = 0;
     this.total = null;
-    this.errors = 0;
-    this.counters = this.zeroCounters();
     this.log.reset();
     this.started_at = null;
     this.finished_at = null;
@@ -151,20 +147,12 @@ export class JobLifecycleState<T extends JobLifecycleEvent, C extends string = n
   private apply(data: T) {
     this.done = data.done ?? this.done;
     this.total = data.total ?? this.total;
-    this.errors = data.errors ?? this.errors;
     this.started_at = data.started_at || this.started_at;
     this.schedule = data.schedule ?? this.schedule;
-    const carried = data as Partial<Record<C, number | null>>;
-    for (const name of this.config.counters ?? []) {
-      this.counters[name] = carried[name] ?? this.counters[name];
-    }
+    this.absorb(data);
     this.log.apply(data);
   }
 
-  private zeroCounters(): Record<C, number> {
-    return Object.fromEntries((this.config.counters ?? []).map((name) => [name, 0])) as Record<
-      C,
-      number
-    >;
-  }
+  /** Take what a subclass reads from each event besides the shared figures. */
+  protected absorb(_data: T) {}
 }

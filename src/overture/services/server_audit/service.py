@@ -1,12 +1,9 @@
 """Server audit route-facing service operations."""
 
 lazy from collections.abc import Mapping, Sequence
-lazy from pathlib import Path
 
 lazy from ... import protocols
-lazy from ...config import Settings
 lazy from ...db.session import Database
-lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...jobs.registry import BackgroundJobRegistry
 lazy from ...media_servers.registry import ProviderRegistry
 lazy from ...schemas.common import StatusResponse
@@ -18,8 +15,10 @@ lazy from ...schemas.server_audit import (
 )
 lazy from ..art.collection_art import CollectionArtService
 lazy from ..art.phash import PhashService
+lazy from ..downloads.theme import DownloadThemeHandler
 lazy from ..job_snapshots import patch_snapshot, require_snapshot_keys
 lazy from ..local_assets.service import LocalAssets
+lazy from ..server_copies import ServerCopies
 lazy from ..storage.trusted_roots import validate_folders_under_trusted_roots
 lazy from .compare import AuditContext, run_server_audit
 lazy from .fix import (
@@ -41,23 +40,21 @@ class ServerAuditService:
         provider_registry: ProviderRegistry,
         local_assets: LocalAssets,
         phash: PhashService,
-        image_clients: ProxyClientManager,
         publisher: protocols.EventPublisher,
-        app_config: Settings,
         database: Database,
-        config_dir: Path,
         collection_art: CollectionArtService,
+        server_copies: ServerCopies,
+        theme_handler: DownloadThemeHandler,
     ) -> None:
         self._jobs = background_jobs
         self._provider_registry = provider_registry
         self._local_assets = local_assets
         self._phash = phash
-        self._image_clients = image_clients
         self._publisher = publisher
-        self._config = app_config
         self._database = database
-        self._config_dir = config_dir
         self._collection_art = collection_art
+        self._server_copies = server_copies
+        self._theme_handler = theme_handler
 
     def _audit_context(self) -> AuditContext:
         return AuditContext(
@@ -65,11 +62,11 @@ class ServerAuditService:
             asset_storage=self._local_assets.asset_storage,
             local_assets=self._local_assets,
             phash=self._phash,
-            image_clients=self._image_clients,
-            app_config=self._config,
+            server_copies=self._server_copies,
             database=self._database,
-            config_dir=self._config_dir,
             collection_art=self._collection_art,
+            theme_handler=self._theme_handler,
+            publisher=self._publisher,
         )
 
     async def start(

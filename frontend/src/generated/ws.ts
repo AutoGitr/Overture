@@ -3,99 +3,91 @@
 // Models that also appear in openapi.json are imported from the REST bundle
 // rather than redeclared, so both generators describe one type universe.
 
-import type { Agreement, ArtSource, ArtType, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CatalogSelections, CatalogStatus, CatalogSyncOutcome, CatalogSyncStats, CollectionDownloadTarget, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemCopyRead, ItemDownloadTarget, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaServerState, MediaServerStatus, MediaType, MetadataIssue, PublicError, PublicText, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource } from "./rest/types.gen";
+import type { Agreement, ArtSource, ArtStyle, ArtType, AssetDeliveryRead, AssetFileRead, AssetRead, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CatalogSelections, CatalogStatus, CatalogSyncOutcome, CatalogSyncStats, CollectionDownloadTarget, CollectionPosterStyle, DeliveryChannel, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemCopyRead, ItemDownloadTarget, ItemRecordOperation, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaServerState, MediaServerStatus, MediaType, MetadataIssue, PublicError, PublicText, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource, TitleAssets } from "./rest/types.gen";
 
-export type { Agreement, ArtSource, ArtType, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CatalogSelections, CatalogStatus, CatalogSyncOutcome, CatalogSyncStats, CollectionDownloadTarget, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemCopyRead, ItemDownloadTarget, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaServerState, MediaServerStatus, MediaType, MetadataIssue, PublicError, PublicText, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource } from "./rest/types.gen";
+export type { Agreement, ArtSource, ArtStyle, ArtType, AssetDeliveryRead, AssetFileRead, AssetRead, AssetStatus, BulkItemOperationKind, BulkItemOperationResult, CatalogSelections, CatalogStatus, CatalogSyncOutcome, CatalogSyncStats, CollectionDownloadTarget, CollectionPosterStyle, DeliveryChannel, DownloadJobEvent, DownloadJobMetadata, DownloadStatus, ItemCopyRead, ItemDownloadTarget, ItemRecordOperation, JobKind, JobLogEntry, JobOutcome, JsonValue, MediaItemRead, MediaServerState, MediaServerStatus, MediaType, MetadataIssue, PublicError, PublicText, RealtimeJobSnapshot, RealtimeSnapshot, ServerAsset, ThemeIdSource, TitleAssets } from "./rest/types.gen";
 
 export type LifecycleStatus = "started" | "progress" | "completed" | "stopped" | "failed";
 
 export interface JobMetadata {
   kind: JobKind;
   status: LifecycleStatus;
-  id?: string | null;
-  target?: {
+  id: string | null;
+  target: {
     [key: string]: JsonValue;
   } | null;
-  error?: PublicError | null;
+  error: PublicError | null;
 }
 
 export interface SyncJobEvent {
-  job?: JobMetadata | null;
-  log?: JobLogEntry | null;
-  run_id?: string | null;
-  schedule?: string | null;
-  log_total?: number | null;
-  log_outcomes?: {
+  job: JobMetadata | null;
+  done: number | null;
+  total: number | null;
+  started_at: string | null;
+  finished_at: string | null;
+  log: JobLogEntry | null;
+  run_id: string | null;
+  schedule: string | null;
+  log_total: number | null;
+  log_outcomes: {
     [key: string]: number;
   } | null;
-  log_servers?: {
+  log_targets: {
+    [key: string]: number;
+  } | null;
+  log_servers: {
     [key: string]: {
       [key: string]: number;
     };
   } | null;
-  done?: number | null;
-  total?: number | null;
-  added?: number | null;
-  updated?: number | null;
-  unchanged?: number | null;
-  removed?: number | null;
-  errors?: number | null;
-  started_at?: string | null;
-  finished_at?: string | null;
 }
 
 export interface BulkArtJobEvent {
-  job?: JobMetadata | null;
-  log?: JobLogEntry | null;
-  run_id?: string | null;
-  schedule?: string | null;
-  log_total?: number | null;
-  log_outcomes?: {
+  job: JobMetadata | null;
+  done: number | null;
+  total: number | null;
+  started_at: string | null;
+  finished_at: string | null;
+  log: JobLogEntry | null;
+  run_id: string | null;
+  schedule: string | null;
+  log_total: number | null;
+  log_outcomes: {
     [key: string]: number;
   } | null;
-  log_servers?: {
+  log_targets: {
+    [key: string]: number;
+  } | null;
+  log_servers: {
     [key: string]: {
       [key: string]: number;
     };
   } | null;
-  done?: number | null;
-  total?: number | null;
-  queued?: number | null;
-  downloaded?: number | null;
-  adopted?: number | null;
-  skipped?: number | null;
-  no_match?: number | null;
-  errors?: number | null;
-  settled?: number | null;
-  started_at?: string | null;
-  finished_at?: string | null;
+  settled: number | null;
 }
 
 export interface BulkThemeJobEvent {
-  job?: JobMetadata | null;
-  log?: JobLogEntry | null;
-  run_id?: string | null;
-  schedule?: string | null;
-  log_total?: number | null;
-  log_outcomes?: {
+  job: JobMetadata | null;
+  done: number | null;
+  total: number | null;
+  started_at: string | null;
+  finished_at: string | null;
+  log: JobLogEntry | null;
+  run_id: string | null;
+  schedule: string | null;
+  log_total: number | null;
+  log_outcomes: {
     [key: string]: number;
   } | null;
-  log_servers?: {
+  log_targets: {
+    [key: string]: number;
+  } | null;
+  log_servers: {
     [key: string]: {
       [key: string]: number;
     };
   } | null;
-  done?: number | null;
-  total?: number | null;
-  queued?: number | null;
-  downloaded?: number | null;
-  adopted?: number | null;
-  skipped?: number | null;
-  no_match?: number | null;
-  errors?: number | null;
-  settled?: number | null;
-  started_at?: string | null;
-  finished_at?: string | null;
+  settled: number | null;
 }
 
 export interface AssetIssue {
@@ -108,118 +100,113 @@ export interface AssetIssue {
   conflict: boolean;
   width: number;
   height: number;
-  conflict_with?: string | null;
-  season_num?: number | null;
+  conflict_with: string | null;
+  season_num: number | null;
   potential_false_positive: boolean;
-  renamed?: boolean | null;
-  rename_error?: PublicText | null;
+  renamed: boolean | null;
+  rename_error: PublicText | null;
 }
 
 export interface AssetScanProgressEvent {
-  job?: JobMetadata | null;
-  log?: JobLogEntry | null;
-  run_id?: string | null;
-  schedule?: string | null;
-  log_total?: number | null;
-  log_outcomes?: {
+  job: JobMetadata | null;
+  done: number | null;
+  total: number | null;
+  started_at: string | null;
+  finished_at: string | null;
+  log: JobLogEntry | null;
+  run_id: string | null;
+  schedule: string | null;
+  log_total: number | null;
+  log_outcomes: {
     [key: string]: number;
   } | null;
-  log_servers?: {
+  log_targets: {
+    [key: string]: number;
+  } | null;
+  log_servers: {
     [key: string]: {
       [key: string]: number;
     };
   } | null;
-  results_total?: number | null;
-  done?: number | null;
-  total?: number | null;
-  total_folders?: number | null;
-  issues_found?: number | null;
-  results_found?: number | null;
-  errors?: number | null;
-  started_at?: string | null;
-  finished_at?: string | null;
-  issues?: AssetIssue[] | null;
+  results_total: number | null;
+  total_folders: number | null;
+  issues_found: number | null;
+  results_found: number | null;
+  issues: AssetIssue[] | null;
 }
 
 export type AuditStatus = "phash_match" | "phash_mismatch" | "server_missing" | "theme_match" | "theme_mismatch" | "theme_server_missing" | "theme_unknown" | "local_missing" | "unresolved_server_id" | "error";
 
 export interface ServerAuditResult {
   kind: "art" | "theme";
-  item_id?: number | null;
-  collection_id?: number | null;
-  season_id?: number | null;
+  item_id: number | null;
+  collection_id: number | null;
+  season_id: number | null;
   art_type: ServerAsset;
   status: AuditStatus;
   title: string;
-  local_path?: string | null;
-  server_image_present?: boolean | null;
-  hamming?: number | null;
-  reason?: PublicText | null;
-  local_duration?: number | null;
-  server_duration?: number | null;
-  server_id?: number | null;
-  server?: string | null;
-  server_item_id?: string | null;
-  theme_id?: string | null;
-  theme_title?: string | null;
-  refreshed?: boolean | null;
-  refresh_error?: PublicText | null;
+  local_path: string | null;
+  server_image_present: boolean | null;
+  hamming: number | null;
+  reason: PublicText | null;
+  local_duration: number | null;
+  server_duration: number | null;
+  server_id: number | null;
+  server: string | null;
+  server_item_id: string | null;
+  theme_id: string | null;
+  theme_title: string | null;
+  refreshed: boolean | null;
+  refresh_error: PublicText | null;
 }
 
 export interface ServerAuditProgressEvent {
-  job?: JobMetadata | null;
-  log?: JobLogEntry | null;
-  run_id?: string | null;
-  schedule?: string | null;
-  log_total?: number | null;
-  log_outcomes?: {
+  job: JobMetadata | null;
+  done: number | null;
+  total: number | null;
+  started_at: string | null;
+  finished_at: string | null;
+  log: JobLogEntry | null;
+  run_id: string | null;
+  schedule: string | null;
+  log_total: number | null;
+  log_outcomes: {
     [key: string]: number;
   } | null;
-  log_servers?: {
+  log_targets: {
+    [key: string]: number;
+  } | null;
+  log_servers: {
     [key: string]: {
       [key: string]: number;
     };
   } | null;
-  results_total?: number | null;
-  done?: number | null;
-  total?: number | null;
-  results_found?: number | null;
-  errors?: number | null;
-  started_at?: string | null;
-  finished_at?: string | null;
-  results?: ServerAuditResult[] | null;
+  results_total: number | null;
+  results_found: number | null;
+  results: ServerAuditResult[] | null;
 }
 
 export interface ServerAuditFixEvent {
-  job?: JobMetadata | null;
-  log?: JobLogEntry | null;
-  run_id?: string | null;
-  schedule?: string | null;
-  log_total?: number | null;
-  log_outcomes?: {
+  job: JobMetadata | null;
+  done: number | null;
+  total: number | null;
+  started_at: string | null;
+  finished_at: string | null;
+  log: JobLogEntry | null;
+  run_id: string | null;
+  schedule: string | null;
+  log_total: number | null;
+  log_outcomes: {
     [key: string]: number;
   } | null;
-  log_servers?: {
+  log_targets: {
+    [key: string]: number;
+  } | null;
+  log_servers: {
     [key: string]: {
       [key: string]: number;
     };
   } | null;
-  done?: number | null;
-  total?: number | null;
-  verified?: number | null;
-  unchanged?: number | null;
-  errors?: number | null;
-  started_at?: string | null;
-  finished_at?: string | null;
-}
-
-export interface CollectionThemeUpdatedEvent {
-  collection_id: number;
-  has_theme: boolean;
-  youtube_id?: string | null;
-  youtube_title?: string | null;
-  youtube_duration?: number | null;
-  theme_status: AssetStatus;
 }
 
 export interface CollectionUpdatedEvent {
@@ -232,53 +219,63 @@ export interface CollectionMonitoredEvent {
 }
 
 export interface CatalogSyncEvent {
-  job?: JobMetadata | null;
-  log?: JobLogEntry | null;
-  run_id?: string | null;
-  schedule?: string | null;
-  log_total?: number | null;
-  log_outcomes?: {
+  job: JobMetadata | null;
+  done: number | null;
+  total: number | null;
+  started_at: string | null;
+  finished_at: string | null;
+  log: JobLogEntry | null;
+  run_id: string | null;
+  schedule: string | null;
+  log_total: number | null;
+  log_outcomes: {
     [key: string]: number;
   } | null;
-  log_servers?: {
+  log_targets: {
+    [key: string]: number;
+  } | null;
+  log_servers: {
     [key: string]: {
       [key: string]: number;
     };
   } | null;
-  started_at?: string | null;
-  finished_at?: string | null;
-  stats?: CatalogSyncStats;
+  stats: CatalogSyncStats;
 }
 
 export interface BackupJobEvent {
-  job?: JobMetadata | null;
-  log?: JobLogEntry | null;
-  run_id?: string | null;
-  schedule?: string | null;
-  log_total?: number | null;
-  log_outcomes?: {
+  job: JobMetadata | null;
+  done: number | null;
+  total: number | null;
+  started_at: string | null;
+  finished_at: string | null;
+  log: JobLogEntry | null;
+  run_id: string | null;
+  schedule: string | null;
+  log_total: number | null;
+  log_outcomes: {
     [key: string]: number;
   } | null;
-  log_servers?: {
+  log_targets: {
+    [key: string]: number;
+  } | null;
+  log_servers: {
     [key: string]: {
       [key: string]: number;
     };
   } | null;
-  filename?: string | null;
-  scheduled?: boolean | null;
-  started_at?: string | null;
-  finished_at?: string | null;
+  filename: string | null;
+  scheduled: boolean | null;
 }
 
 export interface LibraryItemUpsertedEvent {
   item: MediaItemRead;
-  source?: string | null;
+  source: string | null;
 }
 
 export interface LibraryItemRemovedEvent {
   media_item_id: number;
-  media_type?: MediaType | null;
-  source?: string | null;
+  media_type: MediaType | null;
+  source: string | null;
 }
 
 export interface ItemUpdatedEvent {
@@ -290,10 +287,10 @@ export interface JobSnapshotClearedEvent {
   finished_at: string;
 }
 
-export type ScheduleKind = "assets" | "sync";
+export type NamedScheduleKind = "assets" | "sync";
 
 export interface SchedulesChangedEvent {
-  kind: ScheduleKind;
+  kind: NamedScheduleKind;
 }
 
 /** A tag the REST query keys carry. */
@@ -368,7 +365,6 @@ export interface WebSocketPayloadMap {
   'download.completed': DownloadJobEvent;
   'download.failed': DownloadJobEvent;
   'download.cancelled': DownloadJobEvent;
-  'collection.theme.updated': CollectionThemeUpdatedEvent;
   'collections.changed': null;
   'collection.updated': CollectionUpdatedEvent;
   'collection.monitored': CollectionMonitoredEvent;
@@ -430,7 +426,6 @@ export const WEBSOCKET_EVENTS = [
   'download.completed',
   'download.failed',
   'download.cancelled',
-  'collection.theme.updated',
   'collections.changed',
   'collection.updated',
   'collection.monitored',

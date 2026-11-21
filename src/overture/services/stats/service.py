@@ -1,20 +1,19 @@
 """Application statistics service."""
 
+lazy from dataclasses import dataclass
 lazy from pathlib import Path
 lazy from typing import Any, cast
 
-lazy from sqlmodel import case, col, func, select, text
+lazy from sqlmodel import and_, case, col, func, or_, select, text
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from sqlmodel.sql.expression import Select
 
-lazy from ...db.completion import SLOT_COMPLETE, THEME_COMPLETE
-lazy from ...db.models.art import ArtSlot
-lazy from ...db.models.media_collection import MediaCollection
+lazy from ...db.models.asset import Asset, AssetDelivery
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.session import Database
 lazy from ...db.tables import table_description, table_models, table_of
-lazy from ...domain import ITEM_ART_TYPES, ArtType, AssetStatus, MediaType
+lazy from ...domain import AssetStatus, DeliveryChannel, MediaType, ServerAsset
 lazy from ...schemas.collections import CollectionRead
 lazy from ...schemas.stats import (
     ArtTypeStats,
@@ -35,16 +34,98 @@ lazy from ..backup.service import BackupService
 lazy from ..collections.reader import CollectionReader
 lazy from ..storage.image_cache import ImageCache
 
-_HAS_FILE = col(ArtSlot.file_hash).is_not(None)
-#: Counts of local and of complete art slots in a grouped query.
-_SLOT_COUNTS = (
-    func.sum(case((_HAS_FILE, 1), else_=0)),
-    func.sum(case((SLOT_COMPLETE, 1), else_=0)),
-)
-#: Bytes of the local files of art slots in a grouped query.
-_SLOT_BYTES = func.sum(
-    case((_HAS_FILE, func.coalesce(col(ArtSlot.file_size), 0)), else_=0)
-)
+#: What one asset counts toward: its kind, and the owner's kind and media type.
+type _AssetKey = tuple[ServerAsset, str, MediaType | None]
+
+
+@dataclass(frozen=True, slots=True)
+class _AssetCounts:
+    """How many assets hold something somewhere, are complete, and their file bytes."""
+
+    held: int = 0
+    complete: int = 0
+    size_bytes: int = 0
+
+
+async def _asset_counts(
+    session: AsyncSession, collection_ids: list[int]
+) -> dict[_AssetKey, _AssetCounts]:
+    """Count every asset of a title, season or listed collection in one query.
+
+    An asset holds something once any of its deliveries has content seen at
+    it; it is matched once it selects something and its stored status is
+    complete, so one nothing is wanted for is not counted; its bytes are those
+    of the files it was found as.
+    """
+    owner = case(
+        (col(Asset.media_item_id).is_not(None), "item"),
+        (col(Asset.season_id).is_not(None), "season"),
+        else_="collection",
+    )
+    seen = col(AssetDelivery.observed_hash).is_not(None)
+    matched = col(Asset.status) == AssetStatus.COMPLETE
+    selected = or_(
+        col(Asset.url).is_not(None),
+        col(Asset.upload_hash).is_not(None),
+        col(Asset.youtube_id).is_not(None),
+    )
+    held = (
+        select(AssetDelivery.id)
+        .where(col(AssetDelivery.asset_id) == col(Asset.id), seen)
+        .exists()
+    )
+    size = (
+        select(func.coalesce(func.sum(col(AssetDelivery.file_size)), 0))
+        .where(
+            col(AssetDelivery.asset_id) == col(Asset.id),
+            seen,
+            col(AssetDelivery.channel) == DeliveryChannel.FILE,
+        )
+        .scalar_subquery()
+    )
+    columns: list[Any] = [
+        col(Asset.kind),
+        owner,
+        col(MediaItem.media_type),
+        func.sum(case((held, 1), else_=0)),
+        func.sum(case((and_(matched, selected), 1), else_=0)),
+        func.sum(size),
+    ]
+    stmt = (
+        cast("Select[Any]", select(*columns))
+        .outerjoin(Season, col(Season.id) == col(Asset.season_id))
+        .outerjoin(
+            MediaItem,
+            col(MediaItem.id)
+            == func.coalesce(col(Asset.media_item_id), col(Season.media_item_id)),
+        )
+        .where(
+            col(Asset.collection_id).is_(None)
+            | col(Asset.collection_id).in_(collection_ids)
+        )
+        .group_by(col(Asset.kind), owner, col(MediaItem.media_type))
+    )
+    rows: list[tuple[str, str, str | None, int | None, int | None, int | None]] = [
+        tuple(row) for row in (await session.exec(stmt)).all()
+    ]
+    return {
+        (
+            ServerAsset(kind),
+            owner_kind,
+            MediaType(media_type) if media_type else None,
+        ): _AssetCounts(held or 0, complete or 0, size_bytes or 0)
+        for kind, owner_kind, media_type, held, complete, size_bytes in rows
+    }
+
+
+def _coverage(total: int, *counts: _AssetCounts) -> Coverage:
+    """Return the coverage of *total* assets from their counted groups."""
+    return Coverage(
+        total=total,
+        local_files=sum(count.held for count in counts),
+        matched_files=sum(count.complete for count in counts),
+        total_size_bytes=sum(count.size_bytes for count in counts),
+    )
 
 
 def _get_db_file_sizes(db_path_str: str | None) -> tuple[int, int]:
@@ -131,84 +212,40 @@ class StatsService:
         )
 
     @staticmethod
-    async def _art(
-        session: AsyncSession,
+    def _art(
+        counts: dict[_AssetKey, _AssetCounts],
         library: LibraryStats,
         collections: list[CollectionRead] | None,
     ) -> ArtTypeStats:
-        """Count artwork slots, their local files and matches, and their bytes."""
-        owner = (col(ArtSlot.art_type), col(MediaItem.media_type))
-        item_slots = col(ArtSlot.media_item_id) == col(MediaItem.id)
-        counts = {
-            (ArtType(art_type), MediaType(media_type)): (local or 0, matched or 0)
-            for art_type, media_type, local, matched in await session.exec(
-                select(*owner, *_SLOT_COUNTS)
-                .join(MediaItem, item_slots)
-                .group_by(*owner)
-            )
-        }
-        sizes = {
-            (ArtType(art_type), MediaType(media_type)): size or 0
-            for art_type, media_type, size in await session.exec(
-                select(*owner, _SLOT_BYTES).join(MediaItem, item_slots).group_by(*owner)
-            )
-        }
-        # SLOT_COMPLETE reads the owning item, so each season joins it.
-        season_local, season_matched, season_bytes = (
-            await session.exec(
-                select(*_SLOT_COUNTS, _SLOT_BYTES)
-                .select_from(ArtSlot)
-                .join(Season, col(ArtSlot.season_id) == col(Season.id))
-                .join(MediaItem, col(Season.media_item_id) == col(MediaItem.id))
-            )
-        ).one()
+        """Count artwork assets, those held and complete, and their bytes."""
         totals = {
             MediaType.MOVIE: library.total_movies,
             MediaType.SHOW: library.total_shows,
         }
 
-        def coverage(art_type: ArtType, media_type: MediaType) -> Coverage:
-            local, matched = counts.get((art_type, media_type), (0, 0))
-            return Coverage(
-                total=totals[media_type],
-                local_files=local,
-                matched_files=matched,
-                total_size_bytes=sizes.get((art_type, media_type), 0),
-            )
+        def of(
+            kind: ServerAsset, owner: str, media_type: MediaType | None
+        ) -> _AssetCounts:
+            return counts.get((kind, owner, media_type), _AssetCounts())
 
         poster_movies, poster_shows, background_movies, background_shows = (
-            coverage(art_type, media_type)
-            for art_type in ITEM_ART_TYPES
+            _coverage(totals[media_type], of(kind, "item", media_type))
+            for kind in (ServerAsset.POSTER, ServerAsset.BACKGROUND)
             for media_type in MediaType
         )
-        season_poster = Coverage(
-            total=library.total_seasons,
-            local_files=season_local or 0,
-            matched_files=season_matched or 0,
-            total_size_bytes=season_bytes or 0,
+        season_poster = _coverage(
+            library.total_seasons,
+            of(ServerAsset.SEASON_POSTER, "season", MediaType.SHOW),
         )
-        collection_art = None
-        if collections is not None:
-            collection_bytes = (
-                await session.exec(
-                    select(_SLOT_BYTES).where(
-                        col(ArtSlot.collection_id).in_([row.id for row in collections])
-                    )
-                )
-            ).one()
-            collection_art = Coverage(
-                total=len(collections) * len(ITEM_ART_TYPES),
-                local_files=sum(
-                    (row.poster_hash is not None) + (row.background_hash is not None)
-                    for row in collections
-                ),
-                matched_files=sum(
-                    (row.poster_status is AssetStatus.COMPLETE)
-                    + (row.background_status is AssetStatus.COMPLETE)
-                    for row in collections
-                ),
-                total_size_bytes=collection_bytes or 0,
+        collection_art = (
+            _coverage(
+                len(collections) * 2,
+                of(ServerAsset.POSTER, "collection", None),
+                of(ServerAsset.BACKGROUND, "collection", None),
             )
+            if collections is not None
+            else None
+        )
         poster = poster_movies + poster_shows
         background = background_movies + background_shows
         return ArtTypeStats(
@@ -227,60 +264,28 @@ class StatsService:
         )
 
     @staticmethod
-    async def _themes(
-        session: AsyncSession,
+    def _themes(
+        counts: dict[_AssetKey, _AssetCounts],
         library: LibraryStats,
         collections: list[CollectionRead] | None,
     ) -> ThemeStats:
-        """Count item themes, their local files and matches, and their bytes."""
-        has_file = col(MediaItem.theme_file_hash).is_not(None)
-        theme_bytes = func.coalesce(col(MediaItem.theme_file_size), 0)
-        rows = {
-            MediaType(media_type): (local or 0, matched or 0, size or 0)
-            for media_type, local, matched, size in await session.exec(
-                select(
-                    col(MediaItem.media_type),
-                    func.sum(case((has_file, 1), else_=0)),
-                    func.sum(case((THEME_COMPLETE, 1), else_=0)),
-                    func.sum(case((has_file, theme_bytes), else_=0)),
-                ).group_by(col(MediaItem.media_type))
+        """Count themes, the ones held somewhere and complete, and their bytes."""
+        movies = _coverage(
+            library.total_movies,
+            counts.get((ServerAsset.THEME, "item", MediaType.MOVIE), _AssetCounts()),
+        )
+        shows = _coverage(
+            library.total_shows,
+            counts.get((ServerAsset.THEME, "item", MediaType.SHOW), _AssetCounts()),
+        )
+        collection_themes = (
+            _coverage(
+                len(collections),
+                counts.get((ServerAsset.THEME, "collection", None), _AssetCounts()),
             )
-        }
-        totals = {
-            MediaType.MOVIE: library.total_movies,
-            MediaType.SHOW: library.total_shows,
-        }
-
-        def coverage(media_type: MediaType) -> Coverage:
-            local, matched, size = rows.get(media_type, (0, 0, 0))
-            return Coverage(
-                total=totals[media_type],
-                local_files=local,
-                matched_files=matched,
-                total_size_bytes=size,
-            )
-
-        movies, shows = coverage(MediaType.MOVIE), coverage(MediaType.SHOW)
-        collection_themes = None
-        if collections is not None:
-            collection_bytes = (
-                await session.exec(
-                    select(
-                        func.sum(func.coalesce(col(MediaCollection.theme_file_size), 0))
-                    ).where(
-                        col(MediaCollection.theme_file_hash).is_not(None),
-                        col(MediaCollection.id).in_([row.id for row in collections]),
-                    )
-                )
-            ).one()
-            collection_themes = Coverage(
-                total=len(collections),
-                local_files=sum(row.has_theme for row in collections),
-                matched_files=sum(
-                    row.theme_status is AssetStatus.COMPLETE for row in collections
-                ),
-                total_size_bytes=collection_bytes or 0,
-            )
+            if collections is not None
+            else None
+        )
         return ThemeStats(
             movies=movies,
             shows=shows,
@@ -344,8 +349,9 @@ class StatsService:
         )
         async with self._database.read_session() as session:
             library = await self._library(session, collections)
-            art = await self._art(session, library, collections)
-            themes = await self._themes(session, library, collections)
+            counts = await _asset_counts(session, [row.id for row in collections or ()])
+            art = self._art(counts, library, collections)
+            themes = self._themes(counts, library, collections)
             database = await self._database_stats(session, files)
 
         backups = await owned_thread(self._backups.store.list_backups)

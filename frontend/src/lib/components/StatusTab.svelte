@@ -1,12 +1,13 @@
 <script lang="ts">
   import X from "@lucide/svelte/icons/x";
-  import type { StatusTone } from "../utils/sidebarDomain";
+  import type { StatusTone } from "../utils/sidebarShared";
 
   let {
     icon: Icon,
     label,
     active = false,
     status = null,
+    note = null,
     onselect,
     clearLabel = `Clear ${label.toLowerCase()}`,
     onclear = null,
@@ -18,6 +19,8 @@
     active?: boolean;
     /** The section's asset status, in the sidebar's tones; null shows none. */
     status?: StatusTone | null;
+    /** Why the status is what it is, shown on hover; null says nothing more. */
+    note?: string | null;
     /** Opens the section; without it the tab only names the panel shown. */
     onselect?: () => void;
     clearLabel?: string;
@@ -30,7 +33,7 @@
 <!-- The icon carries the status. With something to remove it is its own
      button, a cross on hover; otherwise it belongs to the label. Both forms
      are the same width, so the tab never moves. -->
-<div class={["tab-item status-tab", { active }]} role="presentation">
+<div class={["tab-item status-tab", { active }]} role="presentation" title={note ?? undefined}>
   {#if onclear}
     <button
       type="button"

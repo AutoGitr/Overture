@@ -14,7 +14,7 @@ lazy from ...domain import MediaType
 lazy from ...integrations.tmdb import TMDBClient
 lazy from ...jobs.progress_log import JobOutcome
 lazy from ...jobs.runner import ManagedJob
-lazy from ...jobs.tally import SyncTally
+lazy from ...jobs.tally import JobTally
 lazy from ...repositories.copies import CopyRepository
 lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...repositories.seasons import SeasonRepository
@@ -50,7 +50,7 @@ class TmdbSeasonSync:
         async with self._database.read_session() as session:
             return await MediaItemRepository(session).list_unconnected_tmdb_shows()
 
-    async def run(self, items: list[MediaItem], job: ManagedJob[SyncTally]) -> None:
+    async def run(self, items: list[MediaItem], job: ManagedJob[JobTally]) -> None:
         """Refresh one show per transaction and report each planned outcome.
 
         A few shows are fetched at once; TMDB's own rate limit paces them.

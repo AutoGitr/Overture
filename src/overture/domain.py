@@ -388,12 +388,7 @@ class ThemeIdSource(StrEnum):
 
 
 class AssetStatus(StrEnum):
-    """How much of an asset Overture holds.
-
-    ``complete`` once both the selection and the local file are recorded (or
-    just the selection, for an item without a local folder), ``partial`` when
-    only some of it is.
-    """
+    """How much of an asset Overture holds, by :mod:`overture.db.ledger`'s rule."""
 
     COMPLETE = "complete"
     PARTIAL = "partial"
@@ -437,6 +432,15 @@ class ServerAsset(StrEnum):
     def art_type(self) -> ArtType | None:
         """Return the artwork slot this asset is, or ``None`` for the theme."""
         return None if self is ServerAsset.THEME else ArtType(self.value)
+
+
+class DeliveryChannel(StrEnum):
+    """How an asset's content reaches one destination."""
+
+    #: Written as a file: into an item's folder, or a server's collection folder.
+    FILE = "file"
+    #: Sent through a media server's API to its copy of a collection.
+    UPLOAD = "upload"
 
 
 class ArtType(StrEnum):
@@ -494,6 +498,12 @@ THUMB_BOUNDS: tuple[int, int] = (
 
 #: Art types stored against a media item. Ordered for deterministic iteration.
 ITEM_ART_TYPES: tuple[ArtType, ...] = (ArtType.POSTER, ArtType.BACKGROUND)
+#: The assets an item, and a collection, can hold.
+ITEM_ASSETS: tuple[ServerAsset, ...] = (
+    ServerAsset.POSTER,
+    ServerAsset.BACKGROUND,
+    ServerAsset.THEME,
+)
 
 
 class ArtStyle(StrEnum):
@@ -754,10 +764,16 @@ class MediaServerState(StrEnum):
 
 
 class ScheduleKind(StrEnum):
-    """Category of reusable named schedule."""
+    """Category of persisted schedule."""
 
     ASSETS = "assets"
     SYNC = "sync"
+    BACKUP = "backup"
+    CATALOG = "catalog"
+
+
+#: User-named schedule kinds that manage multiple entries via ``NamedSchedules``.
+type NamedScheduleKind = Literal[ScheduleKind.ASSETS, ScheduleKind.SYNC]
 
 
 class Workflow(StrEnum):
@@ -900,7 +916,8 @@ PERFECT_MATCH_ONLY = -1
 ASSETS_MATCH_THRESHOLD_DEFAULT = PERFECT_MATCH_ONLY
 
 
-#: What a bulk operation changes on item records; artwork and themes are removed.
-type BulkItemOperationKind = Literal[
-    "artwork", "themes", "delete", "monitor", "unmonitor"
-]
+#: A bulk operation on the item records themselves.
+type ItemRecordOperation = Literal["delete", "monitor", "unmonitor"]
+
+#: What a bulk operation changes: item records, or each item's artwork or theme.
+type BulkItemOperationKind = Literal["artwork", "themes"] | ItemRecordOperation

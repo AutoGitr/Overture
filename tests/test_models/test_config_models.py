@@ -7,14 +7,20 @@ lazy import pytest
 lazy from pydantic import ValidationError
 
 lazy from overture.config import Settings
-lazy from overture.db.models.schedule import TaskSchedule
+lazy from overture.db.models.saved_schedule import SavedSchedule
 lazy from overture.db.models.settings import (
     SETTINGS_ROW_ID,
     AppSettings,
     AppSettingsBase,
 )
-lazy from overture.domain import AspectRatioTolerance, ServerType, Workflow
+lazy from overture.domain import (
+    AspectRatioTolerance,
+    ScheduleKind,
+    ServerType,
+    Workflow,
+)
 lazy from overture.schemas.settings import AppSettingsRead, AppSettingsUpdate
+lazy from overture.utils.time import utc_now
 
 ARGON2_HASH = (
     "$argon2id$v=19$m=19456,t=2,p=1$Y96qqNb5fWisYsjxPJH7rw$"
@@ -257,9 +263,16 @@ class TestAppSettingsModel:
                 AppSettingsUpdate(**payload)
 
 
-class TestTaskScheduleModel:
+class TestSavedScheduleModel:
     def test_payload_helpers_return_dicts_only(self) -> None:
-        schedule = TaskSchedule(task_name="sync")
+        now = utc_now()
+        schedule = SavedSchedule(
+            kind=ScheduleKind.CATALOG,
+            name="catalog",
+            cron_expression="0 0 * * *",
+            created_at=now,
+            updated_at=now,
+        )
         schedule.payload = {"library_ids": ["1:1"]}
 
         assert schedule.payload == {"library_ids": ["1:1"]}

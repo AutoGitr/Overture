@@ -1,27 +1,22 @@
 """Library REST and WebSocket schemas."""
 
 lazy from collections.abc import Mapping, Sequence
-lazy from dataclasses import asdict
 lazy from datetime import datetime
 lazy from typing import Literal
 
 lazy from pydantic import Field
 
-lazy from ..db.art_slots import flattened_art, read_art_slot
-lazy from ..db.completion import art_completion, slot_status, theme_status
-lazy from ..db.models.art import ArtSlot
+lazy from ..db.ledger import item_art_status, read_asset
 lazy from ..db.models.media_item import MediaItem
 lazy from ..db.models.season import Season
 lazy from ..domain import (
-    ArtSource,
-    ArtType,
     AssetStatus,
     BulkItemOperationKind,
     MediaType,
     MetadataIssue,
-    ThemeIdSource,
+    ServerAsset,
 )
-lazy from ..utils.art_urls import art_preview_url
+lazy from .assets import AssetRead, TitleAssets, asset_read, assets_read
 lazy from .base import PublicText, StrictBaseModel
 lazy from .catalog import CatalogSelections
 lazy from .common import SaveSelectionResponse
@@ -61,41 +56,17 @@ class MediaItemRead(StrictBaseModel):
     directors: list[str] = Field(default_factory=list[str])
     studio: str | None = None
 
-    # Artwork & Assets
+    #: The poster, background and theme.
+    assets: TitleAssets
+    #: The poster, background and, for a show, every tracked season's poster,
+    #: taken together.
     art_status: AssetStatus = AssetStatus.MISSING
-    poster_status: AssetStatus = AssetStatus.MISSING
-    background_status: AssetStatus = AssetStatus.MISSING
+    #: Every tracked season's poster taken together; a show without one is
+    #: missing them.
     season_posters_status: AssetStatus = AssetStatus.MISSING
-    poster_url: str | None = None
-    poster_preview_url: str | None = None
-    poster_source: ArtSource | None = None
-    poster_hash: str | None = None
-    poster_phash: str | None = None
-    poster_width: int | None = None
-    poster_height: int | None = None
-    background_url: str | None = None
-    background_source: ArtSource | None = None
-    background_hash: str | None = None
-    background_phash: str | None = None
-    background_width: int | None = None
-    background_height: int | None = None
     has_incorrect_aspect_ratio: bool = False
-
-    # Theme
-    youtube_id: str | None = None
-    youtube_id_source: ThemeIdSource | None = None
-    #: OvertureDB says the title has no theme music, so none is missing.
-    catalog_no_theme: bool = False
     #: The item's OvertureDB entry, which the catalog view opens.
     catalog_entry_key: str | None = None
-    youtube_title: str | None = None
-    youtube_duration: int | None = None
-    theme_file_hash: str | None = None
-    theme_duration: int | None = Field(
-        default=None,
-        description="Seconds: the local file's length, else the selected video's.",
-    )
-    theme_status: AssetStatus = AssetStatus.MISSING
 
     # Computed
     catalog_complete: bool = False
@@ -141,16 +112,7 @@ class SeasonRead(StrictBaseModel):
     title: str | None = None
     file_count: int = 0
     folder_path: str | None = None
-
-    poster_status: AssetStatus = AssetStatus.MISSING
-    poster_url: str | None = None
-    poster_source: ArtSource | None = None
-    poster_preview_url: str | None = None
-    poster_hash: str | None = None
-    poster_phash: str | None = None
-    poster_width: int | None = None
-    poster_height: int | None = None
-
+    poster: AssetRead
     last_matched_at: datetime | None = None
 
 
@@ -171,11 +133,6 @@ class FolderRootsResponse(StrictBaseModel):
 
     movies: list[str]
     shows: list[str]
-
-
-def _preview_url(slot: ArtSlot, art_type: ArtType) -> str | None:
-    """Return the smaller rendition of the slot's selected artwork, if any."""
-    return slot.url and art_preview_url(slot.url, art_type)
 
 
 def item_metadata_issues(
@@ -205,7 +162,6 @@ def media_item_read_from_model(
     seasons: Sequence[Season],
     directors: Sequence[str] = (),
     has_incorrect_aspect_ratio: bool = False,
-    catalog_no_theme: bool = False,
     catalog_entry_key: str | None = None,
     catalog_ids: Literal["matching", "mismatching"] | None = None,
     catalog_selections: CatalogSelections | None = None,
@@ -217,23 +173,15 @@ def media_item_read_from_model(
     *seasons* are the item's tracked seasons, which a show's artwork status
     depends on, and *directors* a movie's; callers load both in bulk.
     """
-    poster = read_art_slot(item, ArtType.POSTER)
-    background = read_art_slot(item, ArtType.BACKGROUND)
+    art = item_art_status(item, seasons)
     return MediaItemRead.model_validate(
         {
             # Item metadata stays internal: it serves collection criteria only.
             **item.model_dump(include=set(MediaItemRead.model_fields)),
             "directors": list(directors),
-            **flattened_art(poster, "poster"),
-            **flattened_art(background, "background"),
-            # Only a remote poster is shown in place of a file, at preview size.
-            "poster_preview_url": _preview_url(poster, ArtType.POSTER),
-            **asdict(art_completion(item, seasons)),
-            "theme_duration": item.theme_file_duration or item.youtube_duration,
-            "theme_status": AssetStatus.COMPLETE
-            if catalog_no_theme
-            else theme_status(item),
-            "catalog_no_theme": catalog_no_theme,
+            "assets": assets_read(item),
+            "art_status": art.art,
+            "season_posters_status": art.season_posters,
             "catalog_entry_key": catalog_entry_key,
             "catalog_complete": catalog_complete,
             "catalog_themerrdb": catalog_themerrdb,
@@ -247,18 +195,12 @@ def media_item_read_from_model(
     )
 
 
-def season_read_from_model(season: Season, *, files: bool) -> SeasonRead:
-    """Map a persisted season to the public season response.
-
-    *files* tells whether the season's item holds local files.
-    """
-    poster = read_art_slot(season, ArtType.SEASON_POSTER)
+def season_read_from_model(season: Season) -> SeasonRead:
+    """Map a persisted season to the public season response."""
     return SeasonRead.model_validate(
         {
             **season.model_dump(include=set(SeasonRead.model_fields)),
-            "poster_status": slot_status(poster, files=files),
-            **flattened_art(poster, "poster"),
-            "poster_preview_url": _preview_url(poster, ArtType.SEASON_POSTER),
+            "poster": asset_read(read_asset(season, ServerAsset.SEASON_POSTER)),
         }
     )
 

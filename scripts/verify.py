@@ -119,14 +119,14 @@ lazy from overture.domain import (
 lazy from overture.media_servers.base import BaseMediaServerProvider
 lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.plex.client import PLEX_CUSTOM_SORT
-lazy from overture.media_servers.registry import ProviderRegistry
-lazy from overture.schemas.collections import CollectionRuleWrite, FilterGroup
-lazy from overture.services.collections.plex_query import (
+lazy from overture.media_servers.plex.query import (
     compile_plex_query,
     plex_field_keys,
     plex_operators,
     plex_sort,
 )
+lazy from overture.media_servers.registry import ProviderRegistry
+lazy from overture.schemas.collections import CollectionRuleWrite, FilterGroup
 lazy from overture.utils.collection_fields import FIELDS, PlexFieldType
 lazy from overture.utils.generated_art import render_art
 lazy from overture.utils.http_security import API_KEY_HEADER

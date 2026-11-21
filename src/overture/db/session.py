@@ -14,9 +14,11 @@ lazy from sqlalchemy import event
 lazy from sqlalchemy.engine import Connection
 lazy from sqlalchemy.engine.interfaces import DBAPIConnection
 lazy from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+lazy from sqlalchemy.orm import Session as OrmSession
 lazy from sqlalchemy.pool import AsyncAdaptedQueuePool
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
+lazy from .ledger import verify_flush
 lazy from .models.settings import SETTINGS_ROW_ID, AppSettings
 
 logger = logging.getLogger(__name__)
@@ -103,6 +105,11 @@ def _begin(conn: Connection) -> None:
     """
     if conn.get_execution_options().get("sqlite_write"):
         conn.exec_driver_sql("BEGIN IMMEDIATE")
+
+
+# Every session, whoever opens it, refuses to store an asset status that
+# disagrees with the asset's rows.
+event.listen(OrmSession, "before_flush", verify_flush)
 
 
 def configure_sqlite(engine: AsyncEngine) -> AsyncEngine:

@@ -18,10 +18,10 @@ lazy from sqlmodel import select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import read_art_slot
+lazy from overture.db.ledger import read_asset
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.models.media_item import MediaItem
-lazy from overture.db.models.schedule import TaskSchedule
+lazy from overture.db.models.saved_schedule import SavedSchedule
 lazy from overture.db.models.season import Season
 lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database
@@ -31,6 +31,7 @@ lazy from overture.domain import (
     JobType,
     MediaServerState,
     MediaType,
+    ScheduleKind,
     ServerAsset,
     ServerType,
 )
@@ -43,7 +44,7 @@ lazy from overture.services.downloads import art as art_module
 lazy from overture.services.downloads.art import DownloadArtHandler
 lazy from overture.services.downloads.events import DownloadEventPublisher, job_target
 lazy from overture.services.downloads.queue import JobTarget
-lazy from overture.services.downloads.results import DownloadedCollectionTheme
+lazy from overture.services.downloads.results import DownloadedTheme
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.downloads.theme import DownloadThemeHandler
 lazy from overture.services.downloads.watch import DownloadOutcome
@@ -58,6 +59,7 @@ lazy from overture.utils.image_fetch import RATE_LIMIT_RETRIES, RateLimitedError
 lazy from overture.utils.progress import ProgressCallback, ProgressUpdate
 lazy from overture.ws.events import validate_event_payload
 lazy from tests.collection_helpers import stored_collection
+lazy from tests.factories import file_hash_of, file_of, theme_file_hash, theme_of
 lazy from tests.media_servers import TEST_SERVER_ID, configure, served_item, server_of
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
@@ -407,13 +409,11 @@ async def test_shutdown_owns_remote_upload_until_it_settles(
     )
     monkeypatch.setattr(
         manager.theme_handler,
-        "download_collection_theme",
+        "download_youtube",
         AsyncMock(
-            return_value=DownloadedCollectionTheme(
-                youtube_id="abcDEF123_4",
-                title="Theme",
-                duration=60,
-                audio_bytes=b"audio",
+            return_value=(
+                b"audio",
+                DownloadedTheme(youtube_id="abcDEF123_4", title="Theme", duration=60),
             )
         ),
     )
@@ -528,9 +528,9 @@ async def test_process_art_job_downloads_writes_hashes_and_refreshes_provider(
 
     assert job is not None
     assert job.status == "done"
-    poster = read_art_slot(item, ArtType.POSTER)
-    assert poster.file_hash
-    assert poster.phash == "0" * PHASH_HEX_LENGTH
+    poster = read_asset(item, ServerAsset.POSTER)
+    assert file_hash_of(poster)
+    assert file_of(poster).fingerprint == "0" * PHASH_HEX_LENGTH
     assert (movie_dir / "poster.jpg").is_file()
     assert provider.refreshed == [("plex-1", ("poster",))]
     assert [event for event, _ in publisher.events] == [
@@ -631,10 +631,13 @@ async def test_art_job_writes_only_when_the_bytes_differ(
     async with isolated_session_factory() as session:
         item = await session.get(MediaItem, 1)
         assert item is not None
-        slot = read_art_slot(item, ArtType.POSTER)
+        slot = read_asset(item, ServerAsset.POSTER)
     assert slot.url == "https://images.test/poster.jpg"
-    assert slot.file_hash == compute_bytes_hash(downloaded)
-    assert (slot.file_mtime_ns, slot.file_size) == (after.st_mtime_ns, after.st_size)
+    assert file_hash_of(slot) == compute_bytes_hash(downloaded)
+    assert (file_of(slot).file_mtime_ns, file_of(slot).file_size) == (
+        after.st_mtime_ns,
+        after.st_size,
+    )
 
 
 async def test_process_art_job_allows_trusted_private_media_server_url(
@@ -734,9 +737,9 @@ async def test_process_art_job_allows_trusted_private_media_server_url(
         }
     ]
     # Trusted private media-server URLs are not persisted as the stored URL
-    poster = read_art_slot(item, ArtType.POSTER)
+    poster = read_asset(item, ServerAsset.POSTER)
     assert poster.url is None
-    assert poster.file_hash
+    assert file_hash_of(poster)
 
 
 async def test_process_art_job_blocks_untrusted_private_url(
@@ -921,9 +924,9 @@ async def test_process_season_poster_job_updates_asset_and_parent_aggregates(
         assert item is not None
         assert season is not None
 
-    season_poster = read_art_slot(season, ArtType.SEASON_POSTER)
-    assert season_poster.file_hash
-    assert season_poster.phash == "1" * PHASH_HEX_LENGTH
+    season_poster = read_asset(season, ServerAsset.SEASON_POSTER)
+    assert file_hash_of(season_poster)
+    assert file_of(season_poster).fingerprint == "1" * PHASH_HEX_LENGTH
     # A season poster is not the show's, so the show unlocks nothing.
     assert provider.refreshed == [("plex-show", ())]
     assert [event for event, _ in publisher.events] == [
@@ -960,7 +963,12 @@ async def test_process_theme_job_writes_theme_and_updates_item(
         ) -> ThemeAudio:
             _ = youtube_id, min_duration, max_duration, progress_callback
             levelled.append(normalize_loudness)
-            return ThemeAudio(audio_bytes=b"mp3", title="Theme", duration=120)
+            return ThemeAudio(
+                audio_bytes=b"mp3",
+                title="Theme",
+                duration=120,
+                fingerprint="audio-fp",
+            )
 
     movie_dir = tmp_path / "Movie"
     movie_dir.mkdir()
@@ -984,7 +992,7 @@ async def test_process_theme_job_writes_theme_and_updates_item(
                 created_at=datetime(2026, 1, 1, tzinfo=UTC),
             )
         )
-        item.theme_provenance_cleared = True
+        theme_of(item).provenance_cleared = True
         await session.commit()
 
     manager = _download_manager(
@@ -1005,12 +1013,13 @@ async def test_process_theme_job_writes_theme_and_updates_item(
     assert job is not None
     assert job.status == "done"
     assert levelled == [False]
-    assert item.youtube_id == "abcDEF123_4"
-    assert item.youtube_title == "Theme"
-    assert item.youtube_duration == 120
-    assert item.theme_file_hash is not None
-    assert item.theme_provenance_cleared is False
-    assert item.youtube_id_source == "download"
+    assert theme_of(item).youtube_id == "abcDEF123_4"
+    assert theme_of(item).youtube_title == "Theme"
+    assert theme_of(item).youtube_duration == 120
+    assert theme_file_hash(item) is not None
+    assert file_of(theme_of(item)).fingerprint == "audio-fp"
+    assert theme_of(item).provenance_cleared is False
+    assert theme_of(item).youtube_id_source == "download"
     assert (movie_dir / "theme.mp3").read_bytes() == b"mp3"
     assert provider.refreshed == [("plex-1", ("theme",))]
     assert [event for event, _ in publisher.events] == [
@@ -1128,10 +1137,13 @@ async def test_another_writer_can_commit_while_a_download_is_in_flight(
             _ = normalize_loudness
             async with database.write_session() as session:
                 session.add(
-                    TaskSchedule(
-                        task_name="wrote-mid-download",
+                    SavedSchedule(
+                        kind=ScheduleKind.BACKUP,
+                        name="wrote-mid-download",
                         enabled=True,
                         cron_expression="0 * * * *",
+                        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+                        updated_at=datetime(2026, 1, 1, tzinfo=UTC),
                     )
                 )
             return ThemeAudio(audio_bytes=b"mp3", title="Theme", duration=120)
@@ -1170,7 +1182,7 @@ async def test_another_writer_can_commit_while_a_download_is_in_flight(
     await manager.process_job("job-theme")
 
     async with isolated_session_factory() as session:
-        names = list((await session.exec(select(TaskSchedule.task_name))).all())
+        names = list((await session.exec(select(SavedSchedule.name))).all())
         job = await session.get(DownloadJob, "job-theme")
 
     assert names == ["wrote-mid-download"]
@@ -1483,11 +1495,13 @@ async def test_stop_during_file_write_finishes_file_and_metadata(
             assert item is not None
             if job_type is JobType.ART:
                 assert (
-                    read_art_slot(item, ArtType.POSTER).file_hash is not None
+                    file_hash_of(read_asset(item, ServerAsset.POSTER)) is not None
                 ) is not write_fails
             else:
-                assert (item.theme_file_hash is not None) is not write_fails
-                assert item.youtube_id == (None if write_fails else "abcDEF123_4")
+                assert (theme_file_hash(item) is not None) is not write_fails
+                assert theme_of(item).youtube_id == (
+                    None if write_fails else "abcDEF123_4"
+                )
         events = [event for event, _ in publisher.events]
         assert events.count("download.completed") == int(not write_fails)
         assert events.count("download.failed") == int(write_fails)

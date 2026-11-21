@@ -9,14 +9,14 @@ lazy from overture.domain import (
     FilterOperator,
     MediaType,
 )
-lazy from overture.schemas.collections import FieldCondition, FilterGroup
-lazy from overture.services.collections.plex_query import (
+lazy from overture.media_servers.plex.query import (
     UnmappableFilterError,
     choice_keys,
     compile_plex_query,
     decompile_plex_query,
     plex_field,
 )
+lazy from overture.schemas.collections import FieldCondition, FilterGroup
 lazy from overture.utils.collection_fields import FIELDS
 
 _VALUES: dict[FieldKind, tuple[FilterOperator, str | int | bool]] = {

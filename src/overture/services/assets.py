@@ -10,6 +10,7 @@ lazy from ..config import Settings
 lazy from ..db.session import Database
 lazy from ..domain import ScheduleKind
 lazy from ..jobs.gate import WaitReporter
+lazy from ..jobs.progress_log import JobOutcome
 lazy from ..jobs.registry import BackgroundJobRegistry
 lazy from ..jobs.runner import JobContext
 lazy from ..jobs.slot import ManagedBackgroundJob
@@ -22,9 +23,9 @@ lazy from ..schemas.bulk import (
     BulkThemeRequest,
 )
 lazy from ..schemas.common import Status, StatusResponse
-lazy from .art.bulk import run_bulk_art_match
 lazy from .art.collection_art import CollectionArtService
 lazy from .art.matcher import ArtMatcher
+lazy from .asset_runs.run import run_art, run_themes
 lazy from .downloads.service import DownloadService
 lazy from .local_assets.service import LocalAssets
 lazy from .named_schedules import (
@@ -35,17 +36,16 @@ lazy from .named_schedules import (
     job_run_summary,
 )
 lazy from .scheduler import SchedulerService
-lazy from .themes.bulk import run_bulk_themes
 lazy from .themes.youtube_resolver import YouTubeResolver
 
 #: The counters of an Assets run's jobs, as its schedule shows them.
 _ASSETS_COUNTERS = frozendict(
     {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
-        "queued": "queued",
-        "adopted": "adopted",
-        "skipped": "skipped",
-        "no_match": "unmatched",
-        "errors": "failed",
+        JobOutcome.QUEUED: "queued",
+        JobOutcome.ADOPTED: "adopted",
+        JobOutcome.SKIPPED: "skipped",
+        JobOutcome.NO_MATCH: "unmatched",
+        JobOutcome.ERROR: "failed",
     }
 )
 
@@ -214,11 +214,11 @@ class AssetsService:
         context: JobContext,
         params: BulkMatchArtRequest,
     ) -> None:
-        await run_bulk_art_match(
+        await run_art(
             context,
             params,
-            self.downloads,
-            self.art_matcher,
+            downloads=self.downloads,
+            art_matcher=self.art_matcher,
             art=self._art,
             local_assets=self.local_assets,
             app_config=self._app_config,
@@ -230,11 +230,11 @@ class AssetsService:
         context: JobContext,
         params: BulkThemeRequest,
     ) -> None:
-        await run_bulk_themes(
+        await run_themes(
             context,
             params,
-            self.downloads,
-            self.youtube_resolver,
+            downloads=self.downloads,
+            youtube_resolver=self.youtube_resolver,
             app_config=self._app_config,
             local_assets=self.local_assets,
             database=self._database,

@@ -11,12 +11,10 @@ lazy from pydantic import SecretStr, ValidationError
 lazy from sqlmodel import select
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import (
-    ArtFileFacts,
-    clear_art_selection,
-    record_art_file,
+lazy from overture.db.ledger import (
+    clear_selection,
+    read_asset,
     select_art,
-    select_upload,
 )
 lazy from overture.db.models.catalog import CatalogCollection
 lazy from overture.db.models.media_collection import MediaCollection
@@ -38,6 +36,7 @@ lazy from overture.domain import (
     FilterOperator,
     MediaType,
     ScheduleKind,
+    ServerAsset,
     ServerType,
     SetDimension,
     SourceType,
@@ -67,7 +66,11 @@ lazy from overture.media_servers.adapters import ServerCollection, ServerSection
 lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.plex.provider import PlexProvider
 lazy from overture.media_servers.registry import ProviderRegistry
-lazy from overture.repositories.collections import CollectionRepository, TermSelection
+lazy from overture.repositories.collection_items import (
+    CollectionItemRepository,
+    TermSelection,
+)
+lazy from overture.repositories.collections import CollectionRepository
 lazy from overture.repositories.libraries import LibraryRepository
 lazy from overture.repositories.saved_schedules import SavedScheduleRepository
 lazy from overture.schemas.art import (
@@ -123,6 +126,7 @@ lazy from overture.services.collections.service import CollectionsService
 lazy from overture.services.collections.sources import condition_label, source_label
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.media_server_roster import MediaServerRoster
+lazy from overture.services.needs import AssetNeeds
 lazy from overture.services.sync.reconciler import LibraryReconciler
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.collection_fields import FIELDS
@@ -130,6 +134,7 @@ lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_catalog
 lazy from tests.collection_helpers import copy_id, library_rule, stored_collection
+lazy from tests.factories import seed_asset, seed_theme
 lazy from tests.media_servers import TEST_SERVER_ID, configure, served_item, server_of
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
@@ -648,9 +653,11 @@ async def manager(database: Database, app_config: Settings) -> Manager:
         await assign(session, show, genre=["Animation"])
         await session.flush()
         ids = [item.id or 0 for item in items]
+    registry = NoopProviderRegistry(provider)
     service = CollectionsService(
+        needs=AssetNeeds(database=database, provider_registry=registry),
         database=database,
-        provider_registry=NoopProviderRegistry(provider),
+        provider_registry=registry,
         publisher=publisher,
         downloads=downloads,
         proxy_clients=unused(ProxyClientManager),
@@ -746,7 +753,7 @@ async def test_delete_handles_only_an_already_absent_server_collection(
         )
         assert (
             len(
-                await CollectionRepository(session).library_items(
+                await CollectionItemRepository(session).library_items(
                     MediaType.MOVIE, "1:movies"
                 )
             )
@@ -767,7 +774,14 @@ async def test_delete_from_server_preserves_configuration(
         assert copy_id(row) is None
         assert row.child_count == 0
         assert await repo.rule(identity) is not None
-        assert len(await repo.library_items(MediaType.MOVIE, "1:movies")) == 3
+        assert (
+            len(
+                await CollectionItemRepository(session).library_items(
+                    MediaType.MOVIE, "1:movies"
+                )
+            )
+            == 3
+        )
     await manager.service.rules.sync(identity)
     async with database.read_session() as session:
         row = await CollectionRepository(session).get(identity)
@@ -963,7 +977,7 @@ async def test_set_collections_leave_only_with_their_set(manager: Manager) -> No
     first, _ = (await manager.service.groups.sync("Decades")).created
     for remove in (
         manager.service.editor.delete(first),
-        manager.service.editor.orphan(first),
+        manager.service.adoption.orphan(first),
     ):
         with pytest.raises(PublicServiceError, match="set made it"):
             await remove
@@ -1117,9 +1131,11 @@ def make_jellyfin_service(
     provider: JellyfinProvider | None = None,
 ) -> CollectionsService:
     provider = provider or JellyfinProvider(app_config)
+    registry = NoopProviderRegistry(provider)
     return CollectionsService(
+        needs=AssetNeeds(database=database, provider_registry=registry),
         database=database,
-        provider_registry=NoopProviderRegistry(provider),
+        provider_registry=registry,
         publisher=manager.publisher,
         downloads=manager.downloads,
         proxy_clients=unused(ProxyClientManager),
@@ -1172,7 +1188,7 @@ async def test_create_edit_order_and_delete_preserve_media(
         assert row is not None
         select_art(
             row,
-            ArtType.POSTER,
+            ServerAsset.POSTER,
             PublicArtUrl("https://example.test/poster.jpg"),
             poster_style=CollectionPosterStyle.INDIVIDUAL,
         )
@@ -1184,7 +1200,7 @@ async def test_create_edit_order_and_delete_preserve_media(
         assert await CollectionRepository(session).rule(identity) is None
         assert (
             len(
-                await CollectionRepository(session).library_items(
+                await CollectionItemRepository(session).library_items(
                     MediaType.MOVIE, "1:movies"
                 )
             )
@@ -1713,7 +1729,7 @@ async def test_smart_collections_label_sources_and_filter_by_plex_keys(
         "sort=addedAt%3Adesc&year%3E=2000&and=1&label=5&and=1&unwatched=1"
     )
     async with database.read_session() as session:
-        labelled = await CollectionRepository(session).library_items(
+        labelled = await CollectionItemRepository(session).library_items(
             MediaType.MOVIE, "1:movies", TermSelection(frozenset({TermKind.LABEL}))
         )
     assert [label in item.values(TermKind.LABEL) for item in labelled] == [
@@ -1782,7 +1798,7 @@ async def test_smart_collections_test_fields_plex_lacks_through_labels(
     assert manager.provider.smart_filters["1"] == "sort=titleSort&label=7"
     # Its Plex filter reads Overture's label, so it cannot be left unmanaged.
     with pytest.raises(PublicServiceError, match="labels only Overture keeps"):
-        await manager.service.editor.orphan(detail.id)
+        await manager.service.adoption.orphan(detail.id)
 
 
 async def test_regular_and_smart_kinds_replace_the_server_collection(
@@ -2381,7 +2397,7 @@ async def test_franchise_sets_skip_franchises_other_collections_hold(
     )[0].title == "Saga"
 
 
-async def test_get_collection_theme_status(manager: Manager) -> None:
+async def test_a_new_collection_has_no_theme(manager: Manager) -> None:
     col = await created(
         manager.service,
         CollectionCreate(
@@ -2390,7 +2406,7 @@ async def test_get_collection_theme_status(manager: Manager) -> None:
         ),
     )
     theme = await manager.service.themes.status(col.id)
-    assert theme.has_theme is False
+    assert (theme.youtube_id, theme.status) == (None, AssetStatus.MISSING)
 
 
 async def test_sync_group_records_rule_errors(manager: Manager) -> None:
@@ -3084,7 +3100,7 @@ async def test_adoption_puts_an_unmanaged_collection_in_its_group(
     # An unmanaged collection is in no stored group, even if it names one.
     assert await manager.service.groups.names() == ["Ungrouped"]
 
-    detail = await manager.service.editor.adopt(
+    detail = await manager.service.adoption.adopt(
         identity, CollectionAdoption(group="Sagas")
     )
 
@@ -3099,7 +3115,7 @@ async def test_adoption_puts_an_unmanaged_collection_in_its_group(
     assert detail.member_ids == manager.ids
     assert detail.tmdb_collection_id == 10
     with pytest.raises(PublicServiceError, match="already manages"):
-        await manager.service.editor.adopt(identity, CollectionAdoption())
+        await manager.service.adoption.adopt(identity, CollectionAdoption())
 
 
 async def test_adoption_names_members_that_share_no_franchise(
@@ -3112,7 +3128,7 @@ async def test_adoption_names_members_that_share_no_franchise(
         item.tmdb_collection_id = 20
         session.add(item)
 
-    detail = await manager.service.editor.adopt(identity, CollectionAdoption())
+    detail = await manager.service.adoption.adopt(identity, CollectionAdoption())
 
     assert detail.rule is not None
     assert detail.rule.libraries[0].criteria == sources(
@@ -3161,7 +3177,7 @@ async def test_orphan_reverses_adoption_keeping_the_server_copy(
         CollectionOptions(title="Saga", collection_group="Sagas"),
     )
 
-    detail = await manager.service.editor.orphan(identity)
+    detail = await manager.service.adoption.orphan(identity)
 
     assert not detail.managed
     assert detail.rule is None
@@ -3171,13 +3187,13 @@ async def test_orphan_reverses_adoption_keeping_the_server_copy(
     # The group outlives its last collection, until it is deleted.
     assert await manager.service.groups.names() == ["Sagas", "Ungrouped"]
     with pytest.raises(PublicServiceError, match="does not manage"):
-        await manager.service.editor.orphan(identity)
+        await manager.service.adoption.orphan(identity)
     refused = await manager.service.bulk.run(
         BulkCollectionOperation(collection_ids=[identity], operation="orphan")
     )
     assert refused.errors == {identity: "Adopt the collection before changing it"}
 
-    adopted = await manager.service.editor.adopt(
+    adopted = await manager.service.adoption.adopt(
         identity, CollectionAdoption(group="Sagas")
     )
     assert adopted.managed
@@ -3194,7 +3210,7 @@ async def test_orphan_refuses_a_collection_without_a_server_copy(
     await manager.service.editor.delete(identity, target="server")
 
     with pytest.raises(PublicServiceError, match="not on the media server"):
-        await manager.service.editor.orphan(identity)
+        await manager.service.adoption.orphan(identity)
     assert (await manager.service.reader.get(identity)).managed
 
 
@@ -3287,7 +3303,7 @@ async def test_missing_group_membership_uses_reserved_fallback(
     manager: Manager, database: Database
 ) -> None:
     identity = await create_unmanaged(manager, database)
-    detail = await manager.service.editor.adopt(identity, CollectionAdoption())
+    detail = await manager.service.adoption.adopt(identity, CollectionAdoption())
     assert detail.collection_group == "Ungrouped"
     result = await manager.service.bulk.run(
         BulkCollectionOperation(collection_ids=[identity], operation="set_group")
@@ -3415,22 +3431,23 @@ async def test_collection_rows_report_art_size_source_and_shape(
     async with database.write_session() as session:
         row = await session.get(MediaCollection, identity)
         assert row is not None
-        select_art(
+        seed_asset(
             row,
-            ArtType.POSTER,
-            PublicArtUrl("https://image.tmdb.org/t/p/original/a.jpg"),
+            ServerAsset.POSTER,
+            url="https://image.tmdb.org/t/p/original/a.jpg",
             poster_style=CollectionPosterStyle.INDIVIDUAL,
-        )
-        record_art_file(
-            row, ArtType.POSTER, ArtFileFacts("hash", "a" * 64, 1000, 1000, 1, 1)
+            file_hash="hash",
+            fingerprint="a" * 64,
+            width=1000,
+            height=1000,
         )
         session.add(row)
 
     [listed] = await manager.service.reader.listed()
 
-    assert (listed.poster_width, listed.poster_height) == (1000, 1000)
-    assert listed.poster_source == "tmdb"
-    assert listed.background_width is None
+    poster = listed.assets.poster
+    assert (poster.width, poster.height, poster.source) == (1000, 1000, "tmdb")
+    assert listed.assets.background.width is None
     assert listed.has_incorrect_aspect_ratio
 
 
@@ -3443,11 +3460,11 @@ async def test_bulk_clears_forget_collection_art_and_theme_choices(
         assert row is not None
         select_art(
             row,
-            ArtType.POSTER,
+            ServerAsset.POSTER,
             PublicArtUrl("https://image.tmdb.org/t/p/original/a.jpg"),
             poster_style=CollectionPosterStyle.INDIVIDUAL,
         )
-        row.youtube_id = "abcdefghijk"
+        seed_theme(row, "abcdefghijk")
         session.add(row)
 
     for operation in ("remove_artwork", "remove_themes"):
@@ -3461,7 +3478,7 @@ async def test_bulk_clears_forget_collection_art_and_theme_choices(
 
     assert manager.art.removed == [(identity, None, AssetRemoval())]
     detail = await manager.service.reader.get(identity)
-    assert detail.youtube_id is None
+    assert detail.assets.theme.youtube_id is None
 
 
 async def test_unmanaged_collections_accept_only_adoption(
@@ -3489,7 +3506,7 @@ async def test_unmanaged_collections_accept_only_adoption(
     )
     assert refused.errors == {identity: "Adopt the collection before changing it"}
 
-    await manager.service.editor.adopt(identity, CollectionAdoption())
+    await manager.service.adoption.adopt(identity, CollectionAdoption())
     await manager.service.editor.set_monitored(identity, False)
     again = await manager.service.bulk.run(
         BulkCollectionOperation(collection_ids=[identity], operation="adopt")
@@ -3772,11 +3789,18 @@ async def test_orphaning_leaves_plex_copies_for_the_next_sync_to_list(
         manager.service, CollectionCreate(title="Everything", rule=spanning(manager))
     )
 
-    orphaned = await manager.service.editor.orphan(detail.id)
+    orphaned = await manager.service.adoption.orphan(detail.id)
 
     assert orphaned.managed is False
     assert orphaned.library_ids == ["1:movies"]
     assert manager.provider.deleted == []
+    async with database.read_session() as session:
+        row = await CollectionRepository(session).get(detail.id)
+        assert row is not None
+        assert [
+            delivery.server_item_id
+            for delivery in read_asset(row, ServerAsset.POSTER).deliveries
+        ] == ["1"]
 
 
 async def test_a_new_copy_receives_the_saved_art_and_theme(
@@ -3788,7 +3812,7 @@ async def test_a_new_copy_receives_the_saved_art_and_theme(
         assert row is not None
         select_art(
             row,
-            ArtType.POSTER,
+            ServerAsset.POSTER,
             PublicArtUrl("https://example.test/poster.jpg"),
             poster_style=CollectionPosterStyle.INDIVIDUAL,
         )
@@ -3959,7 +3983,10 @@ async def test_automatic_art_keeps_an_upload_and_generates_a_missing_poster(
         )
         row = await CollectionRepository(session).get(identity)
         assert row is not None
-        select_upload(row, ArtType.BACKGROUND, "b" * 64)
+        # An uploaded background every copy already shows.
+        seed_asset(
+            row, ServerAsset.BACKGROUND, upload_hash="b" * 64, file_hash="b" * 64
+        )
         session.add(row)
     manager.art.selections.clear()
 
@@ -3978,7 +4005,7 @@ async def test_automatic_art_keeps_an_upload_and_generates_a_missing_poster(
     async with database.write_session() as session:
         row = await CollectionRepository(session).get(identity)
         assert row is not None
-        clear_art_selection(row, ArtType.POSTER)
+        clear_selection(row, ServerAsset.POSTER)
         session.add(row)
     manager.art.fail = False
     await manager.service.rules.sync(identity)
@@ -4209,9 +4236,9 @@ async def test_automatic_generation_titles_posters_and_generates_backgrounds_it_
     wanted = [ArtType.POSTER, ArtType.BACKGROUND] if backgrounds else [ArtType.POSTER]
     assert manager.art.generated == wanted
     detail = await manager.service.reader.get(identity)
-    assert detail.backgrounds is backgrounds
+    assert detail.assets.background.needed is backgrounds
     if not backgrounds:
-        assert detail.background_status is AssetStatus.COMPLETE
+        assert detail.assets.background.status is AssetStatus.COMPLETE
 
 
 async def test_chosen_collections_sync_alone(manager: Manager) -> None:
@@ -4506,3 +4533,75 @@ async def test_saved_filters_are_kept_by_name_for_every_media_type_they_suit(
     assert [entry.name for entry in await saved.list()] == ["Picks", "Seasons"]
     with pytest.raises(PublicServiceError, match="not found"):
         await saved.delete(created.id)
+
+
+async def test_collection_mutations_keep_ledger_needs_and_deliveries_current(
+    manager: Manager, database: Database
+) -> None:
+    await manager.service.groups.save_policy(
+        "Minimal", CollectionGroupPolicy(backgrounds=False, themes=False)
+    )
+    created_detail = await manager.service.editor.create(
+        CollectionCreate(
+            title="Minimal Saga",
+            collection_group="Minimal",
+            rule=chosen(manager),
+        )
+    )
+    assert created_detail.assets.background.needed is False
+    assert created_detail.assets.background.status is AssetStatus.COMPLETE
+    assert created_detail.assets.theme.needed is False
+    assert created_detail.assets.theme.status is AssetStatus.COMPLETE
+
+    moved = await manager.service.editor.update(
+        created_detail.id,
+        CollectionOptions(title="Minimal Saga", collection_group="Other"),
+    )
+    assert moved.assets.background.needed is True
+    assert moved.assets.theme.needed is True
+
+    # Moving back and deleting the group re-evaluates inherited needs.
+    await manager.service.editor.update(
+        created_detail.id,
+        CollectionOptions(title="Minimal Saga", collection_group="Minimal"),
+    )
+    assert (
+        await manager.service.reader.get(created_detail.id)
+    ).assets.theme.needed is False
+    await manager.service.groups.delete(
+        "Minimal", CollectionGroupDelete(collections="keep")
+    )
+    after_group_delete = await manager.service.reader.get(created_detail.id)
+    assert after_group_delete.assets.background.needed is True
+    assert after_group_delete.assets.theme.needed is True
+
+    # Withholding removes delivery targets at once.
+    synced_detail = await synced(manager.service, created_detail.id)
+    assert len(synced_detail.assets.poster.deliveries) == 1
+    await manager.service.editor.delete(created_detail.id, target="server")
+    withheld = await manager.service.reader.get(created_detail.id)
+    assert withheld.assets.poster.deliveries == []
+
+    # Orphaning clears non-lead copies and former group policy on the ledger.
+    await manager.service.groups.save_policy(
+        "Themeless", CollectionGroupPolicy(themes=False)
+    )
+    spanned = await created(
+        manager.service,
+        CollectionCreate(
+            title="Everything",
+            collection_group="Themeless",
+            rule=spanning(manager),
+        ),
+    )
+    assert spanned.assets.theme.needed is False
+    orphaned = await manager.service.adoption.orphan(spanned.id)
+    assert orphaned.assets.theme.needed is True
+    assert orphaned.assets.theme.status is AssetStatus.MISSING
+    async with database.read_session() as session:
+        row = await CollectionRepository(session).get(spanned.id)
+        assert row is not None
+        assert [
+            delivery.server_item_id
+            for delivery in read_asset(row, ServerAsset.POSTER).deliveries
+        ] == ["2"]

@@ -11,6 +11,7 @@ lazy from pydantic import ValidationError
 lazy from starlette.routing import BaseRoute
 
 lazy from overture.config import Settings
+lazy from overture.db.ledger import place_local, select_theme
 lazy from overture.db.models.catalog import CatalogCollection
 lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
@@ -24,10 +25,13 @@ lazy from overture.domain import (
     MATCH_THRESHOLD_MAX,
     ArtBulkSource,
     ArtType,
+    AssetStatus,
     MediaType,
     RecentUnit,
+    ServerAsset,
     ServerType,
     ThemeBulkSource,
+    ThemeIdSource,
 )
 lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.main import health_router
@@ -48,9 +52,7 @@ lazy from overture.schemas.bulk import (
     BulkThemeRequest,
 )
 lazy from overture.schemas.collections import (
-    CollectionThemeStatusResponse,
     collection_read,
-    collection_theme_status_response,
 )
 lazy from overture.schemas.common import SaveSelectionResponse
 lazy from overture.schemas.library import (
@@ -74,8 +76,8 @@ lazy from overture.schemas.themes import (
     SelectThemeRequest,
 )
 lazy from overture.services import settings as settings_service
-lazy from overture.services.art.bulk_work import split_art_types
 lazy from overture.services.art.targets import target_label
+lazy from overture.services.asset_runs.plan import kinds
 lazy from overture.services.server_audit.work import (
     AuditTarget,
     item_audit_work,
@@ -84,8 +86,8 @@ lazy from overture.services.server_audit.work import (
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.utils.assets import season_poster_candidates
 lazy from overture.utils.path import real_path
-lazy from tests.collection_helpers import stored_collection
-lazy from tests.factories import MediaItemFactory, SeasonFactory
+lazy from tests.collection_helpers import shown_on_server, stored_collection
+lazy from tests.factories import MediaItemFactory, SeasonFactory, seed_asset
 lazy from tests.runtime_helpers import make_runtime
 
 
@@ -212,25 +214,25 @@ class TestRestResponseContracts:
 
 
 class TestLibraryResponseMappers:
-    def test_media_item_mapper_flattens_every_art_slot_field(
+    def test_media_item_mapper_shows_each_asset_its_file_and_status(
         self, media_item_factory: MediaItemFactory
     ) -> None:
-        """Art slots are flattened at the public API boundary."""
+        """Each asset is one object at the public API boundary."""
         read = media_item_read_from_model(
             media_item_factory(
                 id=7,
+                folder_path="/movies/Movie",
                 art={
                     "poster": {
                         "url": "https://images.test/poster.jpg",
                         "file_hash": "p-hash",
-                        "phash": "p-phash",
+                        "fingerprint": "p-phash",
                         "width": 600,
                         "height": 900,
                     },
                     "background": {
                         "url": "https://images.test/bg.jpg",
                         "file_hash": "b-hash",
-                        "phash": "b-phash",
                         "width": 1920,
                         "height": 1080,
                     },
@@ -239,45 +241,51 @@ class TestLibraryResponseMappers:
             seasons=[],
         )
 
-        assert read.poster_url == "https://images.test/poster.jpg"
-        assert read.poster_hash == "p-hash"
-        assert read.poster_phash == "p-phash"
-        assert (read.poster_width, read.poster_height) == (600, 900)
-        assert read.background_url == "https://images.test/bg.jpg"
-        assert read.background_hash == "b-hash"
-        assert read.background_phash == "b-phash"
-        assert (read.background_width, read.background_height) == (1920, 1080)
-        assert read.poster_status == "complete"
-        assert read.art_status == "complete"
+        poster = read.assets.poster
+        assert poster.url == "https://images.test/poster.jpg"
+        assert poster.content_hash == "p-hash"
+        assert poster.file is not None
+        assert (poster.file.hash, poster.file.fingerprint) == ("p-hash", "p-phash")
+        assert (poster.file.width, poster.file.height) == (600, 900)
+        assert [(row.server_id, row.delivered) for row in poster.deliveries] == [
+            (None, True)
+        ]
+        background = read.assets.background
+        assert background.file is not None
+        assert (background.file.width, background.file.height) == (1920, 1080)
+        assert poster.status is AssetStatus.COMPLETE
+        assert read.art_status is AssetStatus.COMPLETE
 
-    def test_media_item_mapper_reports_empty_art_as_null(
+    def test_media_item_mapper_shows_absent_assets_as_missing(
         self, media_item_factory: MediaItemFactory
     ) -> None:
-        """An item with no art rows must serialise as nulls, not raise."""
+        """An item with no asset rows serialises them blank, not raising."""
         read = media_item_read_from_model(media_item_factory(id=8), seasons=[])
 
-        assert read.poster_url is None
-        assert read.poster_hash is None
-        assert read.background_width is None
-        assert read.art_status == "missing"
-        assert read.theme_status == "missing"
+        assert read.assets.poster.url is None
+        assert read.assets.poster.file is None
+        assert read.art_status is AssetStatus.MISSING
+        assert read.assets.theme.status is AssetStatus.MISSING
 
     @pytest.mark.parametrize(
-        ("file_hash", "status"), [(None, "partial"), ("h", "complete")]
+        ("file_hash", "status"),
+        [(None, AssetStatus.PARTIAL), ("h", AssetStatus.COMPLETE)],
     )
     def test_season_mapper_reports_poster_completeness(
-        self, season_factory: SeasonFactory, file_hash: str | None, status: str
+        self,
+        season_factory: SeasonFactory,
+        file_hash: str | None,
+        status: AssetStatus,
     ) -> None:
-        read = season_read_from_model(
-            season_factory(
-                id=2,
-                art={
-                    "season_poster": {"url": "https://x/s.jpg", "file_hash": file_hash}
-                },
-            ),
-            files=True,
+        season = season_factory(id=2)
+        place_local(season, (ServerAsset.SEASON_POSTER,), folder=True)
+        seed_asset(
+            season,
+            ServerAsset.SEASON_POSTER,
+            url="https://x/s.jpg",
+            file_hash=file_hash,
         )
-        assert read.poster_status == status
+        assert season_read_from_model(season).poster.status is status
 
     def test_library_collection_mappers_build_stable_response_models(
         self, media_item_factory: MediaItemFactory, season_factory: SeasonFactory
@@ -293,8 +301,7 @@ class TestLibraryResponseMappers:
                 season_num=1,
                 file_count=3,
                 art={"season_poster": {"url": "https://images.test/s.jpg"}},
-            ),
-            files=True,
+            )
         )
 
         assert MediaItemListResponse(items=[item], total=1).total == 1
@@ -308,30 +315,32 @@ class TestLibraryResponseMappers:
         assert library.count == 5
         assert folder_roots_response({"movies": ["/movies"]}).shows == []
         assert season.file_count == 3
-        assert season.poster_url == "https://images.test/s.jpg"
+        assert season.poster.url == "https://images.test/s.jpg"
 
 
 class TestCollectionResponseMappers:
     @staticmethod
-    def _row(**changes: str | None) -> MediaCollection:
+    def _row(thumb: str = "provider-thumb") -> MediaCollection:
         row = stored_collection(
             id=1,
             server_item_id="abc",
             media_type=MediaType.MOVIE,
             title="Collection",
             summary="Summary",
-            thumb_url="provider-thumb",
-            art_url="provider-art",
             child_count=3,
-            server_theme_id="/themes/abc",
-            youtube_id="abcDEF12345",
-            youtube_title="Collection Theme",
-            youtube_duration=120,
             monitored=False,
             tmdb_collection_id=10,
         )
-        row.sqlmodel_update(changes)
-        return row
+        select_theme(
+            row,
+            "abcDEF12345",
+            source=ThemeIdSource.DOWNLOAD,
+            title="Collection Theme",
+            duration=120,
+        )
+        return shown_on_server(
+            row, poster=thumb, background="provider-art", theme="/themes/abc"
+        )
 
     def test_collection_mapper_combines_server_state_provenance_and_catalog(
         self,
@@ -341,13 +350,7 @@ class TestCollectionResponseMappers:
         )
         row = self._row()
         read = collection_read(
-            row,
-            catalog,
-            None,
-            copies=row.copies,
-            trust_no_theme=True,
-            backgrounds=True,
-            themes=True,
+            row, catalog, None, copies=row.copies, trust_no_theme=True
         )
 
         assert read.server_poster_version is not None
@@ -355,35 +358,16 @@ class TestCollectionResponseMappers:
         versions = read.server_poster_version + read.server_background_version
         assert "provider" not in versions
         # A replaced server image gets a new version; the same one keeps its version.
-        replaced = self._row(thumb_url="provider-thumb-2")
+        replaced = self._row(thumb="provider-thumb-2")
         renamed = collection_read(
-            replaced,
-            None,
-            None,
-            copies=replaced.copies,
-            trust_no_theme=True,
-            backgrounds=True,
-            themes=True,
+            replaced, None, None, copies=replaced.copies, trust_no_theme=True
         )
         assert renamed.server_poster_version is not None
         assert renamed.server_poster_version != read.server_poster_version
         assert renamed.server_background_version == read.server_background_version
-        # A collection no server holds has no server image to show.
-        withheld = collection_read(
-            row,
-            None,
-            None,
-            copies=[],
-            trust_no_theme=True,
-            backgrounds=True,
-            themes=True,
-        )
-        assert (withheld.server_poster_version, withheld.server_background_version) == (
-            None,
-            None,
-        )
-        assert read.has_theme is True
-        assert read.youtube_id == "abcDEF12345"
+        theme = read.assets.theme
+        assert [row.present for row in theme.deliveries] == [True]
+        assert theme.youtube_id == "abcDEF12345"
         assert read.monitored is False
         assert read.tmdb_collection_id == 10
         assert (read.catalog_complete, read.catalog_themerrdb) == (
@@ -391,17 +375,6 @@ class TestCollectionResponseMappers:
             True,
         )
         assert renamed.catalog_themerrdb is False
-
-    def test_collection_theme_status_mapper_uses_reconciled_collection(self) -> None:
-        row = self._row(
-            server_theme_id=None,
-            youtube_id=None,
-            youtube_title=None,
-            youtube_duration=None,
-        )
-        assert collection_theme_status_response(row) == (
-            CollectionThemeStatusResponse(has_theme=False, youtube_id=None)
-        )
 
 
 class TestThemeResponseMappers:
@@ -602,13 +575,15 @@ class TestBulkRequestContract:
         assert target_label(item) == "Show"
         assert target_label(item, season=season) == "Show S02"
 
-    def test_split_art_types_lists_poster_before_background(self) -> None:
-        assert split_art_types(
-            [ArtType.SEASON_POSTER, ArtType.BACKGROUND, ArtType.POSTER]
-        ) == (
-            [ArtType.POSTER, ArtType.BACKGROUND],
-            [ArtType.SEASON_POSTER],
+    def test_art_runs_list_poster_before_background_then_season_posters(self) -> None:
+        request = BulkMatchArtRequest(
+            art_types=[ArtType.SEASON_POSTER, ArtType.BACKGROUND, ArtType.POSTER]
         )
+        assert kinds(request) == [
+            ServerAsset.POSTER,
+            ServerAsset.BACKGROUND,
+            ServerAsset.SEASON_POSTER,
+        ]
 
 
 class TestSyncAndThemeRequestContract:
@@ -708,6 +683,36 @@ class TestServerAuditContract:
                 server_id=1, item_id=1, server_item_id="s", theme_id="t"
             )
         ]
+        collection_fix = FixAuditRequest.model_validate(
+            {
+                "themes": [
+                    {
+                        "collection_id": 4,
+                        "server_id": 1,
+                        "server_item_id": "box",
+                    }
+                ],
+                "snapshot_finished_at": "finish",
+            }
+        )
+        assert collection_fix.themes == [
+            ServerAuditThemeDeleteTarget(
+                server_id=1, collection_id=4, server_item_id="box"
+            )
+        ]
+        with pytest.raises(ValidationError, match="Name an item or a collection"):
+            ServerAuditThemeDeleteTarget.model_validate(
+                {"server_id": 1, "server_item_id": "box"}
+            )
+        with pytest.raises(ValidationError, match="Name an item or a collection"):
+            ServerAuditThemeDeleteTarget.model_validate(
+                {
+                    "item_id": 1,
+                    "collection_id": 4,
+                    "server_id": 1,
+                    "server_item_id": "box",
+                }
+            )
 
     def test_fix_request_needs_a_finding(self) -> None:
         with pytest.raises(ValidationError, match="at least one finding"):

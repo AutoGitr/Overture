@@ -6,16 +6,7 @@ lazy from typing import cast
 lazy import pytest
 
 lazy from overture.db.models.saved_schedule import SavedSchedule
-lazy from overture.db.models.schedule import TaskSchedule
 lazy from overture.domain import ScheduleKind
-
-
-def test_task_schedule_payload_is_native_dict() -> None:
-    schedule = TaskSchedule(task_name="sync", payload={"library_ids": ["1:1"]})
-    assert schedule.payload == {"library_ids": ["1:1"]}
-
-    schedule.payload = {}
-    assert schedule.payload == {}
 
 
 def test_bulk_schedule_payload_is_native_dict() -> None:

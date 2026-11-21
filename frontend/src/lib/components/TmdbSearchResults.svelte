@@ -25,17 +25,16 @@
   } from "../router/routes";
   import { settingsState } from "../stores/settingsState.svelte";
   import { downloadState } from "../stores/downloadState.svelte";
+  import { arrangeTmdbResults } from "../utils/sidebarDomain";
+  import type { TmdbFilterKey, TmdbFilters } from "../utils/sidebarFilters";
   import {
-    arrangeTmdbResults,
     statusTone,
     type SidebarSortDir,
-    type SidebarSortField,
-    type TmdbFilterKey,
-    type TmdbFilters,
-  } from "../utils/sidebarDomain";
+    type SidebarTab,
+  } from "../utils/sidebarShared";
+  import type { SidebarSortField } from "../utils/sidebarSorts";
   import { sidebarState, type AdvanceEntry } from "../stores/sidebarState.svelte";
   import { debounced } from "../utils/delayedFlag.svelte";
-  import type { SidebarTab } from "../utils/sidebarDomain";
   import DataStatus from "./DataStatus.svelte";
   import SidebarRow from "./SidebarRow.svelte";
   import SidebarGroupBrowser from "./SidebarGroupBrowser.svelte";
@@ -314,7 +313,7 @@
       settingsState.current.collection_themes_unavailable !== null}
     artStatus={statusTone(stored?.art_status ?? "missing", false)}
     themeStatus={statusTone(
-      stored?.theme_status ?? "missing",
+      stored?.assets.theme.status ?? "missing",
       !!stored && downloadState.isDownloadingCollection(stored.id),
     )}
     onSelect={() => select(result)}

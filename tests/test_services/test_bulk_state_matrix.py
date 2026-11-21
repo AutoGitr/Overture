@@ -10,11 +10,7 @@ lazy from sqlmodel import select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import (
-    ArtFileFacts,
-    read_art_slot,
-    select_art,
-)
+lazy from overture.db.ledger import place_local, read_asset, select_art
 lazy from overture.db.models.catalog import (
     CatalogItem,
     CatalogItemSeason,
@@ -26,16 +22,16 @@ lazy from overture.domain import (
     ArtBulkSource,
     ArtType,
     MediaType,
+    ServerAsset,
     ServerType,
     ThemeBulkSource,
 )
 lazy from overture.schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
-lazy from overture.services.art import bulk as art_bulk
 lazy from overture.services.art.collection_art import CollectionArtService
-lazy from overture.services.art.matcher import LocalComparison
+lazy from overture.services.art.matcher import ImageComparison
+lazy from overture.services.asset_runs import run as asset_run
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.storage.assets import AssetStorage
-lazy from overture.services.themes import bulk as theme_bulk
 lazy from overture.services.themes.youtube_resolver import YouTubeResolver
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.hashing import compute_bytes_hash
@@ -52,7 +48,7 @@ lazy from tests.bulk_helpers import (
     progress_logs,
     write_existing_asset,
 )
-lazy from tests.factories import seed_art_slot
+lazy from tests.factories import file_hash_of, seed_asset, seed_theme, theme_file_hash
 lazy from tests.media_servers import configure, served_item
 lazy from tests.runtime_helpers import make_local_assets, unused
 
@@ -62,7 +58,7 @@ ACTION_LINES: frozendict[str, tuple[str, str]] = frozendict(
         "queued": ("Queued ", "OvertureDB"),
         "restored": ("Queued ", "restores the saved selection"),
         "kept_saved": ("Skipped ", "saved selection already set"),
-        "kept_theme": ("Skipped ", "kept the local theme file"),
+        "kept_theme": ("Skipped ", "kept the theme in place"),
         "kept_art": ("Skipped ", "OvertureDB artwork is a different picture, d=30"),
         "adopted": ("Adopted ", "identical to the local file"),
     }
@@ -141,13 +137,15 @@ async def test_catalog_only_state_matrix(
         queued[target.media_item_id] = target.target_url
         return True
 
-    async def compare_with_local(url: str, facts: ArtFileFacts) -> LocalComparison:
+    async def compare(
+        url: str, *, fingerprint: str | None, content_hash: str | None
+    ) -> ImageComparison:
         assert url == "https://public.test/image.jpg"
-        same = facts.file_hash == compute_bytes_hash(CATALOG_BYTES)
-        return LocalComparison(distance=0 if same else 30, identical=same)
+        same = content_hash == compute_bytes_hash(CATALOG_BYTES)
+        return ImageComparison(distance=0 if same else 30, identical=same)
 
-    monkeypatch.setattr(art_bulk, "queue_download", queue)
-    monkeypatch.setattr(theme_bulk, "queue_download", queue)
+    monkeypatch.setattr(asset_run, "queue_download", queue)
+    monkeypatch.setattr(asset_run, "queue_download", queue)
     context = Context()
     downloads = make_bulk_downloads(app_config=app_config, database=database)
     local_assets = make_local_assets(
@@ -160,23 +158,23 @@ async def test_catalog_only_state_matrix(
         "overture.services.local_assets.theme.ffprobe_theme_metadata", no_tags
     )
     if asset == "theme":
-        await theme_bulk.run_bulk_themes(
+        await asset_run.run_themes(
             as_job_context(context),
             BulkThemeRequest(
                 source_order=[ThemeBulkSource.OVERTUREDB],
                 skip_recent_val=1,
                 overwrite_existing=mode == "overwrite",
             ),
-            downloads,
-            unused(YouTubeResolver),
+            downloads=downloads,
+            youtube_resolver=unused(YouTubeResolver),
             app_config=app_config,
             local_assets=local_assets,
             database=database,
         )
     else:
         matcher = art_matcher(app_config=app_config, database=database)
-        monkeypatch.setattr(matcher, "compare_with_local", compare_with_local)
-        await art_bulk.run_bulk_art_match(
+        monkeypatch.setattr(matcher, "compare", compare)
+        await asset_run.run_art(
             as_job_context(context),
             BulkMatchArtRequest(
                 source_order=[ArtBulkSource.OVERTUREDB],
@@ -184,8 +182,8 @@ async def test_catalog_only_state_matrix(
                 skip_recent_val=1,
                 overwrite_existing=mode == "overwrite",
             ),
-            downloads,
-            matcher,
+            downloads=downloads,
+            art_matcher=matcher,
             art=unused(CollectionArtService),
             local_assets=local_assets,
             app_config=app_config,
@@ -206,13 +204,17 @@ async def test_catalog_only_state_matrix(
     assert totals == {len(expected)}
     completed = context.events[-1][1]
     assert completed["done"] == completed["total"] == len(expected)
-    assert completed["queued"] == len(queue_targets)
-    assert completed["adopted"] == actions.count("adopted")
-    assert completed["skipped"] == sum(
+    assert completed["log_targets"].get("Queued", 0) == len(queue_targets)
+    assert completed["log_targets"].get("Adopted", 0) == actions.count("adopted")
+    assert completed["log_targets"].get("Skipped", 0) == sum(
         action == "set" or action.startswith(("kept", "recent")) for action in actions
     )
-    assert completed["no_match"] == no_match
-    assert completed["downloaded"] == completed["errors"] == 0
+    assert completed["log_targets"].get("No match", 0) == no_match
+    assert (
+        completed["log_targets"].get("Downloaded", 0)
+        == completed["log_targets"].get("Error", 0)
+        == 0
+    )
 
     await assert_rows_match_disk(
         db_session, asset, on_disk, cached_flags, files_read, expected
@@ -233,18 +235,27 @@ def seed_case(
     """Add one case's rows and files; return whether the catalog serves it."""
     saved, disk, same, cached, recent = flags
     folder.mkdir()
+    # A saved selection on disk is the file it was downloaded as.
+    if asset == "theme":
+        written = b"existing theme"
+    else:
+        written = CATALOG_BYTES if same else b"existing artwork"
+    content = compute_bytes_hash(written) if saved and disk else None
     is_season = asset == "season_poster"
     media_type = MediaType.SHOW if is_season else MediaType.MOVIE
-    item = served_item(
-        id=number,
-        title=folder.name,
-        media_type=media_type,
-        tmdb_id=number,
-        folder_path=str(folder),
-        server_item_id=str(number) if server_id else None,
-        theme_file_hash="cached-hash" if cached and asset == "theme" else None,
-        youtube_id="saved-video" if saved and asset == "theme" else None,
-        last_matched_at=utc_now() if recent else None,
+    item = seed_theme(
+        served_item(
+            id=number,
+            title=folder.name,
+            media_type=media_type,
+            tmdb_id=number,
+            folder_path=str(folder),
+            server_item_id=str(number) if server_id else None,
+            last_matched_at=utc_now() if recent else None,
+        ),
+        "saved-video" if saved and asset == "theme" else None,
+        file_hash="cached-hash" if cached and asset == "theme" else None,
+        content_hash=content,
     )
     season = (
         Season(
@@ -258,16 +269,22 @@ def seed_case(
         if is_season
         else None
     )
+    if season is not None:
+        # A sync places a season's poster in its show's folder.
+        place_local(season, (ServerAsset.SEASON_POSTER,), folder=True)
     if asset != "theme":
         owner = season if season is not None else item
         if saved:
             select_art(
-                owner, ArtType(asset), PublicArtUrl("https://saved.test/image.jpg")
+                owner,
+                ArtType(asset).server_asset,
+                PublicArtUrl("https://saved.test/image.jpg"),
             )
-        seed_art_slot(
+        seed_asset(
             owner,
             ArtType(asset),
             file_hash="cached-hash" if cached else None,
+            content_hash=content,
             file_mtime_ns=1 if cached else None,
             file_size=1 if cached else None,
         )
@@ -333,7 +350,7 @@ def expected_action(
 
 def aggregate(logs: list[str], outcome: str) -> int:
     """Sum the counts of a run's planning lines for *outcome*."""
-    pattern = re.compile(rf"{outcome} (\d+) (?:items?|art slots?) - ")
+    pattern = re.compile(rf"{outcome} (\d+) (?:items?|assets?) - ")
     return sum(int(match[1]) for line in logs if (match := pattern.prefixmatch(line)))
 
 
@@ -371,10 +388,10 @@ async def assert_rows_match_disk(
         item = items[number]
         present = disk if files_read[number] else cached_flags[number]
         if asset == "theme":
-            assert (item.theme_file_hash is not None) is present, item.title
+            assert (theme_file_hash(item) is not None) is present, item.title
             continue
         owner = seasons[number] if asset == "season_poster" else item
-        slot = read_art_slot(owner, ArtType(asset))
-        assert (slot.file_hash is not None) is present, item.title
+        slot = read_asset(owner, ArtType(asset).server_asset)
+        assert (file_hash_of(slot) is not None) is present, item.title
         if expected[item.title] == "adopted":
             assert slot.url == "https://public.test/image.jpg"

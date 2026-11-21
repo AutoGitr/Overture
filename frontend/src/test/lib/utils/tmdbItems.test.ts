@@ -98,7 +98,7 @@ describe("persisting a TMDB preview", () => {
     settingsState.load(appSettings({ auto_advance: "slots_and_items", workflow: "themes" }));
     routed.view = { mode: "themes", artSubTab: "poster", drillSeasonNum: null };
     vi.mocked(findCachedLibraryItem).mockReturnValue(
-      mediaItem({ id: 9, theme_status: "complete" }),
+      mediaItem({ id: 9, assets: { theme: { status: "complete" } } }),
     );
     settingsState.current.auto_advance_skip_completed = true;
 

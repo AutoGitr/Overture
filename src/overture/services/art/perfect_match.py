@@ -5,7 +5,6 @@ lazy import logging
 
 lazy import httpx2
 
-lazy from ...db.art_slots import ArtFileFacts
 lazy from ...domain import PERFECT_MATCH_ONLY
 lazy from ...schemas.art import ArtCandidate
 lazy from ...utils.hashing import compute_bytes_hash
@@ -51,9 +50,9 @@ def accepted_matches(matches: list[ArtCandidate], threshold: int) -> list[ArtCan
 
 
 async def remote_matches_file(
-    url: str, facts: ArtFileFacts, *, cache: ArtMatcherCache
+    url: str, content_hash: str, *, cache: ArtMatcherCache
 ) -> bool:
-    """Return whether the original image at *url* has the local file's bytes.
+    """Return whether the original image at *url* has the bytes *content_hash* names.
 
     Raises:
         httpx2.HTTPError: When the image cannot be fetched.
@@ -61,19 +60,16 @@ async def remote_matches_file(
         ValueError: When the response is not a usable image.
     """
     image = await cache.fetch(url)
-    return (
-        len(image.data) == facts.file_size
-        and compute_bytes_hash(image.data) == facts.file_hash
-    )
+    return compute_bytes_hash(image.data) == content_hash
 
 
 async def annotate_perfect_matches(
-    facts: ArtFileFacts,
+    content_hash: str,
     matches: list[ArtCandidate],
     *,
     cache: ArtMatcherCache,
 ) -> list[str]:
-    """Mark close matches whose original bytes equal the local file.
+    """Mark close matches whose original bytes are the ones *content_hash* names.
 
     Mutates *matches* in place; returns failures that prevented verification.
     """
@@ -85,7 +81,7 @@ async def annotate_perfect_matches(
         and match.url
     ]
     outcomes = await asyncio.gather(
-        *(remote_matches_file(match.url, facts, cache=cache) for match in close),
+        *(remote_matches_file(match.url, content_hash, cache=cache) for match in close),
         return_exceptions=True,
     )
     errors: list[str] = []

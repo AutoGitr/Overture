@@ -7,7 +7,7 @@ lazy from ...db.models.settings import AppSettings
 lazy from ...domain import ARR_ADDED_TAG, MediaType
 lazy from ...integrations.arr import ArrRequest, ArrTitle
 lazy from ...integrations.tmdb import TMDBClient
-lazy from ...repositories.collections import CollectionItem
+lazy from ...repositories.collection_items import CollectionItem
 lazy from ...schemas.collections import (
     CollectionMissing,
     CollectionMissingTitle,

@@ -8,7 +8,7 @@ lazy from overture.domain import ArtType, CollectionPosterStyle, MediaType
 lazy from overture.schemas.catalog import CatalogSelections
 lazy from overture.services.catalog.agreement import collection_agreement
 lazy from tests.collection_helpers import stored_collection
-lazy from tests.factories import seed_art_slot
+lazy from tests.factories import seed_asset
 
 _MATTE = "https://theposterdb.com/api/assets/668235"
 _INDIVIDUAL = "https://image.tmdb.org/t/p/original/saga.jpg"
@@ -22,9 +22,7 @@ def _collection(
     row = stored_collection(
         id=1, server_item_id="saga", media_type=MediaType.MOVIE, title="Saga"
     )
-    seed_art_slot(
-        row, ArtType.POSTER, url=poster, poster_style=style, upload_hash=upload
-    )
+    seed_asset(row, ArtType.POSTER, url=poster, poster_style=style, upload_hash=upload)
     return row
 
 

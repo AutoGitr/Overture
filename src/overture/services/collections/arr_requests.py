@@ -2,7 +2,7 @@
 
 lazy from ...db.models.settings import AppSettings, get_app_settings
 lazy from ...domain import MediaType
-lazy from ...repositories.collections import CollectionItem
+lazy from ...repositories.collection_items import CollectionItem
 lazy from ...schemas.collections import (
     ArrTagRead,
     CollectionArrOptions,

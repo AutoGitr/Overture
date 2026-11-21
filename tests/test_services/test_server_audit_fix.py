@@ -4,17 +4,20 @@ lazy from collections import deque
 lazy from collections.abc import Collection, Mapping, Sequence
 lazy from dataclasses import replace
 lazy from pathlib import Path
-lazy from typing import Any, override
+lazy from typing import Any, cast, override
 
 lazy import pytest
 
 lazy from overture.config import Settings
+lazy from overture.db.ledger import read_asset
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, MediaType, ServerAsset
+lazy from overture.domain import ArtType, MediaType, ServerAsset, ServerType
 lazy from overture.jobs.kinds import JobKind
 lazy from overture.jobs.lifecycle import ManagedJobLifecycle
 lazy from overture.media_servers.errors import MediaServerError
+lazy from overture.media_servers.jellyfin import JellyfinProvider
+lazy from overture.media_servers.plex import PlexProvider
 lazy from overture.schemas.server_audit import (
     AuditStatus,
     FixAuditRequest,
@@ -24,6 +27,7 @@ lazy from overture.schemas.server_audit import (
 )
 lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.art.phash import PhashService
+lazy from overture.services.downloads.theme import DownloadThemeHandler
 lazy from overture.services.server_audit import fix as module
 lazy from overture.services.server_audit.compare import AuditContext
 lazy from overture.services.server_audit.fix import (
@@ -35,16 +39,20 @@ lazy from overture.services.server_audit.fix import (
 lazy from overture.services.server_audit.work import AuditTarget, CollectionAuditTarget
 lazy from overture.services.server_identity import ServerCopy
 lazy from overture.services.storage.assets import AssetStorage
+lazy from overture.services.themes.youtube_resolver import ThemeAudio, YouTubeResolver
 lazy from overture.utils.time import utc_now
 lazy from overture.ws.events import validate_event_payload
 lazy from tests.collection_helpers import stored_collection
-lazy from tests.media_servers import TEST_SERVER_ID
+lazy from tests.factories import seed_theme
+lazy from tests.media_servers import TEST_SERVER_ID, configure, server_of
+lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     JobProbe,
     NoopProviderRegistry,
     StaticImageClients,
     make_local_assets,
     make_runtime,
+    make_server_copies,
     unused,
 )
 
@@ -120,7 +128,6 @@ def _context(
 ) -> AuditContext:
     phash = PhashService(app_config=app_config)
     return AuditContext(
-        config_dir=tmp_path,
         collection_art=unused(CollectionArtService),
         provider_registry=NoopProviderRegistry(),
         asset_storage=AssetStorage(app_config=app_config),
@@ -128,9 +135,15 @@ def _context(
             app_config=app_config, database=database, phash=phash
         ),
         phash=phash,
-        image_clients=StaticImageClients(),
-        app_config=app_config,
         database=database,
+        server_copies=make_server_copies(
+            app_config=app_config,
+            image_clients=StaticImageClients(),
+            config_dir=tmp_path,
+            phash=phash,
+        ),
+        theme_handler=unused(DownloadThemeHandler),
+        publisher=NullEventPublisher(),
     )
 
 
@@ -156,7 +169,7 @@ async def _run(
     *,
     art: Sequence[ServerAuditRefreshTarget] = (),
     themes: Sequence[ServerAuditThemeDeleteTarget] = (),
-    provider: FakeProvider,
+    provider: Any,
     context: AuditContext,
 ) -> list[dict[AuditRowKey, RowFix]]:
     marks: list[dict[AuditRowKey, RowFix]] = []
@@ -218,7 +231,11 @@ async def test_art_rows_turn_verified_only_once_the_server_shows_the_local_file(
     ]
     event, payload = probe.terminal()
     assert event == "server.audit.fix.completed"
-    assert (payload["done"], payload["total"], payload["verified"]) == (2, 2, 2)
+    assert (
+        payload["done"],
+        payload["total"],
+        payload["log_targets"].get("Matched", 0),
+    ) == (2, 2, 2)
 
 
 async def test_rows_the_server_never_takes_end_unchanged_with_the_latest_difference(
@@ -247,7 +264,11 @@ async def test_rows_the_server_never_takes_end_unchanged_with_the_latest_differe
         ("art", 1, None, "poster", 1): RowFix(error="Still differs after refresh: d=12")
     }
     _, payload = probe.terminal()
-    assert (payload["done"], payload["unchanged"], payload["verified"]) == (1, 1, 0)
+    assert (
+        payload["done"],
+        payload["log_targets"].get("Mismatch", 0),
+        payload["log_targets"].get("Matched", 0),
+    ) == (1, 1, 0)
 
 
 async def test_a_stopped_fix_leaves_unsettled_rows_without_an_outcome(
@@ -348,7 +369,7 @@ async def test_a_failed_theme_delete_skips_the_refresh_and_marks_its_rows(
         )
     }
     assert server.checks == []
-    assert probe.terminal()[1]["errors"] == 1
+    assert probe.terminal()[1]["log_targets"].get("Error", 0) == 1
 
 
 async def test_fix_failures_settle_as_errors_without_a_check(
@@ -384,7 +405,7 @@ async def test_fix_failures_settle_as_errors_without_a_check(
     assert errors["art", 3, None, "poster", 1] == "Item not found"
     assert server.checks == []
     _, payload = probe.terminal()
-    assert (payload["done"], payload["errors"]) == (3, 3)
+    assert (payload["done"], payload["log_targets"].get("Error", 0)) == (3, 3)
 
 
 async def test_the_service_fixes_art_and_themes_in_one_run_and_marks_the_rows(
@@ -511,7 +532,7 @@ async def test_a_collection_image_is_uploaded_again_then_verified(
     async def audited(
         target: CollectionAuditTarget, **_kwargs: object
     ) -> tuple[CollectionAuditTarget, list[ServerAuditResult]]:
-        assert target == CollectionAuditTarget(4, ArtType.POSTER)
+        assert target == CollectionAuditTarget(4, ServerAsset.POSTER)
         return target, [
             ServerAuditResult(
                 kind="art",
@@ -546,3 +567,259 @@ async def test_a_collection_image_is_uploaded_again_then_verified(
     # Nothing of an item is refreshed for a collection.
     assert provider.calls == []
     assert marks == [{row: PENDING}, {row: VERIFIED}]
+
+
+async def test_a_collection_image_fixed_across_servers_uploads_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    app_config: Settings,
+    database: Database,
+) -> None:
+    async with database.write_session() as session:
+        session.add(
+            stored_collection(
+                id=4,
+                server_item_id="box",
+                media_type=MediaType.MOVIE,
+                title="Saga",
+                last_synced_at=utc_now(),
+            )
+        )
+
+    async def audited(
+        target: CollectionAuditTarget, **_kwargs: object
+    ) -> tuple[CollectionAuditTarget, list[ServerAuditResult]]:
+        assert target == CollectionAuditTarget(4, ServerAsset.POSTER)
+        return target, [
+            ServerAuditResult(
+                kind="art",
+                collection_id=4,
+                art_type=target.asset,
+                title="Saga",
+                status=AuditStatus.PHASH_MATCH,
+                server_id=server_id,
+            )
+            for server_id in (1, 2)
+        ]
+
+    monkeypatch.setattr(module, "audit_target", audited)
+    reuploads = Reuploads()
+
+    marks = await _run(
+        JobProbe(lifecycle=LIFECYCLE),
+        art=[
+            ServerAuditRefreshTarget(
+                server_id=server_id, collection_id=4, art_type=ArtType.POSTER
+            )
+            for server_id in (1, 2)
+        ],
+        provider=FakeProvider(),
+        context=replace(
+            _context(tmp_path, app_config=app_config, database=database),
+            collection_art=reuploads,
+        ),
+    )
+
+    first = ("collection", 4, None, "poster", 1)
+    second = ("collection", 4, None, "poster", 2)
+    assert reuploads.sent == [(4, ArtType.POSTER)]
+    assert marks == [
+        {first: PENDING, second: PENDING},
+        {first: VERIFIED, second: VERIFIED},
+    ]
+
+
+class _FakeCollectionThemeResolver:
+    def __init__(self, audio_bytes: bytes, fingerprint: str) -> None:
+        self._audio_bytes = audio_bytes
+        self._fingerprint = fingerprint
+
+    async def download_audio(
+        self,
+        youtube_id: str,
+        min_duration: int = 30,
+        max_duration: int = 300,
+        progress_callback: object = None,
+        *,
+        normalize_loudness: bool = False,
+    ) -> ThemeAudio:
+        del youtube_id, min_duration, max_duration, progress_callback
+        del normalize_loudness
+        return ThemeAudio(
+            audio_bytes=self._audio_bytes,
+            title="Saga Theme",
+            duration=90,
+            fingerprint=self._fingerprint,
+        )
+
+
+async def test_a_plex_collection_theme_is_uploaded_again_then_verified(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    app_config: Settings,
+    database: Database,
+) -> None:
+    uploaded: list[tuple[str, bytes]] = []
+
+    class PlexThemeProvider(PlexProvider):
+        @override
+        async def upload_collection_theme(
+            self, server_item_id: str, mp3_bytes: bytes
+        ) -> str:
+            uploaded.append((server_item_id, mp3_bytes))
+            return "/library/metadata/box/theme/2"
+
+    async with database.write_session() as session:
+        session.add(
+            seed_theme(
+                stored_collection(
+                    id=4,
+                    server_item_id="box",
+                    media_type=MediaType.MOVIE,
+                    title="Saga",
+                    last_synced_at=utc_now(),
+                ),
+                "VENZKx1iFzA",
+                uploaded_as="/library/metadata/box/theme/1",
+            )
+        )
+
+    async def audited(
+        target: CollectionAuditTarget, **_kwargs: object
+    ) -> tuple[CollectionAuditTarget, list[ServerAuditResult]]:
+        assert target == CollectionAuditTarget(4, ServerAsset.THEME)
+        return target, [
+            ServerAuditResult(
+                kind="theme",
+                collection_id=4,
+                art_type=ServerAsset.THEME,
+                title="Saga",
+                status=AuditStatus.THEME_MATCH,
+                server_id=TEST_SERVER_ID,
+                server_item_id="box",
+            )
+        ]
+
+    monkeypatch.setattr(module, "audit_target", audited)
+    handler = DownloadThemeHandler(
+        asset_storage=unused(AssetStorage),
+        youtube_resolver=cast(
+            "YouTubeResolver", _FakeCollectionThemeResolver(b"new-mp3", "new-fp")
+        ),
+        database=database,
+    )
+    marks = await _run(
+        JobProbe(lifecycle=LIFECYCLE),
+        themes=[
+            ServerAuditThemeDeleteTarget(
+                server_id=1,
+                collection_id=4,
+                server_item_id="box",
+                theme_id="box",
+            )
+        ],
+        provider=PlexThemeProvider(
+            server=server_of(app_config),
+            server_id=TEST_SERVER_ID,
+            app_config=app_config,
+        ),
+        context=replace(
+            _context(tmp_path, app_config=app_config, database=database),
+            theme_handler=handler,
+        ),
+    )
+
+    row_key = ("collection", 4, None, "theme", 1)
+    assert uploaded == [("box", b"new-mp3")]
+    async with database.read_session() as session:
+        stored = await session.get(type(stored_collection(server_item_id="x")), 4)
+        assert stored is not None
+        assert read_asset(stored, ServerAsset.THEME).fingerprint == "new-fp"
+    assert marks == [{row_key: PENDING}, {row_key: VERIFIED}]
+
+
+async def test_a_jellyfin_collection_theme_is_written_to_folder_then_verified(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    app_config: Settings,
+    database: Database,
+) -> None:
+    refreshed: list[str] = []
+
+    class JellyfinThemeProvider(JellyfinProvider):
+        @override
+        async def refresh_item(
+            self, item_id: str, *, unlock: Collection[ServerAsset]
+        ) -> None:
+            del unlock
+            refreshed.append(item_id)
+
+    folder = tmp_path / "Saga [boxset]"
+    folder.mkdir()
+    configure(app_config, type=ServerType.JELLYFIN, collections_path=tmp_path)
+    async with database.write_session() as session:
+        session.add(
+            seed_theme(
+                stored_collection(
+                    id=4,
+                    server_item_id="box",
+                    media_type=MediaType.MOVIE,
+                    title="Saga",
+                    server_path="/config/collections/Saga [boxset]",
+                    last_synced_at=utc_now(),
+                ),
+                "VENZKx1iFzA",
+            )
+        )
+
+    async def audited(
+        target: CollectionAuditTarget, **_kwargs: object
+    ) -> tuple[CollectionAuditTarget, list[ServerAuditResult]]:
+        assert target == CollectionAuditTarget(4, ServerAsset.THEME)
+        assert (folder / "theme.mp3").read_bytes() == b"jf-mp3"
+        return target, [
+            ServerAuditResult(
+                kind="theme",
+                collection_id=4,
+                art_type=ServerAsset.THEME,
+                title="Saga",
+                status=AuditStatus.THEME_MATCH,
+                server_id=TEST_SERVER_ID,
+                server_item_id="box",
+            )
+        ]
+
+    monkeypatch.setattr(module, "audit_target", audited)
+    handler = DownloadThemeHandler(
+        asset_storage=unused(AssetStorage),
+        youtube_resolver=cast(
+            "YouTubeResolver", _FakeCollectionThemeResolver(b"jf-mp3", "jf-fp")
+        ),
+        database=database,
+    )
+    marks = await _run(
+        JobProbe(lifecycle=LIFECYCLE),
+        themes=[
+            ServerAuditThemeDeleteTarget(
+                server_id=1,
+                collection_id=4,
+                server_item_id="box",
+            )
+        ],
+        provider=JellyfinThemeProvider(
+            server=server_of(app_config, ServerType.JELLYFIN),
+            server_id=TEST_SERVER_ID,
+            app_config=app_config,
+        ),
+        context=replace(
+            _context(tmp_path, app_config=app_config, database=database),
+            theme_handler=handler,
+        ),
+    )
+
+    row_key = ("collection", 4, None, "theme", 1)
+    assert refreshed == ["box"]
+    assert marks == [{row_key: PENDING}, {row_key: VERIFIED}]

@@ -84,5 +84,5 @@ class RealtimeSnapshotBuilder:
         )
         return cast(
             "dict[str, JsonValue]",
-            snapshot.model_dump(mode="json", exclude_none=True),
+            snapshot.model_dump(mode="json"),
         )

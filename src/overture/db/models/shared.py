@@ -53,21 +53,3 @@ class PolicyOverrides(SQLModel):
     member_label: str | None = None
     arr_tag: str | None = None
     home_order: int | None = None
-
-
-class ThemeColumns(SQLModel):
-    """The theme a title or collection has: its video and its local file.
-
-    The file columns describe one inspection of the local theme file, and are
-    written together through :mod:`overture.db.theme_file`.
-    """
-
-    youtube_id: str | None = None
-    youtube_title: str | None = None
-    #: Seconds, as YouTube gives the video's length.
-    youtube_duration: int | None = None
-    theme_file_hash: str | None = None
-    theme_file_mtime_ns: int | None = None
-    theme_file_size: int | None = None
-    #: Seconds, read from the file at the revision above.
-    theme_file_duration: int | None = None

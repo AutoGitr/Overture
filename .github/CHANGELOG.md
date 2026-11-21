@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+### Added
+
+- **Interface:** hovering a title's or collection's **Poster** or **Background** tab names the servers, or the folder, that do not yet show Overture's image.
+
+### Changed
+
+- **API:** titles and collections carry their poster, background and theme under `assets`, and seasons their poster under `poster`: each with its selection, the content Overture holds, its status and where it is delivered, per server and folder. This replaces the flat `poster_*`, `background_*`, `theme_*` and `youtube_*` fields; existing choices and files are converted.
+- **API:** the `collection.theme.updated` event is gone, as `collection.updated` reports a theme change; setting or removing a collection theme returns the theme. Job events carry `log_targets` in place of their outcome counters.
+- **API:** WebSocket events carry every field, `null` where it has no value, instead of leaving it out.
+- **API:** an asset says whether it is `selected`, `GET /api/collections/{id}/theme` returns the theme as an asset, and Server audit fixes take a collection's theme by `collection_id`.
+- **Collections:** a sync checks the art and theme of every server copy, not just the first, and a collection is complete only once every copy shows them.
+- **Collections:** a chosen theme stays chosen when a server plays another; the collection's next sync or an Assets run sends it again.
+- **Library:** auto-unmonitor counts a title's theme as complete when OvertureDB says it has none and Overture trusts that flag.
+- **Operations:** Server audit compares and fixes collection images and themes exactly as a sync does, and records what it finds on a collection's copies, so the collection's status follows the audit.
+- **Operations:** Assets runs decide titles and collections by the same rules: a saved choice is restored wherever a place lacks it, OvertureDB art replaces a different image only with Replace existing, Replace existing skips a theme already in place as it does art, and planning lines count `assets` and `collection assets`.
+- **Statistics:** the images Overture uploads to collections count in the image cache, not in the artwork sizes.
+
+### Fixed
+
+- **Collections:** a sync keeps the art Overture uploaded while the server still shows it. Plex changes a collection's image link whenever the collection is edited, which a sync took for a replaced image, so collections lost their complete art and the next Assets run uploaded it again.
+- **Interface:** a collection offers to remove its theme only when it has one.
+- **Operations:** a running collection download shows its stage instead of `undefined/undefined`.
+- **Operations:** a run's log filters and its notifications count the targets each line names, so `94 collections` counts 94, as the run's totals do.
+- **Operations:** log lines name a collection's asset as one, such as `Alien (collection poster)`, so it never reads as the title of the same name; theme lines name the theme.
+- **Operations:** a title or collection that leaves the library during an Assets run is skipped, not an error, in every kind of run.
+
 ## 0.4.0 - 2026-11-20
 
 ### Added

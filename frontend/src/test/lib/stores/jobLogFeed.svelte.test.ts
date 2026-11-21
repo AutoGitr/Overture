@@ -141,15 +141,17 @@ describe("JobLogFeed", () => {
   it("lists only the outcomes shown, by the counts the run's events carry", async () => {
     storedOutcomes(["Added", "Error", "Added", "Unchanged"]);
     const feed = new JobLogFeed();
+    // One "Added" line sums up 94 titles: a filter counts its targets, the list its lines.
     feed.apply({
       run_id: "run",
       log_total: 4,
       log_outcomes: { Added: 2, Error: 1, Unchanged: 1 },
+      log_targets: { Added: 95, Error: 1, Unchanged: 1 },
     });
     feed.show(0, 4);
     await vi.waitFor(() => expect(feed.lines.size).toBe(4));
     expect(feed.groups.map(({ key, count, shown }) => [key, count, shown])).toEqual([
-      ["Added", 2, true],
+      ["Added", 95, true],
       ["Unchanged", 1, true],
       ["Error", 1, true],
     ]);

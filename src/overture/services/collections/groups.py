@@ -23,8 +23,10 @@ lazy from ...utils.collection_fields import DIMENSIONS
 lazy from ...utils.collection_groups import collection_group
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
+lazy from ..needs import apply_needs
 lazy from . import COLLECTIONS_LOCK
 lazy from .access import CollectionAccess
+lazy from .adoption import CollectionAdoption
 lazy from .editor import CollectionEditor
 lazy from .rule_sync import RuleSync
 lazy from .rules import generator, group_name
@@ -42,6 +44,7 @@ class CollectionGroups:
         access: CollectionAccess,
         validator: CollectionValidator,
         editor: CollectionEditor,
+        adoption: CollectionAdoption,
         sets: CollectionSets,
         rules: RuleSync,
         separators: CollectionSeparators,
@@ -49,6 +52,7 @@ class CollectionGroups:
         self._access = access
         self._validator = validator
         self._editor = editor
+        self._adoption = adoption
         self._sets = sets
         self._rules = rules
         self._separators = separators
@@ -120,7 +124,7 @@ class CollectionGroups:
                             f"collection:{identity}"
                         ):
                             if body.collections == "orphan":
-                                await self._editor.orphan_locked(
+                                await self._adoption.orphan_locked(
                                     identity, set_removed=True
                                 )
                             else:
@@ -136,12 +140,14 @@ class CollectionGroups:
                     group = await repo.group(name)
                     if group is not None:
                         moved_to = await repo.ensure_group(target)
-                        for row in await repo.group_members(group):
+                        members = await repo.group_members(group)
+                        for row in members:
                             row.group = moved_to
                             row.generated_value = None
                             row.updated_at = utc_now()
                             session.add(row)
                         await session.flush()
+                        await apply_needs(session, collections=members)
                         await session.delete(group)
         await self._access.changed()
         return result
@@ -241,6 +247,7 @@ class CollectionGroups:
             session.add(row)
             await session.flush()
             await self._separators.refuse_taken(session, row)
+        await self._access.needs.apply_collections()
         await self._access.changed()
         return body
 

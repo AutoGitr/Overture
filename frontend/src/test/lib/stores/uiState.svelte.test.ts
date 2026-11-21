@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { activeFilterCount } from "../../../lib/utils/sidebarDomain";
+import { activeFilterCount } from "../../../lib/utils/sidebarFilters";
 
 describe("uiState popups", () => {
   it("never reflects the open popup in the URL (path, hash, or search params)", async () => {

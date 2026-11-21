@@ -8,7 +8,7 @@ import { navigate, route } from "../../../lib/router/routes";
 import { artPreviewState } from "../../../lib/stores/artPreviewState.svelte";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
 import { getCatalogStatusOptions } from "../../../generated/rest/@tanstack/svelte-query.gen";
-import { mediaItem, catalogStatus, season } from "../../helpers/fixtures";
+import { assetFile, catalogStatus, mediaItem, season, withAsset } from "../../helpers/fixtures";
 import { renderWithQueryClient } from "../../helpers/render";
 
 const {
@@ -140,11 +140,15 @@ describe("DetailPanel", () => {
         id: 7,
         title: "The Matrix",
         art_status: "partial",
-        poster_status: "complete",
-        poster_url: "https://image.tmdb.org/t/p/original/a.jpg",
-        poster_source: "tmdb",
-        background_status: "missing",
-        theme_status: "missing",
+        assets: {
+          poster: {
+            status: "complete",
+            url: "https://image.tmdb.org/t/p/original/a.jpg",
+            source: "tmdb",
+          },
+          background: { status: "missing" },
+          theme: { status: "missing" },
+        },
       }),
     });
     const tone = (el: HTMLElement) => el.querySelector(".status-icon")?.getAttribute("data-status");
@@ -216,14 +220,14 @@ describe("DetailPanel poster", () => {
       id: 7,
       title: "Chosen",
       folder_path: null,
-      poster_url: "https://image.tmdb.org/t/p/original/a.jpg",
+      assets: { poster: { url: "https://image.tmdb.org/t/p/original/a.jpg" } },
     });
     const { container, rerender } = renderWithQueryClient(DetailPanel, { item: chosen });
     const poster = () => posterImage(container);
-    expect(poster()).toHaveAttribute("src", chosen.poster_url);
+    expect(poster()).toHaveAttribute("src", chosen.assets.poster.url);
 
     await rerender({
-      item: { ...chosen, poster_url: "https://image.tmdb.org/t/p/original/b.jpg" },
+      item: withAsset(chosen, "poster", { url: "https://image.tmdb.org/t/p/original/b.jpg" }),
     });
     await waitFor(() =>
       expect(poster()).toHaveAttribute("src", "https://image.tmdb.org/t/p/original/b.jpg"),
@@ -233,13 +237,13 @@ describe("DetailPanel poster", () => {
     await waitFor(() => expect(poster()).toBeNull());
 
     await rerender({
-      item: { ...chosen, poster_url: "https://image.tmdb.org/t/p/original/c.jpg" },
+      item: withAsset(chosen, "poster", { url: "https://image.tmdb.org/t/p/original/c.jpg" }),
     });
     await waitFor(() =>
       expect(poster()).toHaveAttribute("src", "https://image.tmdb.org/t/p/original/c.jpg"),
     );
 
-    await rerender({ item: { ...chosen, poster_url: null } });
+    await rerender({ item: withAsset(chosen, "poster", { url: null }) });
     await waitFor(() => expect(poster()).toBeNull());
   });
 });
@@ -256,8 +260,7 @@ describe("DetailPanel images", () => {
         id: 7,
         title: "Local",
         folder_path: "/movies/Local",
-        poster_hash: "p1",
-        background_hash: "b1",
+        assets: { poster: { file: assetFile("p1") }, background: { file: assetFile("b1") } },
       }),
     });
 
@@ -289,8 +292,7 @@ describe("DetailPanel image changes", () => {
       id,
       title,
       folder_path: `/movies/${title}`,
-      poster_hash: hash,
-      background_hash: hash,
+      assets: { poster: { file: assetFile(hash) }, background: { file: assetFile(hash) } },
     });
 
   it("never shows the previous item's art while the next item's loads", async () => {
@@ -321,7 +323,7 @@ describe("DetailPanel image changes", () => {
     expect(poster).toHaveAttribute("src", "https://images.test/preview.jpg");
 
     // The same element keeps the preview on screen until the file has loaded.
-    const downloaded = { ...item, poster_hash: "new" };
+    const downloaded = withAsset(item, "poster", { file: assetFile("new") });
     artPreviewState.itemUpdated(downloaded);
     await rerender({ item: downloaded });
     expect(posterImage(container)).toBe(poster);
@@ -339,9 +341,10 @@ describe("DetailPanel record actions", () => {
   const alien = mediaItem({
     id: 8,
     title: "Alien",
-    poster_url: "https://images.test/poster.jpg",
-    poster_source: "tmdb",
-    youtube_id: "abc123",
+    assets: {
+      poster: { url: "https://images.test/poster.jpg", source: "tmdb" },
+      theme: { youtube_id: "abc123" },
+    },
   });
 
   beforeEach(async () => {
@@ -353,8 +356,8 @@ describe("DetailPanel record actions", () => {
     invalidateSeasons.mockResolvedValue(undefined);
     getSeasons.mockResolvedValue({
       data: [
-        season({ id: 1, season_num: 1, poster_url: "https://x/1.jpg", poster_source: "tmdb" }),
-        season({ id: 2, season_num: 2, poster_url: "https://x/2.jpg", poster_source: "tmdb" }),
+        season({ id: 1, season_num: 1, poster: { url: "https://x/1.jpg", source: "tmdb" } }),
+        season({ id: 2, season_num: 2, poster: { url: "https://x/2.jpg", source: "tmdb" } }),
       ],
     });
     await navigate("/movies", { replace: true });
@@ -399,7 +402,11 @@ describe("DetailPanel record actions", () => {
 
   it("offers to clear an uploaded poster, which has no link", async () => {
     renderWithQueryClient(DetailPanel, {
-      item: { ...alien, poster_url: null, poster_source: "upload" },
+      item: withAsset(alien, "poster", {
+        url: null,
+        upload_hash: "a".repeat(64),
+        source: "upload",
+      }),
     });
 
     expect(screen.getByRole("button", { name: "Clear poster" })).toBeEnabled();
@@ -407,7 +414,7 @@ describe("DetailPanel record actions", () => {
 
   it("offers to remove a local poster nothing selects", async () => {
     renderWithQueryClient(DetailPanel, {
-      item: { ...alien, poster_url: null, poster_source: null, poster_hash: "local" },
+      item: withAsset(alien, "poster", { url: null, source: null, file: assetFile("local") }),
     });
     expect(screen.getByRole("button", { name: "Clear poster" })).toBeEnabled();
   });

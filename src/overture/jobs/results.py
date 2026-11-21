@@ -196,12 +196,13 @@ async def interrupt_unfinished(database: Database) -> None:
                 )
             )
             run.log_total += 1
-            outcomes: dict[str, int] = summary.get("log_outcomes") or {}
             summary["log"] = entry
             summary["log_total"] = run.log_total
-            summary["log_outcomes"] = {
-                **outcomes,
-                JobOutcome.SKIPPED: outcomes.get(JobOutcome.SKIPPED, 0) + 1,
-            }
+            for key in ("log_outcomes", "log_targets"):
+                counts: dict[str, int] = summary.get(key) or {}
+                summary[key] = {
+                    **counts,
+                    JobOutcome.SKIPPED: counts.get(JobOutcome.SKIPPED, 0) + 1,
+                }
             run.summary = summary
             session.add(run)

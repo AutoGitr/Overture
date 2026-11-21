@@ -617,6 +617,134 @@ export type ArtUploadResponse = {
 export type AspectRatioTolerance = 'strict' | 'lenient' | 'off';
 
 /**
+ * AssetDeliveryRead
+ *
+ * One place the asset has to be, and whether it holds the content.
+ */
+export type AssetDeliveryRead = {
+    channel: DeliveryChannel;
+    /**
+     * Checked At
+     */
+    checked_at: string | null;
+    /**
+     * Delivered
+     */
+    delivered: boolean;
+    /**
+     * Present
+     */
+    present: boolean;
+    /**
+     * Required
+     */
+    required: boolean;
+    /**
+     * Server Id
+     */
+    server_id: number | null;
+};
+
+/**
+ * AssetFileRead
+ *
+ * The file in the item's own folder, as the last inspection found it.
+ */
+export type AssetFileRead = {
+    /**
+     * Duration
+     */
+    duration: number | null;
+    /**
+     * Fingerprint
+     */
+    fingerprint: string | null;
+    /**
+     * Hash
+     */
+    hash: string;
+    /**
+     * Height
+     */
+    height: number | null;
+    /**
+     * Width
+     */
+    width: number | null;
+};
+
+/**
+ * AssetRead
+ *
+ * One artwork slot or theme: its selection, content, deliveries and status.
+ */
+export type AssetRead = {
+    /**
+     * Content Hash
+     */
+    content_hash: string | null;
+    /**
+     * Deliveries
+     */
+    deliveries: Array<AssetDeliveryRead>;
+    /**
+     * Duration
+     */
+    duration: number | null;
+    file: AssetFileRead | null;
+    generated_style: ArtStyle | null;
+    /**
+     * Generated Title Only
+     */
+    generated_title_only: boolean;
+    /**
+     * Height
+     */
+    height: number | null;
+    kind: ServerAsset;
+    /**
+     * Needed
+     */
+    needed: boolean;
+    poster_style: CollectionPosterStyle | null;
+    /**
+     * Preview Url
+     */
+    preview_url: string | null;
+    /**
+     * Selected
+     */
+    selected: boolean;
+    source: ArtSource | null;
+    status: AssetStatus;
+    /**
+     * Upload Hash
+     */
+    upload_hash: string | null;
+    /**
+     * Url
+     */
+    url: string | null;
+    /**
+     * Width
+     */
+    width: number | null;
+    /**
+     * Youtube Duration
+     */
+    youtube_duration: number | null;
+    /**
+     * Youtube Id
+     */
+    youtube_id: string | null;
+    youtube_id_source: ThemeIdSource | null;
+    /**
+     * Youtube Title
+     */
+    youtube_title: string | null;
+};
+
+/**
  * AssetRemoval
  *
  * What removing an asset does, in any combination.
@@ -672,11 +800,7 @@ export type AssetRenameResult = {
 /**
  * AssetStatus
  *
- * How much of an asset Overture holds.
- *
- * ``complete`` once both the selection and the local file are recorded (or
- * just the selection, for an item without a local folder), ``partial`` when
- * only some of it is.
+ * How much of an asset Overture holds, by :mod:`overture.db.ledger`'s rule.
  */
 export type AssetStatus = 'complete' | 'partial' | 'missing';
 
@@ -1223,7 +1347,7 @@ export type BulkItemOperation = {
     removal?: AssetRemoval;
 };
 
-export type BulkItemOperationKind = 'artwork' | 'themes' | 'delete' | 'monitor' | 'unmonitor';
+export type BulkItemOperationKind = 'artwork' | 'themes' | ItemRecordOperation;
 
 /**
  * BulkItemOperationResult
@@ -2143,32 +2267,7 @@ export type CollectionDetail = {
      */
     active_start_mmdd: string | null;
     art_status: AssetStatus;
-    /**
-     * Background Hash
-     */
-    background_hash: string | null;
-    /**
-     * Background Height
-     */
-    background_height: number | null;
-    /**
-     * Background Phash
-     */
-    background_phash: string | null;
-    background_source: ArtSource | null;
-    background_status: AssetStatus;
-    /**
-     * Background Url
-     */
-    background_url: string | null;
-    /**
-     * Background Width
-     */
-    background_width: number | null;
-    /**
-     * Backgrounds
-     */
-    backgrounds: boolean;
+    assets: TitleAssets;
     /**
      * Below Minimum
      */
@@ -2181,10 +2280,6 @@ export type CollectionDetail = {
      * Catalog Entry Key
      */
     catalog_entry_key: string | null;
-    /**
-     * Catalog No Theme
-     */
-    catalog_no_theme: boolean;
     catalog_selections: CatalogSelections | null;
     /**
      * Catalog Themerrdb
@@ -2222,10 +2317,6 @@ export type CollectionDetail = {
      * Has Incorrect Aspect Ratio
      */
     has_incorrect_aspect_ratio: boolean;
-    /**
-     * Has Theme
-     */
-    has_theme: boolean;
     /**
      * Home Order
      */
@@ -2268,29 +2359,6 @@ export type CollectionDetail = {
      */
     monitored: boolean;
     order_type: CollectionOrder;
-    /**
-     * Poster Hash
-     */
-    poster_hash: string | null;
-    /**
-     * Poster Height
-     */
-    poster_height: number | null;
-    /**
-     * Poster Phash
-     */
-    poster_phash: string | null;
-    poster_source: ArtSource | null;
-    poster_status: AssetStatus;
-    poster_style: CollectionPosterStyle | null;
-    /**
-     * Poster Url
-     */
-    poster_url: string | null;
-    /**
-     * Poster Width
-     */
-    poster_width: number | null;
     rule: CollectionRuleRead | null;
     /**
      * Server Added At
@@ -2325,11 +2393,6 @@ export type CollectionDetail = {
      */
     sync_failed: boolean;
     /**
-     * Theme Duration
-     */
-    theme_duration: number | null;
-    theme_status: AssetStatus;
-    /**
      * Theme Unavailable
      */
     theme_unavailable: string | null;
@@ -2337,10 +2400,6 @@ export type CollectionDetail = {
      * Theme Writable
      */
     theme_writable: boolean;
-    /**
-     * Themes
-     */
-    themes: boolean;
     /**
      * Title
      */
@@ -2370,14 +2429,6 @@ export type CollectionDetail = {
      */
     withheld: boolean;
     /**
-     * Youtube Duration
-     */
-    youtube_duration: number | null;
-    /**
-     * Youtube Id
-     */
-    youtube_id: string | null;
-    /**
      * Youtube Id Overturedb
      */
     youtube_id_overturedb: string | null;
@@ -2385,10 +2436,6 @@ export type CollectionDetail = {
      * Youtube Id Themerrdb
      */
     youtube_id_themerrdb: string | null;
-    /**
-     * Youtube Title
-     */
-    youtube_title: string | null;
 };
 
 /**
@@ -3039,32 +3086,7 @@ export type CollectionRead = {
      */
     active_start_mmdd: string | null;
     art_status: AssetStatus;
-    /**
-     * Background Hash
-     */
-    background_hash: string | null;
-    /**
-     * Background Height
-     */
-    background_height: number | null;
-    /**
-     * Background Phash
-     */
-    background_phash: string | null;
-    background_source: ArtSource | null;
-    background_status: AssetStatus;
-    /**
-     * Background Url
-     */
-    background_url: string | null;
-    /**
-     * Background Width
-     */
-    background_width: number | null;
-    /**
-     * Backgrounds
-     */
-    backgrounds: boolean;
+    assets: TitleAssets;
     /**
      * Below Minimum
      */
@@ -3073,10 +3095,6 @@ export type CollectionRead = {
      * Catalog Complete
      */
     catalog_complete: boolean;
-    /**
-     * Catalog No Theme
-     */
-    catalog_no_theme: boolean;
     catalog_selections: CatalogSelections | null;
     /**
      * Catalog Themerrdb
@@ -3109,10 +3127,6 @@ export type CollectionRead = {
      * Has Incorrect Aspect Ratio
      */
     has_incorrect_aspect_ratio: boolean;
-    /**
-     * Has Theme
-     */
-    has_theme: boolean;
     /**
      * Home Order
      */
@@ -3148,29 +3162,6 @@ export type CollectionRead = {
     monitored: boolean;
     order_type: CollectionOrder;
     /**
-     * Poster Hash
-     */
-    poster_hash: string | null;
-    /**
-     * Poster Height
-     */
-    poster_height: number | null;
-    /**
-     * Poster Phash
-     */
-    poster_phash: string | null;
-    poster_source: ArtSource | null;
-    poster_status: AssetStatus;
-    poster_style: CollectionPosterStyle | null;
-    /**
-     * Poster Url
-     */
-    poster_url: string | null;
-    /**
-     * Poster Width
-     */
-    poster_width: number | null;
-    /**
      * Server Added At
      */
     server_added_at: string | null;
@@ -3203,15 +3194,6 @@ export type CollectionRead = {
      */
     sync_failed: boolean;
     /**
-     * Theme Duration
-     */
-    theme_duration: number | null;
-    theme_status: AssetStatus;
-    /**
-     * Themes
-     */
-    themes: boolean;
-    /**
      * Title
      */
     title: string;
@@ -3239,18 +3221,6 @@ export type CollectionRead = {
      * Withheld
      */
     withheld: boolean;
-    /**
-     * Youtube Duration
-     */
-    youtube_duration: number | null;
-    /**
-     * Youtube Id
-     */
-    youtube_id: string | null;
-    /**
-     * Youtube Title
-     */
-    youtube_title: string | null;
 };
 
 /**
@@ -3673,30 +3643,6 @@ export type CollectionSourceRead = {
     unavailable: string | null;
 };
 
-/**
- * CollectionThemeStatusResponse
- *
- * Collection theme status response.
- */
-export type CollectionThemeStatusResponse = {
-    /**
-     * Has Theme
-     */
-    has_theme: boolean;
-    /**
-     * Youtube Duration
-     */
-    youtube_duration: number | null;
-    /**
-     * Youtube Id
-     */
-    youtube_id: string | null;
-    /**
-     * Youtube Title
-     */
-    youtube_title: string | null;
-};
-
 export type ConditionInput = ({
     kind: 'field';
 } & FieldConditionInput) | ({
@@ -3819,7 +3765,7 @@ export type CustomSetValueOutput = {
  *
  * ``stored`` is the record's own row first, then every row that refers to
  * it through a foreign key, and theirs in turn. ``derived`` holds what the
- * API shows that no column stores, so not the fields copied from artwork rows.
+ * API shows that no column stores, so not the assets the asset rows hold.
  */
 export type DatabaseRecord = {
     /**
@@ -3903,16 +3849,19 @@ export type DatabaseTableCount = {
 /**
  * DeleteCollectionThemeResponse
  *
- * Collection theme delete response.
+ * Collection theme delete response: the theme as it is now.
  */
 export type DeleteCollectionThemeResponse = {
-    /**
-     * Has Theme
-     */
-    has_theme: boolean;
     status: Status;
-    theme_status: AssetStatus;
+    theme: AssetRead;
 };
+
+/**
+ * DeliveryChannel
+ *
+ * How an asset's content reaches one destination.
+ */
+export type DeliveryChannel = 'file' | 'upload';
 
 export type DisplayName = string;
 
@@ -4277,6 +4226,8 @@ export type ItemDownloadTarget = {
     title: string | null;
 };
 
+export type ItemRecordOperation = 'delete' | 'monitor' | 'unmonitor';
+
 /**
  * ItemSelectionResponse
  *
@@ -4306,6 +4257,12 @@ export type JobLogEntry = {
      * When the job wrote the entry, as an ISO timestamp.
      */
     at: string;
+    /**
+     * Count
+     *
+     * How many targets the entry is about; one entry can sum up several that share an outcome and reason.
+     */
+    count: number;
     outcome: JobOutcome;
     reason: PublicText;
     /**
@@ -4357,9 +4314,9 @@ export type JobLogPage = {
  *
  * What a job did with one target.
  *
- * The word an entry starts with is also the counter it increments (see
- * ``JobTally.outcome_counters``), so a run's totals always equal the entries
- * in its log.
+ * Every count a run reports is taken from its entries by
+ * :class:`OutcomeCounts`, so a run's totals always equal the targets its log
+ * names.
  */
 export type JobOutcome = 'Started' | 'Added' | 'Updated' | 'Unchanged' | 'Removed' | 'Queued' | 'Downloaded' | 'Adopted' | 'Matched' | 'Mismatch' | 'Checked' | 'No match' | 'Skipped' | 'Error';
 
@@ -4668,28 +4625,7 @@ export type MediaItemListResponse = {
  */
 export type MediaItemRead = {
     art_status: AssetStatus;
-    /**
-     * Background Hash
-     */
-    background_hash: string | null;
-    /**
-     * Background Height
-     */
-    background_height: number | null;
-    /**
-     * Background Phash
-     */
-    background_phash: string | null;
-    background_source: ArtSource | null;
-    background_status: AssetStatus;
-    /**
-     * Background Url
-     */
-    background_url: string | null;
-    /**
-     * Background Width
-     */
-    background_width: number | null;
+    assets: TitleAssets;
     /**
      * Catalog Complete
      */
@@ -4704,10 +4640,6 @@ export type MediaItemRead = {
      * Whether the IDs the item and its OvertureDB entry both carry agree; null without an entry.
      */
     catalog_ids: 'matching' | 'mismatching' | null;
-    /**
-     * Catalog No Theme
-     */
-    catalog_no_theme: boolean;
     /**
      * How each selection compares with the item's OvertureDB entry; null without an entry.
      */
@@ -4765,32 +4697,6 @@ export type MediaItemRead = {
      * Monitored
      */
     monitored: boolean;
-    /**
-     * Poster Hash
-     */
-    poster_hash: string | null;
-    /**
-     * Poster Height
-     */
-    poster_height: number | null;
-    /**
-     * Poster Phash
-     */
-    poster_phash: string | null;
-    /**
-     * Poster Preview Url
-     */
-    poster_preview_url: string | null;
-    poster_source: ArtSource | null;
-    poster_status: AssetStatus;
-    /**
-     * Poster Url
-     */
-    poster_url: string | null;
-    /**
-     * Poster Width
-     */
-    poster_width: number | null;
     season_posters_status: AssetStatus;
     /**
      * Server Added At
@@ -4808,17 +4714,6 @@ export type MediaItemRead = {
      * Studio
      */
     studio: string | null;
-    /**
-     * Theme Duration
-     *
-     * Seconds: the local file's length, else the selected video's.
-     */
-    theme_duration: number | null;
-    /**
-     * Theme File Hash
-     */
-    theme_file_hash: string | null;
-    theme_status: AssetStatus;
     /**
      * Title
      */
@@ -4839,19 +4734,6 @@ export type MediaItemRead = {
      * Year
      */
     year: number | null;
-    /**
-     * Youtube Duration
-     */
-    youtube_duration: number | null;
-    /**
-     * Youtube Id
-     */
-    youtube_id: string | null;
-    youtube_id_source: ThemeIdSource | null;
-    /**
-     * Youtube Title
-     */
-    youtube_title: string | null;
 };
 
 /**
@@ -5431,32 +5313,7 @@ export type SeasonRead = {
      * Media Item Id
      */
     media_item_id: number;
-    /**
-     * Poster Hash
-     */
-    poster_hash: string | null;
-    /**
-     * Poster Height
-     */
-    poster_height: number | null;
-    /**
-     * Poster Phash
-     */
-    poster_phash: string | null;
-    /**
-     * Poster Preview Url
-     */
-    poster_preview_url: string | null;
-    poster_source: ArtSource | null;
-    poster_status: AssetStatus;
-    /**
-     * Poster Url
-     */
-    poster_url: string | null;
-    /**
-     * Poster Width
-     */
-    poster_width: number | null;
+    poster: AssetRead;
     /**
      * Season Num
      */
@@ -5550,13 +5407,18 @@ export type ServerAuditRequest = {
  * One theme delete target selected from server audit results.
  *
  * Without a ``theme_id`` the server has no theme to delete, so the item is
- * only refreshed to pick up the local file.
+ * only refreshed to pick up the local file. Collections name
+ * ``collection_id`` instead and re-deliver their saved or downloaded theme.
  */
 export type ServerAuditThemeDeleteTarget = {
     /**
+     * Collection Id
+     */
+    collection_id?: number | null;
+    /**
      * Item Id
      */
-    item_id: number;
+    item_id?: number | null;
     /**
      * Server Id
      */
@@ -5640,7 +5502,7 @@ export type SetCollectionThemeResponse = {
      * Job Id
      */
     job_id: string | null;
-    theme_status: AssetStatus;
+    theme: AssetRead;
 };
 
 /**
@@ -6122,6 +5984,17 @@ export type ThemeStats = {
     movies: Coverage;
     overall: Coverage;
     shows: Coverage;
+};
+
+/**
+ * TitleAssets
+ *
+ * A title's or collection's poster, background and theme.
+ */
+export type TitleAssets = {
+    background: AssetRead;
+    poster: AssetRead;
+    theme: AssetRead;
 };
 
 /**
@@ -6634,6 +6507,8 @@ export type ArtTypeStatsWritable = {
     poster_shows: CoverageWritable;
     season_poster: CoverageWritable;
 };
+
+export type BulkItemOperationKindWritable = 'artwork' | 'themes' | ItemRecordOperation;
 
 export type CollectionIdsWritable = UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0MinLenMinLength1;
 
@@ -9870,7 +9745,7 @@ export type GetCollectionThemeResponses = {
     /**
      * Successful Response
      */
-    200: CollectionThemeStatusResponse;
+    200: AssetRead;
 };
 
 export type GetCollectionThemeResponse = GetCollectionThemeResponses[keyof GetCollectionThemeResponses];

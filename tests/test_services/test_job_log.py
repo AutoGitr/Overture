@@ -13,7 +13,7 @@ lazy from overture.jobs.kinds import INTERRUPTED_MESSAGE, JobKind
 lazy from overture.jobs.lifecycle import ManagedJobLifecycle
 lazy from overture.jobs.progress_log import JobOutcome
 lazy from overture.jobs.runner import run_managed_job
-lazy from overture.jobs.tally import BulkAssetTally, SyncTally
+lazy from overture.jobs.tally import BulkAssetTally, JobTally
 lazy from overture.schemas.base import StrictBaseModel
 lazy from overture.utils.errors import PublicServiceError
 lazy from tests.runtime_helpers import JobProbe
@@ -67,12 +67,31 @@ async def test_each_event_numbers_the_line_it_adds_and_the_log_is_paged(
     ]
 
 
+async def test_a_line_summing_up_targets_counts_once_as_a_line_and_each_target(
+    database: Database,
+) -> None:
+    probe = JobProbe(lifecycle=ManagedJobLifecycle(JobKind.BULK_ART))
+    async with run_managed_job(
+        probe.context, BulkAssetTally(), database=database
+    ) as job:
+        await job.planned(95)
+        await job.report(JobOutcome.NO_MATCH, "94 collections", "no entry", count=94)
+        await job.report(JobOutcome.NO_MATCH, "Alien (poster)", "no entry")
+
+    _, terminal = probe.terminal()
+    assert terminal["log_outcomes"] == {"No match": 2}
+    assert terminal["log_targets"] == {"No match": 95}
+    assert terminal["log_targets"].get("No match", 0) == 95
+    page = await job_results.log_page(database, terminal["run_id"], 0, 10)
+    assert [entry.count for entry in page.items] == [94, 1]
+
+
 async def test_a_failed_run_ends_its_persisted_log_on_the_error(
     database: Database,
 ) -> None:
     probe = JobProbe(lifecycle=ManagedJobLifecycle(JobKind.SYNC))
 
-    async with run_managed_job(probe.context, SyncTally(), database=database):
+    async with run_managed_job(probe.context, JobTally(), database=database):
         raise OSError("disk gone")
 
     _, terminal = probe.terminal()

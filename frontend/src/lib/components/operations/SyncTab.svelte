@@ -419,20 +419,20 @@
     job={syncState}
     unit="items"
     stats={[
-      { label: "added", value: syncState.counters.added, title: "New library items", tone: "info" },
+      { label: "added", value: syncState.count("Added"), title: "New library items", tone: "info" },
       {
         label: "updated",
-        value: syncState.counters.updated,
+        value: syncState.count("Updated"),
         title: "Items whose metadata, art, files or seasons changed",
         tone: "accent",
       },
-      { label: "unchanged", value: syncState.counters.unchanged },
+      { label: "unchanged", value: syncState.count("Unchanged") },
       {
         label: "removed",
-        value: syncState.counters.removed,
+        value: syncState.count("Removed"),
         title: "No longer on the server; hidden, files kept",
       },
-      { label: "errors", value: syncState.errors, tone: "danger" },
+      { label: "errors", value: syncState.count("Error"), tone: "danger" },
     ]}
   />
 {/if}

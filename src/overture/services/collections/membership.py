@@ -15,11 +15,18 @@ lazy from ...domain import (
     ServerType,
     TermKind,
 )
-lazy from ...repositories.collections import (
+lazy from ...media_servers.plex.query import (
+    choice_keys,
+    compile_plex_query,
+    plex_field,
+    tag_keys,
+)
+lazy from ...repositories.collection_items import (
     CollectionItem,
-    CollectionRepository,
+    CollectionItemRepository,
     TermSelection,
 )
+lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.copies import CopyRepository
 lazy from ...repositories.terms import TermRepository
 lazy from ...schemas.collections import FilterGroup
@@ -34,7 +41,6 @@ lazy from .criteria import (
     field_value,
     order_items,
 )
-lazy from .plex_query import choice_keys, compile_plex_query, plex_field, tag_keys
 lazy from .rules import criteria_of
 lazy from .sources import (
     SOURCE_LABEL_PREFIX,
@@ -285,7 +291,7 @@ class Membership:
                     library_id, media_type, criteria_of(part)
                 ).values()
             }
-            items = await repo.library_items(
+            items = await CollectionItemRepository(session).library_items(
                 media_type, library_id, TermSelection(frozenset({TermKind.LABEL}))
             )
         stale = {

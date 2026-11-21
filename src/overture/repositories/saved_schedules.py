@@ -8,7 +8,7 @@ lazy from ..domain import ScheduleKind
 
 
 class SavedScheduleRepository:
-    """Centralize saved assets and sync schedule persistence operations."""
+    """Centralize persisted schedule queries and mutations."""
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -16,6 +16,25 @@ class SavedScheduleRepository:
     async def get(self, schedule_id: int) -> SavedSchedule | None:
         """Return a schedule by ID."""
         return await self.session.get(SavedSchedule, schedule_id)
+
+    async def singleton(self, kind: ScheduleKind) -> SavedSchedule | None:
+        """Return the singleton schedule row for *kind*, if one was saved."""
+        return (
+            await self.session.exec(
+                select(SavedSchedule).where(col(SavedSchedule.kind) == kind)
+            )
+        ).first()
+
+    async def enabled(self, kind: ScheduleKind, *, default: bool) -> bool:
+        """Return whether *kind* is enabled, defaulting when no row was saved."""
+        value = (
+            await self.session.exec(
+                select(col(SavedSchedule.enabled)).where(
+                    col(SavedSchedule.kind) == kind
+                )
+            )
+        ).first()
+        return default if value is None else bool(value)
 
     async def of_kind(self, kind: ScheduleKind) -> list[SavedSchedule]:
         """Return the schedules of one kind, oldest first."""
@@ -56,8 +75,11 @@ class SavedScheduleRepository:
         await self._replace("collection_groups", name, replacement)
 
     async def _replace(self, key: str, value: str, replacement: str) -> None:
-        """Replace *value* in each schedule's list under *key*."""
-        for record in (await self.session.exec(select(SavedSchedule))).all():
+        """Replace *value* in each named schedule's list under *key*."""
+        stmt = select(SavedSchedule).where(
+            col(SavedSchedule.kind).in_((ScheduleKind.ASSETS, ScheduleKind.SYNC))
+        )
+        for record in (await self.session.exec(stmt)).all():
             values: list[str] = record.payload.get(key) or []
             if value in values:
                 moved = [replacement if each == value else each for each in values]

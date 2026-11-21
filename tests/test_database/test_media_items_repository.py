@@ -8,16 +8,15 @@ lazy import pytest
 lazy from sqlalchemy.exc import InvalidRequestError
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from overture.db.art_slots import find_art_slot, select_art
-lazy from overture.db.models.art import ArtSlot
+lazy from overture.db.ledger import find_asset, place_local, select_art
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtStyle, ArtType, MediaType
+lazy from overture.domain import ArtType, MediaType, ServerAsset
 lazy from overture.repositories.copies import CopyRepository
 lazy from overture.repositories.media_items import MediaItemRepository
 lazy from overture.utils.art_urls import PublicArtUrl
-lazy from tests.factories import seed_art_slot
+lazy from tests.factories import file_hash_of, seed_asset, seed_theme
 lazy from tests.media_servers import TEST_SERVER_ID, served_item
 lazy from tests.term_helpers import assign
 
@@ -32,7 +31,7 @@ async def test_a_match_only_lookup_finds_the_row_but_refuses_its_artwork(
         server_item_id="server-1",
         tmdb_id=603,
     )
-    seed_art_slot(item, ArtType.POSTER, file_hash="hash")
+    seed_asset(item, ArtType.POSTER, file_hash="hash")
     db_session.add(item)
     await db_session.commit()
 
@@ -58,11 +57,11 @@ async def test_a_match_only_lookup_finds_the_row_but_refuses_its_artwork(
     for row in found:
         assert row is not None
         with pytest.raises(InvalidRequestError):
-            find_art_slot(row, ArtType.POSTER)
+            find_asset(row, ServerAsset.POSTER)
     assert loaded is not None
-    slot = find_art_slot(loaded, ArtType.POSTER)
+    slot = find_asset(loaded, ServerAsset.POSTER)
     assert slot is not None
-    assert slot.file_hash == "hash"
+    assert file_hash_of(slot) == "hash"
 
 
 @pytest.fixture
@@ -302,34 +301,6 @@ async def test_directors_by_version_keeps_each_movies_order(
     }
 
 
-async def test_bulk_operate_clears_artwork_selections(
-    db_session: AsyncSession, database: Database
-) -> None:
-    item = MediaItem(id=100, media_type=MediaType.MOVIE, title="With Generated Art")
-    slot = ArtSlot(
-        media_item_id=100,
-        art_type=ArtType.POSTER,
-        upload_hash="genhash123",
-        generated_style=ArtStyle.DARK,
-        file_hash="filehash123",
-    )
-    db_session.add_all([item, slot])
-    await db_session.commit()
-
-    async with database.write_session() as session:
-        repo = MediaItemRepository(session)
-        affected = await repo.bulk_operate([100], "artwork")
-    assert affected == [100]
-
-    async with database.read_session() as session:
-        loaded = await session.get(ArtSlot, slot.id)
-        assert loaded is not None
-        assert loaded.upload_hash is None
-        assert loaded.generated_style is None
-        assert loaded.url is None
-        assert loaded.file_hash == "filehash123"
-
-
 async def test_bulk_targets_keeping_files_have_a_saved_selection_on_disk(
     db_session: AsyncSession, tmp_path: Path
 ) -> None:
@@ -351,13 +322,18 @@ async def test_bulk_targets_keeping_files_have_a_saved_selection_on_disk(
     unmonitored = movie(3, monitored=False)
     show = movie(4, media_type=MediaType.SHOW, library_id="1:shows")
     season = Season(id=1, media_item_id=4, season_num=1)
-    themed = movie(5, youtube_id="video", theme_file_hash="theme")
+    themed = seed_theme(movie(5), "video", file_hash="theme")
     file_without_selection = movie(6)
     url = PublicArtUrl("https://cdn.test/p.jpg")
+    place_local(season, (ServerAsset.SEASON_POSTER,), folder=True)
+
+    def poster(owner: MediaItem | Season) -> ServerAsset:
+        return ServerAsset.SEASON_POSTER if owner is season else ServerAsset.POSTER
+
     for owner in (on_disk, not_on_disk, unmonitored, season):
-        select_art(owner, ArtType.POSTER, url)
+        select_art(owner, poster(owner), url)
     for owner in (on_disk, unmonitored, season, file_without_selection):
-        seed_art_slot(owner, ArtType.POSTER, file_hash="poster")
+        seed_asset(owner, poster(owner), file_hash="poster")
     db_session.add_all(
         [
             on_disk,

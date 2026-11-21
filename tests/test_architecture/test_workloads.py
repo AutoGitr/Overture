@@ -34,6 +34,7 @@ lazy from overture.schemas.collections import (
 lazy from overture.schemas.library_filters import LibraryFilterMatchRequest
 lazy from overture.schemas.removal import AssetRemoval, RemovalTarget
 lazy from overture.services.collections.service import CollectionsService
+lazy from overture.services.needs import AssetNeeds
 lazy from overture.services.removal import AssetRemover
 lazy from overture.services.sync.reconciler import LibraryReconciler
 lazy from overture.utils.time import utc_now
@@ -149,9 +150,11 @@ async def bed(
         )
         await session.merge(settings_row())
     remover = make_remover(provider, app_config=app_config, database=database)
+    registry = NoopProviderRegistry(provider)
     service = CollectionsService(
+        needs=AssetNeeds(database=database, provider_registry=registry),
         database=database,
-        provider_registry=NoopProviderRegistry(provider),
+        provider_registry=registry,
         publisher=FakePublisher(),
         downloads=FakeDownloads(),
         proxy_clients=unused(ProxyClientManager),

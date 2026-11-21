@@ -22,7 +22,7 @@ export type ResultGroupsOf<TItem> = (
 ) => (readonly [key: string, label: string, server?: ServerType])[];
 
 /** How one collecting job names and selects its findings. */
-export interface CollectingJobConfig<TEvent, TItem> extends JobLifecycleConfig<never> {
+export interface CollectingJobConfig<TEvent, TItem> extends JobLifecycleConfig {
   /** Selector for the collected batch from an event. */
   items: (event: TEvent) => TItem[] | null | undefined;
   /** Selector for the running total from an event. */

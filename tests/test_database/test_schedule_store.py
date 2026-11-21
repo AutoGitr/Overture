@@ -7,7 +7,9 @@ lazy from pydantic import ValidationError
 lazy from sqlmodel import select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from overture.db.models.schedule import TaskSchedule
+lazy from overture.db.models.saved_schedule import SavedSchedule
+lazy from overture.domain import ScheduleKind
+lazy from overture.repositories.saved_schedules import SavedScheduleRepository
 lazy from overture.schemas.backup import BackupRetention
 lazy from overture.schemas.catalog import CatalogSyncStats
 lazy from overture.services.schedule_store import (
@@ -45,7 +47,7 @@ async def test_loading_an_unsaved_schedule_returns_defaults_and_writes_no_row(
     assert public.payload.last_status == "never_synced"
     assert public.enabled is True
 
-    rows = (await db_session.exec(select(TaskSchedule))).all()
+    rows = (await db_session.exec(select(SavedSchedule))).all()
     assert rows == []
 
 
@@ -110,3 +112,86 @@ def test_cron_validation_rejects_empty_and_invalid_values() -> None:
     for value in ("", "not cron", "* * *"):
         with pytest.raises(ValueError, match=r"cron_expression"):
             validate_cron_expression(value)
+
+
+async def test_repository_singleton_and_enabled_read_saved_kind_without_creating(
+    db_session: AsyncSession,
+) -> None:
+    repo = SavedScheduleRepository(db_session)
+    assert await repo.singleton(ScheduleKind.BACKUP) is None
+    assert await repo.enabled(ScheduleKind.BACKUP, default=True) is True
+    assert await repo.enabled(ScheduleKind.CATALOG, default=False) is False
+
+    await save_schedule(
+        db_session,
+        BACKUP_SCHEDULE,
+        enabled=False,
+        cron_expression="0 4 * * *",
+    )
+
+    row = await repo.singleton(ScheduleKind.BACKUP)
+    assert row is not None
+    assert row.kind is ScheduleKind.BACKUP
+    assert await repo.enabled(ScheduleKind.BACKUP, default=True) is False
+    assert await repo.singleton(ScheduleKind.CATALOG) is None
+
+
+async def test_repository_rename_and_move_skip_singleton_schedules(
+    db_session: AsyncSession,
+) -> None:
+    assets = SavedSchedule(
+        kind=ScheduleKind.ASSETS,
+        name="Nightly",
+        enabled=True,
+        cron_expression="0 1 * * *",
+        payload={"collection_groups": ["Sci-Fi"], "library_ids": ["lib-1"]},
+        created_at=SYNCED,
+        updated_at=SYNCED,
+    )
+    sync = SavedSchedule(
+        kind=ScheduleKind.SYNC,
+        name="Daily",
+        enabled=True,
+        cron_expression="0 2 * * *",
+        payload={"collection_groups": ["Sci-Fi"], "library_ids": ["lib-1"]},
+        created_at=SYNCED,
+        updated_at=SYNCED,
+    )
+    backup = SavedSchedule(
+        kind=ScheduleKind.BACKUP,
+        name="backup",
+        enabled=True,
+        cron_expression="0 3 * * *",
+        payload={"collection_groups": ["Sci-Fi"], "library_ids": ["lib-1"]},
+        created_at=SYNCED,
+        updated_at=SYNCED,
+    )
+    catalog = SavedSchedule(
+        kind=ScheduleKind.CATALOG,
+        name="catalog",
+        enabled=True,
+        cron_expression="0 0 * * *",
+        payload={"collection_groups": ["Sci-Fi"], "library_ids": ["lib-1"]},
+        created_at=SYNCED,
+        updated_at=SYNCED,
+    )
+    repo = SavedScheduleRepository(db_session)
+    for row in (assets, sync, backup, catalog):
+        repo.add(row)
+    await db_session.flush()
+
+    await repo.rename_group("Sci-Fi", "Science Fiction")
+    await repo.move_library("lib-1", "lib-2")
+
+    assert assets.payload["collection_groups"] == ["Science Fiction"]
+    assert assets.payload["library_ids"] == ["lib-2"]
+    assert sync.payload["collection_groups"] == ["Science Fiction"]
+    assert sync.payload["library_ids"] == ["lib-2"]
+    assert backup.payload == {
+        "collection_groups": ["Sci-Fi"],
+        "library_ids": ["lib-1"],
+    }
+    assert catalog.payload == {
+        "collection_groups": ["Sci-Fi"],
+        "library_ids": ["lib-1"],
+    }

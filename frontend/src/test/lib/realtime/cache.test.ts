@@ -11,9 +11,10 @@ import { ApiError } from "../../../lib/rest/transport";
 import { realtimeConnectionState } from "../../../lib/stores/realtimeConnectionState.svelte";
 import { syncState } from "../../../lib/stores/jobStates.svelte";
 import {
+  catalogStatus,
   itemDownload,
   mediaItem,
-  catalogStatus,
+  syncEvent,
   wsMessage as message,
 } from "../../helpers/fixtures";
 
@@ -78,29 +79,11 @@ describe("realtime REST cache policy", () => {
       "library",
     ]);
     rest.invalidateTags.mockClear();
-    syncState.handleStarted({});
+    syncState.handleStarted(syncEvent({}));
     applyRestCachePolicy(message("collection.updated", { collection_id: 2 }));
     expect(rest.invalidateTags).not.toHaveBeenCalled();
     applyRestCachePolicy(message("collections.changed", null));
     expect(rest.invalidateTags).toHaveBeenCalledTimes(1);
-  });
-
-  it("patches a collection's theme without its absent YouTube details", () => {
-    applyRestCachePolicy(
-      message("collection.theme.updated", {
-        collection_id: 1,
-        has_theme: true,
-        theme_status: "complete",
-      }),
-    );
-
-    expect(rest.patchCollection).toHaveBeenCalledWith(1, {
-      has_theme: true,
-      youtube_id: null,
-      youtube_title: null,
-      youtube_duration: null,
-      theme_status: "complete",
-    });
   });
 
   it("stores an item a user action changed, but leaves sync's items to the sync refresh", () => {
@@ -118,7 +101,9 @@ describe("realtime REST cache policy", () => {
     applyRestCachePolicy(
       message("library.items.changed", { item_ids: [1, 2], operation: "monitor", errors: {} }),
     );
-    applyRestCachePolicy(message("library.item.removed", { media_item_id: 3 }));
+    applyRestCachePolicy(
+      message("library.item.removed", { media_item_id: 3, media_type: null, source: null }),
+    );
 
     expect(rest.applyBulkItemOperation).toHaveBeenCalledWith({
       item_ids: [1, 2],
@@ -169,13 +154,13 @@ describe("realtime REST cache policy", () => {
     ["theme.stopped", ["library", "collections"]],
     ["theme.failed", ["library", "collections"]],
   ] as const)("marks the data a %s event changes stale", (event, tags) => {
-    applyRestCachePolicy(message(event, {}));
+    applyRestCachePolicy(message(event, syncEvent()));
 
     expect(rest.invalidateTags).toHaveBeenCalledExactlyOnceWith(tags);
   });
 
   it("leaves the caches alone for progress events", () => {
-    applyRestCachePolicy(message("sync.progress", { done: 1 }));
+    applyRestCachePolicy(message("sync.progress", syncEvent({ done: 1 })));
 
     expect(Object.values(rest).every((fn) => fn.mock.calls.length === 0)).toBe(true);
   });

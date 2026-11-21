@@ -13,6 +13,8 @@ lazy import pytest
 lazy from sqlmodel import CheckConstraint, select
 
 lazy from overture.db import metadata
+lazy from overture.db.ledger import settled_status
+lazy from overture.db.models.asset import Asset
 lazy from overture.db.session import Database
 lazy from overture.db.tables import table_models
 lazy from overture.utils.threads import owned_thread
@@ -82,7 +84,14 @@ async def test_a_release_database_upgrades_and_every_row_stays_valid(
         async with database.read_session() as session:
             for model in table_models():
                 # Loading builds every row as the current models read it.
-                (await session.exec(select(model))).all()
+                (await session.exec(select(model))).unique().all()
+            # Every status the upgrade stored is the one the ledger's rule gives.
+            drifted = [
+                asset.id
+                for asset in (await session.exec(select(Asset))).unique().all()
+                if asset.status is not settled_status(asset)
+            ]
+            assert drifted == []
     finally:
         await database.close()
     assert await owned_thread(_broken_checks, path) == []

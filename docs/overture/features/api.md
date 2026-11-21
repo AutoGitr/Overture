@@ -24,6 +24,24 @@ Required JSON request bodies reject `null`. To stop all bulk asset jobs,
 
 Errors in the web interface include a request ID that also appears in the log.
 
+## Assets
+
+Titles and collections carry their poster, background and theme under
+`assets`, and a season its poster under `poster`. Each asset has:
+
+- the selection: `url`, `upload_hash` or `youtube_id`, with where it came from,
+  and `selected` when there is one;
+- `content_hash`, the bytes Overture holds for the selection once it has them;
+- `status`: `complete` once every place it must be holds those bytes,
+  `partial` when only some of it is recorded, and `missing` otherwise; an
+  asset that is not `needed` is complete as it is;
+- `deliveries`, one per place: `server_id` is `null` for the title's own
+  folder, `delivered` says the place holds Overture's bytes, and `present` that
+  something was seen there at all;
+- `file`, the file in the title's folder; `width` and `height` of the image
+  in place; and `duration`, how long a theme plays: the audio Overture holds,
+  else the file in the folder, else the YouTube video.
+
 ## Useful endpoints
 
 | Endpoint                                                     | Returns                                                                     |
