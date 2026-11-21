@@ -20,7 +20,7 @@ lazy from overture.domain import (
 lazy from overture.schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
 lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.asset_runs import run as asset_run
-lazy from overture.services.asset_runs.support import SAVED_SELECTION
+lazy from overture.services.asset_runs.plan import SAVED_SELECTION
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.local_assets.service import LocalAssets
 lazy from overture.services.storage.assets import AssetStorage

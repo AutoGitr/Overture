@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AssetDeliveryRead } from "../../../generated/rest/types.gen";
-import { deliveryNote } from "../../../lib/utils/assetDeliveries";
+import { deliveryNote, holdsSomething, isDelivered } from "../../../lib/utils/assetDeliveries";
 import { asset } from "../../helpers/fixtures";
 
 function delivery(overrides: Partial<AssetDeliveryRead>): AssetDeliveryRead {
@@ -68,5 +68,28 @@ describe("delivery notes", () => {
       ),
     ).toBeNull();
     expect(deliveryNote(asset("poster"), serverTitle)).toBeNull();
+  });
+});
+
+describe("what an asset holds", () => {
+  it("has something to clear once it selects something or anything is in place", () => {
+    expect(holdsSomething(asset("theme"))).toBe(false);
+    expect(holdsSomething(asset("theme", { youtube_id: "abcDEF123_4" }))).toBe(true);
+    expect(holdsSomething(asset("poster", { upload_hash: "a".repeat(64) }))).toBe(true);
+    const shown = asset("theme", { deliveries: [delivery({ delivered: false })] });
+    expect(holdsSomething(shown)).toBe(true);
+    const empty = asset("theme", { deliveries: [delivery({ delivered: false, present: false })] });
+    expect(holdsSomething(empty)).toBe(false);
+  });
+
+  it("is delivered once its selection is in every required place", () => {
+    expect(isDelivered(asset("theme", { youtube_id: "yt1" }))).toBe(true);
+    const lacking = asset("theme", {
+      youtube_id: "yt1",
+      deliveries: [delivery({}), delivery({ server_id: 2, delivered: false })],
+    });
+    expect(isDelivered(lacking)).toBe(false);
+    // Complete because nothing is wanted, yet nothing is chosen or delivered.
+    expect(isDelivered(asset("theme", { status: "complete", needed: false }))).toBe(false);
   });
 });

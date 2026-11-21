@@ -55,7 +55,6 @@ class SyncedCollection:
     settings: AppSettings
     #: The collection's libraries on Plex servers, which keep labels and Home rows.
     plex_libraries: frozenset[str]
-    #: The sync made a server copy the collection's saved assets are not on yet.
 
     @property
     def collection_id(self) -> int:

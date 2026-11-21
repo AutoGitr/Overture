@@ -36,6 +36,7 @@ lazy from overture.schemas.server_audit import (
 lazy from overture.services import server_copies
 lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.art.phash import PhashService
+lazy from overture.services.downloads.theme import DownloadThemeHandler
 lazy from overture.services.server_audit import compare as module
 lazy from overture.services.server_audit.compare import (
     AuditContext,
@@ -54,6 +55,7 @@ lazy from tests.collection_helpers import stored_collection
 lazy from tests.factories import seed_theme
 lazy from tests.http_mock import mock_client_factory
 lazy from tests.media_servers import TEST_SERVER_ID, configure, served_item, server_of
+lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     StaticImageClients,
@@ -175,6 +177,8 @@ async def _audit(
             config_dir=tmp_path / "config",
             phash=phash,
         ),
+        theme_handler=unused(DownloadThemeHandler),
+        publisher=NullEventPublisher(),
     )
     _, results = await audit_target(AuditTarget(1), context=context)
     actionable = differences(results)
@@ -540,6 +544,7 @@ async def test_plex_collection_theme_audit_checks_served_audio_and_updates_deliv
         database=database,
         collection_art=unused(CollectionArtService),
         publisher=publisher,
+        theme_handler=unused(DownloadThemeHandler),
     )
     _, [result] = await audit_target(
         CollectionAuditTarget(1, ServerAsset.THEME), context=context
@@ -635,6 +640,7 @@ async def test_jellyfin_collection_theme_audit_inspects_folder_and_updates_deliv
         database=database,
         collection_art=unused(CollectionArtService),
         publisher=publisher,
+        theme_handler=unused(DownloadThemeHandler),
     )
     _, [result] = await audit_target(
         CollectionAuditTarget(1, ServerAsset.THEME), context=context
@@ -706,6 +712,8 @@ async def test_local_theme_reuses_recorded_fingerprint_until_file_changes(
             config_dir=tmp_path / "config",
             phash=phash,
         ),
+        theme_handler=unused(DownloadThemeHandler),
+        publisher=NullEventPublisher(),
     )
 
     _, [result] = await audit_target(AuditTarget(1), context=context)

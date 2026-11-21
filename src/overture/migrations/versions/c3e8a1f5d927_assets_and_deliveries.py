@@ -8,7 +8,8 @@ last seen there. A selection's content is the file Overture wrote or
 verified for it, else the recorded file, as the app took it to be. A Plex
 collection theme Overture uploaded was never hashed, so its content is named
 by its video until it is uploaded again. Every title, season and collection
-gets its assets, so a status is stored for each.
+gets its assets, so a status is stored for each. Each is stored as needed;
+the app records what is not as it starts, from settings and the catalog.
 
 Revision ID: c3e8a1f5d927
 Revises: b7d2f9a4c681
@@ -79,6 +80,17 @@ def upgrade() -> None:
                 "metadata_url",
                 "selection",
                 name="themeidsource",
+                native_enum=False,
+            ),
+            nullable=True,
+        ),
+        sa.Column(
+            "theme_found_by",
+            sa.Enum(
+                "overturedb",
+                "themerrdb",
+                "youtube_search",
+                name="themebulksource",
                 native_enum=False,
             ),
             nullable=True,
@@ -154,6 +166,14 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "youtube_id_source IS NULL OR youtube_id IS NOT NULL",
             name="ck_assets_theme_source",
+        ),
+        sa.CheckConstraint(
+            "theme_found_by IN ('overturedb', 'themerrdb', 'youtube_search')",
+            name="ck_assets_theme_found_by",
+        ),
+        sa.CheckConstraint(
+            "theme_found_by IS NULL OR youtube_id IS NOT NULL",
+            name="ck_assets_theme_found_by_video",
         ),
         sa.ForeignKeyConstraint(
             ["collection_id"], ["media_collections.id"], ondelete="CASCADE"
@@ -440,15 +460,25 @@ def _table(name: str, columns: Mapping[str, object]) -> sa.TableClause:
 
 
 def _status(
-    selected: bool, content: str | None, deliveries: list[tuple[bool, object]]
+    selected: bool, content: str | None, deliveries: list[dict[str, object]]
 ) -> str:
-    """The app's status rule: every required delivery holds the content."""
-    required = [observed for needed, observed in deliveries if needed]
+    """The app's status rule: every delivery holds the content.
+
+    Anything seen at a delivery, Overture's content or not, starts the asset.
+    """
     if selected and (
-        not required or (content is not None and all(o == content for o in required))
+        not deliveries
+        or (
+            content is not None
+            and all(d.get("observed_hash") == content for d in deliveries)
+        )
     ):
         return "complete"
-    started = selected or content is not None or any(o for _, o in deliveries)
+    started = (
+        selected
+        or content is not None
+        or any(d.get("observed_hash") or d.get("observed_ref") for d in deliveries)
+    )
     return "partial" if started else "missing"
 
 
@@ -464,7 +494,7 @@ def _insert(
     status = _status(
         selected,
         content if isinstance(content, str) else None,
-        [(True, d.get("observed_hash")) for d in deliveries],
+        deliveries,
     )
     columns = {
         "media_item_id": None,
@@ -479,6 +509,7 @@ def _insert(
         "generated_style": None,
         "generated_title_only": False,
         "youtube_id_source": None,
+        "theme_found_by": None,
         "youtube_title": None,
         "youtube_duration": None,
         "provenance_cleared": False,
@@ -555,18 +586,21 @@ def _convert() -> None:
     season_items = dict(
         connection.execute(sa.text("SELECT id, media_item_id FROM seasons")).all()
     )
-    server_types = {
-        server_id: server_type
-        for server_id, server_type, _ in connection.execute(
-            sa.text("SELECT id, server_type, position FROM media_servers")
-        )
+    servers = connection.execute(
+        sa.text("SELECT id, server_type, position FROM media_servers")
+    ).all()
+    server_types = {server_id: server_type for server_id, server_type, _ in servers}
+    positions = {
+        server_id: position
+        for server_id, _, position in servers
+        if position is not None
     }
-    lead_server = connection.execute(
-        sa.text(
-            "SELECT id FROM media_servers WHERE position IS NOT NULL "
-            "ORDER BY position LIMIT 1"
-        )
-    ).scalar()
+
+    def lead_of(held: list[tuple[int, str]]) -> int | None:
+        """The server of a collection's lead copy: its first configured one."""
+        configured = [server_id for server_id, _ in held if server_id in positions]
+        return min(configured, key=positions.__getitem__, default=None)
+
     copies: dict[int, list[tuple[int, str]]] = {}
     for collection_id, server_id, server_item_id in connection.execute(
         sa.text(
@@ -644,7 +678,10 @@ def _convert() -> None:
             "theme",
             {
                 "youtube_id": item["youtube_id"],
-                "youtube_id_source": item["youtube_id_source"],
+                # The old schema did not tie a source to a video.
+                "youtube_id_source": item["youtube_id_source"]
+                if item["youtube_id"]
+                else None,
                 "youtube_title": item["youtube_title"],
                 "youtube_duration": item["youtube_duration"],
                 "provenance_cleared": item["theme_provenance_cleared"],
@@ -670,6 +707,7 @@ def _convert() -> None:
         )
     for collection_id, collection in collections.items():
         held = copies.get(collection_id, [])
+        lead_server = lead_of(held)
         owner = {"collection_id": collection_id}
         for kind, server_url in (
             ("poster", collection["thumb_url"]),
@@ -709,6 +747,7 @@ def _convert() -> None:
             {
                 "youtube_id": video,
                 "youtube_id_source": "download" if video else None,
+                "theme_found_by": collection["youtube_id_source"] if video else None,
                 "youtube_title": collection["youtube_title"],
                 "youtube_duration": collection["youtube_duration"],
                 "content_hash": content if video else None,
@@ -727,7 +766,11 @@ def _collection_theme_deliveries(
     content: str | None,
     lead_server: int | None,
 ) -> list[dict[str, object]]:
-    """A collection theme's places: each Plex copy, and one folder per Jellyfin."""
+    """A collection theme's places: each Plex copy, and one folder per Jellyfin.
+
+    Every Plex copy took the uploaded theme, as every copy took uploaded art;
+    only the lead's theme ID was kept, so the others are checked afresh.
+    """
     deliveries: list[dict[str, object]] = []
     folders_seen: set[int] = set()
     for server_id, server_item_id in held:
@@ -739,9 +782,7 @@ def _collection_theme_deliveries(
                     "server_id": server_id,
                     "server_item_id": server_item_id,
                     "channel": "upload",
-                    "observed_hash": content
-                    if collection["server_theme_id"] and is_lead
-                    else None,
+                    "observed_hash": content if collection["server_theme_id"] else None,
                     "observed_ref": collection["server_theme_id"] if is_lead else None,
                 }
             )
@@ -764,14 +805,22 @@ def _collection_theme_deliveries(
 def _restore() -> None:
     """Write assets back as art slots and theme columns.
 
-    What a slot recorded per server copy keeps only the lead copy's link, and
-    a placeholder content name is dropped, as the earlier app kept them.
+    A collection keeps only its lead copy's image link and theme ID, and a
+    placeholder content name is dropped, as the earlier app kept them. The
+    earlier app took a collection's image as its file, which records no stat
+    revision, so one is written as zero.
     """
     connection = op.get_bind()
     deliveries: dict[int, list[sa.RowMapping]] = {}
     for row in (
         connection.execute(
-            sa.text("SELECT * FROM asset_deliveries ORDER BY server_id IS NOT NULL, id")
+            # The lead copy, on the first server, comes first.
+            sa.text(
+                "SELECT asset_deliveries.* FROM asset_deliveries "
+                "LEFT JOIN media_servers ON media_servers.id = server_id "
+                "ORDER BY server_id IS NOT NULL, media_servers.position, "
+                "asset_deliveries.id"
+            )
         )
         .mappings()
         .all()
@@ -817,6 +866,7 @@ def _restore() -> None:
             else:
                 upload = next((row for row in rows if row["channel"] == "upload"), None)
                 values["server_theme_id"] = upload["observed_ref"] if upload else None
+                values["youtube_id_source"] = asset["theme_found_by"]
             owners = _table(table, {**values, "id": owner})
             connection.execute(
                 sa.update(owners).where(owners.c.id == owner).values(values)

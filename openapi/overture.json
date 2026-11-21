@@ -1560,6 +1560,10 @@
             ],
             "title": "Preview Url"
           },
+          "selected": {
+            "title": "Selected",
+            "type": "boolean"
+          },
           "source": {
             "anyOf": [
               {
@@ -1654,6 +1658,7 @@
           "kind",
           "status",
           "needed",
+          "selected",
           "url",
           "preview_url",
           "upload_hash",
@@ -1759,7 +1764,7 @@
         "type": "object"
       },
       "AssetStatus": {
-        "description": "How much of an asset Overture holds.\n\n``complete`` once both the selection and the local file are recorded (or\njust the selection, for an item without a local folder), ``partial`` when\nonly some of it is.",
+        "description": "How much of an asset Overture holds, by :mod:`overture.db.ledger`'s rule.",
         "enum": [
           "complete",
           "partial",

@@ -27,6 +27,7 @@ lazy from overture.domain import (
     MediaType,
     ServerAsset,
     ServerType,
+    ThemeBulkSource,
     ThemeIdSource,
 )
 lazy from overture.integrations.mdblist import MDBListClient
@@ -257,7 +258,7 @@ async def test_list_collections_shows_listed_rows_with_their_catalog_themes(
     assert enabled[1].catalog_complete is True
     # The copy plays a theme of its own, which Overture holds nothing of.
     theme = enabled[2].assets.theme
-    assert theme.status is AssetStatus.MISSING
+    assert theme.status is AssetStatus.PARTIAL
     assert [(d.present, d.delivered) for d in theme.deliveries] == [(True, False)]
 
 
@@ -357,10 +358,12 @@ async def test_an_inactive_collection_keeps_its_theme_for_the_sync_that_restores
     assert (
         theme_of(row).youtube_id,
         theme_of(row).youtube_id_source,
+        theme_of(row).theme_found_by,
         server_ref(row, ServerAsset.THEME),
     ) == (
         "abcDEF123_4",
         ThemeIdSource.SELECTION,
+        ThemeBulkSource.YOUTUBE_SEARCH,
         None,
     )
     assert publisher.broadcasts[-1][0] == "collection.updated"

@@ -33,6 +33,7 @@ lazy from ...domain import (
     CollectionPosterStyle,
     MediaType,
     ServerAsset,
+    ThemeBulkSource,
 )
 lazy from ...repositories.catalog import CatalogRepository
 lazy from ...repositories.catalog_drafts import CatalogDraftRepository
@@ -122,7 +123,10 @@ def collection_entry(
         poster = None
     background = _catalog_art_url(read_asset(collection, ServerAsset.BACKGROUND).url)
     theme = _theme(collection)
-    if catalog and theme == catalog.youtube_id_themerrdb:
+    found_by = read_asset(collection, ServerAsset.THEME).theme_found_by
+    if found_by is ThemeBulkSource.THEMERRDB or (
+        catalog and theme == catalog.youtube_id_themerrdb
+    ):
         theme = None
     if not (poster or background or theme):
         return None

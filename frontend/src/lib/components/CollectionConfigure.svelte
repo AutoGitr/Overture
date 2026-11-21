@@ -7,7 +7,7 @@
   import { route } from "../router/routes";
   import { revealSection } from "../utils/revealSection";
   import { CollectionDraft } from "../utils/collectionDraft.svelte";
-  import { CollectionEditor } from "../utils/collectionForms.svelte";
+  import { CollectionEditor } from "../utils/collectionEditor.svelte";
   import CollectionDefinition from "./CollectionDefinition.svelte";
   import CollectionRulePanel from "./CollectionRulePanel.svelte";
   import CollectionSettings from "./CollectionSettings.svelte";

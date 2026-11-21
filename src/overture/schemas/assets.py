@@ -10,6 +10,7 @@ lazy from ..db.ledger import (
     holds_content,
     local_file,
     read_asset,
+    selection,
     shows_something,
 )
 lazy from ..db.models.asset import Asset, AssetDelivery
@@ -63,6 +64,8 @@ class AssetRead(StrictBaseModel):
     status: AssetStatus
     #: ``False`` when nothing is wanted here, which leaves the asset complete.
     needed: bool
+    #: It selects something: an artwork link, a kept image or a video.
+    selected: bool
     url: str | None = None
     #: A smaller rendition of a selected artwork link, for lists.
     preview_url: str | None = None
@@ -111,6 +114,7 @@ def asset_read(asset: Asset) -> AssetRead:
         kind=asset.kind,
         status=asset.status,
         needed=asset.needed,
+        selected=selection(asset) is not None,
         url=asset.url,
         preview_url=art_preview_url(asset.url, art_type)
         if asset.url and art_type

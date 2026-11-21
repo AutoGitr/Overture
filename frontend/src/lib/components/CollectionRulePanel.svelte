@@ -2,7 +2,7 @@
   import type { LibrarySectionRead } from "../../generated/rest/types.gen";
   import { countOf } from "../utils/plural";
   import type { CollectionDraft } from "../utils/collectionDraft.svelte";
-  import type { CollectionEditor } from "../utils/collectionForms.svelte";
+  import type { CollectionEditor } from "../utils/collectionEditor.svelte";
   import { switchKind } from "../utils/collectionFormShared.svelte";
   import { errorMessage } from "../utils/errors";
   import { inLibraryOrder, libraryScope } from "../utils/libraries.svelte";

@@ -52,12 +52,12 @@ class CandidateComparison:
 
 
 @dataclass(frozen=True, slots=True)
-class LocalComparison:
-    """How one image compares with a slot's local file."""
+class ImageComparison:
+    """How one image compares with the art in place."""
 
     #: The pHash distance between the two.
     distance: int
-    #: The image's original bytes are the local file's.
+    #: The image's original bytes are those of the art in place.
     identical: bool
 
 
@@ -251,28 +251,31 @@ class ArtMatcher:
         )
         return replace(comparison, errors=sources.errors)
 
-    async def compare_with_local(self, url: str, facts: FileFacts) -> LocalComparison:
-        """Return how the image at *url* compares with the local file.
+    async def compare(
+        self, url: str, *, fingerprint: str | None, content_hash: str | None
+    ) -> ImageComparison:
+        """Return how the image at *url* compares with the art in place.
 
         It is compared as local art matching compares candidates: by the
-        pHash distance, and by its original bytes.
+        pHash distance with *fingerprint*, and by its original bytes when
+        *content_hash* names those of the art in place.
 
         Raises:
             ValueError: When either image cannot be fetched or read.
         """
-        if facts.fingerprint is None:
-            raise ValueError("the local file could not be decoded")
+        if fingerprint is None:
+            raise ValueError("the art in place could not be decoded")
         try:
-            identical = await remote_matches_file(
-                url, facts.file_hash, cache=self._cache
+            identical = content_hash is not None and await remote_matches_file(
+                url, content_hash, cache=self._cache
             )
             remote = await self._cache.cached_url_phash(url)
         except (httpx2.HTTPError, OSError, ValueError) as exc:
-            raise ValueError(f"could not compare with the local file: {exc!s}") from exc
+            raise ValueError(f"could not compare with the art in place: {exc}") from exc
         if remote is None:
-            raise ValueError("could not compare with the local file: unreadable image")
-        return LocalComparison(
-            distance=self.phash.hamming_distance(facts.fingerprint, remote),
+            raise ValueError("could not compare with the art in place: unreadable")
+        return ImageComparison(
+            distance=self.phash.hamming_distance(fingerprint, remote),
             identical=identical,
         )
 

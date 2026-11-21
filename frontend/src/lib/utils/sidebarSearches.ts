@@ -20,7 +20,7 @@ import {
 type Matcher<T> = (query: string) => (row: T) => boolean;
 
 /** One search-by field, by the list it applies to; a list without a matcher lacks it. */
-export interface SearchDef {
+interface SearchDef {
   label: string;
   /** What the field is called in the collection list, where it differs. */
   collectionsLabel?: string;
@@ -69,7 +69,7 @@ function externalIdMatcher<
 }
 
 /** Every search-by field, in menu order. */
-export const SEARCHES = {
+const SEARCHES = {
   title: {
     label: "Title",
     collectionsLabel: "Title or TMDB collection ID",

@@ -711,6 +711,10 @@ export type AssetRead = {
      * Preview Url
      */
     preview_url: string | null;
+    /**
+     * Selected
+     */
+    selected: boolean;
     source: ArtSource | null;
     status: AssetStatus;
     /**
@@ -796,11 +800,7 @@ export type AssetRenameResult = {
 /**
  * AssetStatus
  *
- * How much of an asset Overture holds.
- *
- * ``complete`` once both the selection and the local file are recorded (or
- * just the selection, for an item without a local folder), ``partial`` when
- * only some of it is.
+ * How much of an asset Overture holds, by :mod:`overture.db.ledger`'s rule.
  */
 export type AssetStatus = 'complete' | 'partial' | 'missing';
 

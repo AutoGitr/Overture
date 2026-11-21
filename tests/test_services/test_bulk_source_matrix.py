@@ -15,7 +15,7 @@ lazy import pytest
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.ledger import ContentFacts, FileFacts, record_content, select_art
+lazy from overture.db.ledger import ContentFacts, record_content, select_art
 lazy from overture.db.models.catalog import CatalogItem
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.models.settings import AppSettings
@@ -34,9 +34,9 @@ lazy from overture.schemas.art import ArtCandidate, ArtMatchResponse
 lazy from overture.schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
 lazy from overture.schemas.themes import ThemeSearchResult
 lazy from overture.services.art.collection_art import CollectionArtService
-lazy from overture.services.art.matcher import ArtMatchOutcome, LocalComparison
+lazy from overture.services.art.matcher import ArtMatchOutcome, ImageComparison
 lazy from overture.services.asset_runs import run as asset_run
-lazy from overture.services.asset_runs.support import SAVED_SELECTION
+lazy from overture.services.asset_runs.plan import SAVED_SELECTION
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.utils.art_urls import PublicArtUrl
@@ -324,11 +324,11 @@ async def test_art_source_matrix(
         queued[f"Case {target.media_item_id:03d}"] = target.target_url
         return True
 
-    async def compare_with_local(url: str, facts: FileFacts) -> LocalComparison:
-        same = url == CATALOG_URL and facts.file_hash == compute_bytes_hash(
-            CATALOG_BYTES
-        )
-        return LocalComparison(distance=0 if same else 30, identical=same)
+    async def compare(
+        url: str, *, fingerprint: str | None, content_hash: str | None
+    ) -> ImageComparison:
+        same = url == CATALOG_URL and content_hash == compute_bytes_hash(CATALOG_BYTES)
+        return ImageComparison(distance=0 if same else 30, identical=same)
 
     async def match_item_art(
         item_id: int, art_type: ArtType, *_args: Any, **_kwargs: Any
@@ -347,7 +347,7 @@ async def test_art_source_matrix(
 
     monkeypatch.setattr(asset_run, "queue_download", queue)
     matcher = art_matcher(app_config=app_config, database=database)
-    monkeypatch.setattr(matcher, "compare_with_local", compare_with_local)
+    monkeypatch.setattr(matcher, "compare", compare)
     monkeypatch.setattr(matcher, "match_item_art", match_item_art)
     context = Context()
     await asset_run.run_art(

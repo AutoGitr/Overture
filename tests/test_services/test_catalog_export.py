@@ -8,7 +8,7 @@ lazy import pytest
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.catalog_contract.contract import validate_entries
-lazy from overture.db.ledger import select_art
+lazy from overture.db.ledger import select_art, select_theme
 lazy from overture.db.models.catalog import CatalogCollection
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
@@ -17,6 +17,8 @@ lazy from overture.domain import (
     CollectionPosterStyle,
     MediaType,
     ServerAsset,
+    ThemeBulkSource,
+    ThemeIdSource,
 )
 lazy from overture.services.catalog.export import (
     REPORT_NAME,
@@ -222,6 +224,45 @@ async def test_export_carries_collection_art_without_a_themerrdb_theme(
     assert entry["poster_url_matte"] is None
     assert entry["poster_url_overlay"] is None
     assert entry["background_url"] is None
+    assert entry["youtube_id_overturedb"] is None
+
+
+async def test_export_leaves_out_a_theme_found_in_themerrdb_after_the_catalog_moves(
+    db_session: AsyncSession,
+    tmp_path: Path,
+    database: Database,
+) -> None:
+    collection = stored_collection(
+        server_item_id="saga",
+        media_type=MediaType.MOVIE,
+        title="Saga",
+        tmdb_collection_id=10,
+        last_synced_at=utc_now(),
+    )
+    select_theme(
+        collection,
+        "themerrdb01",
+        source=ThemeIdSource.DOWNLOAD,
+        title=None,
+        duration=None,
+        found_by=ThemeBulkSource.THEMERRDB,
+    )
+    select_art(
+        collection,
+        ServerAsset.POSTER,
+        PublicArtUrl("https://image.tmdb.org/t/p/w500/saga.jpg"),
+        poster_style=CollectionPosterStyle.INDIVIDUAL,
+    )
+    # ThemerrDB has moved on to another video since.
+    db_session.add(
+        CatalogCollection(tmdb_id=10, title="Saga", youtube_id_themerrdb="newer000001")
+    )
+    db_session.add(collection)
+    await db_session.commit()
+
+    with ZipFile(await export_selections(database, tmp_path)) as archive:
+        entry = json.loads(archive.read("data/collections/tmdb-10.json"))
+
     assert entry["youtube_id_overturedb"] is None
 
 

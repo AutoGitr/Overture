@@ -10,8 +10,8 @@ collections and themes all follow the same rule:
 * **complete**: the asset is not needed, or it has a selection and every
   required delivery holds its content (no required delivery: the selection
   alone completes it).
-* **partial**: something is recorded: a selection, content, or a file seen
-  at a destination.
+* **partial**: something is recorded: a selection, content, or anything
+  seen at a destination, Overture's or not.
 * **missing**: nothing is.
 
 The functions work on rows loaded in a session the caller owns, and write
@@ -35,6 +35,7 @@ lazy from ..domain import (
     DeliveryChannel,
     MediaType,
     ServerAsset,
+    ThemeBulkSource,
     ThemeIdSource,
 )
 lazy from ..utils.art_urls import PublicArtUrl, selected_art_source
@@ -127,14 +128,9 @@ class Selection:
 # --- Reading -----------------------------------------------------------------
 
 
-def owner_assets(owner: Owner) -> list[Asset]:
-    """Return the owner's asset rows."""
-    return owner.assets
-
-
 def find_asset(owner: Owner, kind: ServerAsset) -> Asset | None:
     """Return the owner's asset of *kind*, or ``None`` when it has none."""
-    for asset in owner_assets(owner):
+    for asset in owner.assets:
         if asset.kind == kind:
             return asset
     return None
@@ -184,9 +180,13 @@ def content(asset: Asset) -> ContentFacts | None:
 def delivery(asset: Asset, destination: Destination = LOCAL) -> AssetDelivery | None:
     """Return the asset's delivery to *destination*, or ``None``."""
     for row in asset.deliveries:
-        if (row.server_id, row.server_item_id) == destination.key:
+        if _key(row) == destination.key:
             return row
     return None
+
+
+def _key(row: AssetDelivery) -> tuple[int | None, str | None]:
+    return row.server_id, row.server_item_id
 
 
 def file_facts(row: AssetDelivery | None) -> FileFacts | None:
@@ -228,14 +228,13 @@ def holds_content(row: AssetDelivery, asset: Asset) -> bool:
     return asset.content_hash is not None and row.observed_hash == asset.content_hash
 
 
-def required_deliveries(asset: Asset) -> list[AssetDelivery]:
-    """Return the deliveries the asset is complete only with."""
-    return [row for row in asset.deliveries if row.required]
-
-
 def missing_deliveries(asset: Asset) -> list[AssetDelivery]:
     """Return the required deliveries that do not hold the asset's content."""
-    return [row for row in required_deliveries(asset) if not holds_content(row, asset)]
+    return [
+        row
+        for row in asset.deliveries
+        if row.required and not holds_content(row, asset)
+    ]
 
 
 def settled_status(asset: Asset) -> AssetStatus:
@@ -248,7 +247,7 @@ def settled_status(asset: Asset) -> AssetStatus:
     started = (
         selected
         or asset.content_hash is not None
-        or any(row.observed_hash is not None for row in asset.deliveries)
+        or any(shows_something(row) for row in asset.deliveries)
     )
     return AssetStatus.PARTIAL if started else AssetStatus.MISSING
 
@@ -267,7 +266,7 @@ def _owned(owner: Owner, kind: ServerAsset) -> Asset:
         created = Asset(season_id=owner.id, kind=kind)
     else:
         created = Asset(media_item_id=owner.id, kind=kind)
-    owner_assets(owner).append(created)
+    owner.assets.append(created)
     return created
 
 
@@ -292,20 +291,12 @@ def place(
         return read_asset(owner, kind)
     asset = _owned(owner, kind)
     for row in list(asset.deliveries):
-        if (row.server_id, row.server_item_id) not in wanted:
+        if _key(row) not in wanted:
             asset.deliveries.remove(row)
     for destination in wanted.values():
         row = delivery(asset, destination)
         if row is None:
-            asset.deliveries.append(
-                AssetDelivery(
-                    asset_id=asset.id or 0,
-                    server_id=destination.server_id,
-                    server_item_id=destination.server_item_id,
-                    channel=destination.channel,
-                    required=destination.required,
-                )
-            )
+            _add(asset, destination)
         else:
             if row.channel != destination.channel:
                 _forget(row)
@@ -410,13 +401,18 @@ def select_theme(
     source: ThemeIdSource,
     title: str | None,
     duration: int | None,
+    found_by: ThemeBulkSource | None = None,
 ) -> Asset:
-    """Select the YouTube video *youtube_id* as the theme, and how it was found."""
+    """Select the YouTube video *youtube_id* as the theme, and how it was found.
+
+    *found_by* names the catalog or search a collection's video came from.
+    """
     asset = _owned(owner, ServerAsset.THEME)
     if asset.youtube_id != youtube_id:
         _forget_content(asset)
     asset.youtube_id = youtube_id
     asset.youtube_id_source = source
+    asset.theme_found_by = found_by
     asset.youtube_title = title
     asset.youtube_duration = duration
     asset.provenance_cleared = False
@@ -437,6 +433,7 @@ def clear_selection(owner: Owner, kind: ServerAsset) -> None:
     asset.upload_hash = None
     asset.youtube_id = None
     asset.youtube_id_source = None
+    asset.theme_found_by = None
     asset.youtube_title = None
     asset.youtube_duration = None
     asset.poster_style = None
@@ -476,24 +473,28 @@ def record_file(
 ) -> Asset | None:
     """Record what an inspection found at a file destination: *facts*, or none.
 
-    The destination is placed if it was not, as an inspection that finds a
-    file proves it is a place the asset is kept.
+    A found file places its destination if it was not, as it proves the asset
+    is kept there; an absent one places nothing.
 
     Returns:
         The asset, or ``None`` when an absent file found nothing to record.
     """
     asset = find_asset(owner, kind)
-    if asset is None and facts is None:
-        return None
-    asset = asset or _owned(owner, kind)
-    row = delivery(asset, destination) or _add(asset, destination)
-    row.observed_hash = facts.file_hash if facts else None
-    row.file_mtime_ns = facts.file_mtime_ns if facts else None
-    row.file_size = facts.file_size if facts else None
-    row.fingerprint = facts.fingerprint if facts else None
-    row.width = facts.width if facts else None
-    row.height = facts.height if facts else None
-    row.duration = facts.duration if facts else None
+    row = delivery(asset, destination) if asset is not None else None
+    if facts is None:
+        if asset is None or row is None:
+            return asset
+        _forget(row)
+    else:
+        asset = asset or _owned(owner, kind)
+        row = row or _add(asset, destination)
+        row.observed_hash = facts.file_hash
+        row.file_mtime_ns = facts.file_mtime_ns
+        row.file_size = facts.file_size
+        row.fingerprint = facts.fingerprint
+        row.width = facts.width
+        row.height = facts.height
+        row.duration = facts.duration
     row.checked_at = at
     return _settle(asset)
 
@@ -625,12 +626,6 @@ def item_art_status(item: MediaItem, seasons: Iterable[Season]) -> ItemArtStatus
     if item.media_type is MediaType.SHOW:
         parts.append(season_posters)
     return ItemArtStatus(combined_status(parts), season_posters)
-
-
-def local_holds_content(asset: Asset) -> bool:
-    """Whether the file in the item's own folder holds the selection's content."""
-    row = delivery(asset)
-    return row is not None and holds_content(row, asset)
 
 
 def verify_flush(session: OrmSession, *_: object) -> None:

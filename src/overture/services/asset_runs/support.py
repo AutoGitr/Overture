@@ -1,17 +1,13 @@
-"""The rules and effects every Assets run shares: planning, queueing, reporting.
+"""The effects an Assets run has: refreshing files, queueing and reporting.
 
-A run plans every target before the first decision: each is decided from
-the database alone, by :func:`planned_outcome`, or kept as a visit.
-:func:`refresh_scope` first brings the recorded files of saved selections up
-to date, so planning keeps only those still on disk.
+:func:`refresh_scope` brings the recorded files of saved selections up to
+date before planning, so planning keeps only those still on disk.
 """
 
 lazy import asyncio
 lazy import logging
 lazy from collections.abc import AsyncGenerator, Awaitable, Callable
 lazy from contextlib import asynccontextmanager
-lazy from datetime import datetime, timedelta
-lazy from typing import Protocol
 
 lazy from sqlalchemy.exc import SQLAlchemyError
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
@@ -28,8 +24,6 @@ lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.session import CHUNK_SIZE, Database
 lazy from ...domain import (
-    PERFECT_MATCH_ONLY,
-    RecentUnit,
     ServerAsset,
 )
 lazy from ...jobs.progress_log import JobOutcome
@@ -39,12 +33,9 @@ lazy from ...media_servers.adapters import FolderThemes
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...repositories.seasons import SeasonRepository
-lazy from ...schemas.art import ArtMatchResponse
 lazy from ...schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
-lazy from ...utils.text import count_label
 lazy from ...utils.threads import owned_thread
 lazy from ...utils.time import utc_now
-lazy from ..catalog.index import CatalogPick
 lazy from ..collections.theme_files import inspect_theme_file
 lazy from ..downloads.collection_theme import theme_folders
 lazy from ..downloads.queue import JobTarget
@@ -59,112 +50,12 @@ logger = logging.getLogger(__name__)
 #: downloads or a yt-dlp search, so a few overlap without flooding providers.
 DECIDE_CONCURRENCY = 4
 
-#: Why targets whose saved selection is on disk were not visited.
-SAVED_SELECTION = "saved selection already set; Replace existing searches again"
-
 #: Why planned targets could not be visited: their row left the library.
 LEFT_LIBRARY = "no longer in the library"
 #: Why matching artwork was not saved: its link is private or carries credentials.
 NOT_PUBLIC_ART_URL = (
     "the matching artwork's link is not a public link Overture can save"
 )
-
-#: Why artwork candidates were not compared.
-REJECTED_CANDIDATES = "rejected on size or aspect ratio"
-
-
-def no_match_reason(match_result: ArtMatchResponse, threshold: int) -> str:
-    """Say why local art matching found nothing for one slot."""
-    if reason := match_result.reason:
-        return reason
-    rejected = match_result.prefiltered
-    if not match_result.total_compared:
-        if rejected == 1:
-            return f"1 candidate {REJECTED_CANDIDATES}"
-        return (
-            f"all {rejected} candidates {REJECTED_CANDIDATES}"
-            if rejected
-            else "no candidates returned by enabled artwork providers"
-        )
-    within = (
-        "no perfect match"
-        if threshold == PERFECT_MATCH_ONLY
-        else f"nothing within distance {threshold}"
-    )
-    return f"{within}, {rejected} {REJECTED_CANDIDATES}" if rejected else within
-
-
-#: What one target came to without being visited: its outcome and the reason.
-type PlannedOutcome = tuple[JobOutcome, str]
-
-
-class AssetRunParams(Protocol):
-    """The options of a bulk request that decide targets while planning."""
-
-    overwrite_existing: bool
-    library_ids: list[str]
-    item_ids: list[int] | None
-    include_unmonitored: bool
-    skip_recent_val: int
-    skip_recent_unit: RecentUnit
-
-
-def planned_outcome(
-    params: AssetRunParams,
-    *,
-    saved: Selection | None,
-    selection_missing: bool,
-    last_checked: datetime | None,
-    catalog: CatalogPick | None,
-) -> PlannedOutcome | None:
-    """Decide one target from the database, or return ``None`` to visit it.
-
-    This is the planning half of an Assets decision; a visit makes the half
-    that needs the files on disk or a source. *saved* is the slot's saved
-    selection, and *selection_missing* says the file on disk is not it: the
-    file is missing, or was replaced outside Overture. *catalog* is ``None``
-    unless the run's sole sources are catalogs, and then is what they offer
-    the target.
-    The rules apply in order:
-
-    1. A saved selection missing from disk is visited, whenever last
-       checked, since the visit downloads the saved choice rather than asking
-       a source.
-    2. On a catalog-only run, a target no catalog serves is no match, or
-       skipped when OvertureDB is disabled: no option would find it anything.
-    3. A saved selection on disk that already is the catalog's offer is
-       skipped, Overwrite or not: replacing it would fetch the same art.
-    4. A saved selection is skipped unless Overwrite is on.
-    5. A target checked within the Skip recently checked window is skipped.
-    6. Everything else is visited.
-    """
-    kept = bool(saved) and not params.overwrite_existing
-    if kept and selection_missing:
-        return None
-    if catalog is not None and catalog.value is None:
-        outcome = JobOutcome.NO_MATCH if catalog.enabled else JobOutcome.SKIPPED
-        return outcome, catalog.reason
-    saved_url = saved and (saved.url or saved.youtube_id)
-    if catalog is not None and not selection_missing and saved_url == catalog.value:
-        return JobOutcome.SKIPPED, f"saved selection is already the {catalog.label}"
-    if kept:
-        return JobOutcome.SKIPPED, _saved_reason(catalog)
-    if checked_recently(last_checked, params):
-        return (
-            JobOutcome.SKIPPED,
-            f"checked within the last {recent_window_label(params)}",
-        )
-    return None
-
-
-def _saved_reason(catalog: CatalogPick | None) -> str:
-    """Say why a saved selection that is not the catalog's offer is kept."""
-    if catalog is None:
-        return SAVED_SELECTION
-    return (
-        f"saved selection differs from the {catalog.label}; "
-        "Replace existing would replace it"
-    )
 
 
 async def refresh_folder_themes(
@@ -251,10 +142,7 @@ async def _refresh_collection_theme_folders(
         if not rows:
             return
         for row in rows:
-            if (
-                not params.overwrite_existing
-                or selection(read_asset(row, ServerAsset.THEME)) is not None
-            ):
+            if selection(read_asset(row, ServerAsset.THEME)) is not None:
                 try:
                     await refresh_folder_themes(
                         row, downloads=downloads, database=database
@@ -273,8 +161,6 @@ async def refresh_scope(
     *,
     local_assets: LocalAssets,
     downloads: DownloadService,
-    art: bool,
-    source: str,
     database: Database,
 ) -> None:
     """Record the files of saved selections as they are, before planning.
@@ -288,7 +174,8 @@ async def refresh_scope(
     """
     if params.overwrite_existing:
         return
-    if not art and params.collection_scope and isinstance(params, BulkThemeRequest):
+    art = isinstance(params, BulkMatchArtRequest)
+    if not art and params.collection_scope:
         await _refresh_collection_theme_folders(
             params, downloads=downloads, database=database
         )
@@ -307,15 +194,18 @@ async def refresh_scope(
             )
         if item_ids:
             await local_assets.reconcile(
-                item_ids=item_ids, art=art, themes=not art, source=source
+                item_ids=item_ids,
+                art=art,
+                themes=not art,
+                source="assets.art" if art else "assets.themes",
             )
         if len(item_ids) < CHUNK_SIZE:
             return
         after_id = item_ids[-1]
 
 
-async def queue_and_report[TallyT: BulkAssetTally](
-    job: ManagedJob[TallyT],
+async def queue_and_report(
+    job: ManagedJob[BulkAssetTally],
     target: str,
     reason: str,
     queue: Callable[[], Awaitable[bool]],
@@ -351,21 +241,6 @@ async def queue_and_report[TallyT: BulkAssetTally](
             f"{reason}; an identical download is already queued or running",
         )
     return True
-
-
-def recent_window_label(params: AssetRunParams) -> str:
-    """Name the skip-recent window the way the user set it."""
-    return count_label(
-        params.skip_recent_val, params.skip_recent_unit.value.removesuffix("s")
-    )
-
-
-def checked_recently(last_checked: datetime | None, params: AssetRunParams) -> bool:
-    """Return whether *last_checked* falls inside the skip-recent window."""
-    if params.skip_recent_val <= 0 or last_checked is None:
-        return False
-    window = timedelta(seconds=params.skip_recent_val * params.skip_recent_unit.seconds)
-    return utc_now() - last_checked < window
 
 
 class SelectionChangedError(Exception):
@@ -425,8 +300,8 @@ async def queue_download(
 
 
 @asynccontextmanager
-async def report_downloads[TallyT: BulkAssetTally](
-    job: ManagedJob[TallyT],
+async def report_downloads(
+    job: ManagedJob[BulkAssetTally],
     watch: DownloadWatch,
     *,
     downloads: DownloadService,

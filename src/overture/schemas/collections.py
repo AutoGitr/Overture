@@ -436,9 +436,10 @@ class DeleteCollectionThemeResponse(StatusResponse):
     theme: AssetRead
 
 
-def _server_image_version(row: MediaCollection, kind: ServerAsset) -> str | None:
+def _server_image_version(
+    row: MediaCollection, kind: ServerAsset, lead: CollectionLibrary | None
+) -> str | None:
     """Name the lead copy's current image without revealing its URL."""
-    lead = row.copies[0] if row.copies else None
     found = (
         delivery(
             read_asset(row, kind),
@@ -466,12 +467,15 @@ def collection_read(
     rule: CollectionRule | None,
     *,
     copies: Sequence[CollectionLibrary],
+    trust_no_theme: bool,
 ) -> CollectionRead:
     """Map a stored collection, its catalog entry and its rule to public output.
 
     *copies* holds a part for each server copy on the configured servers, the
-    lead first.
+    lead first; *trust_no_theme* lets the catalog's No theme flag count as a
+    theme.
     """
+    lead = copies[0] if copies else None
     return CollectionRead(
         id=row.id or 0,
         assets=assets_read(row),
@@ -502,8 +506,10 @@ def collection_read(
         sync_failed=bool(rule and rule.last_error),
         last_rule_sync=rule.last_synced_at if rule else None,
         generated_value=row.generated_value,
-        server_poster_version=_server_image_version(row, ServerAsset.POSTER),
-        server_background_version=_server_image_version(row, ServerAsset.BACKGROUND),
+        server_poster_version=_server_image_version(row, ServerAsset.POSTER, lead),
+        server_background_version=_server_image_version(
+            row, ServerAsset.BACKGROUND, lead
+        ),
         child_count=row.child_count,
         media_types=row.media_types,
         library_ids=row.library_ids,
@@ -527,10 +533,7 @@ def collection_read(
         tmdb_collection_id=row.tmdb_collection_id,
         catalog_complete=bool(
             catalog
-            and (
-                catalog.youtube_id_overturedb
-                or not read_asset(row, ServerAsset.THEME).needed
-            )
+            and (catalog.youtube_id_overturedb or (trust_no_theme and catalog.no_theme))
         ),
         catalog_themerrdb=bool(catalog and catalog.youtube_id_themerrdb),
     )

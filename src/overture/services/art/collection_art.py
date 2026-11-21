@@ -49,7 +49,7 @@ lazy from ...schemas.art import (
 )
 lazy from ...schemas.common import Status, StatusResponse
 lazy from ...schemas.removal import AssetRemoval
-lazy from ...utils.art_urls import public_art_url
+lazy from ...utils.art_urls import PublicArtUrl
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.generated_art import render_art
 lazy from ...utils.image import inspect_saved_image
@@ -63,7 +63,7 @@ lazy from ...utils.locks import KeyedLock
 lazy from ...utils.threads import owned_thread
 lazy from ...utils.time import utc_now
 lazy from ..collections import COLLECTIONS_LOCK
-lazy from ..collections.copies import lead_part
+lazy from ..collections.copies import held_copies
 lazy from ..collections.destinations import collection_destinations, place_collection
 lazy from ..removal import NO_COLLECTION_ART_FILE, AssetRemover
 lazy from ..server_copies import ServerCopies
@@ -605,28 +605,41 @@ class CollectionArtService:
         self,
         collection_id: int,
         art_type: ArtType,
-        url: str,
+        url: PublicArtUrl,
         poster_style: CollectionPosterStyle | None,
-    ) -> bool:
-        """Save *url* as the selection of art the server already shows.
+    ) -> None:
+        """Save *url* as the selection of the art in place, as :meth:`match` found.
 
-        Returns:
-            Whether it was saved; ``False`` when it is not a public link.
+        The content Overture holds is what the link matched, so it stays and
+        so do the copies holding it. Without any, a copy's image was
+        matched: the link is kept as the content that copy shows.
         """
-        public = await public_art_url(url, app_config=self._config)
-        if public is None:
-            return False
-        async with (
-            self._asset_locks.acquire(f"collection:{collection_id}"),
-            self._database.write_session() as db,
-        ):
-            row = await self._require(db, collection_id, art_type)
-            select_art(row, art_type.server_asset, public, poster_style=poster_style)
-            db.add(row)
+        kind = art_type.server_asset
+        async with self._asset_locks.acquire(f"collection:{collection_id}"):
+            async with self._database.read_session() as db:
+                row = await self._require(db, collection_id, art_type)
+            held = content(read_asset(row, kind))
+            shown = None
+            if held is None:
+                shown = self._shown_copy(row, art_type)
+                if shown is None:
+                    raise PublicServiceError(
+                        422, "The collection has no image to adopt"
+                    )
+                _, _, held = await self._fetch(
+                    url, art_type, rate_limit_retries=RATE_LIMIT_RETRIES
+                )
+            async with self._database.write_session() as db:
+                row = await self._require(db, collection_id, art_type)
+                select_art(row, kind, url, poster_style=poster_style)
+                record_content(row, kind, held)
+                if shown is not None:
+                    destination, ref = shown
+                    confirm_delivery(row, kind, destination, ref=ref, at=utc_now())
+                db.add(row)
         await self._publisher.broadcast(
             "collection.updated", {"collection_id": collection_id}
         )
-        return True
 
     async def remove(
         self, collection_id: int, art_type: ArtType | None, removal: AssetRemoval
@@ -693,11 +706,9 @@ class CollectionArtService:
             raise PublicServiceError(
                 422, "Set a TMDB collection ID before matching artwork"
             )
-        facts = await self.uploaded(row, art_type)
-        if facts is not None and facts.fingerprint is not None:
-            reference, source = facts.fingerprint, "local_file"
-        else:
-            reference, source = await self._server_phash(row, art_type), "media_server"
+        if (in_place := await self.in_place(row, art_type)) is None:
+            raise PublicServiceError(422, "The collection has no image to match")
+        reference, held = in_place
         sources = await self.found(collection_id, art_type)
         candidates = list(
             {
@@ -710,11 +721,9 @@ class CollectionArtService:
             reference, candidates, threshold
         )
         errors = list(comparison.errors)
-        if facts is not None:
+        if held is not None:
             errors.extend(
-                await self._matcher.annotate_perfect(
-                    facts.content_hash, comparison.matches
-                )
+                await self._matcher.annotate_perfect(held, comparison.matches)
             )
         return ArtMatchResponse(
             matches=sorted(
@@ -724,29 +733,46 @@ class CollectionArtService:
             prefiltered=comparison.prefiltered,
             failed=comparison.failed,
             errors=errors,
-            reference=source,
+            reference="local_file" if held else "media_server",
         )
 
-    async def _server_phash(self, row: MediaCollection, art_type: ArtType) -> str:
-        """Return the pHash of the image the lead server copy shows for the asset.
+    def _shown_copy(
+        self, row: MediaCollection, art_type: ArtType
+    ) -> tuple[Destination, str] | None:
+        """Return the first copy, lead first, showing an image, and its image link."""
+        asset = read_asset(row, art_type.server_asset)
+        for part in held_copies(row, self._provider_registry.server_ids()):
+            seen = delivery(asset, Destination(part.server_id, part.server_item_id))
+            if seen is not None and seen.observed_ref is not None:
+                return (
+                    Destination(
+                        seen.server_id, seen.server_item_id, seen.channel, seen.required
+                    ),
+                    seen.observed_ref,
+                )
+        return None
+
+    async def in_place(
+        self, row: MediaCollection, art_type: ArtType
+    ) -> tuple[str, str | None] | None:
+        """Return the fingerprint of the art in place, and its hash if Overture has it.
+
+        The art in place is the content Overture holds, else the image a server
+        copy shows; ``None`` when there is neither.
 
         Raises:
-            PublicServiceError: 422 when the server shows none.
+            PublicServiceError: 409 when Overture no longer holds its content.
         """
-        lead = lead_part(row, self._provider_registry.server_ids())
-        seen = (
-            delivery(
-                read_asset(row, art_type.server_asset),
-                Destination(lead.server_id, lead.server_item_id),
-            )
-            if lead is not None
-            else None
-        )
-        if lead is None or seen is None or seen.observed_ref is None:
-            raise PublicServiceError(422, "The collection has no image to match")
-        return await self._server_copies.collection_image(
-            self._provider_registry.get(lead.server_id),
-            lead.server_item_id or "",
+        facts = await self.uploaded(row, art_type)
+        if facts is not None and facts.fingerprint is not None:
+            return facts.fingerprint, facts.content_hash
+        if (shown := self._shown_copy(row, art_type)) is None:
+            return None
+        destination, ref = shown
+        fingerprint = await self._server_copies.collection_image(
+            self._provider_registry.get(destination.server_id or 0),
+            destination.server_item_id or "",
             art_type,
-            seen.observed_ref,
+            ref,
         )
+        return fingerprint, None

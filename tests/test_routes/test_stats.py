@@ -14,6 +14,7 @@ lazy from overture.db.ledger import (
     confirm_delivery,
     record_content,
     select_theme,
+    set_needed,
 )
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
@@ -129,6 +130,8 @@ async def test_stats_with_seeded_data(
         year=2022,
         monitored=False,
     )
+    # OvertureDB says it has no theme: complete, but nothing was matched.
+    set_needed(movie2, ServerAsset.THEME, False)
     # Seed show with 2 seasons
     show1 = MediaItem(
         media_type=MediaType.SHOW,

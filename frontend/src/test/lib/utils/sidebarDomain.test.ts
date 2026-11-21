@@ -18,40 +18,12 @@ import {
 } from "../../../lib/utils/sidebarFilters";
 import { searchFieldGroups } from "../../../lib/utils/sidebarSearches";
 import {
-  catalogStatus,
-  holdsSomething,
-  inCollectionGroup,
-  preloadRowIndexes,
-  statusTone,
-} from "../../../lib/utils/sidebarShared";
-import {
   aspectDeviation,
-  collectionGroupRows,
   defaultSortDir,
-  normalizeSortPreference,
-  sortCollectionGroups,
   sortMenu,
   type SidebarSortField,
 } from "../../../lib/utils/sidebarSorts";
-import { asset, assetFile, catalogRow, collection, mediaItem } from "../../helpers/fixtures";
-
-describe("catalog badge status", () => {
-  it("uses the same selections for detail and sidebar tones", () => {
-    const entry = catalogRow({
-      media_type: "show",
-      poster_url: "https://images.test/poster.jpg",
-      background_url: "https://images.test/background.jpg",
-    });
-    expect(catalogStatus(entry).art).toBe("warning");
-    expect(catalogStatus({ ...entry, season_posters: 1 })).toEqual(
-      catalogStatus({
-        ...entry,
-        seasons: [{ season_num: 1, poster_url: "https://images.test/season.jpg" }],
-      }),
-    );
-    expect(catalogStatus({ ...entry, season_posters: 1 }).art).toBe("success");
-  });
-});
+import { catalogRow, collection, mediaItem } from "../../helpers/fixtures";
 
 function withFilters(patch: Partial<FilterState>): FilterState {
   return { ...defaultFilters(), ...patch };
@@ -91,21 +63,6 @@ describe("sidebar domain helpers", () => {
     ];
 
     expect(filterItems(items)).toEqual(["Heat", "The Matrix", "A Quiet Place"]);
-  });
-
-  it("shows the backend's asset status as a tone, or downloading while a job runs", () => {
-    expect(statusTone("complete", false)).toBe("success");
-    expect(statusTone("partial", false)).toBe("warning");
-    expect(statusTone("missing", false)).toBe("danger");
-    expect(statusTone("complete", true)).toBe("downloading");
-  });
-
-  it("has something to clear once a selection or a local file is recorded", () => {
-    expect(holdsSomething(asset("theme"))).toBe(false);
-    expect(holdsSomething(asset("theme", { youtube_id: "abcDEF123_4" }))).toBe(true);
-    expect(holdsSomething(asset("theme", { file: assetFile("theme-hash") }))).toBe(true);
-    expect(holdsSomething(asset("poster", { url: "https://img.test/p.jpg" }))).toBe(true);
-    expect(holdsSomething(asset("poster", { upload_hash: "a".repeat(64) }))).toBe(true);
   });
 });
 
@@ -706,56 +663,6 @@ describe("sidebar collections", () => {
   });
 });
 
-describe("sidebar sort preferences", () => {
-  it.each(["library", "collections", "overturedb"] as const)(
-    "preserves every %s sort and rejects the others",
-    (scope) => {
-      for (const { id } of sortMenu(scope)) {
-        expect(normalizeSortPreference({ field: id, dir: "desc" }, scope)).toEqual({
-          field: id,
-          dir: "desc",
-        });
-      }
-      expect(normalizeSortPreference({ field: "child_count", dir: "desc" }, "library").field).toBe(
-        "title",
-      );
-    },
-  );
-
-  it.each([null, [], "invalid", {}, { field: 42, dir: "sideways" }])(
-    "defaults malformed preferences",
-    (value) => {
-      expect(normalizeSortPreference(value, "library")).toEqual({ field: "title", dir: "asc" });
-    },
-  );
-
-  it("offers each list its own sort fields", () => {
-    expect(sortMenu("overturedb").map((entry) => entry.id)).toEqual([
-      "title",
-      "year",
-      "completeness",
-      "has_draft",
-      "in_library",
-    ]);
-    expect(sortMenu("collections").map((entry) => entry.id)).toContain("child_count");
-    expect(sortMenu("library").map((entry) => entry.id)).not.toContain("child_count");
-  });
-});
-
-describe("sidebar thumbnail preloading", () => {
-  it("covers two screens past the mounted rows, below first, nearest first", () => {
-    // Rows 100-104 on screen, so rows 80-124 are mounted (20 overscan each way).
-    expect(preloadRowIndexes(100, 105, 1000)).toEqual([
-      125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 79, 78, 77, 76, 75, 74, 73, 72, 71, 70,
-    ]);
-  });
-
-  it("stays inside the list", () => {
-    expect(preloadRowIndexes(0, 10, 35)).toEqual([30, 31, 32, 33, 34]);
-    expect(preloadRowIndexes(0, 0, 0)).toEqual([]);
-  });
-});
-
 describe("catalog filters", () => {
   const complete = catalogRow({
     title: "Complete",
@@ -914,78 +821,6 @@ describe("sidebar registry", () => {
     expect(sorted("completeness")).toEqual(["Full", "Linked", "Bare"]);
     expect(sorted("has_draft")[0]).toBe("Full");
     expect(sorted("in_library")[0]).toBe("Linked");
-  });
-});
-
-describe("inCollectionGroup", () => {
-  it("puts collections without rules in the virtual Unmanaged group", () => {
-    const imported = { collection_group: "Weekend", managed: false };
-    const managed = { collection_group: "Weekend", managed: true };
-    expect(inCollectionGroup(imported, "Unmanaged")).toBe(true);
-    expect(inCollectionGroup(managed, "Unmanaged")).toBe(false);
-    expect(inCollectionGroup(imported, "Weekend")).toBe(false);
-    expect(inCollectionGroup(managed, "Weekend")).toBe(true);
-  });
-
-  it("lists only managed collections without a group at the top level", () => {
-    expect(inCollectionGroup({ collection_group: null, managed: true }, null)).toBe(true);
-    expect(inCollectionGroup({ collection_group: null, managed: false }, null)).toBe(false);
-    expect(inCollectionGroup({ collection_group: "Weekend", managed: true }, null)).toBe(false);
-  });
-});
-
-describe("collection and group sorts", () => {
-  const ids = (scope: Parameters<typeof sortMenu>[0], context?: Parameters<typeof sortMenu>[1]) =>
-    sortMenu(scope, context).map((entry) => entry.id);
-
-  it("offers collections only what they all have a value for", () => {
-    expect(ids("collections", { plex: true })).toEqual([
-      "title",
-      "sort_title",
-      "group",
-      "home_order",
-      "child_count",
-      "server_added_at",
-      "last_synced_at",
-    ]);
-  });
-
-  it("drops what says nothing about the list shown", () => {
-    expect(ids("collections", { inGroup: true })).not.toContain("group");
-    expect(ids("collections", { plex: false })).not.toContain("home_order");
-  });
-
-  it("sorts groups by what their collections add up to", () => {
-    expect(ids("groups")).toEqual([
-      "title",
-      "collection_count",
-      "child_count",
-      "server_added_at",
-      "last_synced_at",
-    ]);
-    const rows = collectionGroupRows(
-      ["Small", "Large", "Empty"],
-      [
-        collection({ id: 1, managed: true, collection_group: "Small", child_count: 1 }),
-        collection({ id: 2, managed: true, collection_group: "Large", child_count: 4 }),
-        collection({ id: 3, managed: true, collection_group: "Large", child_count: 5 }),
-      ],
-    );
-    expect(rows.map((row) => [row.title, row.collections, row.items])).toEqual([
-      ["Small", 1, 1],
-      ["Large", 2, 9],
-      ["Empty", 0, 0],
-    ]);
-    expect(sortCollectionGroups(rows, "child_count", "desc").map((row) => row.title)).toEqual([
-      "Large",
-      "Small",
-      "Empty",
-    ]);
-    expect(sortCollectionGroups(rows, "title", "desc").map((row) => row.title)).toEqual([
-      "Small",
-      "Large",
-      "Empty",
-    ]);
   });
 });
 

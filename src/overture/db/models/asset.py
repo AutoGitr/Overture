@@ -28,6 +28,7 @@ lazy from ...domain import (
     CollectionPosterStyle,
     DeliveryChannel,
     ServerAsset,
+    ThemeBulkSource,
     ThemeIdSource,
 )
 lazy from ...utils.art_urls import PublicArtUrl
@@ -78,6 +79,10 @@ class Asset(SQLModel, table=True):
             "youtube_id_source IS NULL OR youtube_id IS NOT NULL",
             name="ck_assets_theme_source",
         ),
+        CheckConstraint(
+            "theme_found_by IS NULL OR youtube_id IS NOT NULL",
+            name="ck_assets_theme_found_by_video",
+        ),
         UniqueConstraint("media_item_id", "kind", name="uq_assets_media_item"),
         UniqueConstraint("season_id", "kind", name="uq_assets_season"),
         UniqueConstraint("collection_id", "kind", name="uq_assets_collection"),
@@ -120,6 +125,11 @@ class Asset(SQLModel, table=True):
     youtube_id_source: ThemeIdSource | None = Field(
         default=None, sa_type=enum_type(ThemeIdSource)
     )
+    #: The catalog or search a collection's theme video was found in, so a
+    #: ThemerrDB theme is never contributed as OvertureDB's.
+    theme_found_by: ThemeBulkSource | None = Field(
+        default=None, sa_type=enum_type(ThemeBulkSource)
+    )
     youtube_title: str | None = None
     #: Seconds, as YouTube gives the video's length.
     youtube_duration: int | None = None
@@ -128,7 +138,9 @@ class Asset(SQLModel, table=True):
     provenance_cleared: bool = Field(default=False, nullable=False)
 
     #: The hash of the bytes the selection is, once Overture has them. Each
-    #: required delivery holding these bytes completes the asset.
+    #: required delivery holding these bytes completes the asset. A Plex
+    #: collection theme uploaded before themes were hashed is named
+    #: ``youtube:<video>`` instead, until it is uploaded again.
     content_hash: str | None = None
     #: The content's perceptual fingerprint: an image's pHash, or the hash of
     #: a theme's audio stream, which leaves out tags a server may rewrite.

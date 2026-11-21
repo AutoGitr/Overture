@@ -21,10 +21,12 @@ lazy from overture.schemas.server_audit import (
 )
 lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.art.phash import PHASH_HEX_LENGTH, PhashService
+lazy from overture.services.downloads.theme import DownloadThemeHandler
 lazy from overture.services.server_audit import compare as server_audit
 lazy from overture.services.server_audit.compare import AuditContext
 lazy from overture.services.server_audit.work import AuditTarget
 lazy from overture.services.storage.assets import AssetStorage
+lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     JobProbe,
     NoopProviderRegistry,
@@ -56,6 +58,8 @@ def _audit_context(
             config_dir=tmp_path,
             phash=phash,
         ),
+        theme_handler=unused(DownloadThemeHandler),
+        publisher=NullEventPublisher(),
     )
 
 

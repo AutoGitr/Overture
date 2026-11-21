@@ -15,11 +15,12 @@ lazy from ...db.ledger import FileFacts, local_file
 lazy from ...db.models.season import Season
 lazy from ...domain import (
     MATCH_THRESHOLD_MAX,
+    PERFECT_MATCH_ONLY,
     ArtBulkSource,
     CollectionPosterStyle,
     ThemeBulkSource,
 )
-lazy from ...schemas.art import ArtCandidate
+lazy from ...schemas.art import ArtCandidate, ArtMatchResponse
 lazy from ...schemas.bulk import BulkMatchArtRequest
 lazy from ...utils.errors import PublicServiceError
 lazy from ..art.collection_art import CollectionArtService, chosen_poster_style
@@ -28,7 +29,31 @@ lazy from ..art.perfect_match import accepted_matches, accepts, comparison_thres
 lazy from ..catalog.index import CatalogIndex
 lazy from ..themes.youtube_resolver import DownloadError, YouTubeResolver
 lazy from .plan import RunParams, Source, Target, Unusable, catalog_pick, triage
-lazy from .support import no_match_reason
+
+#: Why artwork candidates were not compared.
+REJECTED_CANDIDATES = "rejected on size or aspect ratio"
+
+
+def no_match_reason(match_result: ArtMatchResponse, threshold: int) -> str:
+    """Say why local art matching found nothing for one slot."""
+    if reason := match_result.reason:
+        return reason
+    rejected = match_result.prefiltered
+    if not match_result.total_compared:
+        if rejected == 1:
+            return f"1 candidate {REJECTED_CANDIDATES}"
+        return (
+            f"all {rejected} candidates {REJECTED_CANDIDATES}"
+            if rejected
+            else "no candidates returned by enabled artwork providers"
+        )
+    within = (
+        "no perfect match"
+        if threshold == PERFECT_MATCH_ONLY
+        else f"nothing within distance {threshold}"
+    )
+    return f"{within}, {rejected} {REJECTED_CANDIDATES}" if rejected else within
+
 
 #: Errors a source reports as its own failure, leaving the rest to be asked.
 SOURCE_ERRORS = (
@@ -144,17 +169,18 @@ class Sources:
         if pick.value is None:
             notes.empty.extend(pick.notes)
             return None
-        if source is ArtBulkSource.OVERTUREDB and target.collection is None:
-            return await self._compare_title(target, pick.value, pick.label, notes)
         art_type = target.kind.art_type
-        return Decision(
-            pick.value,
-            pick.label + (_replaces(target) if target.collection is None else ""),
-            poster_style=facts.index.collection_poster_style(
-                target.collection, art_type
-            )
+        poster_style = (
+            facts.index.collection_poster_style(target.collection, art_type)
             if target.collection is not None and art_type is not None
-            else None,
+            else None
+        )
+        if source is ArtBulkSource.OVERTUREDB:
+            return await self._compare(
+                target, pick.value, pick.label, poster_style, notes
+            )
+        return Decision(
+            pick.value, pick.label + _replaces(target), poster_style=poster_style
         )
 
     @property
@@ -163,31 +189,54 @@ class Sources:
             raise TypeError("Only artwork runs compare images")
         return self.params.threshold
 
-    async def _compare_title(
-        self, target: Target, url: str, label: str, notes: Notes
-    ) -> Decision | None:
-        """Take OvertureDB's art for a title unless it differs from the local file."""
+    async def _in_place(self, target: Target) -> tuple[str | None, str | None] | None:
+        """The fingerprint of the target's art in place, and its hash if known."""
+        if (row := target.collection) is not None:
+            if self.art is None or (art_type := target.kind.art_type) is None:
+                raise ValueError("A collection's art is compared by collection art")
+            return await self.art.in_place(row, art_type)
         local = local_file(target.asset)
-        if local is None or self.params.overwrite_existing:
-            return Decision(url, label + (REPLACES_LOCAL_FILE if local else ""))
+        return None if local is None else (local.fingerprint, local.file_hash)
+
+    async def _compare(
+        self,
+        target: Target,
+        url: str,
+        label: str,
+        poster_style: CollectionPosterStyle | None,
+        notes: Notes,
+    ) -> Decision | None:
+        """Take OvertureDB's art unless it differs from the art in place."""
+        in_place = (
+            None if self.params.overwrite_existing else await self._in_place(target)
+        )
+        if in_place is None:
+            return Decision(url, label + _replaces(target), poster_style=poster_style)
         if self.art_matcher is None:
             raise ValueError("Artwork runs compare with an art matcher")
-        compared = await self.art_matcher.compare_with_local(url, local)
+        fingerprint, content_hash = in_place
+        compared = await self.art_matcher.compare(
+            url, fingerprint=fingerprint, content_hash=content_hash
+        )
+        what = "the local file" if target.collection is None else "the server's image"
         if compared.identical:
             return Decision(
                 url,
-                "OvertureDB artwork is identical to the local file",
+                f"OvertureDB artwork is identical to {what}",
                 adopt=True,
-                verified=local,
+                verified=local_file(target.asset),
+                poster_style=poster_style,
             )
         if accepts(self._threshold, distance=compared.distance, identical=False):
             return Decision(
-                url, f"d={compared.distance} from OvertureDB{REPLACES_LOCAL_FILE}"
+                url,
+                f"d={compared.distance} from OvertureDB{_replaces(target)}",
+                poster_style=poster_style,
             )
         notes.declined.append(
-            f"OvertureDB artwork is d={compared.distance} from the local file but "
-            f"not the same file; a match threshold of {compared.distance} or more "
-            "takes it"
+            f"OvertureDB artwork is d={compared.distance} from {what} but "
+            "not the same file; a match threshold of "
+            f"{compared.distance} or more takes it"
             if compared.distance <= MATCH_THRESHOLD_MAX
             else f"OvertureDB artwork is a different picture, d={compared.distance}"
         )

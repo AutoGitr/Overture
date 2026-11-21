@@ -1,5 +1,5 @@
 import type {
-  AssetRead,
+  AssetStatus,
   CatalogEntryRow,
   CollectionRead,
   MediaItemRead,
@@ -20,10 +20,8 @@ export type CatalogPresence = "all" | "present" | "missing";
 export type SidebarSortDir = "asc" | "desc";
 export type StatusTone = "success" | "warning" | "danger" | "downloading";
 
-export type ThemeSource = NonNullable<AssetRead["youtube_id_source"]>;
 /** The hosts a selected artwork is attributed to. */
 export type ArtSource = keyof typeof SELECTED_ART_SOURCE_LABELS;
-export type AssetStatus = MediaItemRead["art_status"];
 
 /** Which list a search or filter applies to. */
 export type ListScope = "library" | "collections" | "overturedb";
@@ -93,11 +91,6 @@ export function catalogStatus(entry: {
     art: artwork.every(Boolean) ? "success" : artwork.some(Boolean) ? "warning" : "danger",
     theme: entry.youtube_id_overturedb || entry.youtube_id_themerrdb ? "success" : "danger",
   };
-}
-
-/** Whether an asset has a selection or a local file to clear. */
-export function holdsSomething(asset: AssetRead): boolean {
-  return !!(asset.url || asset.upload_hash || asset.youtube_id || asset.file);
 }
 
 export function isRangeActive(range: NumberRange): boolean {

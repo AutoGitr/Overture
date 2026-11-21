@@ -75,7 +75,7 @@ class DownloadThemeHandler:
     async def download(
         self,
         job: DownloadJob,
-        item: MediaItem | None,
+        item: MediaItem,
         progress_cb: ProgressCallback,
     ) -> PreparedDownload:
         """Download and transcode a theme without modifying the destination.
@@ -87,8 +87,7 @@ class DownloadThemeHandler:
         Raises:
             DownloadError: When the job names no YouTube ID or an item lacks a folder.
         """
-        if item is not None:
-            require_folder_path(item)
+        require_folder_path(item)
         audio_bytes, downloaded = await self.download_youtube(
             job.target_url or "", progress_cb
         )

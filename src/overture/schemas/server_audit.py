@@ -189,8 +189,8 @@ class ServerAuditProgressEvent(JobEnvelope):
 class ServerAuditFixEvent(JobEnvelope):
     """WebSocket payload for the job that fixes audit findings and checks them.
 
-    ``done`` counts the fixed files that have settled: **Matched** once the
-    server matches the local file again, **Mismatch** when it still differs
+    ``done`` counts the fixes that have settled: **Matched** once the server
+    shows Overture's file or content again, **Mismatch** when it still differs
     after the server stopped picking up changes, **Error** when the fix itself
     failed.
     """

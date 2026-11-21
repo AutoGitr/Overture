@@ -20,11 +20,13 @@ lazy from overture.schemas.server_audit import (
 lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.art.phash import PhashService
 lazy from overture.services.asset_manager import scan as asset_scan
+lazy from overture.services.downloads.theme import DownloadThemeHandler
 lazy from overture.services.server_audit import compare as server_audit
 lazy from overture.services.server_audit.compare import AuditContext
 lazy from overture.services.server_audit.work import AuditTarget
 lazy from overture.services.storage.assets import AssetStorage
 lazy from tests.bulk_helpers import Context, as_job_context
+lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     StaticImageClients,
@@ -185,6 +187,8 @@ async def test_server_audit_streams_actionable_results_and_terminal_counts(
             config_dir=tmp_path,
             phash=PhashService(app_config=app_config),
         ),
+        theme_handler=unused(DownloadThemeHandler),
+        publisher=NullEventPublisher(),
     )
     await server_audit.run_server_audit(
         ServerAuditRequest(),

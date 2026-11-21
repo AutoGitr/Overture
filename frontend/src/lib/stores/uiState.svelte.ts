@@ -18,11 +18,10 @@ import type {
   SidebarMode,
   SidebarSource,
   SidebarTab,
-  ThemeSource,
 } from "../utils/sidebarShared";
 import { keysOf } from "../utils/records";
 import { readJson, writeJson } from "../utils/storage";
-import type { CollectionPosterStyle } from "../../generated/rest/types.gen";
+import type { CollectionPosterStyle, ThemeIdSource } from "../../generated/rest/types.gen";
 import { COLLECTION_POSTER_STYLES } from "../utils/collectionPosters";
 import {
   CATALOG_SELECTION_FILTERS,
@@ -74,7 +73,7 @@ export interface FilterState extends Record<CatalogSelectionFilter, SelectionAgr
   collectionId: number | null;
   /** The saved custom filter applied to the titles, if any. */
   customFilter: number | null;
-  themeSources: ThemeSource[];
+  themeSources: ThemeIdSource[];
   artSource: { sources: ArtSource[]; artType: ArtSourceSlot };
   metadataIssues: { flags: MetadataIssue[]; mode: "all" | "any" };
   resolution: NumberRange & { artType: "poster" | "background" };

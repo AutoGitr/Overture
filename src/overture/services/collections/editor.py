@@ -258,10 +258,11 @@ class CollectionEditor:
             saved.updated_at = utc_now()
             if not push:
                 saved.unsynced = outdates_server(saved)
-            session.add(saved)
             if saved.rule is not None and display:
                 saved.rule.sqlmodel_update(display)
                 session.add(saved.rule)
+            # Its group and TMDB collection decide what it needs; a pushed
+            # change is part of a sync, whose post-sync step records that.
             if not push:
                 await apply_needs(session, collections=[saved])
             session.add(saved)

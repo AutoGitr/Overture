@@ -45,6 +45,7 @@ lazy from overture.ws.events import validate_event_payload
 lazy from tests.collection_helpers import stored_collection
 lazy from tests.factories import seed_theme
 lazy from tests.media_servers import TEST_SERVER_ID, configure, server_of
+lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     JobProbe,
     NoopProviderRegistry,
@@ -141,6 +142,8 @@ def _context(
             config_dir=tmp_path,
             phash=phash,
         ),
+        theme_handler=unused(DownloadThemeHandler),
+        publisher=NullEventPublisher(),
     )
 
 

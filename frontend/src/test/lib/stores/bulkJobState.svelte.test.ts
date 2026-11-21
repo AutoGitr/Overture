@@ -31,9 +31,13 @@ describe("BulkJobState", () => {
     const adopted = logEntry("Adopted", "Alien", "identical to the local file");
     const skipped = logEntry("Skipped", "Aliens", "saved selection");
     state.handleProgress(bulkArtEvent({ done: 1, log: adopted, log_targets: { Adopted: 1 } }));
-    state.handleProgress(bulkArtEvent({ done: 2, log: skipped, log_targets: { Skipped: 1 } }));
+    // Each event carries the run's totals so far.
+    state.handleProgress(
+      bulkArtEvent({ done: 2, log: skipped, log_targets: { Adopted: 1, Skipped: 1 } }),
+    );
 
     expect(state.progress).toBe(50);
+    expect([state.count("Adopted"), state.count("Skipped")]).toEqual([1, 1]);
     expect(loggedLines(state.log)).toEqual([adopted, skipped]);
   });
 
@@ -114,7 +118,7 @@ describe("BulkJobState", () => {
   });
 });
 
-describe("applyCounters", () => {
+describe("log target counts", () => {
   it("keeps the current value for any counter the event omits", () => {
     const state = new BulkJobState<BulkArtJobEvent>("Art matching failed");
     state.handleStarted(bulkArtEvent({ total: 4 }));

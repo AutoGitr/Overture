@@ -9,12 +9,12 @@ its sources. Titles are visited before collections, each by title.
 lazy from collections import Counter, defaultdict
 lazy from collections.abc import AsyncGenerator, Iterator, Sequence
 lazy from dataclasses import dataclass, field
-lazy from datetime import datetime
+lazy from datetime import datetime, timedelta
 lazy from itertools import batched
 
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ...db.ledger import missing_deliveries, read_asset, selection
+lazy from ...db.ledger import Selection, missing_deliveries, read_asset, selection
 lazy from ...db.models.asset import Asset
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
@@ -35,10 +35,11 @@ lazy from ...repositories.downloads import DownloadJobRepository
 lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
+lazy from ...utils.text import count_label
+lazy from ...utils.time import utc_now
 lazy from ..art.targets import target_label
 lazy from ..catalog.index import NO_THEME, THEME_NOT_NEEDED, CatalogIndex, CatalogPick
 lazy from ..downloads.queue import JobTarget
-lazy from .support import PlannedOutcome, planned_outcome
 
 type RunParams = BulkMatchArtRequest | BulkThemeRequest
 type Source = ArtBulkSource | ThemeBulkSource
@@ -49,6 +50,86 @@ type Slot = tuple[ServerAsset, int | None]
 
 #: Why collection themes need a catalog source.
 CATALOG_THEMES_ONLY = "Collection themes require an OvertureDB or ThemerrDB source"
+
+
+#: Why targets whose saved selection is on disk were not visited.
+SAVED_SELECTION = "saved selection already set; Replace existing searches again"
+
+#: What one target came to without being visited: its outcome and the reason.
+type PlannedOutcome = tuple[JobOutcome, str]
+
+
+def planned_outcome(
+    params: RunParams,
+    *,
+    saved: Selection | None,
+    selection_missing: bool,
+    last_checked: datetime | None,
+    catalog: CatalogPick | None,
+) -> PlannedOutcome | None:
+    """Decide one target from the database, or return ``None`` to visit it.
+
+    This is the planning half of an Assets decision; a visit makes the half
+    that needs the files on disk or a source. *saved* is the slot's saved
+    selection, and *selection_missing* says the file on disk is not it: the
+    file is missing, or was replaced outside Overture. *catalog* is ``None``
+    unless the run's sole sources are catalogs, and then is what they offer
+    the target.
+    The rules apply in order:
+
+    1. A saved selection missing from disk is visited, whenever last
+       checked, since the visit downloads the saved choice rather than asking
+       a source.
+    2. On a catalog-only run, a target no catalog serves is no match, or
+       skipped when OvertureDB is disabled: no option would find it anything.
+    3. A saved selection on disk that already is the catalog's offer is
+       skipped, Overwrite or not: replacing it would fetch the same art.
+    4. A saved selection is skipped unless Overwrite is on.
+    5. A target checked within the Skip recently checked window is skipped.
+    6. Everything else is visited.
+    """
+    kept = bool(saved) and not params.overwrite_existing
+    if kept and selection_missing:
+        return None
+    if catalog is not None and catalog.value is None:
+        outcome = JobOutcome.NO_MATCH if catalog.enabled else JobOutcome.SKIPPED
+        return outcome, catalog.reason
+    saved_url = saved and (saved.url or saved.youtube_id)
+    if catalog is not None and not selection_missing and saved_url == catalog.value:
+        return JobOutcome.SKIPPED, f"saved selection is already the {catalog.label}"
+    if kept:
+        return JobOutcome.SKIPPED, _saved_reason(catalog)
+    if checked_recently(last_checked, params):
+        return (
+            JobOutcome.SKIPPED,
+            f"checked within the last {recent_window_label(params)}",
+        )
+    return None
+
+
+def _saved_reason(catalog: CatalogPick | None) -> str:
+    """Say why a saved selection that is not the catalog's offer is kept."""
+    if catalog is None:
+        return SAVED_SELECTION
+    return (
+        f"saved selection differs from the {catalog.label}; "
+        "Replace existing would replace it"
+    )
+
+
+def recent_window_label(params: RunParams) -> str:
+    """Name the skip-recent window the way the user set it."""
+    return count_label(
+        params.skip_recent_val, params.skip_recent_unit.value.removesuffix("s")
+    )
+
+
+def checked_recently(last_checked: datetime | None, params: RunParams) -> bool:
+    """Return whether *last_checked* falls inside the skip-recent window."""
+    if params.skip_recent_val <= 0 or last_checked is None:
+        return False
+    window = timedelta(seconds=params.skip_recent_val * params.skip_recent_unit.seconds)
+    return utc_now() - last_checked < window
 
 
 @dataclass(frozen=True, slots=True)
@@ -491,6 +572,8 @@ async def plan_run(
                     collection_groups=params.collection_groups,
                     include_unmonitored=params.include_unmonitored,
                 )
+                if not rows:
+                    break
                 index = await CatalogIndex.build_collections(session, rows)
                 failed = (
                     await DownloadJobRepository(session).failed_themes_by_collection(
@@ -499,8 +582,6 @@ async def plan_run(
                     if themes
                     else {}
                 )
-            if not rows:
-                break
             # A collection's sources are catalogs, unless local art matching
             # can compare its image; planning asks which apply to each.
             _plan_targets(

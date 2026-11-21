@@ -156,7 +156,7 @@ describe("CollectionThemePanel theme state", () => {
       steps: 4,
       percent: 41.6,
     });
-    show(withAsset(starWars, "theme", { status: "complete" }));
+    show(withAsset(starWars, "theme", { status: "complete", youtube_id: "abc12345678" }));
 
     renderPanel();
 

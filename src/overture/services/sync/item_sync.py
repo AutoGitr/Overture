@@ -22,6 +22,7 @@ lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...repositories.terms import TermRepository
 lazy from ...utils.time import utc_now
 lazy from ..library.completion import auto_unmonitor_completed
+lazy from ..needs import apply_needs
 lazy from .art_urls import ResolvedArtUrls, apply_provider_art_urls
 lazy from .season_sync import SeasonSynchronizer
 lazy from .tmdb_enrichment import record_tmdb_facts
@@ -205,6 +206,7 @@ class ItemReconciler:
                 lead=True,
                 only_missing_art=False,
             )
+        await apply_needs(session, items=[item])
         await auto_unmonitor_completed(session, item, policy=auto_unmonitor)
 
         session.add(item)
@@ -287,6 +289,7 @@ class ItemReconciler:
                 moved=moved,
             )
 
+        await apply_needs(session, items=[item])
         await auto_unmonitor_completed(session, item, policy=auto_unmonitor)
         session.add(item)
         return art_pulled, TermKind.DIRECTOR in changed, copy.left

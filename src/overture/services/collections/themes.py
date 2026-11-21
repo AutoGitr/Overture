@@ -28,6 +28,7 @@ lazy from ..downloads.collection_theme import (
     collection_theme_unavailable,
     collection_themes_unavailable,
     theme_folders,
+    theme_found_by,
 )
 lazy from ..downloads.queue import JobTarget
 lazy from ..downloads.service import DownloadService
@@ -109,6 +110,7 @@ class CollectionThemes:
                     source=ThemeIdSource.SELECTION,
                     title=None,
                     duration=None,
+                    found_by=await theme_found_by(db, row, youtube_id),
                 )
             )
             row.updated_at = utc_now()

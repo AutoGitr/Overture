@@ -10,11 +10,12 @@ lazy from sqlmodel import select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.ledger import read_asset
+lazy from overture.db.ledger import Destination, Evidence, observe, place, read_asset
 lazy from overture.db.models.catalog import (
     CatalogCollection,
     CatalogDraft,
 )
+lazy from overture.db.models.media_collection import CollectionLibrary
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.settings import get_app_settings
 lazy from overture.db.session import Database
@@ -23,6 +24,7 @@ lazy from overture.domain import (
     AssetStatus,
     CatalogMediaType,
     CollectionPosterStyle,
+    DeliveryChannel,
     MediaType,
     ServerAsset,
 )
@@ -47,6 +49,7 @@ lazy from overture.services.schedule_store import (
     save_schedule,
 )
 lazy from overture.utils.errors import PublicServiceError
+lazy from overture.utils.hashing import text_digest
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_catalog
 lazy from tests.collection_helpers import managing_rule, stored_collection
@@ -474,7 +477,8 @@ async def test_a_collection_needs_no_theme_its_catalog_or_settings_rule_out(
     """OvertureDB's trusted No theme flag, or its settings, leave it complete."""
     async with database.write_session() as session:
         await enable_catalog(session)
-        session.add(CatalogCollection(tmdb_id=10, title="Saga", no_theme=no_theme))
+        entry = CatalogCollection(tmdb_id=10, title="Saga", no_theme=no_theme)
+        session.add(entry)
         settings = await get_app_settings(session)
         settings.collection_themes = themes
         session.add(settings)
@@ -492,5 +496,36 @@ async def test_a_collection_needs_no_theme_its_catalog_or_settings_rule_out(
     theme = read_asset(row, ServerAsset.THEME)
     assert theme.needed is needed
     assert theme.status is (AssetStatus.MISSING if needed else AssetStatus.COMPLETE)
-    read = collection_read(row, None, None, copies=row.copies)
+    read = collection_read(row, entry, None, copies=row.copies, trust_no_theme=True)
     assert read.assets.theme.needed is needed
+    # Only the catalog's own flag completes its theme, never the collection's policy.
+    assert read.catalog_complete is no_theme
+    distrusted = collection_read(
+        row, entry, None, copies=row.copies, trust_no_theme=False
+    )
+    assert distrusted.catalog_complete is False
+
+
+def test_a_collection_names_the_image_its_lead_copy_shows() -> None:
+    row = stored_collection(id=1, server_item_id="other", title="Saga")
+    lead = CollectionLibrary(
+        server_id=2,
+        collection_id=1,
+        library_id="2:library",
+        media_type=MediaType.MOVIE,
+        server_item_id="lead",
+    )
+    row.libraries.append(lead)
+    copies = {
+        ref: Destination(part.server_id, part.server_item_id, DeliveryChannel.UPLOAD)
+        for part, ref in ((row.libraries[0], "/other.jpg"), (lead, "/lead.jpg"))
+    }
+    place(row, ServerAsset.POSTER, copies.values())
+    for ref, copy in copies.items():
+        observe(row, ServerAsset.POSTER, copy, Evidence.DIFFERENT, ref=ref)
+
+    led = collection_read(row, None, None, copies=[lead], trust_no_theme=True)
+    unheld = collection_read(row, None, None, copies=[], trust_no_theme=True)
+
+    assert led.server_poster_version == text_digest("/lead.jpg", 16)
+    assert unheld.server_poster_version is None

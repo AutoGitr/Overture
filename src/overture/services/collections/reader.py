@@ -62,6 +62,7 @@ class CollectionReader:
                 catalog.get(row.tmdb_collection_id or 0),
                 row.rule,
                 copies=self._access.held_copies(row),
+                trust_no_theme=defaults.overturedb_no_theme,
             ).model_copy(
                 update={
                     "below_minimum": row.child_count < policy.minimum_items,
@@ -117,7 +118,8 @@ class CollectionReader:
                 ),
                 row.order_type,
             )
-            policy = await self._access.policy(session, row.group, saved)
+            settings = await get_app_settings(session)
+            policy = resolve_policy(settings, row.group, saved)
             catalog = await catalog_collections(
                 session,
                 {row.tmdb_collection_id} if row.tmdb_collection_id else set(),
@@ -132,6 +134,7 @@ class CollectionReader:
                 entry,
                 saved,
                 copies=self._access.held_copies(row),
+                trust_no_theme=settings.overturedb_no_theme,
             )
             .model_copy(
                 update={

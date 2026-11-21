@@ -49,6 +49,7 @@ lazy from ..art.phash import PhashService
 lazy from ..art.targets import target_label
 lazy from ..collections.destinations import collection_destinations
 lazy from ..collections.theme_files import collection_folder, inspect_theme_file
+lazy from ..downloads.collection_theme import copy_part
 lazy from ..downloads.theme import DownloadThemeHandler
 lazy from ..local_assets.service import LocalAssets
 lazy from ..server_copies import READ_ERRORS, ServerCopies
@@ -84,8 +85,8 @@ class AuditContext:
     server_copies: ServerCopies
     database: Database
     collection_art: CollectionArtService
-    theme_handler: DownloadThemeHandler | None = None
-    publisher: protocols.EventPublisher | None = None
+    theme_handler: DownloadThemeHandler
+    publisher: protocols.EventPublisher
     #: The database's numbers of the servers a run compares with, those that
     #: answered when it started; every configured server when ``None``.
     servers: frozenset[int] | None = None
@@ -226,13 +227,11 @@ def _image_finding(
 
 async def _audit_collection_art(
     target: CollectionAuditTarget,
-    art_type: ArtType | None,
+    art_type: ArtType,
     *,
     context: AuditContext,
 ) -> list[ServerAuditResult]:
     """Audit the image Overture uploaded to a collection against each server copy."""
-    if art_type is None:
-        return []
     result = ServerAuditResult(
         kind="art",
         collection_id=target.collection_id,
@@ -393,7 +392,7 @@ async def _record_collection(
         changed = after != before
         if changed:
             session.add(row)
-    if changed and context.publisher is not None:
+    if changed:
         await context.publisher.broadcast(
             "collection.updated", {"collection_id": collection_id}
         )
@@ -588,9 +587,7 @@ async def _audit_folder_collection_theme(
     expected_hash: str,
     context: AuditContext,
 ) -> ServerAuditResult:
-    part = next(
-        p for p in row.copies if (p.server_id, p.server_item_id) == destination.key
-    )
+    part = copy_part(row, destination)
     try:
         folder = await owned_thread(
             collection_folder, provider.server, part.server_path
@@ -964,11 +961,9 @@ async def audit_target[T: AuditWork](
     A target whose results all match is one the server shows exactly.
     """
     if isinstance(target, CollectionAuditTarget):
-        if target.asset is ServerAsset.THEME:
+        if (art_type := target.asset.art_type) is None:
             return target, await _audit_collection_theme(target, context=context)
-        return target, await _audit_collection_art(
-            target, target.asset.art_type, context=context
-        )
+        return target, await _audit_collection_art(target, art_type, context=context)
     if target.art_type is None:
         return target, await _audit_theme_one(target, context=context)
     return target, await _audit_art_one(target, target.art_type, context=context)

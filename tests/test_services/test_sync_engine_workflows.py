@@ -13,11 +13,20 @@ lazy from pydantic import SecretStr
 lazy from sqlmodel import select
 
 lazy from overture.config import Settings
+lazy from overture.db.ledger import read_asset
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.media_item_copy import MediaItemCopy
 lazy from overture.db.models.saved_schedule import SavedSchedule
+lazy from overture.db.models.settings import get_app_settings
 lazy from overture.db.session import Database
-lazy from overture.domain import MediaServerState, MediaType, ServerType
+lazy from overture.domain import (
+    AssetStatus,
+    AutoUnmonitor,
+    MediaServerState,
+    MediaType,
+    ServerAsset,
+    ServerType,
+)
 lazy from overture.integrations.tmdb import TMDBClient, TmdbFacts
 lazy from overture.jobs import results as job_results
 lazy from overture.jobs.gate import LibraryGate
@@ -59,6 +68,8 @@ lazy from overture.services.sync.reconciler import (
 lazy from overture.services.sync.staging import StagedListing
 lazy from overture.services.sync.tmdb_enrichment import TmdbEnrichment
 lazy from overture.services.sync.tmdb_seasons import TmdbSeasonSync
+lazy from tests.bulk_helpers import enable_catalog
+lazy from tests.factories import CatalogItemFactory
 lazy from tests.media_servers import TEST_SERVER_ID, copy_ids, served_item
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
@@ -219,6 +230,35 @@ async def test_staged_sync_assigns_shared_guid_items_to_distinct_rows(
         assert (report[JobOutcome.ERROR], report.done) == (0, 2)
         assert await listing.is_mapped(1)
         assert await listing.is_mapped(2)
+
+
+async def test_one_sync_completes_and_unmonitors_a_title_overturedb_has_no_theme_for(
+    *,
+    app_config: Settings,
+    database: Database,
+    catalog_item_factory: CatalogItemFactory,
+) -> None:
+    async with database.write_session() as session:
+        await enable_catalog(session)
+        settings = await get_app_settings(session)
+        settings.auto_unmonitor = AutoUnmonitor.THEME
+        session.add(settings)
+        session.add(catalog_item_factory(tmdb_id=42, no_theme=True))
+    reconciler = LibraryReconciler(
+        publisher=NullEventPublisher(),
+        local_assets=make_local_assets(app_config=app_config, database=database),
+        downloads=NoopDownloads(),
+        app_config=app_config,
+        database=database,
+    )
+
+    await sync_full(reconciler, normalized_items())
+
+    async with database.read_session() as session:
+        item = (await session.exec(select(MediaItem))).one()
+    theme = read_asset(item, ServerAsset.THEME)
+    assert (theme.needed, theme.status) == (False, AssetStatus.COMPLETE)
+    assert item.monitored is False
 
 
 @pytest.mark.parametrize("method", ["sync_full", "sync_recent"])

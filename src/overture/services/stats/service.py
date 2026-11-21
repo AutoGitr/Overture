@@ -4,7 +4,7 @@ lazy from dataclasses import dataclass
 lazy from pathlib import Path
 lazy from typing import Any, cast
 
-lazy from sqlmodel import case, col, func, select, text
+lazy from sqlmodel import and_, case, col, func, or_, select, text
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from sqlmodel.sql.expression import Select
 
@@ -53,8 +53,9 @@ async def _asset_counts(
     """Count every asset of a title, season or listed collection in one query.
 
     An asset holds something once any of its deliveries has content seen at
-    it; it is complete as its stored status says; its bytes are those of the
-    files it was found as.
+    it; it is matched once it selects something and its stored status is
+    complete, so one nothing is wanted for is not counted; its bytes are those
+    of the files it was found as.
     """
     owner = case(
         (col(Asset.media_item_id).is_not(None), "item"),
@@ -62,6 +63,12 @@ async def _asset_counts(
         else_="collection",
     )
     seen = col(AssetDelivery.observed_hash).is_not(None)
+    matched = col(Asset.status) == AssetStatus.COMPLETE
+    selected = or_(
+        col(Asset.url).is_not(None),
+        col(Asset.upload_hash).is_not(None),
+        col(Asset.youtube_id).is_not(None),
+    )
     held = (
         select(AssetDelivery.id)
         .where(col(AssetDelivery.asset_id) == col(Asset.id), seen)
@@ -81,7 +88,7 @@ async def _asset_counts(
         owner,
         col(MediaItem.media_type),
         func.sum(case((held, 1), else_=0)),
-        func.sum(case((col(Asset.status) == AssetStatus.COMPLETE, 1), else_=0)),
+        func.sum(case((and_(matched, selected), 1), else_=0)),
         func.sum(size),
     ]
     stmt = (

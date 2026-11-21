@@ -1,6 +1,7 @@
 <script lang="ts">
   import LoaderCircle from "@lucide/svelte/icons/loader-circle";
   import type { CollectionDetail, ThemeSearchResult } from "../../generated/rest/types.gen";
+  import { isDelivered } from "../utils/assetDeliveries";
   import type { CollectionActions } from "../utils/collectionActions.svelte";
   import {
     buildCollectionThemeSearchQuery,
@@ -54,7 +55,7 @@
         onselect={(videoId) => actions.selectTheme(videoId)}
         selectLabel={(video) => {
           const theme = coll.assets.theme;
-          if (theme.youtube_id === video.id && theme.status === "complete") return "Assigned";
+          if (theme.youtube_id === video.id && isDelivered(theme)) return "Assigned";
           if (theme.youtube_id === video.id) return "Requeue";
           return "Select";
         }}

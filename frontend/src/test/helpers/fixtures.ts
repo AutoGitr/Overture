@@ -84,12 +84,12 @@ export function mediaServers(...types: (ServerType | null)[]): MediaServerRead[]
 }
 
 /**
- * A library title. A test names its copy on server 1 with ``library_id`` and
- * ``server_item_id``, which replace any ``copies`` given, or passes ``copies`` itself.
+ * One asset, blank unless *overrides* say what is recorded. It is selected,
+ * as the backend says, when it names a link, a kept image or a video, and a
+ * local file is read from the folder it is delivered to.
  */
-/** One asset, blank unless *overrides* say what is recorded. */
 export function asset(kind: ServerAsset, overrides: Partial<AssetRead> = {}): AssetRead {
-  return {
+  const recorded: Omit<AssetRead, "selected"> = {
     kind,
     status: "missing",
     needed: true,
@@ -112,6 +112,24 @@ export function asset(kind: ServerAsset, overrides: Partial<AssetRead> = {}): As
     deliveries: [],
     ...overrides,
   };
+  const { file, content_hash } = recorded;
+  return {
+    ...recorded,
+    selected: !!(recorded.url || recorded.upload_hash || recorded.youtube_id),
+    deliveries:
+      file && !recorded.deliveries.length
+        ? [
+            {
+              server_id: null,
+              channel: "file",
+              required: true,
+              delivered: content_hash === file.hash,
+              present: true,
+              checked_at: null,
+            },
+          ]
+        : recorded.deliveries,
+  };
 }
 
 /** *owner* with one of its assets changed as *overrides* say. */
@@ -120,7 +138,11 @@ export function withAsset<T extends { assets: TitleAssets }>(
   kind: keyof TitleAssets,
   overrides: Partial<AssetRead>,
 ): T {
-  return { ...owner, assets: { ...owner.assets, [kind]: { ...owner.assets[kind], ...overrides } } };
+  const current = owner.assets[kind];
+  return {
+    ...owner,
+    assets: { ...owner.assets, [kind]: asset(current.kind, { ...current, ...overrides }) },
+  };
 }
 
 /** The file an asset's owner keeps in its folder, named by its hash. */
@@ -140,6 +162,10 @@ export function titleAssets(overrides: AssetOverrides = {}): TitleAssets {
   };
 }
 
+/**
+ * A library title. A test names its copy on server 1 with ``library_id`` and
+ * ``server_item_id``, which replace any ``copies`` given, or passes ``copies`` itself.
+ */
 export function mediaItem(
   overrides: Omit<Partial<MediaItemRead>, "assets"> & {
     assets?: AssetOverrides;

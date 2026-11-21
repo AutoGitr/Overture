@@ -1,8 +1,5 @@
 """The ledger: one rule decides every asset's status, and only it writes assets."""
 
-lazy import random
-lazy from collections.abc import Callable
-
 lazy import pytest
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -14,7 +11,7 @@ lazy from overture.db.ledger import (
     clear_selection,
     combined_status,
     confirm_delivery,
-    find_asset,
+    generation,
     item_art_status,
     local_file,
     observe,
@@ -26,13 +23,17 @@ lazy from overture.db.ledger import (
     record_written,
     select_art,
     select_theme,
+    select_upload,
     set_needed,
     settled_status,
 )
+lazy from overture.db.models.asset import Asset, AssetDelivery
 lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.domain import (
+    ArtGeneration,
+    ArtStyle,
     AssetStatus,
     DeliveryChannel,
     MediaType,
@@ -242,54 +243,152 @@ def test_statuses_combine_to_complete_only_when_all_are() -> None:
     assert combined_status([]) is missing
 
 
-#: Every transition a caller can make, as random arguments choose them.
-_TRANSITIONS: list[Callable[[MediaCollection, random.Random], object]] = [
-    lambda row, rng: place(
-        row,
-        ServerAsset.POSTER,
-        rng.sample([COPY, LOCAL_COPY, OTHER_COPY], rng.randint(0, 3)),
-    ),
-    lambda row, rng: select_art(row, ServerAsset.POSTER, rng.choice([URL, OTHER])),
-    lambda row, rng: clear_selection(row, ServerAsset.POSTER),
-    lambda row, rng: record_content(
-        row, ServerAsset.POSTER, ContentFacts(rng.choice(["a", "b"]))
-    ),
-    lambda row, rng: (
-        read_asset(row, ServerAsset.POSTER).content_hash
-        and confirm_delivery(
-            row, ServerAsset.POSTER, rng.choice([COPY, OTHER_COPY]), ref="r"
-        )
-    ),
-    lambda row, rng: observe(
-        row,
-        ServerAsset.POSTER,
-        rng.choice([COPY, OTHER_COPY]),
-        rng.choice(list(Evidence)),
-        ref="r",
-    ),
-    lambda row, rng: record_file(
-        row,
-        ServerAsset.POSTER,
-        rng.choice([None, _file("a"), _file("b")]),
-        destination=LOCAL_COPY,
-    ),
-    lambda row, rng: set_needed(row, ServerAsset.POSTER, rng.random() < 0.8),
-]
 LOCAL_COPY = Destination(3, "folder", DeliveryChannel.FILE)
 OTHER_COPY = Destination(2, "box", DeliveryChannel.UPLOAD)
 
 
-@pytest.mark.parametrize("seed", range(40))
-def test_every_sequence_of_transitions_stores_the_status_its_rows_give(
-    seed: int,
-) -> None:
-    rng = random.Random(seed)  # noqa: S311 -- a reproducible sequence, not a secret
-    row = MediaCollection(id=2, title="Saga")
-    for _ in range(30):
-        rng.choice(_TRANSITIONS)(row, rng)
-        asset = find_asset(row, ServerAsset.POSTER)
-        if asset is not None:
-            assert asset.status is settled_status(asset)
+def _row(
+    observed_hash: str | None = None,
+    observed_ref: str | None = None,
+    *,
+    required: bool = True,
+) -> AssetDelivery:
+    return AssetDelivery(
+        asset_id=1,
+        server_id=1,
+        server_item_id="box",
+        channel=DeliveryChannel.UPLOAD,
+        required=required,
+        observed_hash=observed_hash,
+        observed_ref=observed_ref,
+    )
+
+
+@pytest.mark.parametrize(
+    ("asset", "status"),
+    [
+        (Asset(kind=ServerAsset.POSTER), AssetStatus.MISSING),
+        (Asset(kind=ServerAsset.POSTER, needed=False), AssetStatus.COMPLETE),
+        (Asset(kind=ServerAsset.POSTER, url=URL), AssetStatus.COMPLETE),
+        (Asset(kind=ServerAsset.POSTER, content_hash="a"), AssetStatus.PARTIAL),
+        (
+            Asset(kind=ServerAsset.POSTER, url=URL, deliveries=[_row()]),
+            AssetStatus.PARTIAL,
+        ),
+        (
+            Asset(
+                kind=ServerAsset.POSTER,
+                url=URL,
+                content_hash="a",
+                deliveries=[_row("a"), _row("b")],
+            ),
+            AssetStatus.PARTIAL,
+        ),
+        (
+            Asset(
+                kind=ServerAsset.POSTER,
+                url=URL,
+                content_hash="a",
+                deliveries=[_row("a"), _row("b", required=False)],
+            ),
+            AssetStatus.COMPLETE,
+        ),
+        # A delivery matches only content Overture holds.
+        (
+            Asset(kind=ServerAsset.POSTER, url=URL, deliveries=[_row(None)]),
+            AssetStatus.PARTIAL,
+        ),
+        # Anything seen at a destination, even another image, starts the asset.
+        (Asset(kind=ServerAsset.POSTER, deliveries=[_row("b")]), AssetStatus.PARTIAL),
+        (
+            Asset(kind=ServerAsset.POSTER, deliveries=[_row(None, "/thumb")]),
+            AssetStatus.PARTIAL,
+        ),
+        (Asset(kind=ServerAsset.POSTER, deliveries=[_row()]), AssetStatus.MISSING),
+    ],
+)
+def test_the_status_rule(asset: Asset, status: AssetStatus) -> None:
+    assert settled_status(asset) is status
+
+
+def test_an_absent_file_places_no_destination() -> None:
+    collection = MediaCollection(id=2, title="Saga")
+    select_art(collection, ServerAsset.POSTER, URL)
+
+    record_file(collection, ServerAsset.POSTER, None, destination=LOCAL_COPY)
+
+    assert read_asset(collection, ServerAsset.POSTER).deliveries == []
+    assert _status(collection, ServerAsset.POSTER) is AssetStatus.COMPLETE
+    assert (
+        record_file(MediaCollection(id=3, title="Other"), ServerAsset.POSTER, None)
+        is None
+    )
+
+
+def test_an_absent_file_forgets_what_was_seen_at_its_destination() -> None:
+    item = _item()
+    record_file(item, ServerAsset.POSTER, _file())
+
+    record_file(item, ServerAsset.POSTER, None)
+
+    assert local_file(read_asset(item, ServerAsset.POSTER)) is None
+    assert _status(item, ServerAsset.POSTER) is AssetStatus.MISSING
+
+
+def test_only_content_overture_holds_can_be_delivered() -> None:
+    collection = MediaCollection(id=2, title="Saga")
+    select_art(collection, ServerAsset.POSTER, URL)
+
+    with pytest.raises(ValueError, match="content"):
+        confirm_delivery(collection, ServerAsset.POSTER, COPY, ref=None)
+
+
+def test_placing_drops_unlisted_destinations_and_forgets_a_changed_channel() -> None:
+    collection = MediaCollection(id=2, title="Saga")
+    _uploaded(collection)
+    place(collection, ServerAsset.POSTER, (COPY, OTHER_COPY))
+    record_file(collection, ServerAsset.POSTER, _file("up"), destination=OTHER_COPY)
+
+    place(
+        collection,
+        ServerAsset.POSTER,
+        (Destination(COPY.server_id, COPY.server_item_id, DeliveryChannel.FILE),),
+    )
+
+    asset = read_asset(collection, ServerAsset.POSTER)
+    assert [(row.server_id, row.observed_hash) for row in asset.deliveries] == [
+        (1, None)
+    ]
+    assert asset.status is AssetStatus.PARTIAL
+
+
+def test_clearing_art_that_was_never_recorded_writes_nothing() -> None:
+    item = MediaItem(id=1, media_type=MediaType.MOVIE, title="Alien")
+
+    clear_selection(item, ServerAsset.POSTER)
+
+    assert item.assets == []
+
+
+def test_a_generated_upload_records_how_it_was_drawn() -> None:
+    item = _item()
+    generated = ArtGeneration(ArtStyle.DARK, title_only=True)
+
+    asset = select_upload(item, ServerAsset.POSTER, "hash", generated=generated)
+
+    assert generation(asset) == generated
+    select_art(item, ServerAsset.POSTER, URL)
+    assert generation(asset) is None
+
+
+def test_observing_a_destination_never_placed_records_nothing() -> None:
+    collection = MediaCollection(id=2, title="Saga")
+    _uploaded(collection)
+
+    observe(collection, ServerAsset.POSTER, OTHER_COPY, Evidence.DIFFERENT, ref="x")
+
+    assert len(read_asset(collection, ServerAsset.POSTER).deliveries) == 1
+    assert _status(collection, ServerAsset.POSTER) is AssetStatus.COMPLETE
 
 
 async def test_a_flush_refuses_a_status_written_outside_the_ledger(

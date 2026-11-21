@@ -16,7 +16,7 @@ lazy from overture.domain import ArtType, MediaType, ServerAsset
 lazy from overture.schemas.library import BulkItemOperation
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from tests.factories import (
-    local_hash,
+    file_hash_of,
     seed_asset,
     seed_theme,
     theme_file_hash,
@@ -98,7 +98,7 @@ async def test_bulk_operation_preserves_untargeted_records(
                     # The selection is forgotten; the local file record stays.
                     poster = read_asset(item, ServerAsset.POSTER)
                     assert poster.url is None
-                    assert local_hash(item, ServerAsset.POSTER) == "poster-hash"
+                    assert file_hash_of(poster) == "poster-hash"
                     assert len(slots) == 9
                 else:
                     assert item.monitored is (operation == "monitor")

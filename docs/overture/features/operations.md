@@ -94,10 +94,11 @@ the image instead.
 asset that already holds the art or theme a source picks, such as OvertureDB's,
 is skipped without downloading anything. A downloaded file identical to yours
 is left untouched. A source image identical to your file is adopted in place.
-OvertureDB's artwork is compared with your file as local image matching
-compares its candidates: by default only an identical file is taken, and a
-looser matching threshold also takes the same picture saved differently,
-replacing your unsaved file with OvertureDB's.
+OvertureDB's artwork is compared with what is in place as local image
+matching compares its candidates: your file, or for a collection the image
+Overture uploaded or its server shows. By default only an identical image is
+taken, and a looser matching threshold also takes the same picture saved
+differently, replacing what is in place with OvertureDB's.
 
 **Skip recently checked** skips searches within the chosen time window, also
 with Replace existing. Restoring a saved choice always runs.

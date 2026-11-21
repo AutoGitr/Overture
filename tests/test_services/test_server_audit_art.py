@@ -45,6 +45,7 @@ lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.art.matcher import ArtMatcher
 lazy from overture.services.art.phash import PhashService
 lazy from overture.services.art.uploads import ArtUploads
+lazy from overture.services.downloads.theme import DownloadThemeHandler
 lazy from overture.services.removal import AssetRemover
 lazy from overture.services.server_audit.compare import AuditContext, audit_target
 lazy from overture.services.server_audit.work import (
@@ -60,6 +61,7 @@ lazy from tests.collection_helpers import shown_on_server, stored_collection
 lazy from tests.factories import seed_asset
 lazy from tests.http_mock import mock_client_factory
 lazy from tests.media_servers import served_item
+lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     StaticImageClients,
@@ -154,6 +156,8 @@ async def _audit(
             config_dir=tmp_path / "config",
             phash=phash,
         ),
+        theme_handler=unused(DownloadThemeHandler),
+        publisher=NullEventPublisher(),
     )
     _, [result] = await audit_target(AuditTarget(1, ArtType.POSTER), context=context)
     return result, transport.requests
@@ -291,6 +295,8 @@ async def test_an_item_gone_from_the_library_is_an_error(
             config_dir=tmp_path,
             phash=phash,
         ),
+        theme_handler=unused(DownloadThemeHandler),
+        publisher=NullEventPublisher(),
     )
 
     _, [result] = await audit_target(AuditTarget(404, ArtType.POSTER), context=context)
@@ -408,6 +414,8 @@ async def _audit_collection(
             config_dir=tmp_path / "config",
             phash=phash,
         ),
+        theme_handler=unused(DownloadThemeHandler),
+        publisher=NullEventPublisher(),
     )
     planned = await plan_collection_audit(
         ServerAuditRequest(check_collections=True), database=database
@@ -564,6 +572,7 @@ async def test_collection_audit_broadcasts_status_change_and_keeps_concurrent_up
             phash=phash,
         ),
         publisher=publisher,
+        theme_handler=unused(DownloadThemeHandler),
     )
 
     _, [mismatch] = await audit_target(
@@ -610,6 +619,7 @@ async def test_collection_audit_broadcasts_status_change_and_keeps_concurrent_up
         collection_art=context.collection_art,
         server_copies=context.server_copies,
         publisher=publisher,
+        theme_handler=unused(DownloadThemeHandler),
     )
     await audit_target(
         CollectionAuditTarget(1, ServerAsset.POSTER), context=racing_context
@@ -690,6 +700,8 @@ async def test_a_cross_library_collection_copy_is_audited_once(
             config_dir=tmp_path / "config",
             phash=phash,
         ),
+        theme_handler=unused(DownloadThemeHandler),
+        publisher=NullEventPublisher(),
     )
 
     _, results = await audit_target(

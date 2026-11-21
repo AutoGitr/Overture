@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CollectionDraft } from "../utils/collectionDraft.svelte";
-  import type { CollectionEditor } from "../utils/collectionForms.svelte";
+  import type { CollectionEditor } from "../utils/collectionEditor.svelte";
   import { formPolicy } from "../utils/collectionFormShared.svelte";
   import CollectionScheduleFields from "./CollectionScheduleFields.svelte";
   import DetailForm from "./DetailForm.svelte";

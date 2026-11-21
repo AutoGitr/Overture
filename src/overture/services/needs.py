@@ -4,8 +4,8 @@ An asset nothing is wanted for is complete as it is, and its stored status
 says so. What is wanted follows outside the asset: OvertureDB's No theme flag
 (trusted while the catalog is enabled and the setting trusts it) for a
 title's or collection's theme, and a collection's policy for its background
-and theme. Whatever changes one of those calls :meth:`AssetNeeds.apply` for
-the rows it touched, or :meth:`AssetNeeds.apply_all`.
+and theme. Whatever changes one of those calls :func:`apply_needs` for the
+rows it touched, or :meth:`AssetNeeds.apply_all`.
 """
 
 lazy from collections.abc import Sequence
@@ -44,9 +44,8 @@ async def apply_needs(
     trusted = await _trusts_no_theme(session, settings)
     catalog = CatalogRepository(session)
     if items:
-        entries = await catalog.items_by_media_item_id(items) if trusted else {}
-        for item in items:
-            entry = entries.get(item.id or 0)
+        matched = await catalog.match_items(items) if trusted else [None] * len(items)
+        for item, entry in zip(items, matched, strict=True):
             set_needed(item, ServerAsset.THEME, not (entry and entry.no_theme))
             session.add(item)
     if collections:

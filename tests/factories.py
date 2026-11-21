@@ -186,13 +186,6 @@ def server_ref(owner: MediaCollection, kind: ArtType | ServerAsset) -> str | Non
     )
 
 
-def local_hash(owner: MediaItem | Season, kind: ArtType | ServerAsset) -> str | None:
-    """Return the hash of the owner's file of *kind* in its folder, if any."""
-    kind = kind.server_asset if isinstance(kind, ArtType) else kind
-    facts = local_file(read_asset(owner, kind))
-    return facts.file_hash if facts else None
-
-
 def seed_theme[Owner: (MediaItem, MediaCollection)](
     owner: Owner,
     youtube_id: str | None = None,

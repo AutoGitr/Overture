@@ -44,7 +44,6 @@ lazy from ...utils.time import utc_now
 lazy from ..downloads.selections import queue_saved_selection_downloads
 lazy from ..downloads.service import DownloadService
 lazy from ..local_assets.service import LocalAssets
-lazy from ..needs import apply_needs
 lazy from ..storage.assets import AssetStorage
 lazy from .art_urls import resolve_provider_art_urls
 lazy from .item_sync import CopyPlace, ItemReconciler
@@ -262,7 +261,6 @@ class LibraryReconciler:
         """
         auto_unmonitor = await self._auto_unmonitor()
         changed: list[int] = []
-        reconciled: list[int] = []
         stopped = False
         async with self._stamping() as synced:
             for server_item in server_items:
@@ -278,25 +276,15 @@ class LibraryReconciler:
                 )
                 if isinstance(outcome, SyncItemResult) and outcome.item_id is not None:
                     synced.add(outcome.item_id)
-                    reconciled.append(outcome.item_id)
                     await on_reconciled(server_item, outcome.item_id)
                     if outcome.visible_changed:
                         changed.append(outcome.item_id)
                 await self._report(server_item, outcome, stats, report)
-        await self._apply_needs(reconciled)
         # Told after the stamp, since an upsert versions server artwork by it.
         await emit_library_items_upserted(
             changed, event_source, self.publisher, database=self._database
         )
         return stopped
-
-    async def _apply_needs(self, item_ids: Sequence[int]) -> None:
-        """Record what is wanted for the batch's titles, as the catalog says."""
-        if not item_ids:
-            return
-        async with self._database.write_session() as session:
-            items = await MediaItemRepository(session).get_many(item_ids)
-            await apply_needs(session, items=items)
 
     @asynccontextmanager
     async def _stamping(self) -> AsyncGenerator[set[int]]:

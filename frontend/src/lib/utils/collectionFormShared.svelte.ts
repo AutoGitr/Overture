@@ -16,7 +16,7 @@ import type {
   MediaType,
   SyncMode,
 } from "../../generated/rest/types.gen";
-import { emptyGroup } from "./collectionCriteria";
+import { availableFields, availableOrders, emptyGroup } from "./collectionCriteria";
 import type { CollectionOptions as Capabilities } from "./libraries.svelte";
 
 /** Collection policy as a collection, a group and the global defaults hold it. */
@@ -88,7 +88,45 @@ export interface CollectionFormLike {
 /** Make the criteria Plex's live filter or Overture's, dropping an order the new kind cannot keep. */
 export function switchKind(form: CollectionFormLike, smart: boolean) {
   form.rule.smart = smart;
+  dropUnofferedOrder(form);
+}
+
+/** Clears a chosen order the form no longer offers. */
+function dropUnofferedOrder(form: CollectionFormLike) {
   if (form.orderType !== null && !form.orders.includes(form.orderType)) form.orderType = null;
+}
+
+/** What a collection form derives from its rule and the libraries it names. */
+export abstract class CollectionRuleForm {
+  abstract rule: CollectionRuleWriteInput;
+  abstract readonly options: Capabilities;
+  abstract typeOf(libraryId: string): MediaType;
+
+  get smart() {
+    return !!this.rule.smart;
+  }
+  get libraryIds() {
+    return this.rule.libraries.map((entry) => entry.library_id);
+  }
+  /** What the chosen libraries hold, movies first. */
+  get mediaTypes(): MediaType[] {
+    return heldTypes(this.libraryIds, (id) => this.typeOf(id));
+  }
+  get capabilities() {
+    return this.options.for(this.mediaTypes[0] ?? "movie");
+  }
+  /** What takes requests and tags for the chosen libraries. */
+  get arr() {
+    const names = { movie: "Radarr", show: "Sonarr" } as const;
+    const usable = this.mediaTypes.filter((mediaType) => this.options.for(mediaType).data?.arr);
+    return usable.map((mediaType) => names[mediaType]).join(" and ") || null;
+  }
+  fieldsFor(libraryId: string) {
+    return availableFields(this.options.forLibrary(libraryId, this.typeOf(libraryId)), this.smart);
+  }
+  get orders() {
+    return availableOrders(this.options.shared(this.mediaTypes), this.smart);
+  }
 }
 
 export function defaultRule(): CollectionRuleWriteInput {
@@ -168,13 +206,7 @@ export function defaultGenerator(libraryIds: string[] = []): SetGenerator {
 }
 
 /** Radarr, Sonarr or both, as far as the form's libraries can use them. */
-export function arrName(form: CollectionFormLike): string | null {
-  const names = { movie: "Radarr", show: "Sonarr" } as const;
-  const usable = form.mediaTypes.filter((mediaType) => form.options.for(mediaType).data?.arr);
-  return usable.map((mediaType) => names[mediaType]).join(" and ") || null;
-}
-
-export function heldTypes(libraryIds: string[], typeOf: (id: string) => MediaType): MediaType[] {
+function heldTypes(libraryIds: string[], typeOf: (id: string) => MediaType): MediaType[] {
   const held = new SvelteSet(libraryIds.map(typeOf));
   return (["movie", "show"] as const).filter((mediaType) => held.has(mediaType));
 }
@@ -249,7 +281,7 @@ export function setLibrary(
         },
       ]
     : form.rule.libraries.filter((entry) => entry.library_id !== libraryId);
-  if (form.orderType !== null && !form.orders.includes(form.orderType)) form.orderType = null;
+  dropUnofferedOrder(form);
 }
 
 /** The rule settings a collection keeps; Default leaves them null. */

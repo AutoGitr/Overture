@@ -15,7 +15,7 @@
   import ContributeIssueLink from "./ContributeIssueLink.svelte";
   import DataStatus from "./DataStatus.svelte";
   import { CollectionDraft } from "../utils/collectionDraft.svelte";
-  import { CollectionEditor } from "../utils/collectionForms.svelte";
+  import { CollectionEditor } from "../utils/collectionEditor.svelte";
   import { CollectionActions } from "../utils/collectionActions.svelte";
   import {
     goToCatalogEntry,
@@ -24,7 +24,7 @@
     routedCollectionArtType,
   } from "../router/routes";
   import { statusTone } from "../utils/sidebarShared";
-  import { deliveryNote } from "../utils/assetDeliveries";
+  import { deliveryNote, holdsSomething } from "../utils/assetDeliveries";
   import CollectionThemePanel from "./CollectionThemePanel.svelte";
   import ConfigureNavigation from "./ConfigureNavigation.svelte";
   import CollectionConfigure from "./CollectionConfigure.svelte";
@@ -284,7 +284,7 @@
       collection.server_background_version
         ? () => void actions.clearArt("all")
         : null}
-      oncleartheme={!collection.theme_unavailable && collection.assets.theme.status !== "missing"
+      oncleartheme={!collection.theme_unavailable && holdsSomething(collection.assets.theme)
         ? () => void actions.clearTheme()
         : null}
       artBusy={actions.clearingArt}

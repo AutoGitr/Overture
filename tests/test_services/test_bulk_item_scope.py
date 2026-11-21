@@ -23,8 +23,7 @@ lazy from overture.schemas.bulk import (
     BulkMatchArtRequest,
     BulkThemeRequest,
 )
-lazy from overture.services.asset_runs.plan import plan_run
-lazy from overture.services.asset_runs.support import SAVED_SELECTION
+lazy from overture.services.asset_runs.plan import SAVED_SELECTION, plan_run
 lazy from overture.utils.time import utc_now
 lazy from tests.factories import MediaItemFactory, SeasonFactory, seed_theme
 lazy from tests.runtime_helpers import row_id

@@ -10,7 +10,7 @@ lazy from sqlmodel import select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.ledger import FileFacts, place_local, read_asset, select_art
+lazy from overture.db.ledger import place_local, read_asset, select_art
 lazy from overture.db.models.catalog import (
     CatalogItem,
     CatalogItemSeason,
@@ -28,7 +28,7 @@ lazy from overture.domain import (
 )
 lazy from overture.schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
 lazy from overture.services.art.collection_art import CollectionArtService
-lazy from overture.services.art.matcher import LocalComparison
+lazy from overture.services.art.matcher import ImageComparison
 lazy from overture.services.asset_runs import run as asset_run
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.storage.assets import AssetStorage
@@ -137,10 +137,12 @@ async def test_catalog_only_state_matrix(
         queued[target.media_item_id] = target.target_url
         return True
 
-    async def compare_with_local(url: str, facts: FileFacts) -> LocalComparison:
+    async def compare(
+        url: str, *, fingerprint: str | None, content_hash: str | None
+    ) -> ImageComparison:
         assert url == "https://public.test/image.jpg"
-        same = facts.file_hash == compute_bytes_hash(CATALOG_BYTES)
-        return LocalComparison(distance=0 if same else 30, identical=same)
+        same = content_hash == compute_bytes_hash(CATALOG_BYTES)
+        return ImageComparison(distance=0 if same else 30, identical=same)
 
     monkeypatch.setattr(asset_run, "queue_download", queue)
     monkeypatch.setattr(asset_run, "queue_download", queue)
@@ -171,7 +173,7 @@ async def test_catalog_only_state_matrix(
         )
     else:
         matcher = art_matcher(app_config=app_config, database=database)
-        monkeypatch.setattr(matcher, "compare_with_local", compare_with_local)
+        monkeypatch.setattr(matcher, "compare", compare)
         await asset_run.run_art(
             as_job_context(context),
             BulkMatchArtRequest(

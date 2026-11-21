@@ -44,7 +44,7 @@ lazy from overture.services.downloads import art as art_module
 lazy from overture.services.downloads.art import DownloadArtHandler
 lazy from overture.services.downloads.events import DownloadEventPublisher, job_target
 lazy from overture.services.downloads.queue import JobTarget
-lazy from overture.services.downloads.results import DownloadedTheme, PreparedDownload
+lazy from overture.services.downloads.results import DownloadedTheme
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.downloads.theme import DownloadThemeHandler
 lazy from overture.services.downloads.watch import DownloadOutcome
@@ -409,15 +409,11 @@ async def test_shutdown_owns_remote_upload_until_it_settles(
     )
     monkeypatch.setattr(
         manager.theme_handler,
-        "download",
+        "download_youtube",
         AsyncMock(
-            return_value=PreparedDownload(
-                data=b"audio",
-                result=DownloadedTheme(
-                    youtube_id="abcDEF123_4",
-                    title="Theme",
-                    duration=60,
-                ),
+            return_value=(
+                b"audio",
+                DownloadedTheme(youtube_id="abcDEF123_4", title="Theme", duration=60),
             )
         ),
     )

@@ -22,11 +22,11 @@ lazy from overture.jobs.results import log_page
 lazy from overture.schemas.art import ArtCandidate, ArtMatchResponse, MatchReference
 lazy from overture.schemas.bulk import BulkMatchArtRequest
 lazy from overture.services.art.collection_art import CollectionArtService
-lazy from overture.services.art.matcher import ArtMatchOutcome, LocalComparison
+lazy from overture.services.art.matcher import ArtMatchOutcome, ImageComparison
 lazy from overture.services.art.perfect_match import PERFECT_MATCH_MAX_DISTANCE
 lazy from overture.services.asset_runs import run as asset_run
+lazy from overture.services.asset_runs.plan import SAVED_SELECTION
 lazy from overture.services.asset_runs.sources import Sources
-lazy from overture.services.asset_runs.support import SAVED_SELECTION
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import (
@@ -629,7 +629,7 @@ async def test_failed_catalog_comparison_reports_error_without_stamping(
     matcher = art_matcher(app_config=app_config, database=database)
     monkeypatch.setattr(
         matcher,
-        "compare_with_local",
+        "compare",
         AsyncMock(side_effect=ValueError("invalid image")),
     )
     use_art_work(
@@ -688,8 +688,8 @@ async def test_overturedb_art_is_compared_with_the_local_file_as_local_matching_
     matcher = art_matcher(app_config=app_config, database=database)
     monkeypatch.setattr(
         matcher,
-        "compare_with_local",
-        AsyncMock(return_value=LocalComparison(distance=0, identical=False)),
+        "compare",
+        AsyncMock(return_value=ImageComparison(distance=0, identical=False)),
     )
     monkeypatch.setattr(asset_run, "queue_download", AsyncMock(return_value=True))
     use_art_work(

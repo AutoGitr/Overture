@@ -725,9 +725,9 @@ class DownloadService:
         self, job: DownloadJob, progress: ProgressCallback
     ) -> None:
         """Download and deliver one collection theme under the collection lock."""
-        prepared = await self.theme_handler.download(job, None, progress)
-        if not isinstance(prepared.result, DownloadedTheme):
-            raise TypeError("Expected DownloadedTheme for collection theme job")
+        audio_bytes, downloaded = await self.theme_handler.download_youtube(
+            job.target_url or "", progress
+        )
         # The upload is the write: one collection takes one at a time.
         async with self.asset_locks.acquire(_lock_key(job)):
             await self._finish_commit(
@@ -736,10 +736,7 @@ class DownloadService:
                     job,
                     job.collection_title,
                     partial(
-                        self._upload_collection_theme,
-                        job,
-                        prepared.data,
-                        prepared.result,
+                        self._upload_collection_theme, job, audio_bytes, downloaded
                     ),
                 ),
             )
@@ -772,12 +769,8 @@ class DownloadService:
                 poster_style=job.poster_style,
             ),
         )
-        await self._mark_done(job)
-        return _Placed.UPLOADED
-
-    async def _mark_done(self, job: DownloadJob) -> None:
-        """Mark a running job done once what it writes is recorded."""
         await complete_running_job(self._database, job)
+        return _Placed.UPLOADED
 
     async def record_job(
         self, job: DownloadJob, downloaded: DownloadResult, stored: StoredFile

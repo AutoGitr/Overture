@@ -25,17 +25,11 @@ import { queryClient } from "../rest/queryClient";
 import { goToCollection, goToCollectionsList } from "../router/routes";
 import { createNotifier } from "../stores/notificationState.svelte";
 import { settingsState } from "../stores/settingsState.svelte";
+import { emptyGroup, franchiseCriteria } from "./collectionCriteria";
 import {
-  availableFields,
-  availableOrders,
-  emptyGroup,
-  franchiseCriteria,
-} from "./collectionCriteria";
-import {
-  arrName,
+  CollectionRuleForm,
   defaultGenerator,
   defaultRule,
-  heldTypes,
   optionsBody,
   ruleBody,
   setLibrary,
@@ -50,7 +44,7 @@ import { CollectionOptions as Capabilities } from "./libraries.svelte";
 import { openSync } from "./syncShortcut";
 
 /** Something a new set's form found that the person should know before saving. */
-export type SetNotice = {
+type SetNotice = {
   tone: "error" | "warning" | "info";
   title: string;
   message: string;
@@ -62,7 +56,7 @@ function sameName(a: string, b: string) {
 }
 
 /** An unsaved collection or collection set, created when its form is submitted. */
-export class CollectionDraft {
+export class CollectionDraft extends CollectionRuleForm {
   readonly defaults;
   readonly options: Capabilities;
   /** Criteria of a library just left, so swapping one for another keeps them. */
@@ -111,6 +105,7 @@ export class CollectionDraft {
     private readonly libraries: () => LibrarySectionRead[],
     private readonly seed: () => TmdbCollectionResponse | null,
   ) {
+    super();
     this.defaults = createQuery(() =>
       getCollectionDefaultsOptions({
         query: { name: this.collectionGroup || undefined },
@@ -123,23 +118,6 @@ export class CollectionDraft {
     this.preview = new CriteriaPreview(() => this);
   }
 
-  get smart() {
-    return !!this.rule.smart;
-  }
-  get libraryIds() {
-    return this.rule.libraries.map((entry) => entry.library_id);
-  }
-  /** What the chosen libraries hold, movies first. */
-  get mediaTypes(): MediaType[] {
-    return heldTypes(this.libraryIds, (id) => this.typeOf(id));
-  }
-  get capabilities() {
-    return this.options.for(this.mediaTypes[0] ?? "movie");
-  }
-  /** What takes requests and tags for the chosen libraries. */
-  get arr() {
-    return arrName(this);
-  }
   typeOf(libraryId: string): MediaType {
     return this.libraries().find((library) => library.id === libraryId)?.media_type ?? "movie";
   }
@@ -158,12 +136,6 @@ export class CollectionDraft {
   setLibrary(libraryId: string, chosen: boolean) {
     const seed = this.typeOf(libraryId) === "movie" ? this.seed() : null;
     setLibrary(this, libraryId, chosen, this.fallbackCriteria(seed));
-  }
-  fieldsFor(libraryId: string) {
-    return availableFields(this.options.forLibrary(libraryId, this.typeOf(libraryId)), this.smart);
-  }
-  get orders() {
-    return availableOrders(this.options.shared(this.mediaTypes), this.smart);
   }
   /** What a set can test: only what every one of its libraries holds. */
   get setCapabilities() {

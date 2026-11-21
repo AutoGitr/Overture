@@ -23,7 +23,7 @@ IDENTIFIER_RE = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*")
 OPENAPI_PATH = Path(__file__).resolve().parents[1] / "openapi" / "overture.json"
 
 
-def read_openapi_document() -> dict[str, Any]:
+def _openapi_document() -> dict[str, Any]:
     """Return the committed OpenAPI document, or an empty one before it exists."""
     if not OPENAPI_PATH.exists():
         return {}
@@ -257,7 +257,7 @@ def _job_tables(renderer: TypeScriptRenderer) -> str:
 
 def render_ws_types() -> str:
     """Render WebSocket payload map from overture.ws.events.EVENT_REGISTRY."""
-    document = read_openapi_document()
+    document = _openapi_document()
     renderer = TypeScriptRenderer(shared_types=openapi_schema_names(document))
     payload_type_by_event: dict[str, str] = {}
     for event, definition in EVENT_REGISTRY.items():

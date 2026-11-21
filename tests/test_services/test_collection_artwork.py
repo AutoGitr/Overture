@@ -14,6 +14,8 @@ lazy from overture.config import Settings
 lazy from overture.db.ledger import (
     Destination,
     Evidence,
+    confirm_delivery,
+    missing_deliveries,
     observe,
     read_asset,
 )
@@ -26,6 +28,7 @@ lazy from overture.domain import (
     ArtSource,
     ArtStyle,
     ArtType,
+    AssetStatus,
     CatalogMediaType,
     CollectionPosterStyle,
     DeliveryChannel,
@@ -53,13 +56,18 @@ lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.removal import AssetRemover
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.storage.image_cache import ImageCache
+lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.generated_art import FONT_FILES, font_coverage, render_art
 lazy from overture.utils.image import THUMB_EXTENSION
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_catalog
-lazy from tests.collection_helpers import managing_rule, stored_collection
-lazy from tests.factories import server_ref
+lazy from tests.collection_helpers import (
+    managing_rule,
+    shown_on_server,
+    stored_collection,
+)
+lazy from tests.factories import seed_asset, server_ref
 lazy from tests.runtime_helpers import NoopProviderRegistry, art_service, unused
 lazy from tests.test_services.test_collection_management import Provider
 lazy from tests.test_services.test_collections_service import FakePublisher
@@ -288,6 +296,89 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
             )
     finally:
         await images.client.aclose()
+
+
+@pytest.mark.parametrize("held", [False, True])
+async def test_adopting_a_collection_image_keeps_it_delivered_without_an_upload(
+    held: bool,
+    tmp_path: Path,
+    database: Database,
+    app_config: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without content of its own, the link becomes what the lead copy shows."""
+    data = BytesIO()
+    Image.new("RGB", (200, 300), "red").save(data, format="JPEG")
+    images = Images(data.getvalue())
+    provider = ArtProvider(app_config)
+
+    async def public(_url: str) -> bool:
+        return False
+
+    monkeypatch.setattr("overture.utils.image_fetch.is_private_url", public)
+    async with database.write_session() as session:
+        row = stored_collection(
+            id=1,
+            server_item_id="box",
+            media_type=MediaType.MOVIE,
+            title="Saga",
+            tmdb_collection_id=10,
+            last_synced_at=utc_now(),
+        )
+        shown_on_server(row, poster="/library/metadata/box/thumb/7")
+        if held:
+            seed_asset(
+                row,
+                ServerAsset.POSTER,
+                upload_hash="kept",
+                file_hash="kept",
+                fingerprint="a" * 64,
+            )
+            part = row.libraries[0]
+            confirm_delivery(
+                row,
+                ServerAsset.POSTER,
+                Destination(
+                    part.server_id, part.server_item_id, DeliveryChannel.UPLOAD
+                ),
+                ref="/library/metadata/box/thumb/7",
+            )
+        session.add(row)
+        await session.flush()
+        session.add(managing_rule(1))
+    service = art_service(
+        app_config=app_config,
+        database=database,
+        asset_storage=AssetStorage(app_config=app_config),
+        matcher=Matcher(),
+        phash=Hashes(),
+        downloads=unused(DownloadService),
+        publisher=FakePublisher(),
+        provider_registry=NoopProviderRegistry(provider),
+        candidates=Candidates(),
+        image_clients=images,
+        image_cache=ImageCache(tmp_path / "images", tmp_path / "uploads"),
+        remover=unused(AssetRemover),
+    )
+    try:
+        matched = await service.collections.match(1, ArtType.POSTER, 5)
+        assert matched.reference == ("local_file" if held else "media_server")
+        await service.collections.adopt(
+            1, ArtType.POSTER, PublicArtUrl(URL), CollectionPosterStyle.INDIVIDUAL
+        )
+    finally:
+        await images.client.aclose()
+
+    async with database.read_session() as session:
+        saved = await CollectionRepository(session).get(1)
+        assert saved is not None
+    poster = read_asset(saved, ServerAsset.POSTER)
+    assert poster.url == URL
+    assert poster.status is AssetStatus.COMPLETE
+    assert missing_deliveries(poster) == []
+    assert poster.content_hash == ("kept" if held else poster.content_hash)
+    assert server_ref(saved, ServerAsset.POSTER) == "/library/metadata/box/thumb/7"
+    assert provider.uploads == []
 
 
 async def test_an_uploaded_collection_image_is_shown_from_the_cache_and_sent_again(

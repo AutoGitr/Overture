@@ -21,9 +21,10 @@ lazy from ...db.ledger import (
 lazy from ...db.models.download_job import DownloadJob
 lazy from ...db.models.media_collection import CollectionLibrary, MediaCollection
 lazy from ...db.session import Database
-lazy from ...domain import DeliveryChannel, ServerAsset, ThemeIdSource
+lazy from ...domain import DeliveryChannel, ServerAsset, ThemeBulkSource, ThemeIdSource
 lazy from ...media_servers.adapters import FolderThemes, NoCollectionThemes
 lazy from ...media_servers.registry import CollectionProvider, ProviderRegistry
+lazy from ...repositories.catalog import CatalogRepository
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...utils.assets import THEME_FILENAME
 lazy from ...utils.hashing import compute_bytes_hash
@@ -61,7 +62,7 @@ def collection_themes_unavailable(
     return None if None in reasons else reasons[0]
 
 
-def _part(row: MediaCollection, destination: Destination) -> CollectionLibrary:
+def copy_part(row: MediaCollection, destination: Destination) -> CollectionLibrary:
     """Return the copy of *row* a server-copy destination names."""
     return next(
         part
@@ -85,7 +86,7 @@ async def theme_folders(
         if destination.channel is not DeliveryChannel.FILE:
             continue
         provider = provider_registry.get(destination.server_id or 0)
-        part = _part(row, destination)
+        part = copy_part(row, destination)
         try:
             folder = await owned_thread(
                 collection_folder, provider.server, part.server_path
@@ -209,10 +210,10 @@ async def store_collection_theme(
 async def reupload_collection_theme(
     collection_id: int,
     *,
-    theme_handler: DownloadThemeHandler | None,
+    theme_handler: DownloadThemeHandler,
     provider_registry: ProviderRegistry,
     asset_storage: AssetStorage,
-    publisher: protocols.EventPublisher | None = None,
+    publisher: protocols.EventPublisher,
     database: Database,
 ) -> None:
     """Re-deliver a collection's theme to every server copy and record it delivered.
@@ -252,8 +253,6 @@ async def reupload_collection_theme(
         if audio_bytes is None or content is None:
             if not asset.youtube_id:
                 raise ValueError("Overture holds no theme to send to it")
-            if theme_handler is None:
-                raise ValueError("No theme downloader is configured")
             audio_bytes, downloaded = await theme_handler.download_youtube(
                 asset.youtube_id
             )
@@ -279,10 +278,7 @@ async def reupload_collection_theme(
             _record_delivered(current, delivered, now=now)
             current.updated_at = now
             session.add(current)
-    if publisher is not None:
-        await publisher.broadcast(
-            "collection.updated", {"collection_id": collection_id}
-        )
+    await publisher.broadcast("collection.updated", {"collection_id": collection_id})
 
 
 @dataclass(frozen=True, slots=True)
@@ -313,6 +309,21 @@ def _record_delivered(
             )
 
 
+async def theme_found_by(
+    session: AsyncSession, row: MediaCollection, youtube_id: str
+) -> ThemeBulkSource:
+    """Return where a collection's theme video was found: a catalog, else a search."""
+    catalog = await CatalogRepository(session).collections_by_tmdb_id(
+        {row.tmdb_collection_id} if row.tmdb_collection_id else set()
+    )
+    entry = catalog.get(row.tmdb_collection_id or 0)
+    if entry and youtube_id == entry.youtube_id_themerrdb:
+        return ThemeBulkSource.THEMERRDB
+    if entry and youtube_id == entry.youtube_id_overturedb:
+        return ThemeBulkSource.OVERTUREDB
+    return ThemeBulkSource.YOUTUBE_SEARCH
+
+
 async def record_collection_theme(
     job: DownloadJob,
     *,
@@ -329,12 +340,14 @@ async def record_collection_theme(
         row = await session.get(MediaCollection, job.collection_id)
         if row is None:
             return False
+        youtube_id = job.target_url or ""
         select_theme(
             row,
-            job.target_url or "",
+            youtube_id,
             source=ThemeIdSource.DOWNLOAD,
             title=title,
             duration=duration,
+            found_by=await theme_found_by(session, row, youtube_id),
         )
         record_content(row, ServerAsset.THEME, content)
         _record_delivered(row, delivered, now=now)

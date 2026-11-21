@@ -23,11 +23,10 @@ import { patchCollectionRule, storeCollectionDetail } from "../rest/cache";
 import { closeCollection } from "../router/routes";
 import { chooseAction, confirmAction, createNotifier } from "../stores/notificationState.svelte";
 import { settingsState } from "../stores/settingsState.svelte";
-import { availableFields, availableOrders, emptyGroup } from "./collectionCriteria";
+import { emptyGroup } from "./collectionCriteria";
 import {
-  arrName,
+  CollectionRuleForm,
   defaultRule,
-  heldTypes,
   optionsBody,
   ruleBody,
   setLibrary,
@@ -38,7 +37,7 @@ import { CollectionOptions as Capabilities } from "./libraries.svelte";
 import { openSync } from "./syncShortcut";
 
 /** Form drafts and actions for one mounted collection. */
-export class CollectionEditor {
+export class CollectionEditor extends CollectionRuleForm {
   readonly defaults;
   readonly options: Capabilities;
   /** Criteria of a library just left, so swapping one for another keeps them. */
@@ -97,6 +96,7 @@ export class CollectionEditor {
     private readonly current: () => CollectionDetail,
     private readonly libraries: () => LibrarySectionRead[],
   ) {
+    super();
     this.defaults = createQuery(() =>
       getCollectionDefaultsOptions({
         query: { name: this.collectionGroup || undefined },
@@ -125,20 +125,6 @@ export class CollectionEditor {
   get collection() {
     return this.current();
   }
-  get libraryIds() {
-    return this.rule.libraries.map((entry) => entry.library_id);
-  }
-  /** What the chosen libraries hold, movies first. */
-  get mediaTypes(): MediaType[] {
-    return heldTypes(this.libraryIds, (id) => this.typeOf(id));
-  }
-  get capabilities() {
-    return this.options.for(this.mediaTypes[0] ?? "movie");
-  }
-  /** What takes requests and tags for the chosen libraries. */
-  get arr() {
-    return arrName(this);
-  }
   typeOf(libraryId: string): MediaType {
     return (
       this.libraries().find((library) => library.id === libraryId)?.media_type ??
@@ -152,15 +138,6 @@ export class CollectionEditor {
   /** Its collection set decides the criteria and title of a generated collection. */
   get generated() {
     return this.collection.generated_value !== null;
-  }
-  get smart() {
-    return !!this.rule.smart;
-  }
-  fieldsFor(libraryId: string) {
-    return availableFields(this.options.forLibrary(libraryId, this.typeOf(libraryId)), this.smart);
-  }
-  get orders() {
-    return availableOrders(this.options.shared(this.mediaTypes), this.smart);
   }
   /** Append keeps members a sync no longer matches, so members can be added by hand too. */
   get manualMembersAllowed() {

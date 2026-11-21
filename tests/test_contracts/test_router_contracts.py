@@ -349,7 +349,9 @@ class TestCollectionResponseMappers:
             tmdb_id=10, title="Star Wars Collection", youtube_id_themerrdb="a" * 11
         )
         row = self._row()
-        read = collection_read(row, catalog, None, copies=row.copies)
+        read = collection_read(
+            row, catalog, None, copies=row.copies, trust_no_theme=True
+        )
 
         assert read.server_poster_version is not None
         assert read.server_background_version is not None
@@ -357,7 +359,9 @@ class TestCollectionResponseMappers:
         assert "provider" not in versions
         # A replaced server image gets a new version; the same one keeps its version.
         replaced = self._row(thumb="provider-thumb-2")
-        renamed = collection_read(replaced, None, None, copies=replaced.copies)
+        renamed = collection_read(
+            replaced, None, None, copies=replaced.copies, trust_no_theme=True
+        )
         assert renamed.server_poster_version is not None
         assert renamed.server_poster_version != read.server_poster_version
         assert renamed.server_background_version == read.server_background_version

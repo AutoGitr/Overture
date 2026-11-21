@@ -461,11 +461,7 @@
     activeFilters={searchingTmdb
       ? tmdbFilterKeys.filter((key) => uiState.tmdbFilters[key] !== "all").length
       : uiState.sidebarSource === "overturedb"
-      ? sidebarFilters.CATALOG_FILTER_KEYS.filter(
-          (key) =>
-            (key !== "seasonPosters" || uiState.sidebarTab === "show") &&
-            uiState.catalogFilters[key] !== "all",
-        ).length
+      ? sidebarFilters.catalogFilterCount(uiState.catalogFilters, uiState.sidebarTab)
       : sidebarFilters.activeFilterCount(
           uiState.currentFilters,
           catalog.enabled,

@@ -3,6 +3,7 @@ import type {
   CollectionRead,
   MediaItemRead,
   MetadataIssue,
+  ThemeIdSource,
   TitleAssets,
 } from "../../generated/rest/types.gen";
 import { METADATA_ISSUES, SELECTED_ART_SOURCE_LABELS } from "../../generated/settings";
@@ -21,7 +22,6 @@ import {
   type SidebarMode,
   type SidebarSource,
   type SidebarTab,
-  type ThemeSource,
 } from "./sidebarShared";
 
 export const CATALOG_FILTER_LABELS = {
@@ -35,6 +35,13 @@ export const CATALOG_FILTER_LABELS = {
 } as const;
 export const CATALOG_FILTER_KEYS = keysOf(CATALOG_FILTER_LABELS);
 export type CatalogFilters = Record<keyof typeof CATALOG_FILTER_LABELS, CatalogPresence>;
+
+/** How many catalog filters narrow the list; season posters only narrow shows. */
+export function catalogFilterCount(filters: CatalogFilters, tab: SidebarTab): number {
+  return CATALOG_FILTER_KEYS.filter(
+    (key) => (key !== "seasonPosters" || tab === "show") && filters[key] !== "all",
+  ).length;
+}
 
 export function defaultCatalogFilters(): CatalogFilters {
   return {
@@ -74,7 +81,7 @@ export function tmdbFilterKeys(
 }
 
 /** Where an item's theme ID came from; the file sources are read from its tags. */
-export const THEME_SOURCE_LABELS: Record<ThemeSource, string> = {
+export const THEME_SOURCE_LABELS: Record<ThemeIdSource, string> = {
   download: "Downloaded",
   embedded_id: "File ID tag",
   source_url: "File source link",

@@ -176,3 +176,12 @@ describe("themeSearch helpers", () => {
     ).toEqual(["abc123_DEF0", "xyz987_UVW1"]);
   });
 });
+
+describe("themeCandidateVideoIds", () => {
+  it("keeps each video once, in order, without blanks or padding", () => {
+    expect(themeCandidateVideoIds(" abc ", null, "def", undefined, "abc", "", "  ")).toEqual([
+      "abc",
+      "def",
+    ]);
+  });
+});

@@ -22,7 +22,7 @@ type ImageSize = NonNullable<NonNullable<ProxyCollectionImageData["query"]>["siz
 /**
  * How a remote poster (TMDB, fanart.tv, TheTVDB) is shown: by its preview,
  * the size of an art grid card and of the detail poster, when its source has
- * one. A search result, its detail page and the stored item share it.
+ * one. A search result and its detail page share it.
  */
 export function remotePosterUrl(art: {
   poster_url?: string | null;
@@ -32,7 +32,7 @@ export function remotePosterUrl(art: {
 }
 
 /** How a stored remote selection is shown: by its preview when its source has one. */
-export function assetPreviewUrl(asset: AssetRead): string | null {
+function assetPreviewUrl(asset: AssetRead): string | null {
   return asset.preview_url ?? asset.url;
 }
 

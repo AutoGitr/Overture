@@ -388,12 +388,7 @@ class ThemeIdSource(StrEnum):
 
 
 class AssetStatus(StrEnum):
-    """How much of an asset Overture holds.
-
-    ``complete`` once both the selection and the local file are recorded (or
-    just the selection, for an item without a local folder), ``partial`` when
-    only some of it is.
-    """
+    """How much of an asset Overture holds, by :mod:`overture.db.ledger`'s rule."""
 
     COMPLETE = "complete"
     PARTIAL = "partial"

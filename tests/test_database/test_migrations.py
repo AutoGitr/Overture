@@ -1883,7 +1883,10 @@ def test_slots_and_themes_become_assets_with_deliveries_and_come_back() -> None:
             "theme_provenance_cleared) VALUES (1, 'movie', 'Alien', 1, "
             "'/movies/Alien', 'yt-alien', 'download', 'other', 5, 6, 'theme', 0), "
             "(2, 'show', 'Firefly', 1, '/shows/Firefly', NULL, NULL, 'unselected', "
-            "7, 8, NULL, 0)"
+            "7, 8, NULL, 0), "
+            # A source the old schema kept without its video.
+            "(3, 'movie', 'Heat', 1, NULL, NULL, 'download', NULL, NULL, NULL, "
+            "NULL, 0)"
         )
         conn.exec_driver_sql(
             "UPDATE media_items SET theme_file_duration = 30 WHERE id = 2"
@@ -1908,9 +1911,10 @@ def test_slots_and_themes_become_assets_with_deliveries_and_come_back() -> None:
         conn.exec_driver_sql(
             "INSERT INTO media_collections (id, title, kind, order_type, "
             "visible_home, visible_shared, visible_library, child_count, monitored, "
-            "deselected, unsynced, last_synced_at, thumb_url, youtube_id, "
-            "server_theme_id) VALUES (2, 'Saga', 'regular', 'release.asc', 0, 0, "
-            "0, 0, 1, 0, 0, '2026-11-20', 'http://plex/thumb/1', 'yt-saga', "
+            "deselected, unsynced, last_synced_at, thumb_url, art_url, youtube_id, "
+            "youtube_id_source, server_theme_id) VALUES (2, 'Saga', 'regular', "
+            "'release.asc', 0, 0, 0, 0, 1, 0, 0, '2026-11-20', "
+            "'http://plex/thumb/1', 'http://plex/art/1', 'yt-saga', 'themerrdb', "
             "'/theme/1')"
         )
         conn.exec_driver_sql(
@@ -1959,8 +1963,18 @@ def test_slots_and_themes_become_assets_with_deliveries_and_come_back() -> None:
         assert assets[("season", 1, "season_poster")][:2] == ("complete", "s1")
         # The uploaded poster is on the collection's copies; only lead gets ref.
         assert assets[("collection", 2, "poster")][:2] == ("complete", "up")
-        # A Plex theme Overture uploaded is named by its video; only lead gets ref/hash.
-        assert assets[("collection", 2, "theme")][:2] == ("partial", "youtube:yt-saga")
+        # An image the server shows that Overture never chose starts the asset.
+        assert assets[("collection", 2, "background")][:2] == ("partial", None)
+        # A Plex theme Overture uploaded is named by its video, on every copy.
+        assert assets[("collection", 2, "theme")][:2] == (
+            "complete",
+            "youtube:yt-saga",
+        )
+        assert assets[("item", 3, "theme")][:2] == ("missing", None)
+        assert conn.exec_driver_sql(
+            "SELECT youtube_id_source, theme_found_by FROM assets WHERE id = ?",
+            (assets[("collection", 2, "theme")][3],),
+        ).one() == ("download", "themerrdb")
         theme_deliveries = conn.exec_driver_sql(
             "SELECT server_id, server_item_id, channel, observed_hash, observed_ref "
             "FROM asset_deliveries WHERE asset_id = ? ORDER BY server_id",
@@ -1968,7 +1982,7 @@ def test_slots_and_themes_become_assets_with_deliveries_and_come_back() -> None:
         ).all()
         assert theme_deliveries == [
             (1, "box", "upload", "youtube:yt-saga", "/theme/1"),
-            (2, "box2", "upload", None, None),
+            (2, "box2", "upload", "youtube:yt-saga", None),
         ]
 
         command.downgrade(config, "b7d2f9a4c681")
@@ -1991,10 +2005,134 @@ def test_slots_and_themes_become_assets_with_deliveries_and_come_back() -> None:
         ).all() == [
             (1, "yt-alien", "other", "theme"),
             (2, None, "unselected", None),
+            (3, None, None, None),
         ]
         assert conn.exec_driver_sql(
-            "SELECT thumb_url, youtube_id, server_theme_id FROM media_collections"
-        ).one() == ("http://plex/thumb/1", "yt-saga", "/theme/1")
+            "SELECT thumb_url, art_url, youtube_id, youtube_id_source, "
+            "server_theme_id FROM media_collections"
+        ).one() == (
+            "http://plex/thumb/1",
+            "http://plex/art/1",
+            "yt-saga",
+            "themerrdb",
+            "/theme/1",
+        )
+
+
+def test_assets_without_folders_or_on_other_servers_convert_and_come_back() -> None:
+    with _at_revision("b7d2f9a4c681") as (conn, config):
+        conn.exec_driver_sql(
+            "INSERT INTO media_servers (id, key, title, server_type, identity, "
+            "position) VALUES (1, 'plex', 'Plex', 'plex', 'plex:a', 0), "
+            "(2, 'jellyfin', 'Jellyfin', 'jellyfin', 'jf:a', 1), "
+            "(3, 'emby', 'Emby', 'emby', 'emby:a', 2)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO libraries (id, media_type, server_id, title) VALUES "
+            "('2:1', 'movie', 2, 'Movies'), ('3:1', 'movie', 3, 'Movies')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO media_items (id, media_type, title, monitored, "
+            "theme_provenance_cleared) VALUES (1, 'movie', 'Heat', 1, 0), "
+            "(2, 'movie', 'Ronin', 1, 0)"
+        )
+        conn.exec_driver_sql(
+            "UPDATE media_items SET folder_path = '/m/Ronin' WHERE id = 2"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO art_slots (id, media_item_id, art_type, url, "
+            "generated_title_only) VALUES (1, 1, 'poster', "
+            "'https://image.tmdb.org/t/p/original/h.jpg', 0)"
+        )
+        # A file in the folder that nothing selects.
+        conn.exec_driver_sql(
+            "INSERT INTO art_slots (id, media_item_id, art_type, file_hash, "
+            "file_mtime_ns, file_size, generated_title_only) "
+            "VALUES (2, 2, 'poster', 'found', 3, 4, 0)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO media_collections (id, title, kind, order_type, "
+            "visible_home, visible_shared, visible_library, child_count, monitored, "
+            "deselected, unsynced, thumb_url, youtube_id, youtube_id_source, "
+            "theme_file_hash, theme_file_mtime_ns, theme_file_size, "
+            "theme_file_duration) VALUES "
+            "(1, 'Saga', 'regular', 'release.asc', 0, 0, 0, 0, 1, 0, 0, "
+            "'/jf/thumb', 'yt-saga', 'overturedb', 'audio', 5, 6, 30), "
+            "(2, 'Withheld', 'regular', 'release.asc', 0, 0, 0, 0, 1, 0, 0, "
+            "NULL, NULL, NULL, NULL, NULL, NULL, NULL)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO collection_libraries (id, collection_id, library_id, "
+            "media_type, server_id, server_item_id) VALUES "
+            "(1, 1, '2:1', 'movie', 2, 'jf-box'), (2, 1, '3:1', 'movie', 3, 'em-box')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO art_slots (id, collection_id, art_type, url, poster_style, "
+            "file_hash, generated_title_only) VALUES (3, 1, 'poster', "
+            "'https://image.tmdb.org/t/p/original/s.jpg', 'individual', 'up', 0), "
+            "(4, 2, 'poster', 'https://image.tmdb.org/t/p/original/w.jpg', "
+            "'individual', 'kept', 0)"
+        )
+
+        command.upgrade(config, "c3e8a1f5d927")
+
+        def asset(owner: str, owner_id: int, kind: str) -> tuple[object, ...]:
+            return conn.exec_driver_sql(
+                f"SELECT id, status, content_hash FROM assets "  # noqa: S608 -- the test's own column names
+                f"WHERE {owner} = ? AND kind = ?",
+                (owner_id, kind),
+            ).one()
+
+        def deliveries(asset_id: object) -> list[tuple[object, ...]]:
+            return [
+                tuple(row)
+                for row in conn.exec_driver_sql(
+                    "SELECT server_id, channel, observed_hash, observed_ref, "
+                    "file_mtime_ns, duration FROM asset_deliveries "
+                    "WHERE asset_id = ? ORDER BY server_id",
+                    (asset_id,),
+                )
+            ]
+
+        # Without a folder, the selection alone completes a title's art.
+        heat = asset("media_item_id", 1, "poster")
+        assert heat[1:] == ("complete", None)
+        assert deliveries(heat[0]) == []
+        # A file nothing selects is seen, but is no content.
+        ronin = asset("media_item_id", 2, "poster")
+        assert ronin[1:] == ("partial", None)
+        assert deliveries(ronin[0]) == [(None, "file", "found", None, 3, None)]
+        # Jellyfin is this collection's lead copy, though not the first server.
+        poster = asset("collection_id", 1, "poster")
+        assert poster[1:] == ("complete", "up")
+        assert deliveries(poster[0]) == [
+            (2, "upload", "up", "/jf/thumb", None, None),
+            (3, "upload", "up", None, None, None),
+        ]
+        # Jellyfin keeps the theme in the collection's folder; Emby keeps none.
+        theme = asset("collection_id", 1, "theme")
+        assert theme[1:] == ("complete", "audio")
+        assert deliveries(theme[0]) == [(2, "file", "audio", None, 5, 30)]
+        # A collection without a copy is complete on its selection alone.
+        assert asset("collection_id", 2, "poster")[1:] == ("complete", "kept")
+
+        command.downgrade(config, "b7d2f9a4c681")
+
+        assert conn.exec_driver_sql(
+            "SELECT id, thumb_url, youtube_id, youtube_id_source, theme_file_hash, "
+            "theme_file_mtime_ns, theme_file_duration FROM media_collections "
+            "ORDER BY id"
+        ).all() == [
+            (1, "/jf/thumb", "yt-saga", "overturedb", "audio", 5, 30),
+            (2, None, None, None, None, None, None),
+        ]
+        assert conn.exec_driver_sql(
+            "SELECT id, url, file_hash, file_mtime_ns FROM art_slots "
+            "WHERE media_item_id IS NOT NULL ORDER BY id"
+        ).all() == [
+            (1, "https://image.tmdb.org/t/p/original/h.jpg", None, None),
+            (2, None, "found", 3),
+        ]
 
 
 def test_task_schedules_move_into_saved_schedules_and_back() -> None:

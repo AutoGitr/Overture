@@ -1,5 +1,10 @@
 import type { AssetRead } from "../../generated/rest/types.gen";
 
+/** The places the asset has to be that do not hold its content. */
+function undelivered(asset: AssetRead): AssetRead["deliveries"] {
+  return asset.deliveries.filter((delivery) => delivery.required && !delivery.delivered);
+}
+
 /**
  * Says which of an asset's required places do not yet hold Overture's chosen
  * content, naming each server copy by *serverTitle*; null when nothing is
@@ -9,12 +14,21 @@ export function deliveryNote(
   asset: AssetRead,
   serverTitle: (serverId: number) => string,
 ): string | null {
-  const selected = !!(asset.url || asset.upload_hash || asset.youtube_id);
-  if (!asset.needed || !selected) return null;
-  const missing = asset.deliveries.filter((delivery) => delivery.required && !delivery.delivered);
+  if (!asset.needed || !asset.selected) return null;
+  const missing = undelivered(asset);
   if (!missing.length) return null;
   const places = missing.map((delivery) =>
     delivery.server_id === null ? "in the folder" : `on ${serverTitle(delivery.server_id)}`,
   );
   return `Not yet ${[...new Set(places)].join(", ")}`;
+}
+
+/** Whether the asset's selection is in every place it has to be. */
+export function isDelivered(asset: AssetRead): boolean {
+  return asset.selected && !undelivered(asset).length;
+}
+
+/** Whether an asset has a selection, or anything in place, to clear. */
+export function holdsSomething(asset: AssetRead): boolean {
+  return asset.selected || asset.deliveries.some((delivery) => delivery.present);
 }

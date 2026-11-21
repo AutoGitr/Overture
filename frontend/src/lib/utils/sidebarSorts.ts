@@ -53,7 +53,7 @@ function catalogCompleteness(entry: CatalogEntryRow): number {
 }
 
 /** Every sort, in menu order; a list's first sort is its default. */
-export const SORTS = {
+const SORTS = {
   relevance: {
     label: "Relevance",
     shortLabel: "Relevance",

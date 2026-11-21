@@ -199,12 +199,9 @@ def _plan(
                     ServerAsset.THEME,
                     target.server_id,
                     collection_id=target.collection_id,
-                    server_item_id=target.server_item_id,
                 ),
             )
             fix.rows.append(key)
-            if target.theme_id:
-                fix.theme_ids.append(target.theme_id)
             continue
         fix = fixes.setdefault(
             ("theme", target.item_id, target.server_id),

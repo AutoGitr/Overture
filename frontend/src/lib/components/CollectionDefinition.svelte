@@ -6,7 +6,7 @@
   import FieldRow from "./FieldRow.svelte";
   import SegmentedControl from "./SegmentedControl.svelte";
   import { CollectionDraft } from "../utils/collectionDraft.svelte";
-  import type { CollectionEditor } from "../utils/collectionForms.svelte";
+  import type { CollectionEditor } from "../utils/collectionEditor.svelte";
   import Notice from "./Notice.svelte";
   import SetDimensionField from "./SetDimensionField.svelte";
   import type { LibrarySectionRead } from "../../generated/rest/types.gen";

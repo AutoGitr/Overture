@@ -58,13 +58,12 @@ lazy from ..downloads.watch import DownloadWatch
 lazy from ..library.items import emit_library_item_upserted
 lazy from ..local_assets.service import LocalAssets
 lazy from ..themes.youtube_resolver import YouTubeResolver
-lazy from .plan import Batch, RunParams, Target, kinds, plan_run
+lazy from .plan import SAVED_SELECTION, Batch, RunParams, Target, plan_run
 lazy from .sources import SOURCE_ERRORS, BatchFacts, Decision, Notes, Sources
 lazy from .support import (
     DECIDE_CONCURRENCY,
     LEFT_LIBRARY,
     NOT_PUBLIC_ART_URL,
-    SAVED_SELECTION,
     CheckedStamper,
     queue_and_report,
     queue_download,
@@ -293,6 +292,7 @@ async def _adopt(run: _Run, target: Target, decision: Decision) -> None:
         if run.sources.art is None:
             raise ValueError("Collection art runs adopt through collection art")
         await run.sources.art.adopt(row.id or 0, art_type, url, decision.poster_style)
+        sent = "nothing uploaded"
     else:
         title = target.title
         if title is None or title.id is None or decision.verified is None:
@@ -316,10 +316,9 @@ async def _adopt(run: _Run, target: Target, decision: Decision) -> None:
         await emit_library_item_upserted(
             title.id, "assets.art", job.context.publisher, database=run.database
         )
+        sent = "nothing downloaded"
     await job.report(
-        JobOutcome.ADOPTED,
-        target.label,
-        f"{decision.reason}; selection saved, nothing downloaded",
+        JobOutcome.ADOPTED, target.label, f"{decision.reason}; selection saved, {sent}"
     )
     await _stamp(run, target)
 
@@ -414,7 +413,7 @@ async def _run(
     The total is fixed before the first target is visited; only planned
     visits have their files read and their sources asked.
     """
-    themes = ServerAsset.THEME in kinds(params)
+    themes = isinstance(params, BulkThemeRequest)
     with downloads.watch() as watch:
         async with run_managed_job(context, BulkAssetTally(), database=database) as job:
             run = _Run(
@@ -438,8 +437,6 @@ async def _run(
                 params,
                 local_assets=local_assets,
                 downloads=downloads,
-                art=not themes,
-                source="assets.themes" if themes else "assets.art",
                 database=database,
             )
             plan = await plan_run(params, database=database)
