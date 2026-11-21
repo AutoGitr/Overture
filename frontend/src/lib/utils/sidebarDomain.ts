@@ -1,9 +1,11 @@
 import type {
+  AssetRead,
   CatalogEntryRow,
   CatalogSelections,
   CollectionRead,
   MediaItemRead,
   MetadataIssue,
+  TitleAssets,
   TmdbSearchBy,
 } from "../../generated/rest/types.gen";
 import {
@@ -105,7 +107,7 @@ export function catalogStatus(entry: {
     theme: entry.youtube_id_overturedb || entry.youtube_id_themerrdb ? "success" : "danger",
   };
 }
-export type ThemeSource = NonNullable<MediaItemRead["youtube_id_source"]>;
+export type ThemeSource = NonNullable<AssetRead["youtube_id_source"]>;
 /** The hosts a selected artwork is attributed to. */
 export type ArtSource = keyof typeof SELECTED_ART_SOURCE_LABELS;
 export type AssetStatus = MediaItemRead["art_status"];
@@ -245,27 +247,29 @@ export const SORTS = {
   poster_resolution: {
     label: "Poster width",
     shortLabel: "Poster",
-    library: (item) => item.poster_width,
+    library: (item) => item.assets.poster.width,
   },
   background_resolution: {
     label: "Background width",
     shortLabel: "Background",
-    library: (item) => item.background_width,
+    library: (item) => item.assets.background.width,
   },
   poster_aspect: {
     label: "Poster aspect deviation",
     shortLabel: "Poster shape",
-    library: (item) => aspectDeviation(item.poster_width, item.poster_height, "poster"),
+    library: (item) =>
+      aspectDeviation(item.assets.poster.width, item.assets.poster.height, "poster"),
   },
   background_aspect: {
     label: "Background aspect deviation",
     shortLabel: "Background shape",
-    library: (item) => aspectDeviation(item.background_width, item.background_height, "background"),
+    library: (item) =>
+      aspectDeviation(item.assets.background.width, item.assets.background.height, "background"),
   },
   theme_length: {
     label: "Theme length",
     shortLabel: "Theme",
-    library: (item) => item.theme_duration,
+    library: (item) => item.assets.theme.duration,
   },
   completeness: {
     label: "Completeness",
@@ -573,12 +577,12 @@ export const SEARCHES = {
     label: "YouTube link, ID or title",
     placeholder: "Search YouTube...",
     library: youtubeMatcher(
-      (item) => [item.youtube_id],
-      (item) => item.youtube_title,
+      (item) => [item.assets.theme.youtube_id],
+      (item) => item.assets.theme.youtube_title,
     ),
     collections: youtubeMatcher(
-      (collection) => [collection.youtube_id],
-      (collection) => collection.youtube_title,
+      (collection) => [collection.assets.theme.youtube_id],
+      (collection) => collection.assets.theme.youtube_title,
     ),
     overturedb: youtubeMatcher(
       (entry) => [entry.youtube_id_overturedb, entry.youtube_id_themerrdb],
@@ -722,10 +726,10 @@ export const ART_SOURCES = alphabetical(
 
 /** Which of a row's artwork the art source filter looks at. */
 export const ART_SOURCE_SLOTS = {
-  any: ["poster_source", "background_source"],
-  poster: ["poster_source"],
-  background: ["background_source"],
-} as const satisfies Record<string, readonly (keyof MediaItemRead & keyof CollectionRead)[]>;
+  any: ["poster", "background"],
+  poster: ["poster"],
+  background: ["background"],
+} as const satisfies Record<string, readonly (keyof TitleAssets)[]>;
 export type ArtSourceSlot = keyof typeof ART_SOURCE_SLOTS;
 
 export type { MetadataIssue };
@@ -757,17 +761,9 @@ export function metadataIssuesFor(
   );
 }
 
-export function hasThemeAttributes(
-  item:
-    | {
-        youtube_id?: string | null;
-        youtube_title?: string | null;
-        youtube_duration?: number | null;
-      }
-    | null
-    | undefined,
-): boolean {
-  return !!(item && (item.youtube_id || item.youtube_title || item.youtube_duration));
+/** Whether an asset has a selection or a local file to clear. */
+export function holdsSomething(asset: AssetRead): boolean {
+  return !!(asset.url || asset.upload_hash || asset.youtube_id || asset.file);
 }
 
 export function isRangeActive(range: NumberRange): boolean {
@@ -839,13 +835,13 @@ function artSourcePredicate(filters: FilterState): Predicate<Row> | null {
   if (!filters.artSource.sources.length) return null;
   const sources = new Set<string | null>(filters.artSource.sources);
   const slots = ART_SOURCE_SLOTS[filters.artSource.artType];
-  return (row) => slots.some((slot) => sources.has(row[slot]));
+  return (row) => slots.some((slot) => sources.has(row.assets[slot].source));
 }
 
 function resolutionPredicate(filters: FilterState): Predicate<Row> | null {
   if (!isRangeActive(filters.resolution)) return null;
-  const width = filters.resolution.artType === "poster" ? "poster_width" : "background_width";
-  return (row) => inRange(row[width], filters.resolution);
+  const slot = filters.resolution.artType;
+  return (row) => inRange(row.assets[slot].width, filters.resolution);
 }
 
 function issuesPredicate(
@@ -974,9 +970,9 @@ export const FILTERS = {
     group: "status",
     order: 40,
     library: (filters) =>
-      triState(filters.theme, "complete", (item) => item.theme_status === "complete"),
+      triState(filters.theme, "complete", (item) => item.assets.theme.status === "complete"),
     collections: (filters) =>
-      triState(filters.theme, "complete", (row) => row.theme_status === "complete"),
+      triState(filters.theme, "complete", (row) => row.assets.theme.status === "complete"),
   },
   themeLength: {
     label: "Theme length",
@@ -984,11 +980,11 @@ export const FILTERS = {
     order: 300,
     library: (filters) =>
       isRangeActive(filters.themeLength)
-        ? (item) => inRange(item.theme_duration, filters.themeLength)
+        ? (item) => inRange(item.assets.theme.duration, filters.themeLength)
         : null,
     collections: (filters) =>
       isRangeActive(filters.themeLength)
-        ? (row) => inRange(row.theme_duration, filters.themeLength)
+        ? (row) => inRange(row.assets.theme.duration, filters.themeLength)
         : null,
   },
   themeSources: {
@@ -998,7 +994,10 @@ export const FILTERS = {
     library: (filters) => {
       if (!filters.themeSources.length) return null;
       const sources = new Set(filters.themeSources);
-      return (item) => !!item.youtube_id_source && sources.has(item.youtube_id_source);
+      return (item) => {
+        const source = item.assets.theme.youtube_id_source;
+        return !!source && sources.has(source);
+      };
     },
   },
   overtureDb: {

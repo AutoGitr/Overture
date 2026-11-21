@@ -26,8 +26,18 @@ describe("library criteria", () => {
 
   it("combines live status with what the server matched", () => {
     const items = [
-      mediaItem({ id: 1, title: "Unarted horror", art_status: "missing", poster_width: null }),
-      mediaItem({ id: 2, title: "Narrow horror", art_status: "complete", poster_width: 500 }),
+      mediaItem({
+        id: 1,
+        title: "Unarted horror",
+        art_status: "missing",
+        assets: { poster: { width: null } },
+      }),
+      mediaItem({
+        id: 2,
+        title: "Narrow horror",
+        art_status: "complete",
+        assets: { poster: { width: 500 } },
+      }),
       mediaItem({ id: 3, title: "Unarted drama", art_status: "missing" }),
       mediaItem({ id: 4, title: "Unmonitored horror", art_status: "complete", monitored: false }),
     ];

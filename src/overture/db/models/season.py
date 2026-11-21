@@ -12,7 +12,7 @@ lazy from sqlmodel import (
 )
 
 lazy from ..columns import typed_columns
-lazy from .art import ArtSlot
+lazy from .asset import Asset
 lazy from .download_job import DownloadJob
 lazy from .media_item import MediaItem
 
@@ -50,7 +50,7 @@ class Season(SQLModel, table=True):
         back_populates="seasons",
         sa_relationship_kwargs={"lazy": "raise"},
     )
-    art_slots: list["ArtSlot"] = Relationship(
+    assets: list["Asset"] = Relationship(
         back_populates="season",
         cascade_delete=True,
         sa_relationship_kwargs={"lazy": "selectin"},
@@ -63,8 +63,8 @@ class Season(SQLModel, table=True):
 
     def __init__(self, **data: Any) -> None:
         super().__init__(**data)
-        if "art_slots" not in data:
-            self.art_slots = []
+        if "assets" not in data:
+            self.assets = []
 
 
 typed_columns(Season)

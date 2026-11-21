@@ -1,4 +1,4 @@
-import { appSettings } from "../../helpers/fixtures";
+import { appSettings, assetFile } from "../../helpers/fixtures";
 import { fireEvent, screen, waitFor } from "@testing-library/svelte";
 import { storeCatalogStatus } from "../../../lib/realtime/cache";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -94,7 +94,11 @@ describe("ThemePanel search", () => {
   });
 
   it("shows no facts about a finished download", () => {
-    showItem(mediaItem({ youtube_id: "UuPb1J_RCJM", youtube_id_source: "download" }));
+    showItem(
+      mediaItem({
+        assets: { theme: { youtube_id: "UuPb1J_RCJM", youtube_id_source: "download" } },
+      }),
+    );
     renderPanel();
     expect(screen.queryByText(/recorded when downloaded|Recovered from/)).not.toBeInTheDocument();
   });
@@ -151,7 +155,7 @@ describe("ThemePanel search", () => {
     "offers distinct, unselected catalog themes in the unified grid: $primary / $secondary / $current",
     async ({ primary, secondary, current, choices }) => {
       storeCatalogStatus(catalogStatus());
-      showItem(mediaItem({ id: 7, youtube_id: current }));
+      showItem(mediaItem({ id: 7, assets: { theme: { youtube_id: current } } }));
       getCatalogSources.mockResolvedValue({
         data: {
           found: true,
@@ -184,14 +188,14 @@ describe("ThemePanel search", () => {
   );
 
   it("shows a title OvertureDB flags as having no theme, and leaves the flag to OvertureDB", async () => {
-    showItem(mediaItem({ id: 7, title: "Alien", catalog_no_theme: true }));
+    showItem(mediaItem({ id: 7, title: "Alien", assets: { theme: { needed: false } } }));
     const { unmount } = renderPanel();
     expect(screen.getByRole("status", { name: "" })).toHaveTextContent("No theme (OvertureDB)");
     expect(screen.queryByRole("button", { name: "No theme" })).toBeNull();
     unmount();
 
     // A library item cannot set the flag: only the OvertureDB view drafts it.
-    showItem(mediaItem({ id: 8, title: "Heat", youtube_id: "abcdefghijk" }));
+    showItem(mediaItem({ id: 8, title: "Heat", assets: { theme: { youtube_id: "abcdefghijk" } } }));
     renderPanel();
     expect(screen.queryByRole("button", { name: "No theme" })).toBeNull();
   });
@@ -202,8 +206,7 @@ describe("ThemePanel search", () => {
       mediaItem({
         id: 7,
         title: "Alien",
-        youtube_id: "selected_yt",
-        youtube_title: "Alien Current Theme",
+        assets: { theme: { youtube_id: "selected_yt", youtube_title: "Alien Current Theme" } },
       }),
     );
     getCatalogSources.mockResolvedValue({
@@ -356,9 +359,9 @@ describe("ThemePanel search", () => {
     showItem(
       mediaItem({
         id: 7,
-        youtube_id: "existing",
-        theme_file_hash: "theme-hash",
-        theme_status: "complete",
+        assets: {
+          theme: { youtube_id: "existing", file: assetFile("theme-hash"), status: "complete" },
+        },
       }),
     );
     renderPanel();

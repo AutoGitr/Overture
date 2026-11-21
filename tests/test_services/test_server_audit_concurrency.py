@@ -9,7 +9,7 @@ lazy from typing import Any, cast
 lazy import pytest
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import ArtFileFacts
+lazy from overture.db.ledger import FileFacts
 lazy from overture.db.session import Database
 lazy from overture.domain import ArtType, MediaServerState, ServerAsset
 lazy from overture.jobs.kinds import JobKind
@@ -30,6 +30,7 @@ lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     StaticImageClients,
     make_local_assets,
+    make_server_copies,
     unused,
 )
 
@@ -41,7 +42,6 @@ def _audit_context(
 ) -> AuditContext:
     registry = NoopProviderRegistry(SimpleNamespace())
     return AuditContext(
-        config_dir=tmp_path,
         collection_art=unused(CollectionArtService),
         provider_registry=registry,
         asset_storage=AssetStorage(app_config=app_config),
@@ -49,9 +49,14 @@ def _audit_context(
             app_config=app_config, database=database, phash=phash
         ),
         phash=phash,
-        image_clients=StaticImageClients(),
         app_config=app_config,
         database=database,
+        server_copies=make_server_copies(
+            app_config=app_config,
+            image_clients=StaticImageClients(),
+            config_dir=tmp_path,
+            phash=phash,
+        ),
     )
 
 
@@ -123,13 +128,13 @@ async def testlocal_fingerprint_reuses_the_record_until_the_file_changes(
     poster.write_bytes(b"poster")
     stat = poster.stat()
     recorded = "a" * PHASH_HEX_LENGTH
-    known = ArtFileFacts(
+    known = FileFacts(
         file_hash="hash",
-        phash=recorded,
-        width=None,
-        height=None,
         file_mtime_ns=stat.st_mtime_ns,
         file_size=stat.st_size,
+        fingerprint=recorded,
+        width=None,
+        height=None,
     )
     phash = PhashService(app_config=app_config)
     computed: list[str] = []

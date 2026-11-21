@@ -6,7 +6,13 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtBulkSource, ArtType, MediaType, ThemeBulkSource
+lazy from overture.domain import (
+    ArtBulkSource,
+    ArtType,
+    MediaType,
+    ServerAsset,
+    ThemeBulkSource,
+)
 lazy from overture.jobs.progress_log import JobOutcome
 lazy from overture.repositories.media_items import MediaItemRepository
 lazy from overture.schemas.bulk import (
@@ -17,13 +23,12 @@ lazy from overture.schemas.bulk import (
     BulkMatchArtRequest,
     BulkThemeRequest,
 )
-lazy from overture.services.art.bulk_work import load_art_batch, plan_bulk_art
-lazy from overture.services.bulk_common import SAVED_SELECTION
-lazy from overture.services.themes.bulk import load_theme_batch, plan_bulk_themes
+lazy from overture.services.asset_runs.plan import plan_run
+lazy from overture.services.asset_runs.support import SAVED_SELECTION
 lazy from overture.utils.time import utc_now
-lazy from tests.factories import MediaItemFactory, SeasonFactory
-lazy from tests.runtime_helpers import make_local_assets, row_id
-lazy from tests.test_services.test_bulk_catalog_prefilter import visits
+lazy from tests.factories import MediaItemFactory, SeasonFactory, seed_theme
+lazy from tests.runtime_helpers import row_id
+lazy from tests.test_services.test_bulk_catalog_prefilter import decided, visits
 
 
 @pytest.mark.parametrize(
@@ -112,10 +117,8 @@ async def test_both_workflows_use_only_explicit_items_and_their_seasons(
     art_request, theme_request = request.art_request(), request.theme_request()
     assert art_request is not None
     assert theme_request is not None
-    art = await plan_bulk_art(art_request, app_config=app_config, database=database)
-    themes = await plan_bulk_themes(
-        theme_request, app_config=app_config, database=database
-    )
+    art = await plan_run(art_request, app_config=app_config, database=database)
+    themes = await plan_run(theme_request, app_config=app_config, database=database)
     assert visits(art) == (
         {
             selected_id: (
@@ -126,7 +129,9 @@ async def test_both_workflows_use_only_explicit_items_and_their_seasons(
         if include_unmonitored
         else {}
     )
-    assert visits(themes) == ({selected_id: (None,)} if include_unmonitored else {})
+    assert visits(themes) == (
+        {selected_id: ((ServerAsset.THEME, None),)} if include_unmonitored else {}
+    )
     assert art.total == (2 if include_unmonitored else 0)
     assert not selected.monitored
 
@@ -150,20 +155,22 @@ async def test_fully_saved_chunk_does_not_hide_later_missing_slots(
     app_config: Settings,
     database: Database,
 ) -> None:
-    complete = media_item_factory(
-        id=None,
-        server_item_id="complete",
-        library_id="1:movies",
-        art={
-            "poster": {
-                "url": "https://saved.test/poster.jpg",
-                "file_hash": "recorded",
-                "file_mtime_ns": 1,
-                "file_size": 1,
-            }
-        },
-        youtube_id="saved-video",
-        theme_file_hash="recorded",
+    complete = seed_theme(
+        media_item_factory(
+            id=None,
+            server_item_id="complete",
+            library_id="1:movies",
+            art={
+                "poster": {
+                    "url": "https://saved.test/poster.jpg",
+                    "file_hash": "recorded",
+                    "file_mtime_ns": 1,
+                    "file_size": 1,
+                }
+            },
+        ),
+        "saved-video",
+        file_hash="recorded",
     )
     missing = media_item_factory(
         id=None,
@@ -180,16 +187,14 @@ async def test_fully_saved_chunk_does_not_hide_later_missing_slots(
     theme_params = BulkThemeRequest(
         library_ids=["1:movies"], source_order=[ThemeBulkSource.YOUTUBE_SEARCH]
     )
-    art = await plan_bulk_art(
-        art_params, app_config=app_config, database=database, chunk=1
-    )
-    themes = await plan_bulk_themes(
+    art = await plan_run(art_params, app_config=app_config, database=database, chunk=1)
+    themes = await plan_run(
         theme_params, app_config=app_config, database=database, chunk=1
     )
     assert visits(art) == {row_id(missing): ((ArtType.POSTER, None),)}
-    assert visits(themes) == {row_id(missing): (None,)}
+    assert visits(themes) == {row_id(missing): ((ServerAsset.THEME, None),)}
     saved = {(JobOutcome.SKIPPED, SAVED_SELECTION): 1}
-    assert art.decided == themes.decided == saved
+    assert decided(art) == decided(themes) == saved
     assert art.total == themes.total == 2
 
 
@@ -226,38 +231,31 @@ async def test_both_workflows_visit_movies_then_shows_by_title(
     theme_params = BulkThemeRequest(
         item_ids=item_ids, source_order=[ThemeBulkSource.YOUTUBE_SEARCH]
     )
-    local_assets = make_local_assets(app_config=app_config, database=database)
-
     (art_batch,) = (
-        await plan_bulk_art(art_params, app_config=app_config, database=database)
+        await plan_run(art_params, app_config=app_config, database=database)
     ).batches()
     (theme_batch,) = (
-        await plan_bulk_themes(theme_params, app_config=app_config, database=database)
+        await plan_run(theme_params, app_config=app_config, database=database)
     ).batches()
-    art = await load_art_batch(
-        art_params,
-        art_batch,
-        local_assets=local_assets,
-        app_config=app_config,
-        database=database,
-    )
-    themes = await load_theme_batch(
-        theme_params,
-        list(theme_batch),
-        local_assets=local_assets,
-        app_config=app_config,
-        database=database,
-    )
 
-    assert [(item.title, art_type) for item, art_type, _ in art.targets] == [
-        ("Beta", ArtType.POSTER),
-        ("Beta", ArtType.BACKGROUND),
-        ("Zulu", ArtType.POSTER),
-        ("Zulu", ArtType.BACKGROUND),
-        ("Alpha Show", ArtType.POSTER),
-        ("Alpha Show", ArtType.BACKGROUND),
+    titles = {row_id(item): item.title for item in items}
+    assert [
+        (titles[owner], kind)
+        for owner, slots in art_batch.visits.items()
+        for kind, _ in slots
+    ] == [
+        ("Beta", ServerAsset.POSTER),
+        ("Beta", ServerAsset.BACKGROUND),
+        ("Zulu", ServerAsset.POSTER),
+        ("Zulu", ServerAsset.BACKGROUND),
+        ("Alpha Show", ServerAsset.POSTER),
+        ("Alpha Show", ServerAsset.BACKGROUND),
     ]
-    assert [item.title for item in themes.items] == ["Beta", "Zulu", "Alpha Show"]
+    assert [titles[owner] for owner in theme_batch.visits] == [
+        "Beta",
+        "Zulu",
+        "Alpha Show",
+    ]
 
 
 def test_shared_options_reach_both_workers() -> None:

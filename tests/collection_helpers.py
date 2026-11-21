@@ -2,10 +2,11 @@
 
 lazy from typing import Any
 
+lazy from overture.db.ledger import Destination, Evidence, observe, place
 lazy from overture.db.models.collection_group import CollectionGroup
 lazy from overture.db.models.collection_rule import CollectionRule
 lazy from overture.db.models.media_collection import CollectionLibrary, MediaCollection
-lazy from overture.domain import MediaType
+lazy from overture.domain import DeliveryChannel, MediaType, ServerAsset
 lazy from overture.schemas.collections import (
     CollectionLibraryCriteria,
     CollectionRuleWrite,
@@ -13,6 +14,7 @@ lazy from overture.schemas.collections import (
     SourceCondition,
     TmdbItemSource,
 )
+lazy from tests.factories import build
 
 _CRITERIA = FilterGroup(
     conditions=[SourceCondition(source=TmdbItemSource(tmdb_ids=[1]))]
@@ -39,7 +41,7 @@ def stored_collection(
 ) -> MediaCollection:
     """A collection held by one library, as a sync or a save stores it."""
     server_path = fields.pop("server_path", None)
-    row = MediaCollection(**fields)
+    row = build(MediaCollection, **fields)
     if group is not None:
         row.group = CollectionGroup(name=group)
     row.libraries = [
@@ -68,3 +70,27 @@ def library_rule(
             **fields,
         }
     )
+
+
+def shown_on_server(
+    row: MediaCollection,
+    *,
+    poster: str | None = None,
+    background: str | None = None,
+    theme: str | None = None,
+) -> MediaCollection:
+    """Place the row's assets on its first copy and record what that copy shows.
+
+    Each value is what the server names its current image or theme by.
+    """
+    part = row.libraries[0]
+    copy = Destination(part.server_id, part.server_item_id, DeliveryChannel.UPLOAD)
+    for kind, ref in (
+        (ServerAsset.POSTER, poster),
+        (ServerAsset.BACKGROUND, background),
+        (ServerAsset.THEME, theme),
+    ):
+        place(row, kind, (copy,))
+        if ref is not None:
+            observe(row, kind, copy, Evidence.DIFFERENT, ref=ref)
+    return row

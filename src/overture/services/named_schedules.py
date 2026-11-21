@@ -17,7 +17,7 @@ lazy from collections.abc import Awaitable, Callable, Iterable, Mapping
 lazy from dataclasses import dataclass
 lazy from datetime import datetime
 lazy from functools import partial
-lazy from typing import Any
+lazy from typing import Any, cast
 
 lazy from pydantic import BaseModel
 
@@ -27,6 +27,7 @@ lazy from ..db.models.saved_schedule import SavedSchedule
 lazy from ..db.session import Database
 lazy from ..domain import ScheduleKind
 lazy from ..jobs.gate import WaitReporter
+lazy from ..jobs.progress_log import JobOutcome
 lazy from ..jobs.runner import JobBody, scheduled
 lazy from ..repositories.saved_schedules import SavedScheduleRepository
 lazy from ..schemas.common import Status, StatusResponse
@@ -84,14 +85,15 @@ type ScheduleRunner[ConfigT: BaseModel] = Callable[
 
 def job_run_summary(
     payloads: Iterable[dict[str, Any] | None],
-    counters: Mapping[str, str],
+    counters: Mapping[JobOutcome, str],
     *,
     failed: bool = False,
 ) -> ScheduleRunSummary:
     """Summarise the terminal payloads of the jobs one scheduled run ran.
 
-    *counters* maps a payload field to the name it is shown under; the jobs'
-    values are added up and the run lasts from the first start to the last end.
+    *counters* maps an outcome to the name its targets are shown under; the
+    jobs' targets are added up and the run lasts from the first start to the
+    last end.
     """
     finished = [payload for payload in payloads if payload]
     starts = [p["started_at"] for p in finished if p.get("started_at")]
@@ -103,10 +105,11 @@ def job_run_summary(
         if starts and ends
         else None
     )
+    targets = [cast("dict[str, int]", p.get("log_targets") or {}) for p in finished]
     counts = {
         name: total
-        for field, name in counters.items()
-        if (total := sum(int(p.get(field) or 0) for p in finished))
+        for outcome, name in counters.items()
+        if (total := sum(counted.get(outcome, 0) for counted in targets))
     }
     return ScheduleRunSummary(
         duration_seconds=None if duration is None else round(duration, 2),

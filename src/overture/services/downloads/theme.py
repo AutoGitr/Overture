@@ -111,4 +111,5 @@ class DownloadThemeHandler:
             title=result.title,
             duration=result.duration or None,
             audio_bytes=result.audio_bytes,
+            fingerprint=result.fingerprint,
         )

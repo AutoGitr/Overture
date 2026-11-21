@@ -10,12 +10,20 @@ lazy from sqlmodel import col, insert, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import MediaServerConfig, Settings
+lazy from overture.db.ledger import place_local
 lazy from overture.db.models.library import Library
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.media_item_copy import MediaItemCopy
 lazy from overture.db.models.media_server import MediaServer
-lazy from overture.domain import MediaType, ServerType, library_id, library_parts
+lazy from overture.domain import (
+    ITEM_ASSETS,
+    MediaType,
+    ServerType,
+    library_id,
+    library_parts,
+)
 lazy from overture.media_servers.registry import ProviderRegistry
+lazy from tests.factories import build
 
 #: The database's number of the test media server.
 TEST_SERVER_ID = 1
@@ -43,14 +51,16 @@ def served_item(**fields: Any) -> MediaItem:
     ``server_item_id`` names the copy, in the test server's library ``1:1``
     unless ``library_id`` names another; a title without it has none, like one
     chosen from TMDB alone. The copy also takes the title's play state,
-    rating, added time and removal.
+    rating, added time and removal. A title with a folder has its assets
+    placed there, as a sync places them.
     """
     copy = {
         name: fields.pop(field)
         for field, name in _COPY_FIELDS.items()
         if field in fields
     }
-    item = MediaItem(**fields)
+    item = build(MediaItem, **fields)
+    place_local(item, ITEM_ASSETS, folder=item.folder_path is not None)
     if copy.get("server_item_id") is None:
         return item
     copy["library_id"] = copy.get("library_id") or f"{TEST_SERVER_ID}:1"

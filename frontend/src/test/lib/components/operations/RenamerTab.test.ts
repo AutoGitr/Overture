@@ -1,4 +1,5 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
+import { assetIssue, assetScanEvent } from "../../../helpers/fixtures";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import OperationsPopup from "../../../../lib/popups/OperationsPopup.svelte";
 import { queryClient } from "../../../../lib/rest/queryClient";
@@ -21,23 +22,26 @@ describe("RenamerTab results", () => {
   });
 
   it("applies successful asset renames to the completed scan", async () => {
-    assetManagerState.handleCompleted({
-      finished_at: "2026-09-05T12:00:00Z",
-      issues: [
-        {
-          conflict: false,
-          current_filename: "movie.jpg",
-          current_path: "/movies/Movie/movie.jpg",
-          folder: "/movies/Movie",
-          height: 1500,
-          suggested_filename: "poster.jpg",
-          potential_false_positive: false,
-          suggested_path: "/movies/Movie/poster.jpg",
-          type: "poster",
-          width: 1000,
-        },
-      ],
-    });
+    assetManagerState.handleCompleted(
+      assetScanEvent({
+        finished_at: "2026-09-05T12:00:00Z",
+        issues: [
+          {
+            ...assetIssue(),
+            conflict: false,
+            current_filename: "movie.jpg",
+            current_path: "/movies/Movie/movie.jpg",
+            folder: "/movies/Movie",
+            height: 1500,
+            suggested_filename: "poster.jpg",
+            potential_false_positive: false,
+            suggested_path: "/movies/Movie/poster.jpg",
+            type: "poster",
+            width: 1000,
+          },
+        ],
+      }),
+    );
     renameAssets.mockResolvedValue({
       data: {
         results: [{ current_path: "/movies/Movie/movie.jpg", status: "renamed" }],
@@ -64,7 +68,7 @@ describe("RenamerTab results", () => {
   });
 
   it("selects renamer rows by range, and acts only on the kinds shown", async () => {
-    const issue = {
+    const issue = assetIssue({
       conflict: false,
       folder: "/movies/Movie",
       height: 1500,
@@ -72,17 +76,19 @@ describe("RenamerTab results", () => {
       potential_false_positive: false,
       type: "poster",
       width: 1000,
-    };
-    assetManagerState.handleCompleted({
-      finished_at: "2026-09-05T12:00:00Z",
-      issues: ["a", "b", "c", "d"].map((name, index) => ({
-        ...issue,
-        current_filename: `${name}.jpg`,
-        current_path: `/movies/Movie/${name}.jpg`,
-        suggested_path: `/movies/Movie/${name}-poster.jpg`,
-        type: index === 3 ? "background" : "poster",
-      })),
     });
+    assetManagerState.handleCompleted(
+      assetScanEvent({
+        finished_at: "2026-09-05T12:00:00Z",
+        issues: ["a", "b", "c", "d"].map((name, index) => ({
+          ...issue,
+          current_filename: `${name}.jpg`,
+          current_path: `/movies/Movie/${name}.jpg`,
+          suggested_path: `/movies/Movie/${name}-poster.jpg`,
+          type: index === 3 ? "background" : "poster",
+        })),
+      }),
+    );
     renderWithQueryClient(OperationsPopup);
     const header = await screen.findByRole("checkbox", { name: "Select every shown issues" });
     const row = (name: string) =>

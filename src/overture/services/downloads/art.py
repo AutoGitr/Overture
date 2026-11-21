@@ -215,7 +215,7 @@ class DownloadArtHandler:
                 season_id=season.id if season else None,
                 url=url,
                 upload_hash=job.upload_hash,
-                phash=phash,
+                fingerprint=phash,
                 width=original.width or None,
                 height=original.height or None,
             ),

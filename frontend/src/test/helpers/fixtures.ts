@@ -3,6 +3,8 @@ import { DEFAULT_APP_SETTINGS } from "../../generated/settings";
 import type { JobLogFeed } from "../../lib/stores/jobLogFeed.svelte";
 import type {
   AppSettingsRead,
+  AssetFileRead,
+  AssetRead,
   CollectionDimensionRead,
   ArtCandidate,
   ArtMatchResponse,
@@ -21,14 +23,29 @@ import type {
   CatalogRecordItem,
   CatalogRecordSeason,
   SeasonRead,
+  ServerAsset,
+  TitleAssets,
   ThemeSearchResult,
   CatalogStatus,
 } from "../../generated/rest/types.gen";
 import type {
+  AssetIssue,
+  AssetScanProgressEvent,
+  BackupJobEvent,
+  BulkArtJobEvent,
+  BulkThemeJobEvent,
+  CatalogSyncEvent,
   DownloadJobEvent,
   DownloadStatus,
+  JobKind,
   JobLogEntry,
+  JobMetadata,
   JobOutcome,
+  LifecycleStatus,
+  ServerAuditFixEvent,
+  ServerAuditProgressEvent,
+  ServerAuditResult,
+  SyncJobEvent,
   RealtimeSnapshot,
   ServerWebSocketDataMessage,
   WebSocketDataEventName,
@@ -54,6 +71,7 @@ export function logEntry(
     at,
     server_id: server?.id ?? null,
     server: server?.title ?? null,
+    count: 1,
   };
 }
 
@@ -69,34 +87,77 @@ export function mediaServers(...types: (ServerType | null)[]): MediaServerRead[]
  * A library title. A test names its copy on server 1 with ``library_id`` and
  * ``server_item_id``, which replace any ``copies`` given, or passes ``copies`` itself.
  */
+/** One asset, blank unless *overrides* say what is recorded. */
+export function asset(kind: ServerAsset, overrides: Partial<AssetRead> = {}): AssetRead {
+  return {
+    kind,
+    status: "missing",
+    needed: true,
+    url: null,
+    preview_url: null,
+    upload_hash: null,
+    source: null,
+    poster_style: null,
+    generated_style: null,
+    generated_title_only: false,
+    youtube_id: null,
+    youtube_id_source: null,
+    youtube_title: null,
+    youtube_duration: null,
+    content_hash: null,
+    width: null,
+    height: null,
+    duration: null,
+    file: null,
+    deliveries: [],
+    ...overrides,
+  };
+}
+
+/** *owner* with one of its assets changed as *overrides* say. */
+export function withAsset<T extends { assets: TitleAssets }>(
+  owner: T,
+  kind: keyof TitleAssets,
+  overrides: Partial<AssetRead>,
+): T {
+  return { ...owner, assets: { ...owner.assets, [kind]: { ...owner.assets[kind], ...overrides } } };
+}
+
+/** The file an asset's owner keeps in its folder, named by its hash. */
+export function assetFile(hash: string, overrides: Partial<AssetFileRead> = {}): AssetFileRead {
+  return { hash, fingerprint: null, width: null, height: null, duration: null, ...overrides };
+}
+
+/** What a test records of a title's or collection's assets, by kind. */
+export type AssetOverrides = { [K in keyof TitleAssets]?: Partial<AssetRead> };
+
+/** A title's or collection's poster, background and theme. */
+export function titleAssets(overrides: AssetOverrides = {}): TitleAssets {
+  return {
+    poster: asset("poster", overrides.poster),
+    background: asset("background", overrides.background),
+    theme: asset("theme", overrides.theme),
+  };
+}
+
 export function mediaItem(
-  overrides: Partial<MediaItemRead> & {
+  overrides: Omit<Partial<MediaItemRead>, "assets"> & {
+    assets?: AssetOverrides;
     library_id?: string | null;
     server_item_id?: string | null;
   } = {},
 ): MediaItemRead {
-  const { library_id: libraryId, server_item_id: serverItemId, ...rest } = overrides;
+  const { library_id: libraryId, server_item_id: serverItemId, assets, ...rest } = overrides;
   const copies =
     serverItemId || libraryId
       ? [{ server_id: 1, server_item_id: serverItemId ?? "", library_id: libraryId ?? "" }]
       : (rest.copies ?? []);
   return {
     art_status: "missing",
-    catalog_no_theme: false,
     catalog_entry_key: null,
-    background_status: "missing",
-    background_hash: null,
-    background_height: null,
-    background_phash: null,
-    background_source: null,
-    background_url: null,
-    background_width: null,
     created_at: null,
     directors: [],
     has_incorrect_aspect_ratio: false,
-    theme_duration: null,
-    theme_file_hash: null,
-    theme_status: "missing",
     id: 1,
     imdb_id: null,
     last_matched_at: null,
@@ -104,14 +165,6 @@ export function mediaItem(
     folder_path: null,
     media_type: "movie",
     monitored: true,
-    poster_status: "missing",
-    poster_hash: null,
-    poster_height: null,
-    poster_phash: null,
-    poster_preview_url: null,
-    poster_source: null,
-    poster_url: null,
-    poster_width: null,
     catalog_complete: false,
     catalog_themerrdb: false,
     catalog_ids: null,
@@ -128,49 +181,42 @@ export function mediaItem(
     library_collection_id: null,
     tvdb_id: null,
     year: null,
-    youtube_duration: null,
-    youtube_id: null,
-    youtube_id_source: null,
-    youtube_title: null,
     ...rest,
+    assets: titleAssets(assets),
     copies,
   };
 }
 
-export function season(overrides: Partial<SeasonRead> = {}): SeasonRead {
+export function season(
+  overrides: Omit<Partial<SeasonRead>, "poster"> & { poster?: Partial<AssetRead> } = {},
+): SeasonRead {
+  const { poster, ...rest } = overrides;
   return {
     file_count: 1,
     id: 1,
     last_matched_at: null,
     folder_path: null,
     media_item_id: 1,
-    poster_status: "missing",
-    poster_hash: null,
-    poster_height: null,
-    poster_phash: null,
-    poster_preview_url: null,
-    poster_source: null,
-    poster_url: null,
-    poster_width: null,
     season_num: 1,
     title: null,
-    ...overrides,
+    ...rest,
+    poster: asset("season_poster", poster),
   };
 }
 
-export function collection(overrides: Partial<CollectionRead> = {}): CollectionRead {
+export function collection(
+  overrides: Omit<Partial<CollectionRead>, "assets"> & { assets?: AssetOverrides } = {},
+): CollectionRead {
+  const { assets, ...rest } = overrides;
   return {
     active_end_mmdd: null,
     active_start_mmdd: null,
-    backgrounds: true,
-    themes: true,
     contributed_style: "individual",
     generated_value: null,
     // Overture manages what it creates; only server imports start unmanaged.
     managed: true,
     sync_failed: false,
     last_rule_sync: null,
-    theme_duration: null,
     collection_filtering: null,
     delete_when_inactive: null,
     kind: "regular",
@@ -184,30 +230,13 @@ export function collection(overrides: Partial<CollectionRead> = {}): CollectionR
     server_background_version: null,
     sort_title: null,
     collection_group: null,
-    poster_url: null,
-    background_url: null,
-    poster_source: null,
-    poster_style: null,
-    background_source: null,
-    poster_hash: null,
-    background_hash: null,
-    background_phash: null,
-    poster_phash: null,
-    poster_width: null,
-    poster_height: null,
-    background_width: null,
-    background_height: null,
     has_incorrect_aspect_ratio: false,
     home_order: null,
-    catalog_no_theme: false,
-    poster_status: "missing",
-    background_status: "missing",
     art_status: "missing",
     collection_mode: null,
     order_type: "release.asc",
     visible_home: false,
     child_count: 0,
-    has_theme: false,
     id: 1,
     tmdb_collection_id: null,
     catalog_complete: false,
@@ -221,12 +250,9 @@ export function collection(overrides: Partial<CollectionRead> = {}): CollectionR
     copies: [],
     summary: null,
     server_poster_version: null,
-    theme_status: "missing",
     title: "Test Collection",
-    youtube_duration: null,
-    youtube_id: null,
-    youtube_title: null,
-    ...overrides,
+    ...rest,
+    assets: titleAssets(assets),
   };
 }
 
@@ -434,12 +460,14 @@ export function collectionCapabilities(
   };
 }
 
-export function collectionDetail(overrides: Partial<CollectionDetail> = {}): CollectionDetail {
+export function collectionDetail(
+  overrides: Omit<Partial<CollectionDetail>, "assets"> & { assets?: AssetOverrides } = {},
+): CollectionDetail {
+  const { assets, ...rest } = overrides;
   return {
-    ...collection(),
+    ...collection({ assets }),
     effective_sync_mode: "sync",
     rule: collectionRule(),
-    theme_duration: null,
     catalog_entry_key: null,
     theme_writable: true,
     lists_missing: false,
@@ -448,7 +476,7 @@ export function collectionDetail(overrides: Partial<CollectionDetail> = {}): Col
     theme_unavailable: null,
     youtube_id_overturedb: null,
     youtube_id_themerrdb: null,
-    ...overrides,
+    ...rest,
   };
 }
 
@@ -705,6 +733,138 @@ export function bulkAssetsSchedule(
       art: { art_types: ["background"], source_order: ["overturedb"], threshold: 5 },
       themes: null,
     },
+    ...overrides,
+  };
+}
+
+/** What every job event carries, with nothing reported yet. */
+const JOB_ENVELOPE = {
+  job: null,
+  done: null,
+  total: null,
+  started_at: null,
+  finished_at: null,
+  log: null,
+  run_id: null,
+  schedule: null,
+  log_total: null,
+  log_outcomes: null,
+  log_targets: null,
+  log_servers: null,
+} satisfies SyncJobEvent;
+
+export function jobMetadata(
+  kind: JobKind,
+  status: LifecycleStatus,
+  overrides: Partial<JobMetadata> = {},
+): JobMetadata {
+  return { kind, status, id: null, target: null, error: null, ...overrides };
+}
+
+export function syncEvent(overrides: Partial<SyncJobEvent> = {}): SyncJobEvent {
+  return { ...JOB_ENVELOPE, ...overrides };
+}
+
+export function bulkArtEvent(overrides: Partial<BulkArtJobEvent> = {}): BulkArtJobEvent {
+  return { ...JOB_ENVELOPE, settled: null, ...overrides };
+}
+
+export function bulkThemeEvent(overrides: Partial<BulkThemeJobEvent> = {}): BulkThemeJobEvent {
+  return { ...JOB_ENVELOPE, settled: null, ...overrides };
+}
+
+export function assetScanEvent(
+  overrides: Partial<AssetScanProgressEvent> = {},
+): AssetScanProgressEvent {
+  return {
+    ...JOB_ENVELOPE,
+    results_total: null,
+    total_folders: null,
+    issues_found: null,
+    results_found: null,
+    issues: null,
+    ...overrides,
+  };
+}
+
+export function serverAuditEvent(
+  overrides: Partial<ServerAuditProgressEvent> = {},
+): ServerAuditProgressEvent {
+  return { ...JOB_ENVELOPE, results_total: null, results_found: null, results: null, ...overrides };
+}
+
+export function serverAuditFixEvent(
+  overrides: Partial<ServerAuditFixEvent> = {},
+): ServerAuditFixEvent {
+  return { ...JOB_ENVELOPE, ...overrides };
+}
+
+export function catalogSyncEvent(overrides: Partial<CatalogSyncEvent> = {}): CatalogSyncEvent {
+  return {
+    ...JOB_ENVELOPE,
+    stats: {
+      catalog_bytes: 0,
+      catalog_uncompressed_bytes: 0,
+      catalog_url: null,
+      collections: 0,
+      entries: 0,
+      errors: 0,
+      items: 0,
+      movies: 0,
+      schema_version: null,
+      seasons: 0,
+      shows: 0,
+    },
+    ...overrides,
+  };
+}
+
+export function backupEvent(overrides: Partial<BackupJobEvent> = {}): BackupJobEvent {
+  return { ...JOB_ENVELOPE, filename: null, scheduled: null, ...overrides };
+}
+
+export function serverAuditResult(overrides: Partial<ServerAuditResult> = {}): ServerAuditResult {
+  return {
+    kind: "art",
+    item_id: 1,
+    collection_id: null,
+    season_id: null,
+    art_type: "poster",
+    status: "phash_mismatch",
+    title: "Alien",
+    local_path: null,
+    server_image_present: null,
+    hamming: null,
+    reason: null,
+    local_duration: null,
+    server_duration: null,
+    server_id: null,
+    server: null,
+    server_item_id: null,
+    theme_id: null,
+    theme_title: null,
+    refreshed: null,
+    refresh_error: null,
+    ...overrides,
+  };
+}
+
+export function assetIssue(overrides: Partial<AssetIssue> = {}): AssetIssue {
+  return {
+    folder: "/media/Movie",
+    current_path: "/media/Movie/cover.jpg",
+    current_filename: "cover.jpg",
+    suggested_path: "/media/Movie/poster.jpg",
+    suggested_filename: "poster.jpg",
+    type: "poster",
+    conflict: false,
+    width: 1000,
+    height: 1500,
+    conflict_with: null,
+    season_num: null,
+    potential_false_positive: false,
+    renamed: null,
+    rename_error: null,
     ...overrides,
   };
 }

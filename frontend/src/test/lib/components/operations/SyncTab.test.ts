@@ -1,4 +1,4 @@
-import { appSettings, collection, mediaServers } from "../../../helpers/fixtures";
+import { appSettings, bulkArtEvent, collection, mediaServers } from "../../../helpers/fixtures";
 import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import OperationsPopup from "../../../../lib/popups/OperationsPopup.svelte";
@@ -458,7 +458,7 @@ describe("Sync tab", () => {
     expect(screen.getByRole("button", { name: "Run now" })).toBeDisabled();
     expect(screen.getByText("Wait for Assets to finish.")).toBeInTheDocument();
 
-    matchState.handleCompleted({});
+    matchState.handleCompleted(bulkArtEvent({}));
     await waitFor(() => expect(screen.getByRole("button", { name: "Run now" })).toBeEnabled());
     expect(run).not.toHaveBeenCalled();
   });

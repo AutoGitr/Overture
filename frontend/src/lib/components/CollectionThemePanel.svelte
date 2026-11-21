@@ -36,25 +36,27 @@
         initialQuery={buildCollectionThemeSearchQuery(coll.title)}
         videoIds={[
           ...new Set(
-            [coll.youtube_id, coll.youtube_id_overturedb, coll.youtube_id_themerrdb].filter(
+            [coll.assets.theme.youtube_id, coll.youtube_id_overturedb, coll.youtube_id_themerrdb].filter(
               (id): id is string => !!id,
             ),
           ),
         ]}
         present={(results: ThemeSearchResult[]) =>
           mergeThemeResults({
-            item: coll,
+            title: coll.title,
+            theme: coll.assets.theme,
             overtureDbId: coll.youtube_id_overturedb,
             themerrDbId: coll.youtube_id_themerrdb,
             searchResults: results,
           })}
-        currentYoutubeId={coll.youtube_id}
+        currentYoutubeId={coll.assets.theme.youtube_id}
         busyVideoId={actions.uploadingVideoId}
         busy={actions.uploading}
         onselect={(videoId) => actions.selectTheme(videoId)}
         selectLabel={(video) => {
-          if (coll.youtube_id === video.id && coll.has_theme) return "Assigned";
-          if (coll.youtube_id === video.id) return "Requeue";
+          const theme = coll.assets.theme;
+          if (theme.youtube_id === video.id && theme.status === "complete") return "Assigned";
+          if (theme.youtube_id === video.id) return "Requeue";
           return "Select";
         }}
       />

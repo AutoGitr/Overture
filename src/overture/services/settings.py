@@ -15,6 +15,7 @@ lazy from ..utils.errors import PublicServiceError
 lazy from ..utils.time import utc_now
 lazy from .downloads.collection_theme import collection_themes_unavailable
 lazy from .health import get_service_status
+lazy from .needs import AssetNeeds
 
 
 def _read(
@@ -69,11 +70,14 @@ async def update_settings(
     app_config: Settings,
     database: Database,
     provider_registry: ProviderRegistry,
+    needs: AssetNeeds,
 ) -> AppSettingsRead:
     """Update persisted application settings.
 
     Only the fields the request actually sent are applied; the schema has
-    already checked every value against the persisted model's ranges.
+    already checked every value against the persisted model's ranges. The
+    defaults and the trust in OvertureDB's No theme flag decide which assets
+    are wanted, so those are recorded again.
     """
     async with database.write_session() as db:
         settings_row = await get_app_settings(db)
@@ -91,6 +95,7 @@ async def update_settings(
         settings_row.updated_at = utc_now()
         db.add(settings_row)
 
+    await needs.apply_all()
     return _read(settings_row, app_config, provider_registry)
 
 

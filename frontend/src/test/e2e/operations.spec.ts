@@ -1,5 +1,13 @@
 import { type Page } from "@playwright/test";
-import { appSettings, collection, mediaServers } from "../helpers/fixtures";
+import {
+  appSettings,
+  bulkArtEvent,
+  collection,
+  jobMetadata,
+  logEntry,
+  mediaItem,
+  mediaServers,
+} from "../helpers/fixtures";
 import { epoch, expect, logIn, realtimeSnapshot, test } from "./fixtures";
 
 test("assets keeps every part of its results in place while downloads come and go", async ({
@@ -14,19 +22,19 @@ test("assets keeps every part of its results in place while downloads come and g
   const emit = (event: string, data: unknown) =>
     realtime.emit({ epoch, sequence: ++sequence, event, data });
   const emitRun = (status: "progress" | "completed", settled: number, log?: string) =>
-    emit(`match.${status}`, {
-      job: { kind: "bulk_art", status },
-      total: 3,
-      done: 3,
-      queued: 3,
-      settled,
-      downloaded: settled,
-      run_id: "run",
-      log_total: settled + 1,
-      ...(log && {
-        log: { outcome: "Downloaded", target: log, reason: "written", at: "2026-01-01T12:00:00Z" },
+    emit(
+      `match.${status}`,
+      bulkArtEvent({
+        job: jobMetadata("bulk_art", status),
+        total: 3,
+        done: 3,
+        settled,
+        run_id: "run",
+        log_total: settled + 1,
+        log_targets: { Queued: 3, Downloaded: settled },
+        log: log ? logEntry("Downloaded", log, "written") : null,
       }),
-    });
+    );
   const emitDownload = (id: string, title: string, status: "started" | "completed") =>
     emit(`download.${status}`, {
       job: {
@@ -187,22 +195,8 @@ test("assets runs only the current sidebar search results", async ({ page }) => 
       json: {
         items: movies
           ? [
-              {
-                id: 1,
-                title: "Alien",
-                media_type: "movie",
-                directors: ["Ridley Scott"],
-                monitored: false,
-                copies: [],
-              },
-              {
-                id: 3,
-                title: "Aliens",
-                media_type: "movie",
-                directors: ["James Cameron"],
-                monitored: true,
-                copies: [],
-              },
+              mediaItem({ id: 1, title: "Alien", directors: ["Ridley Scott"], monitored: false }),
+              mediaItem({ id: 3, title: "Aliens", directors: ["James Cameron"], monitored: true }),
             ]
           : [],
         total: movies ? 2 : 0,

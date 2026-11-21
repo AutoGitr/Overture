@@ -1346,6 +1346,335 @@
         "title": "AspectRatioTolerance",
         "type": "string"
       },
+      "AssetDeliveryRead": {
+        "additionalProperties": false,
+        "description": "One place the asset has to be, and whether it holds the content.",
+        "properties": {
+          "channel": {
+            "$ref": "#/components/schemas/DeliveryChannel"
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "delivered": {
+            "title": "Delivered",
+            "type": "boolean"
+          },
+          "present": {
+            "title": "Present",
+            "type": "boolean"
+          },
+          "required": {
+            "title": "Required",
+            "type": "boolean"
+          },
+          "server_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server Id"
+          }
+        },
+        "required": [
+          "server_id",
+          "channel",
+          "required",
+          "delivered",
+          "present",
+          "checked_at"
+        ],
+        "title": "AssetDeliveryRead",
+        "type": "object"
+      },
+      "AssetFileRead": {
+        "additionalProperties": false,
+        "description": "The file in the item's own folder, as the last inspection found it.",
+        "properties": {
+          "duration": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration"
+          },
+          "fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fingerprint"
+          },
+          "hash": {
+            "title": "Hash",
+            "type": "string"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          }
+        },
+        "required": [
+          "hash",
+          "fingerprint",
+          "width",
+          "height",
+          "duration"
+        ],
+        "title": "AssetFileRead",
+        "type": "object"
+      },
+      "AssetRead": {
+        "additionalProperties": false,
+        "description": "One artwork slot or theme: its selection, content, deliveries and status.",
+        "properties": {
+          "content_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Hash"
+          },
+          "deliveries": {
+            "items": {
+              "$ref": "#/components/schemas/AssetDeliveryRead"
+            },
+            "title": "Deliveries",
+            "type": "array"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration"
+          },
+          "file": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssetFileRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "generated_style": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "generated_title_only": {
+            "default": false,
+            "title": "Generated Title Only",
+            "type": "boolean"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ServerAsset"
+          },
+          "needed": {
+            "title": "Needed",
+            "type": "boolean"
+          },
+          "poster_style": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionPosterStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "preview_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview Url"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/AssetStatus"
+          },
+          "upload_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upload Hash"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          },
+          "youtube_duration": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Duration"
+          },
+          "youtube_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id"
+          },
+          "youtube_id_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThemeIdSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "youtube_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Title"
+          }
+        },
+        "required": [
+          "kind",
+          "status",
+          "needed",
+          "url",
+          "preview_url",
+          "upload_hash",
+          "source",
+          "poster_style",
+          "generated_style",
+          "generated_title_only",
+          "youtube_id",
+          "youtube_id_source",
+          "youtube_title",
+          "youtube_duration",
+          "content_hash",
+          "width",
+          "height",
+          "duration",
+          "file",
+          "deliveries"
+        ],
+        "title": "AssetRead",
+        "type": "object"
+      },
       "AssetRemoval": {
         "additionalProperties": false,
         "description": "What removing an asset does, in any combination.\n\nOverture only ever deletes images and MP3 themes: the art and theme files\nit manages in media folders, and the server's copies of them.",
@@ -2449,14 +2778,18 @@
         "type": "object"
       },
       "BulkItemOperationKind": {
-        "enum": [
-          "artwork",
-          "themes",
-          "delete",
-          "monitor",
-          "unmonitor"
-        ],
-        "type": "string"
+        "anyOf": [
+          {
+            "enum": [
+              "artwork",
+              "themes"
+            ],
+            "type": "string"
+          },
+          {
+            "$ref": "#/components/schemas/ItemRecordOperation"
+          }
+        ]
       },
       "BulkItemOperationResult": {
         "additionalProperties": false,
@@ -4578,79 +4911,8 @@
             "$ref": "#/components/schemas/AssetStatus",
             "default": "missing"
           },
-          "background_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Background Hash"
-          },
-          "background_height": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Background Height"
-          },
-          "background_phash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Background Phash"
-          },
-          "background_source": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ArtSource"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "background_status": {
-            "$ref": "#/components/schemas/AssetStatus",
-            "default": "missing"
-          },
-          "background_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Background Url"
-          },
-          "background_width": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Background Width"
-          },
-          "backgrounds": {
-            "default": true,
-            "title": "Backgrounds",
-            "type": "boolean"
+          "assets": {
+            "$ref": "#/components/schemas/TitleAssets"
           },
           "below_minimum": {
             "default": false,
@@ -4672,11 +4934,6 @@
               }
             ],
             "title": "Catalog Entry Key"
-          },
-          "catalog_no_theme": {
-            "default": false,
-            "title": "Catalog No Theme",
-            "type": "boolean"
           },
           "catalog_selections": {
             "anyOf": [
@@ -4782,11 +5039,6 @@
             "title": "Has Incorrect Aspect Ratio",
             "type": "boolean"
           },
-          "has_theme": {
-            "default": false,
-            "title": "Has Theme",
-            "type": "boolean"
-          },
           "home_order": {
             "anyOf": [
               {
@@ -4864,85 +5116,6 @@
           "order_type": {
             "$ref": "#/components/schemas/CollectionOrder",
             "default": "release.asc"
-          },
-          "poster_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Hash"
-          },
-          "poster_height": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Height"
-          },
-          "poster_phash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Phash"
-          },
-          "poster_source": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ArtSource"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "poster_status": {
-            "$ref": "#/components/schemas/AssetStatus",
-            "default": "missing"
-          },
-          "poster_style": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CollectionPosterStyle"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "poster_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Url"
-          },
-          "poster_width": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Width"
           },
           "rule": {
             "anyOf": [
@@ -5036,21 +5209,6 @@
             "title": "Sync Failed",
             "type": "boolean"
           },
-          "theme_duration": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Theme Duration"
-          },
-          "theme_status": {
-            "$ref": "#/components/schemas/AssetStatus",
-            "default": "missing"
-          },
           "theme_unavailable": {
             "anyOf": [
               {
@@ -5065,11 +5223,6 @@
           "theme_writable": {
             "default": false,
             "title": "Theme Writable",
-            "type": "boolean"
-          },
-          "themes": {
-            "default": true,
-            "title": "Themes",
             "type": "boolean"
           },
           "title": {
@@ -5112,28 +5265,6 @@
             "title": "Withheld",
             "type": "boolean"
           },
-          "youtube_duration": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Youtube Duration"
-          },
-          "youtube_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Youtube Id"
-          },
           "youtube_id_overturedb": {
             "anyOf": [
               {
@@ -5155,38 +5286,12 @@
               }
             ],
             "title": "Youtube Id Themerrdb"
-          },
-          "youtube_title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Youtube Title"
           }
         },
         "required": [
-          "poster_url",
-          "background_url",
-          "poster_source",
-          "background_source",
-          "poster_style",
-          "poster_hash",
-          "background_hash",
-          "poster_phash",
-          "background_phash",
-          "poster_width",
-          "poster_height",
-          "background_width",
-          "background_height",
-          "poster_status",
-          "background_status",
-          "art_status",
-          "backgrounds",
           "id",
+          "assets",
+          "art_status",
           "kind",
           "title",
           "summary",
@@ -5218,20 +5323,12 @@
           "library_ids",
           "server_added_at",
           "copies",
-          "has_theme",
-          "youtube_id",
-          "youtube_title",
-          "youtube_duration",
-          "theme_duration",
-          "theme_status",
           "monitored",
           "tmdb_collection_id",
           "catalog_complete",
           "catalog_themerrdb",
           "catalog_selections",
           "has_incorrect_aspect_ratio",
-          "catalog_no_theme",
-          "themes",
           "contributed_style",
           "home_order",
           "effective_sync_mode",
@@ -6824,79 +6921,8 @@
             "$ref": "#/components/schemas/AssetStatus",
             "default": "missing"
           },
-          "background_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Background Hash"
-          },
-          "background_height": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Background Height"
-          },
-          "background_phash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Background Phash"
-          },
-          "background_source": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ArtSource"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "background_status": {
-            "$ref": "#/components/schemas/AssetStatus",
-            "default": "missing"
-          },
-          "background_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Background Url"
-          },
-          "background_width": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Background Width"
-          },
-          "backgrounds": {
-            "default": true,
-            "title": "Backgrounds",
-            "type": "boolean"
+          "assets": {
+            "$ref": "#/components/schemas/TitleAssets"
           },
           "below_minimum": {
             "default": false,
@@ -6906,11 +6932,6 @@
           "catalog_complete": {
             "default": false,
             "title": "Catalog Complete",
-            "type": "boolean"
-          },
-          "catalog_no_theme": {
-            "default": false,
-            "title": "Catalog No Theme",
             "type": "boolean"
           },
           "catalog_selections": {
@@ -7002,11 +7023,6 @@
             "title": "Has Incorrect Aspect Ratio",
             "type": "boolean"
           },
-          "has_theme": {
-            "default": false,
-            "title": "Has Theme",
-            "type": "boolean"
-          },
           "home_order": {
             "anyOf": [
               {
@@ -7072,85 +7088,6 @@
           "order_type": {
             "$ref": "#/components/schemas/CollectionOrder",
             "default": "release.asc"
-          },
-          "poster_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Hash"
-          },
-          "poster_height": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Height"
-          },
-          "poster_phash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Phash"
-          },
-          "poster_source": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ArtSource"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "poster_status": {
-            "$ref": "#/components/schemas/AssetStatus",
-            "default": "missing"
-          },
-          "poster_style": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CollectionPosterStyle"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "poster_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Url"
-          },
-          "poster_width": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Width"
           },
           "server_added_at": {
             "anyOf": [
@@ -7234,26 +7171,6 @@
             "title": "Sync Failed",
             "type": "boolean"
           },
-          "theme_duration": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Theme Duration"
-          },
-          "theme_status": {
-            "$ref": "#/components/schemas/AssetStatus",
-            "default": "missing"
-          },
-          "themes": {
-            "default": true,
-            "title": "Themes",
-            "type": "boolean"
-          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -7293,60 +7210,12 @@
             "default": false,
             "title": "Withheld",
             "type": "boolean"
-          },
-          "youtube_duration": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Youtube Duration"
-          },
-          "youtube_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Youtube Id"
-          },
-          "youtube_title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Youtube Title"
           }
         },
         "required": [
-          "poster_url",
-          "background_url",
-          "poster_source",
-          "background_source",
-          "poster_style",
-          "poster_hash",
-          "background_hash",
-          "poster_phash",
-          "background_phash",
-          "poster_width",
-          "poster_height",
-          "background_width",
-          "background_height",
-          "poster_status",
-          "background_status",
-          "art_status",
-          "backgrounds",
           "id",
+          "assets",
+          "art_status",
           "kind",
           "title",
           "summary",
@@ -7378,20 +7247,12 @@
           "library_ids",
           "server_added_at",
           "copies",
-          "has_theme",
-          "youtube_id",
-          "youtube_title",
-          "youtube_duration",
-          "theme_duration",
-          "theme_status",
           "monitored",
           "tmdb_collection_id",
           "catalog_complete",
           "catalog_themerrdb",
           "catalog_selections",
           "has_incorrect_aspect_ratio",
-          "catalog_no_theme",
-          "themes",
           "contributed_style",
           "home_order"
         ],
@@ -8711,57 +8572,6 @@
         "title": "CollectionSourceRead",
         "type": "object"
       },
-      "CollectionThemeStatusResponse": {
-        "additionalProperties": false,
-        "description": "Collection theme status response.",
-        "properties": {
-          "has_theme": {
-            "title": "Has Theme",
-            "type": "boolean"
-          },
-          "youtube_duration": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Youtube Duration"
-          },
-          "youtube_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Youtube Id"
-          },
-          "youtube_title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Youtube Title"
-          }
-        },
-        "required": [
-          "has_theme",
-          "youtube_id",
-          "youtube_title",
-          "youtube_duration"
-        ],
-        "title": "CollectionThemeStatusResponse",
-        "type": "object"
-      },
       "Condition-Input": {
         "discriminator": {
           "mapping": {
@@ -8959,7 +8769,7 @@
       },
       "DatabaseRecord": {
         "additionalProperties": false,
-        "description": "A record as stored, and what the API derives from it.\n\n``stored`` is the record's own row first, then every row that refers to\nit through a foreign key, and theirs in turn. ``derived`` holds what the\nAPI shows that no column stores, so not the fields copied from artwork rows.",
+        "description": "A record as stored, and what the API derives from it.\n\n``stored`` is the record's own row first, then every row that refers to\nit through a foreign key, and theirs in turn. ``derived`` holds what the\nAPI shows that no column stores, so not the assets the asset rows hold.",
         "properties": {
           "derived": {
             "additionalProperties": {
@@ -9081,26 +8891,30 @@
       },
       "DeleteCollectionThemeResponse": {
         "additionalProperties": false,
-        "description": "Collection theme delete response.",
+        "description": "Collection theme delete response: the theme as it is now.",
         "properties": {
-          "has_theme": {
-            "title": "Has Theme",
-            "type": "boolean"
-          },
           "status": {
             "$ref": "#/components/schemas/Status"
           },
-          "theme_status": {
-            "$ref": "#/components/schemas/AssetStatus"
+          "theme": {
+            "$ref": "#/components/schemas/AssetRead"
           }
         },
         "required": [
           "status",
-          "has_theme",
-          "theme_status"
+          "theme"
         ],
         "title": "DeleteCollectionThemeResponse",
         "type": "object"
+      },
+      "DeliveryChannel": {
+        "description": "How an asset's content reaches one destination.",
+        "enum": [
+          "file",
+          "upload"
+        ],
+        "title": "DeliveryChannel",
+        "type": "string"
       },
       "DisplayName": {
         "maxLength": 100,
@@ -9848,6 +9662,14 @@
         "title": "ItemDownloadTarget",
         "type": "object"
       },
+      "ItemRecordOperation": {
+        "enum": [
+          "delete",
+          "monitor",
+          "unmonitor"
+        ],
+        "type": "string"
+      },
       "ItemSelectionResponse": {
         "additionalProperties": false,
         "description": "A recorded selection and its updated item.",
@@ -9891,6 +9713,13 @@
             "title": "At",
             "type": "string"
           },
+          "count": {
+            "default": 1,
+            "description": "How many targets the entry is about; one entry can sum up several that share an outcome and reason.",
+            "minimum": 1.0,
+            "title": "Count",
+            "type": "integer"
+          },
           "outcome": {
             "$ref": "#/components/schemas/JobOutcome"
           },
@@ -9932,7 +9761,8 @@
           "reason",
           "at",
           "server_id",
-          "server"
+          "server",
+          "count"
         ],
         "title": "JobLogEntry",
         "type": "object"
@@ -9972,7 +9802,7 @@
         "type": "object"
       },
       "JobOutcome": {
-        "description": "What a job did with one target.\n\nThe word an entry starts with is also the counter it increments (see\n``JobTally.outcome_counters``), so a run's totals always equal the entries\nin its log.",
+        "description": "What a job did with one target.\n\nEvery count a run reports is taken from its entries by\n:class:`OutcomeCounts`, so a run's totals always equal the targets its log\nnames.",
         "enum": [
           "Started",
           "Added",
@@ -10499,74 +10329,8 @@
             "$ref": "#/components/schemas/AssetStatus",
             "default": "missing"
           },
-          "background_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Background Hash"
-          },
-          "background_height": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Background Height"
-          },
-          "background_phash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Background Phash"
-          },
-          "background_source": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ArtSource"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "background_status": {
-            "$ref": "#/components/schemas/AssetStatus",
-            "default": "missing"
-          },
-          "background_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Background Url"
-          },
-          "background_width": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Background Width"
+          "assets": {
+            "$ref": "#/components/schemas/TitleAssets"
           },
           "catalog_complete": {
             "default": false,
@@ -10599,11 +10363,6 @@
             ],
             "description": "Whether the IDs the item and its OvertureDB entry both carry agree; null without an entry.",
             "title": "Catalog Ids"
-          },
-          "catalog_no_theme": {
-            "default": false,
-            "title": "Catalog No Theme",
-            "type": "boolean"
           },
           "catalog_selections": {
             "anyOf": [
@@ -10728,86 +10487,6 @@
             "title": "Monitored",
             "type": "boolean"
           },
-          "poster_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Hash"
-          },
-          "poster_height": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Height"
-          },
-          "poster_phash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Phash"
-          },
-          "poster_preview_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Preview Url"
-          },
-          "poster_source": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ArtSource"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "poster_status": {
-            "$ref": "#/components/schemas/AssetStatus",
-            "default": "missing"
-          },
-          "poster_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Url"
-          },
-          "poster_width": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Width"
-          },
           "season_posters_status": {
             "$ref": "#/components/schemas/AssetStatus",
             "default": "missing"
@@ -10858,33 +10537,6 @@
             ],
             "title": "Studio"
           },
-          "theme_duration": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Seconds: the local file's length, else the selected video's.",
-            "title": "Theme Duration"
-          },
-          "theme_file_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Theme File Hash"
-          },
-          "theme_status": {
-            "$ref": "#/components/schemas/AssetStatus",
-            "default": "missing"
-          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -10932,49 +10584,6 @@
               }
             ],
             "title": "Year"
-          },
-          "youtube_duration": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Youtube Duration"
-          },
-          "youtube_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Youtube Id"
-          },
-          "youtube_id_source": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ThemeIdSource"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "youtube_title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Youtube Title"
           }
         },
         "required": [
@@ -10993,33 +10602,11 @@
           "monitored",
           "directors",
           "studio",
+          "assets",
           "art_status",
-          "poster_status",
-          "background_status",
           "season_posters_status",
-          "poster_url",
-          "poster_preview_url",
-          "poster_source",
-          "poster_hash",
-          "poster_phash",
-          "poster_width",
-          "poster_height",
-          "background_url",
-          "background_source",
-          "background_hash",
-          "background_phash",
-          "background_width",
-          "background_height",
           "has_incorrect_aspect_ratio",
-          "youtube_id",
-          "youtube_id_source",
-          "catalog_no_theme",
           "catalog_entry_key",
-          "youtube_title",
-          "youtube_duration",
-          "theme_file_hash",
-          "theme_duration",
-          "theme_status",
           "catalog_complete",
           "catalog_themerrdb",
           "catalog_ids",
@@ -12040,85 +11627,8 @@
             "title": "Media Item Id",
             "type": "integer"
           },
-          "poster_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Hash"
-          },
-          "poster_height": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Height"
-          },
-          "poster_phash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Phash"
-          },
-          "poster_preview_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Preview Url"
-          },
-          "poster_source": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ArtSource"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "poster_status": {
-            "$ref": "#/components/schemas/AssetStatus",
-            "default": "missing"
-          },
-          "poster_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Url"
-          },
-          "poster_width": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Width"
+          "poster": {
+            "$ref": "#/components/schemas/AssetRead"
           },
           "season_num": {
             "title": "Season Num",
@@ -12143,14 +11653,7 @@
           "title",
           "file_count",
           "folder_path",
-          "poster_status",
-          "poster_url",
-          "poster_source",
-          "poster_preview_url",
-          "poster_hash",
-          "poster_phash",
-          "poster_width",
-          "poster_height",
+          "poster",
           "last_matched_at"
         ],
         "title": "SeasonRead",
@@ -12414,13 +11917,13 @@
             ],
             "title": "Job Id"
           },
-          "theme_status": {
-            "$ref": "#/components/schemas/AssetStatus"
+          "theme": {
+            "$ref": "#/components/schemas/AssetRead"
           }
         },
         "required": [
           "job_id",
-          "theme_status"
+          "theme"
         ],
         "title": "SetCollectionThemeResponse",
         "type": "object"
@@ -13292,6 +12795,28 @@
           "overall"
         ],
         "title": "ThemeStats",
+        "type": "object"
+      },
+      "TitleAssets": {
+        "additionalProperties": false,
+        "description": "A title's or collection's poster, background and theme.",
+        "properties": {
+          "background": {
+            "$ref": "#/components/schemas/AssetRead"
+          },
+          "poster": {
+            "$ref": "#/components/schemas/AssetRead"
+          },
+          "theme": {
+            "$ref": "#/components/schemas/AssetRead"
+          }
+        },
+        "required": [
+          "poster",
+          "background",
+          "theme"
+        ],
+        "title": "TitleAssets",
         "type": "object"
       },
       "TmdbChart": {
@@ -21383,7 +20908,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CollectionThemeStatusResponse"
+                  "$ref": "#/components/schemas/AssetRead"
                 }
               }
             },

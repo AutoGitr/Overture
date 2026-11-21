@@ -12,8 +12,10 @@ entry as one line at the outcome's level.
 """
 
 lazy import logging
-lazy from dataclasses import dataclass
+lazy from collections import Counter, defaultdict
+lazy from dataclasses import dataclass, field
 lazy from enum import StrEnum
+lazy from typing import Any, Protocol
 
 lazy from pydantic import Field
 
@@ -24,9 +26,9 @@ lazy from ..utils.time import utc_now_iso
 class JobOutcome(StrEnum):
     """What a job did with one target.
 
-    The word an entry starts with is also the counter it increments (see
-    ``JobTally.outcome_counters``), so a run's totals always equal the entries
-    in its log.
+    Every count a run reports is taken from its entries by
+    :class:`OutcomeCounts`, so a run's totals always equal the targets its log
+    names.
     """
 
     #: A job began a stage of work; informational, never counted.
@@ -116,11 +118,26 @@ class JobLogEntry(StrictBaseModel):
         default=None,
         description="The MEDIA_SERVERS name of that server when the entry was written.",
     )
+    count: int = Field(
+        default=1,
+        ge=1,
+        description="How many targets the entry is about; one entry can sum up "
+        "several that share an outcome and reason.",
+    )
 
     def format(self) -> str:
         """Return the entry as the line the container log writes for it."""
         prefix = f"[{self.server}] " if self.server else ""
         return f"{prefix}{self.outcome} {self.target} - {self.reason}"
+
+
+def asset_target(title: str, asset: str, *, collection: bool = False) -> str:
+    """Name one asset of a title or collection, as every log names its targets.
+
+    *asset* is the art type or ``theme``; a collection's is marked as one, so it
+    never reads as the title of the same name.
+    """
+    return f"{title} ({'collection ' if collection else ''}{asset})"
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,11 +155,83 @@ class LogServer:
 
 
 def log_entry(
-    outcome: JobOutcome, target: str, reason: str, *, server: LogServer | None = None
+    outcome: JobOutcome,
+    target: str,
+    reason: str,
+    *,
+    server: LogServer | None = None,
+    count: int = 1,
 ) -> JobLogEntry:
-    """Return the entry for one target and the reason for its outcome, stamped now.
+    """Return the entry for *count* targets and the reason for their outcome, now.
 
     *server* is the media server the entry is about, if it is about one.
     """
-    entry = JobLogEntry(outcome=outcome, target=target, reason=reason, at=utc_now_iso())
+    entry = JobLogEntry(
+        outcome=outcome, target=target, reason=reason, at=utc_now_iso(), count=count
+    )
     return server.on(entry) if server is not None else entry
+
+
+class Report(Protocol):
+    """Write one outcome for *count* targets: a run's log, or a bare count."""
+
+    async def __call__(
+        self,
+        outcome: JobOutcome,
+        target: str,
+        reason: str,
+        /,
+        *,
+        count: int = 1,
+        finished: bool = True,
+        server: LogServer | None = None,
+    ) -> None: ...
+
+
+@dataclass(slots=True)
+class OutcomeCounts:
+    """What a run's log entries add up to: the only counts a run reports.
+
+    Lines are what a filtered log pages through; targets are what the run's
+    totals, filters and notifications show, since one line can sum up several.
+    """
+
+    lines: int = 0
+    by_outcome: Counter[JobOutcome] = field(default_factory=Counter[JobOutcome])
+    targets: Counter[JobOutcome] = field(default_factory=Counter[JobOutcome])
+    by_server: defaultdict[int, Counter[JobOutcome]] = field(
+        default_factory=lambda: defaultdict(Counter[JobOutcome])
+    )
+
+    def add(self, entry: JobLogEntry) -> None:
+        """Count one entry of the run's log."""
+        self.lines += 1
+        self.by_outcome[entry.outcome] += 1
+        self.targets[entry.outcome] += entry.count
+        if entry.server_id is not None:
+            self.by_server[entry.server_id][entry.outcome] += 1
+
+    async def report(
+        self,
+        outcome: JobOutcome,
+        target: str,
+        reason: str,
+        /,
+        *,
+        count: int = 1,
+        finished: bool = True,  # noqa: ARG002 -- a bare count tracks no progress
+        server: LogServer | None = None,
+    ) -> None:
+        """Count an outcome where no run's log is written, as :class:`Report` does."""
+        self.add(log_entry(outcome, target, reason, server=server, count=count))
+
+    def payload(self) -> dict[str, Any]:
+        """Return the counts as the ``log_*`` fields of a job event."""
+        return {
+            "log_total": self.lines,
+            "log_outcomes": dict(self.by_outcome),
+            "log_targets": dict(self.targets),
+            "log_servers": {
+                server: dict(outcomes) for server, outcomes in self.by_server.items()
+            },
+        }

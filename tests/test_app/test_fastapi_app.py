@@ -20,7 +20,7 @@ lazy from overture.main import APP_VERSION, create_app, websocket_endpoint
 lazy from overture.passwords import hash_password
 lazy from overture.utils.http_security import CSRF_COOKIE, CSRF_HEADER
 lazy from overture.ws.connection_manager import ConnectionManager
-lazy from tests.factories import seed_art_slot
+lazy from tests.factories import seed_asset
 lazy from tests.runtime_helpers import make_runtime
 
 
@@ -294,7 +294,7 @@ async def test_local_image_returns_its_connection_before_rendering_thumbnail(
             title="Movie",
             folder_path=str(tmp_path),
         )
-        seed_art_slot(item, ArtType.POSTER, file_hash="a" * 64)
+        seed_asset(item, ArtType.POSTER, file_hash="a" * 64)
         session.add(item)
 
     checked_out: list[int] = []

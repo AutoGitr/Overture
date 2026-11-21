@@ -5,19 +5,31 @@ import {
   itemPosterOriginalUrl,
   seasonPosterUrls,
 } from "../../../lib/utils/artDisplay";
-import { collection, season as fixtureSeason, mediaItem } from "../../helpers/fixtures";
+import type { MediaItemRead } from "../../../generated/rest/types.gen";
+import {
+  assetFile,
+  collection,
+  season as fixtureSeason,
+  mediaItem,
+  withAsset,
+} from "../../helpers/fixtures";
 
 const movie = mediaItem({
   id: 1,
   title: "Alien",
   media_type: "movie",
   folder_path: "/movies/Alien",
-  poster_hash: "old-hash",
-  background_hash: "bg-hash",
   server_item_id: "plex-1",
-  poster_url: "https://image.test/poster.jpg",
-  background_url: "https://image.test/bg.jpg",
+  assets: {
+    poster: { file: assetFile("old-hash"), url: "https://image.test/poster.jpg" },
+    background: { file: assetFile("bg-hash"), url: "https://image.test/bg.jpg" },
+  },
 });
+
+/** *item* with no local files for its poster and background. */
+function withoutFiles(item: MediaItemRead): MediaItemRead {
+  return withAsset(withAsset(item, "poster", { file: null }), "background", { file: null });
+}
 
 describe("art display URLs", () => {
   it("shows local art as its cached display thumbnail and opens the original poster", () => {
@@ -31,11 +43,7 @@ describe("art display URLs", () => {
   });
 
   it("asks the media server for a sized copy when local art is absent", () => {
-    const itemWithoutLocal = {
-      ...movie,
-      poster_hash: null,
-      background_hash: null,
-    };
+    const itemWithoutLocal = withoutFiles(movie);
     expect(itemArtDisplayUrl(itemWithoutLocal, "poster")).toBe(
       "/api/library/items/1/provider-art?type=poster&t=0&size=display",
     );
@@ -49,36 +57,26 @@ describe("art display URLs", () => {
   });
 
   it("returns null instead of remote URLs when neither local nor server art exists", () => {
-    const unmanagedItem = {
-      ...movie,
-      poster_hash: null,
-      background_hash: null,
-      copies: [],
-    };
+    const unmanagedItem = { ...withoutFiles(movie), copies: [] };
     expect(itemArtDisplayUrl(unmanagedItem, "poster")).toBeNull();
     expect(itemArtDisplayUrl(unmanagedItem, "background")).toBeNull();
   });
 
   it("shows the chosen links of an item without a folder", () => {
-    const chosen = {
-      ...movie,
-      folder_path: null,
-      poster_hash: null,
-      background_hash: null,
-      copies: [],
-      poster_preview_url: "https://image.test/poster-small.jpg",
-    };
+    const chosen = withAsset({ ...withoutFiles(movie), folder_path: null, copies: [] }, "poster", {
+      preview_url: "https://image.test/poster-small.jpg",
+    });
     // Shown by its preview everywhere, as a search result shows it; opened in full.
     expect(itemArtDisplayUrl(chosen, "poster")).toBe("https://image.test/poster-small.jpg");
     expect(itemPosterOriginalUrl(chosen)).toBe("https://image.test/poster.jpg");
-    expect(itemArtDisplayUrl({ ...chosen, poster_preview_url: null }, "poster")).toBe(
+    expect(itemArtDisplayUrl(withAsset(chosen, "poster", { preview_url: null }), "poster")).toBe(
       "https://image.test/poster.jpg",
     );
     expect(itemArtDisplayUrl(chosen, "background")).toBe("https://image.test/bg.jpg");
     expect(
       seasonPosterUrls(
         chosen,
-        fixtureSeason({ poster_url: "https://image.test/s.jpg", poster_preview_url: null }),
+        fixtureSeason({ poster: { url: "https://image.test/s.jpg", preview_url: null } }),
       ),
     ).toEqual({ src: "https://image.test/s.jpg", fallbackSrc: null });
   });
@@ -91,8 +89,7 @@ describe("art display URLs", () => {
       id: 20,
       media_item_id: show.id,
       season_num: 1,
-      poster_hash: "season-hash",
-      poster_url: "https://image.test/season.jpg",
+      poster: { file: assetFile("season-hash"), url: "https://image.test/season.jpg" },
     });
     const localUrls = seasonPosterUrls(show, localSeason);
     expect(localUrls.src).toBe("/api/library/seasons/20/local-image?t=season-hash&size=display");
@@ -105,8 +102,7 @@ describe("art display URLs", () => {
       id: 21,
       media_item_id: show.id,
       season_num: 2,
-      poster_hash: null,
-      poster_url: "https://image.test/season.jpg",
+      poster: { file: null, url: "https://image.test/season.jpg" },
     });
     const providerUrls = seasonPosterUrls(show, providerSeason);
     expect(providerUrls.src).toContain("/api/library/seasons/21/provider-art");
@@ -117,8 +113,7 @@ describe("art display URLs", () => {
       id: 22,
       media_item_id: show.id,
       season_num: 3,
-      poster_hash: null,
-      poster_url: "https://image.test/season.jpg",
+      poster: { file: null, url: "https://image.test/season.jpg" },
     });
     const unmanagedUrls = seasonPosterUrls({ ...show, copies: [] }, unmanagedSeason);
     expect(unmanagedUrls.src).toBeNull();
@@ -129,9 +124,9 @@ describe("art display URLs", () => {
   it("shows a collection's uploaded image from the cache, else the server's copy", () => {
     const uploaded = collection({
       id: 7,
-      poster_hash: "a".repeat(64),
       server_poster_version: "v1",
       server_background_version: "v2",
+      assets: { poster: { content_hash: "a".repeat(64) } },
     });
     expect(collectionArtDisplayUrl(uploaded, "poster")).toBe(
       `/api/collections/7/local-image/poster?t=${"a".repeat(64)}&size=display`,
@@ -146,7 +141,7 @@ describe("art display URLs", () => {
     expect(
       seasonPosterUrls(
         { ...movie, media_type: "show", folder_path: null },
-        fixtureSeason({ id: 9, poster_hash: "season-hash" }),
+        fixtureSeason({ id: 9, poster: { file: assetFile("season-hash") } }),
       ).src,
     ).toBe("/api/library/seasons/9/local-image?t=season-hash&size=display");
     expect(collectionArtDisplayUrl(null, "poster")).toBeNull();

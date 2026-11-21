@@ -10,6 +10,7 @@ lazy from ...integrations.tmdb import TMDBClient
 lazy from ...media_servers.registry import ProviderRegistry
 lazy from ..art.collection_art import CollectionArtService
 lazy from ..downloads.service import DownloadService
+lazy from ..needs import AssetNeeds
 lazy from ..removal import AssetRemover
 lazy from .access import CollectionAccess
 lazy from .arr_requests import CollectionArr
@@ -59,6 +60,7 @@ class CollectionsService:
         mdblist: MDBListClient,
         art: CollectionArtService,
         remover: AssetRemover,
+        needs: AssetNeeds,
         radarr: ArrClient | None = None,
         sonarr: ArrClient | None = None,
     ) -> None:
@@ -76,6 +78,7 @@ class CollectionsService:
             publisher=publisher,
             asset_locks=downloads.asset_locks,
             app_config=app_config,
+            needs=needs,
         )
         validator = CollectionValidator(access=access, sources=self._sources)
         membership = Membership(access=access, sources=self._sources)

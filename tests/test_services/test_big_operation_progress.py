@@ -29,6 +29,7 @@ lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     StaticImageClients,
     make_local_assets,
+    make_server_copies,
     unused,
 )
 
@@ -172,15 +173,19 @@ async def test_server_audit_streams_actionable_results_and_terminal_counts(
     context = Context(JobKind.SERVER_AUDIT)
     registry = NoopProviderRegistry(SimpleNamespace())
     audit_context = AuditContext(
-        config_dir=tmp_path,
         collection_art=unused(CollectionArtService),
         provider_registry=registry,
         asset_storage=AssetStorage(app_config=app_config),
         local_assets=make_local_assets(app_config=app_config, database=database),
         phash=PhashService(app_config=app_config),
-        image_clients=StaticImageClients(),
         app_config=app_config,
         database=database,
+        server_copies=make_server_copies(
+            app_config=app_config,
+            image_clients=StaticImageClients(),
+            config_dir=tmp_path,
+            phash=PhashService(app_config=app_config),
+        ),
     )
     await server_audit.run_server_audit(
         ServerAuditRequest(),

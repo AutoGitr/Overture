@@ -8,14 +8,20 @@ lazy import pytest
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import read_art_slot
+lazy from overture.db.ledger import read_asset
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.domain import ArtType, MediaType, ServerAsset
 lazy from overture.media_servers.adapters import ServerTheme
 lazy from overture.schemas.removal import AssetRemoval, RemovalTarget
 lazy from overture.services.storage.assets import AssetStorage, PathTraversalError
 lazy from overture.utils.errors import PublicServiceError
-lazy from tests.factories import seed_art_slot
+lazy from tests.factories import (
+    file_hash_of,
+    seed_asset,
+    seed_theme,
+    theme_file_hash,
+    theme_of,
+)
 lazy from tests.media_servers import served_item
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
@@ -122,19 +128,21 @@ def _media_folder(folder: Path) -> None:
 
 async def _item(db_session: AsyncSession, folder: Path, **fields: Any) -> MediaItem:
     _media_folder(folder)
-    item = served_item(
-        id=1,
-        media_type=MediaType.MOVIE,
-        title="Movie",
-        folder_path=str(folder),
-        server_item_id="srv-1",
-        youtube_id="abcDEF123_4",
-        theme_file_hash="theme",
-        theme_file_size=len(MP3),
-        theme_file_mtime_ns=1,
-        **fields,
+    item = seed_theme(
+        served_item(
+            id=1,
+            media_type=MediaType.MOVIE,
+            title="Movie",
+            folder_path=str(folder),
+            server_item_id="srv-1",
+            **fields,
+        ),
+        "abcDEF123_4",
+        file_hash="theme",
+        file_size=len(MP3),
+        file_mtime_ns=1,
     )
-    seed_art_slot(
+    seed_asset(
         item,
         ArtType.POSTER,
         url="https://image.tmdb.org/t/p/original/p.jpg",
@@ -210,9 +218,9 @@ async def test_deleting_art_removes_the_file_and_the_server_copy_and_keeps_the_r
     item = await db_session.get(MediaItem, 1)
     assert item is not None
     await db_session.refresh(item)
-    slot = read_art_slot(item, ArtType.POSTER)
+    slot = read_asset(item, ServerAsset.POSTER)
     # The selection was kept: only the file and the server's copy went.
-    assert (slot.url, slot.file_hash) == (
+    assert (slot.url, file_hash_of(slot)) == (
         "https://image.tmdb.org/t/p/original/p.jpg",
         None,
     )
@@ -262,4 +270,4 @@ async def test_deleting_a_theme_removes_only_mp3_theme_songs(
     item = await db_session.get(MediaItem, 1)
     assert item is not None
     await db_session.refresh(item)
-    assert (item.youtube_id, item.theme_file_hash) == (None, None)
+    assert (theme_of(item).youtube_id, theme_file_hash(item)) == (None, None)

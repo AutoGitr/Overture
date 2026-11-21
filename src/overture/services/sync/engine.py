@@ -17,9 +17,9 @@ lazy from ...integrations.tmdb import TMDBClient
 lazy from ...jobs.gate import LibraryGate, WaitReporter
 lazy from ...jobs.kinds import JobKind
 lazy from ...jobs.lifecycle import ManagedJobLifecycle
+lazy from ...jobs.progress_log import JobOutcome, OutcomeCounts
 lazy from ...jobs.runner import JobContext
 lazy from ...jobs.slot import ManagedBackgroundJob
-lazy from ...jobs.tally import SyncTally
 lazy from ...media_servers.errors import MediaServerError
 lazy from ...media_servers.registry import ProviderRegistry
 lazy from ...schemas.common import StatusResponse
@@ -45,6 +45,7 @@ lazy from ..named_schedules import (
     job_run_summary,
 )
 lazy from ..scheduler import SchedulerService
+lazy from ..server_copies import ServerCopies
 lazy from .collection_sync import CollectionSync
 lazy from .reconciler import LibraryReconciler, ServerTurn
 lazy from .runner import run_sync as _run_sync
@@ -56,10 +57,10 @@ logger = logging.getLogger(__name__)
 #: The counters of a full sync, as its schedule shows them.
 _FULL_SYNC_COUNTERS = frozendict(
     {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
-        "added": "added",
-        "updated": "updated",
-        "removed": "removed",
-        "errors": "failed",
+        JobOutcome.ADDED: "added",
+        JobOutcome.UPDATED: "updated",
+        JobOutcome.REMOVED: "removed",
+        JobOutcome.ERROR: "failed",
     }
 )
 
@@ -81,6 +82,7 @@ class SyncEngine:
         config_dir: Path,
         tmdb_client: TMDBClient,
         groups: protocols.CollectionGroups,
+        server_copies: ServerCopies,
     ) -> None:
         """Initialize instance state."""
         self._app_config = app_config
@@ -105,6 +107,7 @@ class SyncEngine:
             app_config=app_config,
             database=database,
             downloads=downloads,
+            checks=server_copies,
         )
         self.reconciler = LibraryReconciler(
             publisher=publisher,
@@ -202,7 +205,7 @@ class SyncEngine:
         library_ids = config.library_ids or None
         server_order = self.provider_registry.server_ids()
         start_time = time.monotonic()
-        tally = SyncTally()
+        counts = OutcomeCounts()
         created: list[int] = []
         queued = QueuedDownloads()
         unreachable = 0
@@ -223,7 +226,7 @@ class SyncEngine:
                 provider.server.title,
                 since.isoformat(timespec="seconds"),
             )
-            errors_before = tally.errors + queued.errors
+            errors_before = counts.targets[JobOutcome.ERROR] + queued.errors
             turn = ServerTurn(provider.server_id, frozenset(server_order[:position]))
             try:
                 await self.reconciler.record_libraries(
@@ -236,7 +239,7 @@ class SyncEngine:
                         provider, recent_items
                     )
                     stats = await self.reconciler.sync_recent(
-                        recent_items, turn, tally=tally
+                        recent_items, turn, report=counts.report
                     )
                     created.extend(stats.created_item_ids)
                     queued += await queue_overturedb_downloads_for_items(
@@ -257,27 +260,36 @@ class SyncEngine:
                 raise RuntimeError(
                     f"Incremental sync of {provider.server.title} failed"
                 ) from exc
-            if tally.errors + queued.errors == errors_before:
+            if counts.targets[JobOutcome.ERROR] + queued.errors == errors_before:
                 checkpoints[provider.server_id] = now
         # New titles get their TMDB facts immediately, so criteria match them before
         # the next full sync.
         await self._enrichment.read_new(created)
         duration = max(0.0, time.monotonic() - start_time)
-        errors = tally.errors + queued.errors + unreachable
+        added, updated, unchanged, failed = (
+            counts.targets[outcome]
+            for outcome in (
+                JobOutcome.ADDED,
+                JobOutcome.UPDATED,
+                JobOutcome.UNCHANGED,
+                JobOutcome.ERROR,
+            )
+        )
+        errors = failed + queued.errors + unreachable
         downloads_count = queued.total
         # A poll that found nothing new is routine; one that changed the
         # library, queued downloads or hit errors is worth reading.
         logger.log(
             logging.INFO
-            if tally.added or tally.updated or downloads_count or errors
+            if added or updated or downloads_count or errors
             else logging.DEBUG,
             "Incremental sync finished in %s - added %d, updated %d, unchanged %d, "
             "errors %d; queued %d artwork and %d theme downloads (%d failed to queue)",
             format_duration(duration),
-            tally.added,
-            tally.updated,
-            tally.unchanged,
-            tally.errors,
+            added,
+            updated,
+            unchanged,
+            failed,
             queued.art,
             queued.themes,
             queued.errors,

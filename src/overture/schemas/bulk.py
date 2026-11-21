@@ -189,17 +189,7 @@ class BulkAssetsScheduleResponse(ScheduleResponseBase):
 class BulkJobEvent(JobEnvelope):
     """Shared WebSocket payload fields for bulk art/theme lifecycle events."""
 
-    done: int | None = None
-    total: int | None = None
-    queued: int | None = None
-    downloaded: int | None = None
-    adopted: int | None = None
-    skipped: int | None = None
-    no_match: int | None = None
-    errors: int | None = None
     settled: int | None = None
-    started_at: str | None = None
-    finished_at: str | None = None
 
 
 class BulkArtJobEvent(BulkJobEvent):

@@ -21,12 +21,13 @@ lazy from overture.schemas.bulk import (
     BulkThemeRequest,
 )
 lazy from overture.schemas.themes import ThemeSearchResult
+lazy from overture.services.asset_runs import run as asset_run
 lazy from overture.services.downloads.queue import JobTarget
-lazy from overture.services.themes import bulk as theme_bulk
 lazy from overture.services.themes.youtube_resolver import YouTubeResolver
 lazy from overture.utils.time import utc_now
 lazy from overture.ws.events import validate_event_payload
 lazy from tests.bulk_helpers import (
+    BulkThemeWork,
     Context,
     as_job_context,
     bind_stamper,
@@ -37,6 +38,8 @@ lazy from tests.bulk_helpers import (
     public_index,
     use_theme_work,
 )
+lazy from tests.factories import seed_theme
+lazy from tests.media_servers import served_item
 lazy from tests.runtime_helpers import (
     make_local_assets,
     unused,
@@ -70,10 +73,10 @@ async def test_source_failure_is_reported_even_when_a_later_source_matches(
         async def search(self, query: str, limit: int = 10):
             return await fail()
 
-    use_theme_work(monkeypatch, theme_bulk.BulkThemeWork([item], "{title}", index))
-    monkeypatch.setattr(theme_bulk, "queue_download", queue)
-    stamper = bind_stamper(monkeypatch, theme_bulk)
-    await theme_bulk.run_bulk_themes(
+    use_theme_work(monkeypatch, BulkThemeWork([item], "{title}", index))
+    monkeypatch.setattr(asset_run, "queue_download", queue)
+    stamper = bind_stamper(monkeypatch)
+    await asset_run.run_themes(
         as_job_context(context),
         BulkThemeRequest(
             source_order=[
@@ -81,14 +84,14 @@ async def test_source_failure_is_reported_even_when_a_later_source_matches(
                 ThemeBulkSource.OVERTUREDB,
             ]
         ),
-        downloads,
-        cast("Any", FailedSearch()),
+        downloads=downloads,
+        youtube_resolver=cast("Any", FailedSearch()),
         app_config=app_config,
         local_assets=make_local_assets(app_config=app_config, database=database),
         database=database,
     )
     logs = [str(line) for line in progress_logs(context)]
-    target = "Movie"
+    target = "Movie (theme)"
     failed = "YouTube search: source unavailable"
     if fallback:
         # The failure is its own error line; the later source still decides.
@@ -101,21 +104,23 @@ async def test_source_failure_is_reported_even_when_a_later_source_matches(
         assert "OvertureDB has no" in logs[0]
     assert stamper.checked == ([1] if fallback else [])
     result = context.events[-1][1]
-    assert result["errors"] == result["done"] == 1
-    assert result["queued"] == int(fallback)
-    assert result["downloaded"] == 0
+    assert result["log_targets"].get("Error", 0) == result["done"] == 1
+    assert result["log_targets"].get("Queued", 0) == int(fallback)
+    assert result["log_targets"].get("Downloaded", 0) == 0
 
 
 async def test_bulk_theme_source_order_falls_back_to_youtube_search(
     monkeypatch: pytest.MonkeyPatch, *, app_config: Settings, database: Database
 ) -> None:
-    item = MediaItem(
-        id=1,
-        media_type=MediaType.MOVIE,
-        title="Movie",
-        year=1979,
-        youtube_id=None,
-        last_matched_at=None,
+    item = seed_theme(
+        served_item(
+            id=1,
+            media_type=MediaType.MOVIE,
+            title="Movie",
+            year=1979,
+            last_matched_at=None,
+        ),
+        None,
     )
     queued: list[str] = []
 
@@ -127,22 +132,22 @@ async def test_bulk_theme_source_order_falls_back_to_youtube_search(
         queued.append(f"{target.media_item_id}:{target.target_url}")
         return True
 
-    use_theme_work(monkeypatch, theme_bulk.BulkThemeWork([item], "{title} theme"))
-    monkeypatch.setattr(theme_bulk, "queue_download", fake_queue)
-    stamper = bind_stamper(monkeypatch, theme_bulk)
+    use_theme_work(monkeypatch, BulkThemeWork([item], "{title} theme"))
+    monkeypatch.setattr(asset_run, "queue_download", fake_queue)
+    stamper = bind_stamper(monkeypatch)
 
     class FakeYoutubeResolver:
         async def search(self, query: str, limit: int = 10) -> list[ThemeSearchResult]:
             return await fake_search(query, limit=limit)
 
     context = Context()
-    await theme_bulk.run_bulk_themes(
+    await asset_run.run_themes(
         as_job_context(context),
         BulkThemeRequest(
             source_order=[ThemeBulkSource.OVERTUREDB, ThemeBulkSource.YOUTUBE_SEARCH]
         ),
-        make_bulk_downloads(app_config=app_config, database=database),
-        cast("Any", FakeYoutubeResolver()),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        youtube_resolver=cast("Any", FakeYoutubeResolver()),
         app_config=app_config,
         local_assets=make_local_assets(app_config=app_config, database=database),
         database=database,
@@ -150,21 +155,26 @@ async def test_bulk_theme_source_order_falls_back_to_youtube_search(
 
     assert queued == ["1:abcDEF12345"]
     assert stamper.checked == [1]
-    assert progress_logs(context) == ["Queued Movie - YouTube search: Movie Theme"]
+    assert progress_logs(context) == [
+        "Queued Movie (theme) - YouTube search: Movie Theme"
+    ]
     completed = context.events[-1][1]
-    assert completed["queued"] == 1
+    assert completed["log_targets"].get("Queued", 0) == 1
 
 
 async def test_bulk_theme_existing_youtube_id_without_file_queues_download(
     monkeypatch: pytest.MonkeyPatch, *, app_config: Settings, database: Database
 ) -> None:
-    item = MediaItem(
-        id=1,
-        media_type=MediaType.MOVIE,
-        title="Movie",
-        year=1979,
-        youtube_id="abcDEF12345",
-        last_matched_at=None,
+    item = seed_theme(
+        served_item(
+            id=1,
+            media_type=MediaType.MOVIE,
+            title="Movie",
+            year=1979,
+            folder_path="/media/Movie",
+            last_matched_at=None,
+        ),
+        "abcDEF12345",
     )
     queued: list[str] = []
 
@@ -172,16 +182,16 @@ async def test_bulk_theme_existing_youtube_id_without_file_queues_download(
         queued.append(f"{target.media_item_id}:{target.target_url}")
         return True
 
-    use_theme_work(monkeypatch, theme_bulk.BulkThemeWork([item], "{title} theme"))
-    monkeypatch.setattr(theme_bulk, "queue_download", fake_queue)
-    bind_stamper(monkeypatch, theme_bulk)
+    use_theme_work(monkeypatch, BulkThemeWork([item], "{title} theme"))
+    monkeypatch.setattr(asset_run, "queue_download", fake_queue)
+    bind_stamper(monkeypatch)
 
     context = Context()
-    await theme_bulk.run_bulk_themes(
+    await asset_run.run_themes(
         as_job_context(context),
         BulkThemeRequest(),
-        make_bulk_downloads(app_config=app_config, database=database),
-        unused(YouTubeResolver),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        youtube_resolver=unused(YouTubeResolver),
         app_config=app_config,
         local_assets=make_local_assets(app_config=app_config, database=database),
         database=database,
@@ -191,7 +201,7 @@ async def test_bulk_theme_existing_youtube_id_without_file_queues_download(
     log = progress_logs(context)[-1]
     assert isinstance(log, str)
     assert (
-        log == "Queued Movie - restores the saved selection; local theme file missing"
+        log == "Queued Movie (theme) - restores the saved selection; local file missing"
     )
 
 
@@ -202,17 +212,22 @@ async def test_bulk_theme_queue_failure_does_not_abort_remaining_items(
     app_config: Settings,
     database: Database,
 ) -> None:
-    failing = MediaItem(
-        id=1,
-        media_type=MediaType.MOVIE,
-        title="Broken",
-        youtube_id="abcDEF12345",
+    failing = seed_theme(
+        served_item(
+            id=1,
+            media_type=MediaType.MOVIE,
+            title="Broken",
+            folder_path=str(tmp_path / "Broken"),
+        ),
+        "abcDEF12345",
     )
-    complete = MediaItem(
-        id=2,
-        media_type=MediaType.MOVIE,
-        title="Complete",
-        theme_file_hash="theme-hash",
+    complete = seed_theme(
+        served_item(
+            id=2,
+            media_type=MediaType.MOVIE,
+            title="Complete",
+        ),
+        file_hash="theme-hash",
     )
 
     complete.folder_path = str(tmp_path)
@@ -221,18 +236,16 @@ async def test_bulk_theme_queue_failure_does_not_abort_remaining_items(
     async def fail_queue(*_args: object, **_kwargs: object) -> bool:
         raise OSError("storage unavailable")
 
-    use_theme_work(
-        monkeypatch, theme_bulk.BulkThemeWork([failing, complete], "{title} theme")
-    )
-    monkeypatch.setattr(theme_bulk, "queue_download", fail_queue)
-    bind_stamper(monkeypatch, theme_bulk)
+    use_theme_work(monkeypatch, BulkThemeWork([failing, complete], "{title} theme"))
+    monkeypatch.setattr(asset_run, "queue_download", fail_queue)
+    bind_stamper(monkeypatch)
 
     context = Context()
-    await theme_bulk.run_bulk_themes(
+    await asset_run.run_themes(
         as_job_context(context),
         BulkThemeRequest(),
-        make_bulk_downloads(app_config=app_config, database=database),
-        unused(YouTubeResolver),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        youtube_resolver=unused(YouTubeResolver),
         app_config=app_config,
         local_assets=make_local_assets(app_config=app_config, database=database),
         database=database,
@@ -241,8 +254,8 @@ async def test_bulk_theme_queue_failure_does_not_abort_remaining_items(
     assert len(progress_logs(context)) == 2
     completed = context.events[-1][1]
     assert completed["done"] == 2
-    assert completed["errors"] == 1
-    assert completed["skipped"] == 1
+    assert completed["log_targets"].get("Error", 0) == 1
+    assert completed["log_targets"].get("Skipped", 0) == 1
 
 
 async def test_bulk_theme_skip_recent_suppresses_source_lookup(
@@ -258,7 +271,7 @@ async def test_bulk_theme_skip_recent_suppresses_source_lookup(
         raise AssertionError("recently checked items are never read or searched")
 
     db_session.add_all(
-        MediaItem(
+        served_item(
             id=n,
             media_type=MediaType.MOVIE,
             title=f"Movie {n}",
@@ -270,22 +283,24 @@ async def test_bulk_theme_skip_recent_suppresses_source_lookup(
     await db_session.commit()
     local_assets = make_local_assets(app_config=app_config, database=database)
     monkeypatch.setattr(local_assets, "reconcile", unexpected)
-    bind_stamper(monkeypatch, theme_bulk)
+    bind_stamper(monkeypatch)
 
     context = Context()
-    await theme_bulk.run_bulk_themes(
+    await asset_run.run_themes(
         as_job_context(context),
         BulkThemeRequest(skip_recent_val=1, skip_recent_unit=RecentUnit.DAYS),
-        make_bulk_downloads(app_config=app_config, database=database),
-        unused(YouTubeResolver),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        youtube_resolver=unused(YouTubeResolver),
         app_config=app_config,
         local_assets=local_assets,
         database=database,
     )
 
-    assert progress_logs(context) == ["Skipped 2 items - checked within the last 1 day"]
+    assert progress_logs(context) == [
+        "Skipped 2 assets - checked within the last 1 day"
+    ]
     completed = context.events[-1][1]
-    assert completed["skipped"] == completed["total"] == 2
+    assert completed["log_targets"].get("Skipped", 0) == completed["total"] == 2
 
 
 @pytest.mark.parametrize("source", ["overturedb", "themerrdb"])
@@ -303,7 +318,7 @@ async def test_bulk_theme_items_without_catalog_theme_are_counted_in_one_step(
         raise AssertionError("planned items are never read")
 
     db_session.add_all(
-        MediaItem(
+        served_item(
             id=n,
             title=f"Movie {n}",
             media_type=MediaType.MOVIE,
@@ -314,14 +329,14 @@ async def test_bulk_theme_items_without_catalog_theme_are_counted_in_one_step(
     await enable_catalog(db_session)
     local_assets = make_local_assets(app_config=app_config, database=database)
     monkeypatch.setattr(local_assets, "reconcile", unexpected)
-    bind_stamper(monkeypatch, theme_bulk)
+    bind_stamper(monkeypatch)
 
     context = Context()
-    await theme_bulk.run_bulk_themes(
+    await asset_run.run_themes(
         as_job_context(context),
         BulkThemeRequest(source_order=[ThemeBulkSource(source)]),
-        make_bulk_downloads(app_config=app_config, database=database),
-        unused(YouTubeResolver),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        youtube_resolver=unused(YouTubeResolver),
         app_config=app_config,
         local_assets=local_assets,
         database=database,
@@ -332,10 +347,10 @@ async def test_bulk_theme_items_without_catalog_theme_are_counted_in_one_step(
         if source == "overturedb"
         else "ThemerrDB has no theme for it"
     )
-    assert progress_logs(context) == [f"No match 150 items - {reason}"]
+    assert progress_logs(context) == [f"No match 150 assets - {reason}"]
     assert context.events[1][1]["total"] == 150
     completed = context.events[-1][1]
-    assert completed["total"] == completed["no_match"] == 150
+    assert completed["total"] == completed["log_targets"].get("No match", 0) == 150
 
 
 async def test_bulk_theme_says_why_an_item_with_a_theme_was_skipped(
@@ -345,25 +360,27 @@ async def test_bulk_theme_says_why_an_item_with_a_theme_was_skipped(
     app_config: Settings,
     database: Database,
 ) -> None:
-    item = MediaItem(
-        id=1,
-        media_type=MediaType.MOVIE,
-        title="Movie",
-        theme_file_hash="theme-hash",
+    item = seed_theme(
+        served_item(
+            id=1,
+            media_type=MediaType.MOVIE,
+            title="Movie",
+        ),
+        file_hash="theme-hash",
     )
 
     item.folder_path = str(tmp_path)
     (tmp_path / "theme.mp3").write_bytes(b"existing asset")
 
-    use_theme_work(monkeypatch, theme_bulk.BulkThemeWork([item], "{title} theme"))
-    bind_stamper(monkeypatch, theme_bulk)
+    use_theme_work(monkeypatch, BulkThemeWork([item], "{title} theme"))
+    bind_stamper(monkeypatch)
 
     context = Context()
-    await theme_bulk.run_bulk_themes(
+    await asset_run.run_themes(
         as_job_context(context),
         BulkThemeRequest(),
-        make_bulk_downloads(app_config=app_config, database=database),
-        unused(YouTubeResolver),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        youtube_resolver=unused(YouTubeResolver),
         app_config=app_config,
         local_assets=make_local_assets(app_config=app_config, database=database),
         database=database,
@@ -371,7 +388,7 @@ async def test_bulk_theme_says_why_an_item_with_a_theme_was_skipped(
 
     assert progress_logs(context) == [
         (
-            "Skipped Movie - kept the local theme file "
+            "Skipped Movie (theme) - kept the theme in place "
             "(Replace existing would replace it)"
         )
     ]
@@ -384,33 +401,38 @@ async def test_bulk_theme_says_item_with_saved_youtube_id_was_already_downloaded
     app_config: Settings,
     database: Database,
 ) -> None:
-    item = MediaItem(
-        id=1,
-        media_type=MediaType.MOVIE,
-        title="Movie",
-        youtube_id="abcDEF12345",
-        theme_file_hash="theme-hash",
+    item = seed_theme(
+        served_item(
+            id=1,
+            media_type=MediaType.MOVIE,
+            title="Movie",
+        ),
+        "abcDEF12345",
+        file_hash="theme-hash",
     )
 
     item.folder_path = str(tmp_path)
     (tmp_path / "theme.mp3").write_bytes(b"existing asset")
 
-    use_theme_work(monkeypatch, theme_bulk.BulkThemeWork([item], "{title} theme"))
-    bind_stamper(monkeypatch, theme_bulk)
+    use_theme_work(monkeypatch, BulkThemeWork([item], "{title} theme"))
+    bind_stamper(monkeypatch)
 
     context = Context()
-    await theme_bulk.run_bulk_themes(
+    await asset_run.run_themes(
         as_job_context(context),
         BulkThemeRequest(),
-        make_bulk_downloads(app_config=app_config, database=database),
-        unused(YouTubeResolver),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        youtube_resolver=unused(YouTubeResolver),
         app_config=app_config,
         local_assets=make_local_assets(app_config=app_config, database=database),
         database=database,
     )
 
     assert progress_logs(context) == [
-        "Skipped Movie - saved selection already set; Replace existing searches again"
+        (
+            "Skipped Movie (theme) - saved selection already set; "
+            "Replace existing searches again"
+        )
     ]
 
 
@@ -421,26 +443,28 @@ async def test_bulk_theme_says_item_with_saved_youtube_title_was_already_downloa
     app_config: Settings,
     database: Database,
 ) -> None:
-    item = MediaItem(
-        id=1,
-        media_type=MediaType.MOVIE,
-        title="Movie",
-        youtube_title="Movie Theme",
-        theme_file_hash="theme-hash",
+    item = seed_theme(
+        served_item(
+            id=1,
+            media_type=MediaType.MOVIE,
+            title="Movie",
+        ),
+        title="Movie Theme",
+        file_hash="theme-hash",
     )
 
     item.folder_path = str(tmp_path)
     (tmp_path / "theme.mp3").write_bytes(b"existing asset")
 
-    use_theme_work(monkeypatch, theme_bulk.BulkThemeWork([item], "{title} theme"))
-    bind_stamper(monkeypatch, theme_bulk)
+    use_theme_work(monkeypatch, BulkThemeWork([item], "{title} theme"))
+    bind_stamper(monkeypatch)
 
     context = Context()
-    await theme_bulk.run_bulk_themes(
+    await asset_run.run_themes(
         as_job_context(context),
         BulkThemeRequest(),
-        make_bulk_downloads(app_config=app_config, database=database),
-        unused(YouTubeResolver),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        youtube_resolver=unused(YouTubeResolver),
         app_config=app_config,
         local_assets=make_local_assets(app_config=app_config, database=database),
         database=database,
@@ -448,7 +472,7 @@ async def test_bulk_theme_says_item_with_saved_youtube_title_was_already_downloa
 
     assert progress_logs(context) == [
         (
-            "Skipped Movie - kept the local theme file "
+            "Skipped Movie (theme) - kept the theme in place "
             "(Replace existing would replace it)"
         )
     ]
@@ -458,63 +482,64 @@ async def test_bulk_theme_single_item_without_catalog_theme_has_singular_plurali
     db_session: AsyncSession, *, app_config: Settings, database: Database
 ) -> None:
     db_session.add(
-        MediaItem(
+        served_item(
             id=1, title="Movie", media_type=MediaType.MOVIE, folder_path="/media/Movie"
         )
     )
     await enable_catalog(db_session)
 
     context = Context()
-    await theme_bulk.run_bulk_themes(
+    await asset_run.run_themes(
         as_job_context(context),
         BulkThemeRequest(source_order=[ThemeBulkSource.OVERTUREDB]),
-        make_bulk_downloads(app_config=app_config, database=database),
-        unused(YouTubeResolver),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        youtube_resolver=unused(YouTubeResolver),
         app_config=app_config,
         local_assets=make_local_assets(app_config=app_config, database=database),
         database=database,
     )
 
     assert progress_logs(context) == [
-        "No match 1 item - OvertureDB has no entry for it"
+        "No match 1 asset - OvertureDB has no entry for it"
     ]
 
 
 @pytest.mark.parametrize(
     ("source_order", "expected"),
     [
-        (["overturedb"], "No match Movie - OvertureDB has no entry for it"),
-        (["themerrdb"], "No match Movie - ThemerrDB has no theme for it"),
+        (["overturedb"], "No match Movie (theme) - OvertureDB has no entry for it"),
+        (["themerrdb"], "No match Movie (theme) - ThemerrDB has no theme for it"),
         (
             ["youtube_search"],
-            "No match Movie - YouTube search: no result for 'Movie theme'",
+            "No match Movie (theme) - YouTube search: no result for 'Movie theme'",
         ),
         (
             ["overturedb", "themerrdb"],
             (
-                "No match Movie - OvertureDB has no entry for it; "
+                "No match Movie (theme) - OvertureDB has no entry for it; "
                 "ThemerrDB has no theme for it"
             ),
         ),
         (
             ["overturedb", "youtube_search"],
             (
-                "No match Movie - OvertureDB has no entry for it; "
+                "No match Movie (theme) - OvertureDB has no entry for it; "
                 "YouTube search: no result for 'Movie theme'"
             ),
         ),
         (
             ["youtube_search", "overturedb"],
             (
-                "No match Movie - YouTube search: no result for 'Movie theme'; "
+                "No match Movie (theme) - YouTube search: no result for 'Movie theme'; "
                 "OvertureDB has no entry for it"
             ),
         ),
         (
             ["overturedb", "themerrdb", "youtube_search"],
             (
-                "No match Movie - OvertureDB has no entry for it; ThemerrDB has "
-                "no theme for it; YouTube search: no result for 'Movie theme'"
+                "No match Movie (theme) - OvertureDB has no entry for it; "
+                "ThemerrDB has no theme for it; "
+                "YouTube search: no result for 'Movie theme'"
             ),
         ),
     ],
@@ -534,15 +559,15 @@ async def test_bulk_theme_names_the_sources_that_found_nothing(
             _ = (query, limit)
             return []
 
-    use_theme_work(monkeypatch, theme_bulk.BulkThemeWork([item], "{title} theme"))
-    bind_stamper(monkeypatch, theme_bulk)
+    use_theme_work(monkeypatch, BulkThemeWork([item], "{title} theme"))
+    bind_stamper(monkeypatch)
 
     context = Context()
-    await theme_bulk.run_bulk_themes(
+    await asset_run.run_themes(
         as_job_context(context),
         BulkThemeRequest(source_order=cast("list[Any]", source_order)),
-        make_bulk_downloads(app_config=app_config, database=database),
-        cast("Any", EmptyResolver()),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        youtube_resolver=cast("Any", EmptyResolver()),
         app_config=app_config,
         local_assets=make_local_assets(app_config=app_config, database=database),
         database=database,
@@ -569,48 +594,46 @@ async def test_bulk_theme_selects_overturedb_or_themerrdb_by_configured_order(
         queued.append(target.target_url)
         return True
 
-    use_theme_work(
-        monkeypatch, theme_bulk.BulkThemeWork([item], "{title} theme", index)
-    )
-    monkeypatch.setattr(theme_bulk, "queue_download", fake_queue)
-    bind_stamper(monkeypatch, theme_bulk)
+    use_theme_work(monkeypatch, BulkThemeWork([item], "{title} theme", index))
+    monkeypatch.setattr(asset_run, "queue_download", fake_queue)
+    bind_stamper(monkeypatch)
 
     # Order 1: overturedb first
     context1 = Context()
-    await theme_bulk.run_bulk_themes(
+    await asset_run.run_themes(
         as_job_context(context1),
         BulkThemeRequest(
             source_order=[ThemeBulkSource.OVERTUREDB, ThemeBulkSource.THEMERRDB]
         ),
-        make_bulk_downloads(app_config=app_config, database=database),
-        unused(YouTubeResolver),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        youtube_resolver=unused(YouTubeResolver),
         app_config=app_config,
         local_assets=make_local_assets(app_config=app_config, database=database),
         database=database,
     )
     assert queued == ["yt-overture"]
     assert any(
-        "Queued Movie - OvertureDB theme" in str(line)
+        "Queued Movie (theme) - OvertureDB theme" in str(line)
         for line in progress_logs(context1)
     )
 
     # Order 2: themerrdb first
     queued.clear()
     context2 = Context()
-    await theme_bulk.run_bulk_themes(
+    await asset_run.run_themes(
         as_job_context(context2),
         BulkThemeRequest(
             source_order=[ThemeBulkSource.THEMERRDB, ThemeBulkSource.OVERTUREDB]
         ),
-        make_bulk_downloads(app_config=app_config, database=database),
-        unused(YouTubeResolver),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        youtube_resolver=unused(YouTubeResolver),
         app_config=app_config,
         local_assets=make_local_assets(app_config=app_config, database=database),
         database=database,
     )
     assert queued == ["yt-themerr"]
     assert any(
-        "Queued Movie - ThemerrDB theme" in str(line)
+        "Queued Movie (theme) - ThemerrDB theme" in str(line)
         for line in progress_logs(context2)
     )
 
@@ -635,21 +658,21 @@ async def test_bulk_theme_falls_back_when_first_source_previously_failed(
 
     use_theme_work(
         monkeypatch,
-        theme_bulk.BulkThemeWork(
+        BulkThemeWork(
             [item], "{title} theme", index, failed_themes={1: {"yt-overture-failed"}}
         ),
     )
-    monkeypatch.setattr(theme_bulk, "queue_download", fake_queue)
-    bind_stamper(monkeypatch, theme_bulk)
+    monkeypatch.setattr(asset_run, "queue_download", fake_queue)
+    bind_stamper(monkeypatch)
 
     context = Context()
-    await theme_bulk.run_bulk_themes(
+    await asset_run.run_themes(
         as_job_context(context),
         BulkThemeRequest(
             source_order=[ThemeBulkSource.OVERTUREDB, ThemeBulkSource.THEMERRDB]
         ),
-        make_bulk_downloads(app_config=app_config, database=database),
-        unused(YouTubeResolver),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        youtube_resolver=unused(YouTubeResolver),
         app_config=app_config,
         local_assets=make_local_assets(app_config=app_config, database=database),
         database=database,
@@ -657,7 +680,8 @@ async def test_bulk_theme_falls_back_when_first_source_previously_failed(
     # Even though overturedb was first, it was failed, so fallback to themerrdb
     assert queued == ["yt-themerr-working"]
     assert any(
-        "Queued Movie - ThemerrDB theme" in str(line) for line in progress_logs(context)
+        "Queued Movie (theme) - ThemerrDB theme" in str(line)
+        for line in progress_logs(context)
     )
 
 
@@ -685,15 +709,15 @@ async def test_theme_searches_overlap_but_items_are_reported_in_plan_order(
         return True
 
     context = Context()
-    use_theme_work(monkeypatch, theme_bulk.BulkThemeWork(items, "{title}"))
-    monkeypatch.setattr(theme_bulk, "queue_download", queue)
-    bind_stamper(monkeypatch, theme_bulk)
+    use_theme_work(monkeypatch, BulkThemeWork(items, "{title}"))
+    monkeypatch.setattr(asset_run, "queue_download", queue)
+    bind_stamper(monkeypatch)
 
-    await theme_bulk.run_bulk_themes(
+    await asset_run.run_themes(
         as_job_context(context),
         BulkThemeRequest(source_order=[ThemeBulkSource.YOUTUBE_SEARCH]),
-        make_bulk_downloads(app_config=app_config, database=database),
-        cast("Any", SlowSearch()),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        youtube_resolver=cast("Any", SlowSearch()),
         app_config=app_config,
         local_assets=make_local_assets(app_config=app_config, database=database),
         database=database,
@@ -701,7 +725,7 @@ async def test_theme_searches_overlap_but_items_are_reported_in_plan_order(
 
     queued = [line for line in progress_logs(context) if line.startswith("Queued")]
     assert [line.split(" - ")[0] for line in queued] == [
-        f"Queued Movie {index}" for index in range(1, 6)
+        f"Queued Movie {index} (theme)" for index in range(1, 6)
     ]
     assert peak > 1
 
@@ -716,14 +740,14 @@ async def test_bulk_themes_persists_job_run(
     context = Context(JobKind.BULK_THEME)
     downloads = make_bulk_downloads(app_config=app_config, database=database)
 
-    use_theme_work(monkeypatch, theme_bulk.BulkThemeWork([item], "{title}"))
-    bind_stamper(monkeypatch, theme_bulk)
+    use_theme_work(monkeypatch, BulkThemeWork([item], "{title}"))
+    bind_stamper(monkeypatch)
 
-    await theme_bulk.run_bulk_themes(
+    await asset_run.run_themes(
         as_job_context(context),
         BulkThemeRequest(source_order=[ThemeBulkSource.OVERTUREDB]),
-        downloads,
-        cast("Any", theme_bulk.YouTubeResolver),
+        downloads=downloads,
+        youtube_resolver=unused(YouTubeResolver),
         app_config=app_config,
         local_assets=make_local_assets(app_config=app_config, database=database),
         database=database,

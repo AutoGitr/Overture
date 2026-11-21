@@ -5,15 +5,10 @@ lazy import logging
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ... import protocols
-lazy from ...db.completion import holds_files
+lazy from ...db.ledger import clear_selection, record_file, select_theme
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
-lazy from ...db.theme_file import (
-    clear_theme_selection,
-    record_theme_file,
-    select_theme,
-)
 lazy from ...domain import AssetScope, JobType, ServerAsset, ThemeIdSource
 lazy from ...schemas.common import SaveSelectionResponse, Status, StatusResponse
 lazy from ...schemas.library import ItemSelectionResponse
@@ -25,6 +20,7 @@ lazy from ...schemas.themes import (
     ThemeSearchResult,
 )
 lazy from ...utils.errors import PublicServiceError
+lazy from ...utils.time import utc_now
 lazy from ..downloads.queue import JobTarget
 lazy from ..downloads.service import DownloadService
 lazy from ..library.completion import auto_unmonitor_completed
@@ -120,7 +116,7 @@ class ThemesService:
         One without a folder downloads nothing, so the choice is recorded now
         with *metadata*.
         """
-        if not holds_files(item):
+        if item.folder_path is None:
             select_theme(
                 item,
                 youtube_id,
@@ -138,7 +134,7 @@ class ThemesService:
     async def select(self, item_id: int, youtube_id: str) -> ItemSelectionResponse:
         """Create or reuse a theme download job, or record a bare selection."""
         async with self._database.read_session() as db:
-            files = holds_files(await require_item(db, item_id))
+            files = (await require_item(db, item_id)).folder_path is not None
         metadata = None if files else await self.video_metadata(youtube_id)
 
         async with (
@@ -179,12 +175,12 @@ class ThemesService:
             async with self._database.write_session() as db:
                 item = await require_item(db, item_id)
                 if removal.forget:
-                    clear_theme_selection(item)
+                    clear_selection(item, ServerAsset.THEME)
                     await self._downloads.cancel_assets(
                         db, AssetScope(item_id, job_type=JobType.THEME)
                     )
                 if deleted:
-                    record_theme_file(item, None)
+                    record_file(item, ServerAsset.THEME, None, at=utc_now())
                 db.add(item)
             await self._downloads.committed(db)
             await self._remover.refresh_item(

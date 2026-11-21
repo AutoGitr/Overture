@@ -8,7 +8,7 @@ lazy from sqlalchemy.exc import SQLAlchemyError
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ...config import Settings
-lazy from ...db.art_slots import read_art_slot
+lazy from ...db.ledger import local_file, read_asset
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
@@ -16,7 +16,9 @@ lazy from ...db.session import CHUNK_SIZE, Database
 lazy from ...domain import (
     ITEM_ART_TYPES,
     ArtType,
+    AssetStatus,
     IncrementalThemeOrder,
+    ServerAsset,
 )
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.media_items import MediaItemRepository
@@ -67,7 +69,7 @@ def _art_targets(
     targets: list[JobTarget] = []
     for owner, art_type in owners:
         season = owner if isinstance(owner, Season) else None
-        if read_art_slot(owner, art_type).file_hash is not None:
+        if local_file(read_asset(owner, art_type.server_asset)) is not None:
             continue
         if url := index.art_url(item, art_type, season=season):
             targets.append(
@@ -100,7 +102,7 @@ async def _queue_item(
         for target in _art_targets(index, item, seasons):
             _, created = await downloads.queue_job(session, target, supersede=False)
             queued.art += created
-    if item.theme_file_hash is None and (
+    if local_file(read_asset(item, ServerAsset.THEME)) is None and (
         youtube_id := index.theme(item, theme_order.sources).value
     ):
         _, created = await downloads.queue_job(
@@ -204,12 +206,12 @@ async def queue_catalog_themes_for_collections(
                     database.write_session() as session,
                 ):
                     current = await session.get(MediaCollection, row.id)
+                    # Only a collection holding no theme at all is filled.
                     if (
                         current is None
                         or not current.monitored
-                        or current.youtube_id
-                        or current.server_theme_id
-                        or current.theme_file_hash
+                        or read_asset(current, ServerAsset.THEME).status
+                        is not AssetStatus.MISSING
                     ):
                         continue
                     _, created = await downloads.queue_job(

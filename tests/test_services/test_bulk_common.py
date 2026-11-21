@@ -6,19 +6,23 @@ lazy import pytest
 
 lazy from overture import protocols
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import select_art
+lazy from overture.db.ledger import select_art
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, MediaType
+lazy from overture.domain import ArtType, MediaType, ServerAsset
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.services.art.phash import PhashService
-lazy from overture.services.bulk_common import SelectionChangedError, queue_download
+lazy from overture.services.asset_runs.support import (
+    SelectionChangedError,
+    queue_download,
+)
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.themes.youtube_resolver import YouTubeResolver
 lazy from overture.utils.art_urls import PublicArtUrl
+lazy from tests.factories import seed_theme
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     make_download_service,
@@ -133,14 +137,16 @@ async def test_queue_download_refuses_a_slot_whose_selection_changed(
     database: Database,
 ) -> None:
     async with database.write_session() as session:
-        item = MediaItem(
-            id=1,
-            media_type=MediaType.MOVIE,
-            title="Movie",
-            folder_path="/media/movies/Movie",
-            youtube_id="newer",
+        item = seed_theme(
+            MediaItem(
+                id=1,
+                media_type=MediaType.MOVIE,
+                title="Movie",
+                folder_path="/media/movies/Movie",
+            ),
+            "newer",
         )
-        select_art(item, ArtType.POSTER, PublicArtUrl("https://x/newer.jpg"))
+        select_art(item, ServerAsset.POSTER, PublicArtUrl("https://x/newer.jpg"))
         session.add(item)
     downloads, calls = _download_service(
         monkeypatch, app_config=app_config, database=database

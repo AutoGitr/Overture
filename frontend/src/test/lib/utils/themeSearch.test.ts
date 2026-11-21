@@ -39,9 +39,13 @@ describe("themeSearch helpers", () => {
     it("orders currently selected first, then OvertureDB, then ThemerrDB, then search results", () => {
       const item = mediaItem({
         title: "Alien",
-        youtube_id: "selected_yt",
-        youtube_title: "Alien Main Title",
-        youtube_duration: 120,
+        assets: {
+          theme: {
+            youtube_id: "selected_yt",
+            youtube_title: "Alien Main Title",
+            youtube_duration: 120,
+          },
+        },
       });
       const searchResults = [
         themeSearchResult({ id: "search_1", title: "Alien Ost 1" }),
@@ -49,7 +53,8 @@ describe("themeSearch helpers", () => {
       ];
 
       const merged = mergeThemeResults({
-        item,
+        title: item.title,
+        theme: item.assets.theme,
         overtureDbId: "overture_yt",
         themerrDbId: "themerr_yt",
         searchResults,
@@ -76,12 +81,12 @@ describe("themeSearch helpers", () => {
     it("deduplicates when OvertureDB matches currently selected video and combines badges", () => {
       const item = mediaItem({
         title: "Alien",
-        youtube_id: "shared_yt",
-        youtube_title: "Alien Theme",
+        assets: { theme: { youtube_id: "shared_yt", youtube_title: "Alien Theme" } },
       });
 
       const merged = mergeThemeResults({
-        item,
+        title: item.title,
+        theme: item.assets.theme,
         overtureDbId: "shared_yt",
         themerrDbId: "themerr_yt",
       });
@@ -97,10 +102,7 @@ describe("themeSearch helpers", () => {
     });
 
     it("deduplicates search results that match existing selected or catalog themes and enriches metadata", () => {
-      const item = mediaItem({
-        title: "Alien",
-        youtube_id: "selected_yt",
-      });
+      const item = mediaItem({ title: "Alien", assets: { theme: { youtube_id: "selected_yt" } } });
       const searchResults = [
         themeSearchResult({
           id: "overture_yt",
@@ -121,7 +123,8 @@ describe("themeSearch helpers", () => {
       ];
 
       const merged = mergeThemeResults({
-        item,
+        title: item.title,
+        theme: item.assets.theme,
         overtureDbId: "overture_yt",
         searchResults,
       });
@@ -148,7 +151,8 @@ describe("themeSearch helpers", () => {
 
     it("handles null or missing item and empty inputs gracefully", () => {
       const merged = mergeThemeResults({
-        item: null,
+        title: null,
+        theme: null,
         overtureDbId: null,
         themerrDbId: null,
         searchResults: [],

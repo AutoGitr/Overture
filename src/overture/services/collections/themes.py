@@ -2,23 +2,29 @@
 
 lazy from pathlib import Path
 
+lazy from ...db.ledger import (
+    Destination,
+    Evidence,
+    clear_selection,
+    observe,
+    read_asset,
+    record_file,
+    select_theme,
+)
 lazy from ...db.models.media_collection import CollectionLibrary, MediaCollection
-lazy from ...db.theme_file import record_theme_file
-lazy from ...domain import AssetScope
+lazy from ...domain import AssetScope, DeliveryChannel, ServerAsset, ThemeIdSource
 lazy from ...media_servers.registry import CollectionProvider
+lazy from ...schemas.assets import AssetRead, asset_read
 lazy from ...schemas.collections import (
-    CollectionThemeStatusResponse,
     DeleteCollectionThemeResponse,
     SetCollectionThemeRequest,
     SetCollectionThemeResponse,
-    collection_theme_status_response,
 )
 lazy from ...schemas.common import Status
 lazy from ...schemas.removal import AssetRemoval
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
 lazy from ..downloads.collection_theme import (
-    collection_theme_source,
     collection_theme_unavailable,
     collection_themes_unavailable,
     folder_lacks_theme,
@@ -29,6 +35,7 @@ lazy from ..downloads.service import DownloadService
 lazy from ..removal import AssetRemover
 lazy from ..themes.youtube_resolver import DownloadError
 lazy from .access import CollectionAccess
+lazy from .destinations import collection_destinations
 
 
 class CollectionThemes:
@@ -55,11 +62,11 @@ class CollectionThemes:
         """Whether a Jellyfin folder of the collection holds no theme file."""
         return await folder_lacks_theme(row, self._access.provider_registry)
 
-    async def status(self, collection_id: int) -> CollectionThemeStatusResponse:
+    async def status(self, collection_id: int) -> AssetRead:
         """Return the current theme status for a collection."""
         async with self._access.database.read_session() as session:
             row = await self._access.require(session, collection_id)
-        return collection_theme_status_response(row)
+        return asset_read(read_asset(row, ServerAsset.THEME))
 
     async def queue(
         self, collection_id: int, body: SetCollectionThemeRequest
@@ -74,12 +81,7 @@ class CollectionThemes:
             raise PublicServiceError(400, reason)
         async with self._access.database.read_session() as session:
             row = await self._access.require_managed(session, collection_id)
-            status = await self._access.theme_status(
-                session,
-                row,
-                server_has_theme=bool(row.server_theme_id or row.theme_file_hash),
-                youtube_id=row.youtube_id,
-            )
+        theme = asset_read(read_asset(row, ServerAsset.THEME))
         if not row.copies:
             return await self._keep(collection_id, body.youtube_id)
         target = JobTarget.collection_theme(collection_id, row.title, body.youtube_id)
@@ -93,7 +95,7 @@ class CollectionThemes:
                 await self._access.require(session, collection_id)
                 job_id, _ = await self._downloads.queue_job(session, target)
         await self._downloads.committed(session)
-        return SetCollectionThemeResponse(job_id=job_id, theme_status=status)
+        return SetCollectionThemeResponse(job_id=job_id, theme=theme)
 
     async def _keep(
         self, collection_id: int, youtube_id: str
@@ -105,37 +107,21 @@ class CollectionThemes:
             self._access.database.write_session() as db,
         ):
             row = await self._access.require_managed(db, collection_id)
-            status = await self._access.theme_status(
-                db, row, server_has_theme=False, youtube_id=youtube_id
+            theme = asset_read(
+                select_theme(
+                    row,
+                    youtube_id,
+                    source=ThemeIdSource.SELECTION,
+                    title=None,
+                    duration=None,
+                )
             )
-            row.sqlmodel_update(
-                {
-                    "youtube_id": youtube_id,
-                    "youtube_id_source": await collection_theme_source(
-                        db, row, youtube_id
-                    ),
-                    "youtube_title": None,
-                    "youtube_duration": None,
-                    "server_theme_id": None,
-                    "updated_at": utc_now(),
-                }
-            )
-            record_theme_file(row, None)
+            row.updated_at = utc_now()
             db.add(row)
             await self._downloads.cancel_assets(db, scope)
         await self._downloads.committed(db)
-        await self._access.broadcast(
-            "collection.theme.updated",
-            {
-                "collection_id": collection_id,
-                "has_theme": False,
-                "youtube_id": youtube_id,
-                "youtube_title": None,
-                "youtube_duration": None,
-                "theme_status": status,
-            },
-        )
-        return SetCollectionThemeResponse(job_id=None, theme_status=status)
+        await self._access.updated(collection_id)
+        return SetCollectionThemeResponse(job_id=None, theme=theme)
 
     async def remove(
         self, collection_id: int, removal: AssetRemoval
@@ -157,51 +143,39 @@ class CollectionThemes:
             deleted = await self._delete_files(row) if removal.delete_file else []
             async with self._access.database.write_session() as db:
                 row = await self._access.require_managed(db, collection_id)
+                now = utc_now()
                 if removal.forget:
-                    row.sqlmodel_update(
-                        {
-                            "youtube_id": None,
-                            "youtube_id_source": None,
-                            "youtube_title": None,
-                            "youtube_duration": None,
-                        }
-                    )
+                    clear_selection(row, ServerAsset.THEME)
                     await self._downloads.cancel_assets(db, scope)
                 if removal.delete_from_server:
-                    row.server_theme_id = None
-                if deleted:
-                    record_theme_file(row, None)
-                row.updated_at = utc_now()
+                    for destination in collection_destinations(
+                        row, ServerAsset.THEME, self._access.provider_registry
+                    ):
+                        if destination.channel is DeliveryChannel.UPLOAD:
+                            observe(
+                                row,
+                                ServerAsset.THEME,
+                                destination,
+                                Evidence.DIFFERENT,
+                                ref=None,
+                                at=now,
+                            )
+                for destination, _, _, _ in deleted:
+                    record_file(
+                        row, ServerAsset.THEME, None, destination=destination, at=now
+                    )
+                row.updated_at = now
                 db.add(row)
-                response = collection_theme_status_response(row)
+                theme = asset_read(read_asset(row, ServerAsset.THEME))
             await self._downloads.committed(db)
-            for provider, part, _ in deleted:
+            for _, provider, part, _ in deleted:
                 await provider.refresh_item(part.server_item_id or "", unlock=())
-        async with self._access.database.read_session() as session:
-            status = await self._access.theme_status(
-                session,
-                await self._access.require(session, collection_id),
-                server_has_theme=response.has_theme,
-                youtube_id=response.youtube_id,
-            )
-        await self._access.broadcast(
-            "collection.theme.updated",
-            {
-                "collection_id": collection_id,
-                "has_theme": response.has_theme,
-                "youtube_id": response.youtube_id,
-                "youtube_title": response.youtube_title,
-                "youtube_duration": response.youtube_duration,
-                "theme_status": status,
-            },
-        )
-        return DeleteCollectionThemeResponse(
-            status=Status.OK, has_theme=response.has_theme, theme_status=status
-        )
+        await self._access.updated(collection_id)
+        return DeleteCollectionThemeResponse(status=Status.OK, theme=theme)
 
     async def _delete_files(
         self, row: MediaCollection
-    ) -> list[tuple[CollectionProvider, CollectionLibrary, Path]]:
+    ) -> list[tuple[Destination, CollectionProvider, CollectionLibrary, Path]]:
         """Delete the theme file in each Jellyfin server's folder for the collection.
 
         Returns the folders that had one.
@@ -214,8 +188,8 @@ class CollectionThemes:
         except DownloadError as exc:
             raise PublicServiceError(400, str(exc)) from exc
         return [
-            (provider, part, folder)
-            for provider, part, folder in folders
+            (destination, provider, part, folder)
+            for destination, provider, part, folder in folders
             if provider.server.collections_path is not None
             and await self._remover.delete_collection_theme_file(
                 folder, provider.server.collections_path

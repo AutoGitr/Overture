@@ -11,7 +11,7 @@ import { ApiError } from "../../../lib/rest/transport";
 import CollectionPage from "../../../lib/router/pages/CollectionPage.svelte";
 import { goToCollectionView, navigate } from "../../../lib/router/routes";
 import { notificationState } from "../../../lib/stores/notificationState.svelte";
-import { collectionDetail as collection } from "../../helpers/fixtures";
+import { asset, collectionDetail as collection, withAsset } from "../../helpers/fixtures";
 import { answerConfirmation } from "../../helpers/notifications";
 import { renderWithQueryClient } from "../../helpers/render";
 
@@ -140,7 +140,7 @@ describe("CollectionThemePanel theme state", () => {
   });
 
   it("shows no facts about an assigned theme", () => {
-    show({ ...starWars, theme_status: "complete", has_theme: true, youtube_id: "abc12345678" });
+    show(withAsset(starWars, "theme", { status: "complete", youtube_id: "abc12345678" }));
 
     renderPanel();
 
@@ -156,7 +156,7 @@ describe("CollectionThemePanel theme state", () => {
       steps: 4,
       percent: 41.6,
     });
-    show({ ...starWars, theme_status: "complete", has_theme: true });
+    show(withAsset(starWars, "theme", { status: "complete" }));
 
     renderPanel();
 
@@ -172,15 +172,8 @@ describe("CollectionThemePanel theme state", () => {
         delete_from_server: { count: 1 },
       },
     });
-    deleteCollectionTheme.mockResolvedValue({
-      data: { has_theme: false, theme_status: "missing" },
-    });
-    show({
-      ...starWars,
-      theme_status: "complete",
-      has_theme: true,
-      youtube_id: "abc12345678",
-    });
+    deleteCollectionTheme.mockResolvedValue({ data: { status: "ok", theme: asset("theme") } });
+    show(withAsset(starWars, "theme", { status: "complete", youtube_id: "abc12345678" }));
     await renderPage();
 
     await fireEvent.click(await screen.findByRole("button", { name: "Clear theme" }));
@@ -189,10 +182,9 @@ describe("CollectionThemePanel theme state", () => {
     ).toBe("Remove the collection theme?");
 
     await waitFor(() =>
-      expect(cachedCollection()).toMatchObject({
-        has_theme: false,
+      expect(cachedCollection()?.assets.theme).toMatchObject({
         youtube_id: null,
-        theme_status: "missing",
+        status: "missing",
       }),
     );
     expect(deleteCollectionTheme).toHaveBeenCalledWith(

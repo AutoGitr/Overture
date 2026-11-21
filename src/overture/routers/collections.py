@@ -29,6 +29,7 @@ lazy from ..schemas.art import (
     ArtSourcesResponse,
     SaveCollectionArtRequest,
 )
+lazy from ..schemas.assets import AssetRead
 lazy from ..schemas.collections import (
     ArrTagRead,
     BulkCollectionMonitorUpdate,
@@ -60,7 +61,6 @@ lazy from ..schemas.collections import (
     CollectionSetEntry,
     CollectionSetPreview,
     CollectionSetSummary,
-    CollectionThemeStatusResponse,
     DeleteCollectionThemeResponse,
     KindRecommendation,
     MdblistListRead,
@@ -294,7 +294,7 @@ async def request_collection_missing(
 async def get_collection_theme(
     collection_id: CollectionIdPath,
     themes: CollectionThemesDep,
-) -> CollectionThemeStatusResponse:
+) -> AssetRead:
     """Return the current theme status for a collection."""
     return await themes.status(collection_id)
 

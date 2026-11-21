@@ -7,7 +7,7 @@ import {
   setCollectionMonitoredMutation,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type { CollectionDetail } from "../../generated/rest/types.gen";
-import { patchCollection } from "../rest/cache";
+import { patchCollection, patchCollectionTheme } from "../rest/cache";
 import { downloadStageLabel, downloadState } from "../stores/downloadState.svelte";
 import { createNotifier } from "../stores/notificationState.svelte";
 import { askRemoval, removedMessage } from "./assetRemoval";
@@ -87,7 +87,7 @@ export class CollectionActions {
           title: target.title,
         });
       // An inactive collection keeps the choice; the sync that restores it downloads it.
-      else patchCollection(target.id, { youtube_id: videoId, theme_status: result.theme_status });
+      else patchCollectionTheme(target.id, result.theme);
       handleRecordSelectionAdvance(collectionKey(target.id), "theme", advanceContext);
       return true;
     } catch (error) {
@@ -141,13 +141,7 @@ export class CollectionActions {
         path: { collection_id: target.id },
         query: removal,
       });
-      patchCollection(target.id, {
-        has_theme: cleared.has_theme,
-        ...(removal.forget
-          ? { youtube_id: null, youtube_title: null, youtube_duration: null }
-          : {}),
-        theme_status: cleared.theme_status,
-      });
+      patchCollectionTheme(target.id, cleared.theme);
       this.feedback.success(removedMessage("the collection theme", removal));
     } catch (error) {
       this.feedback.error(errorMessage(error, "Remove theme failed"));

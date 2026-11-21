@@ -14,7 +14,7 @@ lazy from pathlib import Path
 lazy from typing import Any, cast
 
 lazy from ...schemas.themes import ThemeSearchResult
-lazy from ...utils.audio import MAX_REMOTE_AUDIO_BYTES, ffprobe_duration
+lazy from ...utils.audio import MAX_REMOTE_AUDIO_BYTES, audio_hash, ffprobe_duration
 lazy from ...utils.process import ProcessResult, run_process
 lazy from ...utils.progress import ProgressCallback, ProgressUpdate, StepProgress
 lazy from ...utils.rate_limit import RateLimitPause
@@ -128,6 +128,9 @@ class ThemeAudio:
     audio_bytes: bytes
     title: str | None
     duration: int
+    #: The hash of the audio stream without its tags, which a server keeping
+    #: its own copy is compared by; ``None`` when ffmpeg could not read it.
+    fingerprint: str | None = None
 
 
 def _parse_search_output(stdout: bytes) -> list[ThemeSearchResult]:
@@ -309,6 +312,7 @@ class YouTubeResolver:
                 audio_bytes=await owned_thread(mp3_path.read_bytes),
                 title=title or None,
                 duration=duration,
+                fingerprint=await audio_hash(mp3_path),
             )
 
     async def _video_info(self, url: str) -> dict[str, Any]:

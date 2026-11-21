@@ -14,7 +14,7 @@ import {
   FILTER_GROUPS,
   filterSidebarCollections,
   filterSidebarItems,
-  hasThemeAttributes,
+  holdsSomething,
   activeFilterCount,
   inCollectionGroup,
   metadataIssuesFor,
@@ -27,7 +27,7 @@ import {
   type SidebarSortField,
   statusTone,
 } from "../../../lib/utils/sidebarDomain";
-import { catalogRow, collection, mediaItem } from "../../helpers/fixtures";
+import { asset, assetFile, catalogRow, collection, mediaItem } from "../../helpers/fixtures";
 
 describe("catalog badge status", () => {
   it("uses the same selections for detail and sidebar tones", () => {
@@ -94,22 +94,12 @@ describe("sidebar domain helpers", () => {
     expect(statusTone("complete", true)).toBe("downloading");
   });
 
-  it("detects theme attributes presence independently of local files", () => {
-    expect(hasThemeAttributes(null)).toBe(false);
-    expect(hasThemeAttributes(undefined)).toBe(false);
-    expect(
-      hasThemeAttributes(
-        mediaItem({
-          theme_file_hash: "theme-hash",
-          youtube_id: null,
-          youtube_title: null,
-          youtube_duration: null,
-        }),
-      ),
-    ).toBe(false);
-    expect(hasThemeAttributes(mediaItem({ youtube_id: "abcDEF123_4" }))).toBe(true);
-    expect(hasThemeAttributes(mediaItem({ youtube_title: "Theme Song" }))).toBe(true);
-    expect(hasThemeAttributes(mediaItem({ youtube_duration: 120 }))).toBe(true);
+  it("has something to clear once a selection or a local file is recorded", () => {
+    expect(holdsSomething(asset("theme"))).toBe(false);
+    expect(holdsSomething(asset("theme", { youtube_id: "abcDEF123_4" }))).toBe(true);
+    expect(holdsSomething(asset("theme", { file: assetFile("theme-hash") }))).toBe(true);
+    expect(holdsSomething(asset("poster", { url: "https://img.test/p.jpg" }))).toBe(true);
+    expect(holdsSomething(asset("poster", { upload_hash: "a".repeat(64) }))).toBe(true);
   });
 });
 
@@ -141,13 +131,13 @@ describe("sidebar item filters", () => {
       id: 1,
       title: "Complete",
       art_status: "complete",
-      theme_status: "complete",
+      assets: { theme: { status: "complete" } },
     });
     const incomplete = mediaItem({
       id: 2,
       title: "Incomplete",
       art_status: "partial",
-      theme_status: "partial",
+      assets: { theme: { status: "partial" } },
     });
 
     expect(
@@ -174,9 +164,17 @@ describe("sidebar item filters", () => {
 
   it("filters resolution by an inclusive width range and hides unmeasured artwork", () => {
     const items = [
-      mediaItem({ id: 1, title: "Large", poster_width: 2000, background_width: 1280 }),
-      mediaItem({ id: 2, title: "Medium", poster_width: 1000, background_width: 3840 }),
-      mediaItem({ id: 3, title: "Small", poster_width: 500 }),
+      mediaItem({
+        id: 1,
+        title: "Large",
+        assets: { poster: { width: 2000 }, background: { width: 1280 } },
+      }),
+      mediaItem({
+        id: 2,
+        title: "Medium",
+        assets: { poster: { width: 1000 }, background: { width: 3840 } },
+      }),
+      mediaItem({ id: 3, title: "Small", assets: { poster: { width: 500 } } }),
       mediaItem({ id: 4, title: "Unmeasured" }),
     ];
     const resolution = (patch: Partial<FilterState["resolution"]>) =>
@@ -195,8 +193,12 @@ describe("sidebar item filters", () => {
 
   it("filters items and collections by an inclusive theme length range", () => {
     const items = [
-      mediaItem({ id: 1, title: "Short", theme_duration: 45 }),
-      mediaItem({ id: 2, title: "Long", theme_duration: 240, youtube_duration: 30 }),
+      mediaItem({ id: 1, title: "Short", assets: { theme: { duration: 45 } } }),
+      mediaItem({
+        id: 2,
+        title: "Long",
+        assets: { theme: { duration: 240, youtube_duration: 30 } },
+      }),
       mediaItem({ id: 3, title: "Unknown" }),
     ];
 
@@ -210,8 +212,8 @@ describe("sidebar item filters", () => {
     expect(
       filterCollections(
         [
-          collection({ id: 1, title: "Short Set", theme_duration: 30 }),
-          collection({ id: 2, title: "Long Set", theme_duration: 300 }),
+          collection({ id: 1, title: "Short Set", assets: { theme: { duration: 30 } } }),
+          collection({ id: 2, title: "Long Set", assets: { theme: { duration: 300 } } }),
           collection({ id: 3, title: "No Theme" }),
         ],
         { filters: withFilters({ themeLength: { min: 120, max: 300 } }) },
@@ -221,9 +223,21 @@ describe("sidebar item filters", () => {
 
   it("filters by any selected theme source", () => {
     const items = [
-      mediaItem({ id: 1, title: "Downloaded", youtube_id_source: "download" }),
-      mediaItem({ id: 2, title: "Tagged", youtube_id_source: "embedded_id" }),
-      mediaItem({ id: 3, title: "Linked", youtube_id_source: "metadata_url" }),
+      mediaItem({
+        id: 1,
+        title: "Downloaded",
+        assets: { theme: { youtube_id_source: "download" } },
+      }),
+      mediaItem({
+        id: 2,
+        title: "Tagged",
+        assets: { theme: { youtube_id_source: "embedded_id" } },
+      }),
+      mediaItem({
+        id: 3,
+        title: "Linked",
+        assets: { theme: { youtube_id_source: "metadata_url" } },
+      }),
       mediaItem({ id: 4, title: "No Theme" }),
     ];
 
@@ -237,11 +251,14 @@ describe("sidebar item filters", () => {
       mediaItem({
         id: 1,
         title: "Curated",
-        poster_source: "plex",
-        background_source: "tmdb",
+        assets: { poster: { source: "plex" }, background: { source: "tmdb" } },
       }),
-      mediaItem({ id: 2, title: "Fan Art", poster_source: "tmdb", background_source: "fanart" }),
-      mediaItem({ id: 3, title: "Poster DB", poster_source: "tpdb" }),
+      mediaItem({
+        id: 2,
+        title: "Fan Art",
+        assets: { poster: { source: "tmdb" }, background: { source: "fanart" } },
+      }),
+      mediaItem({ id: 3, title: "Poster DB", assets: { poster: { source: "tpdb" } } }),
       mediaItem({ id: 4, title: "No Art" }),
     ];
     const bySource = (artType: "any" | "poster" | "background", sources: string[]) =>
@@ -401,10 +418,13 @@ describe("sidebar search", () => {
       mediaItem({
         id: 1,
         title: "Jaws",
-        youtube_id: "abcDEF123_4",
-        youtube_title: "Jaws Main Title",
+        assets: { theme: { youtube_id: "abcDEF123_4", youtube_title: "Jaws Main Title" } },
       }),
-      mediaItem({ id: 2, title: "Alien", youtube_id: "zyxWVU987_6", youtube_title: "Alien OST" }),
+      mediaItem({
+        id: 2,
+        title: "Alien",
+        assets: { theme: { youtube_id: "zyxWVU987_6", youtube_title: "Alien OST" } },
+      }),
     ];
     const search = (searchQuery: string) =>
       filterItems(items, { searchQuery, searchField: "youtube" });
@@ -454,9 +474,21 @@ describe("sidebar sorting", () => {
   });
 
   it.each([
-    ["poster_resolution", { poster_width: 1000 }, { poster_width: 2000 }],
-    ["background_resolution", { background_width: 1280 }, { background_width: 3840 }],
-    ["theme_length", { theme_duration: 30 }, { theme_duration: 200 }],
+    [
+      "poster_resolution",
+      { assets: { poster: { width: 1000 } } },
+      { assets: { poster: { width: 2000 } } },
+    ],
+    [
+      "background_resolution",
+      { assets: { background: { width: 1280 } } },
+      { assets: { background: { width: 3840 } } },
+    ],
+    [
+      "theme_length",
+      { assets: { theme: { duration: 30 } } },
+      { assets: { theme: { duration: 200 } } },
+    ],
     [
       "last_synced_at",
       { last_synced_at: "2026-01-01T00:00:00Z" },
@@ -515,8 +547,8 @@ describe("sidebar collections", () => {
 
   it("filters collections by the theme status the backend reports", () => {
     const collections = [
-      collection({ id: 1, title: "Themed", theme_status: "complete" }),
-      collection({ id: 2, title: "Server Only", has_theme: true, theme_status: "partial" }),
+      collection({ id: 1, title: "Themed", assets: { theme: { status: "complete" } } }),
+      collection({ id: 2, title: "Server Only", assets: { theme: { status: "partial" } } }),
     ];
 
     expect(
@@ -534,8 +566,7 @@ describe("sidebar collections", () => {
         withheld: true,
         metadata_issues: ["no_tmdb_id", "no_server_id"],
         has_incorrect_aspect_ratio: true,
-        poster_width: 500,
-        poster_source: "tpdb",
+        assets: { poster: { width: 500, source: "tpdb" } },
       }),
     ];
     expect(
@@ -612,7 +643,12 @@ describe("sidebar collections", () => {
         sort_title: "02_Alien",
       }),
       collection({ id: 2, title: "Batman", child_count: 9, sort_title: "01_Batman" }),
-      collection({ id: 3, title: "Cars", youtube_id: "abcdefghijk", child_count: 3 }),
+      collection({
+        id: 3,
+        title: "Cars",
+        child_count: 3,
+        assets: { theme: { youtube_id: "abcdefghijk" } },
+      }),
     ];
 
     expect(filterCollections(collections, { searchField: "group", searchQuery: "franch" })).toEqual(
@@ -828,10 +864,10 @@ describe("sidebar registry", () => {
     expect(aspectDeviation(1000, 1500, "poster")).toBe(0);
     expect(aspectDeviation(null, 1500, "poster")).toBeNull();
     const items = [
-      mediaItem({ id: 1, title: "Exact", poster_width: 1000, poster_height: 1500 }),
-      mediaItem({ id: 2, title: "Square", poster_width: 1000, poster_height: 1000 }),
+      mediaItem({ id: 1, title: "Exact", assets: { poster: { width: 1000, height: 1500 } } }),
+      mediaItem({ id: 2, title: "Square", assets: { poster: { width: 1000, height: 1000 } } }),
       mediaItem({ id: 3, title: "Unmeasured" }),
-      mediaItem({ id: 4, title: "Close", poster_width: 1010, poster_height: 1500 }),
+      mediaItem({ id: 4, title: "Close", assets: { poster: { width: 1010, height: 1500 } } }),
     ];
     expect(
       filterItems(items, { sortField: "poster_aspect", sortDir: defaultSortDir("poster_aspect") }),

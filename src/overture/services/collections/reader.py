@@ -3,7 +3,7 @@
 lazy from fastapi import Response
 
 lazy from ...catalog_contract.contract import entry_file_stem
-lazy from ...db.art_slots import find_art_slot
+lazy from ...db.ledger import Destination, delivery, dimensions, read_asset
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.settings import get_app_settings
 lazy from ...domain import ITEM_ART_TYPES, ArtType, CollectionKind, ImageSize
@@ -62,9 +62,6 @@ class CollectionReader:
                 catalog.get(row.tmdb_collection_id or 0),
                 row.rule,
                 copies=self._access.held_copies(row),
-                trust_no_theme=defaults.overturedb_no_theme,
-                backgrounds=policy.backgrounds,
-                themes=policy.themes,
             ).model_copy(
                 update={
                     "below_minimum": row.child_count < policy.minimum_items,
@@ -77,13 +74,11 @@ class CollectionReader:
                     ),
                     "has_incorrect_aspect_ratio": any(
                         has_incorrect_aspect_ratio(
-                            slot.width,
-                            slot.height,
+                            *dimensions(read_asset(row, art_type.server_asset)),
                             art_type,
                             defaults.aspect_ratio_tolerance,
                         )
                         for art_type in ITEM_ART_TYPES
-                        if (slot := find_art_slot(row, art_type)) is not None
                     ),
                 }
             )
@@ -128,7 +123,6 @@ class CollectionReader:
                 {row.tmdb_collection_id} if row.tmdb_collection_id else set(),
                 app_config=self._access.app_config,
             )
-            trust_no_theme = (await get_app_settings(session)).overturedb_no_theme
         entry = catalog.get(row.tmdb_collection_id or 0)
         reason = await collection_theme_unavailable(
             row, provider_registry=self._access.provider_registry
@@ -139,9 +133,6 @@ class CollectionReader:
                 entry,
                 saved,
                 copies=self._access.held_copies(row),
-                trust_no_theme=trust_no_theme,
-                backgrounds=policy.backgrounds,
-                themes=policy.themes,
             )
             .model_copy(
                 update={
@@ -193,7 +184,11 @@ class CollectionReader:
         lead = self._access.lead(row) if row is not None else None
         if row is None or row.last_synced_at is None or lead is None:
             raise PublicServiceError(404, "Collection not found")
-        if (current_url := row.server_image_url(art_type)) is None:
+        seen = delivery(
+            read_asset(row, art_type.server_asset),
+            Destination(lead.server_id, lead.server_item_id),
+        )
+        if seen is None or (current_url := seen.observed_ref) is None:
             raise PublicServiceError(404, "Collection image not found")
         request = await self._access.provider(
             lead.server_id

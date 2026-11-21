@@ -8,7 +8,7 @@ lazy import pytest
 lazy from overture.jobs.progress_log import JobLogEntry
 lazy from overture.jobs.runner import JobContext, ManagedJob
 lazy from overture.jobs.tally import BulkAssetTally
-lazy from overture.services.bulk_common import (
+lazy from overture.services.asset_runs.support import (
     SelectionChangedError,
     queue_and_report,
     report_downloads,
@@ -74,9 +74,6 @@ async def test_queue_outcome_is_one_counted_line(queue_state: str) -> None:
     succeeded = await queue_and_report(job, "Movie", "OvertureDB theme", queue)
 
     assert succeeded is (queue_state in {"new", "existing"})
-    assert job.tally.queued == int(queue_state == "new")
-    assert job.tally.skipped == int(queue_state in {"existing", "changed"})
-    assert job.tally.errors == int(queue_state == "failed")
     assert job.tally.done == 1
     assert context.logs == [
         {
@@ -147,10 +144,6 @@ async def test_report_downloads_counts_what_landed_and_what_failed() -> None:
     ):
         pass
 
-    assert job.tally.downloaded == 2
-    assert job.tally.adopted == 0
-    assert job.tally.skipped == 1
-    assert job.tally.errors == 1
     assert job.tally.settled == 4
     # A download's outcome follows the target's decision; it is not a new target.
     assert job.tally.done == 0
@@ -178,7 +171,6 @@ async def test_report_downloads_gives_up_the_wait_when_the_run_is_stopped() -> N
     ):
         pass
 
-    assert job.tally.downloaded == 1
     assert context.logs == ["Downloaded Alien (poster) - written to disk"]
 
 

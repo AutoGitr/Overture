@@ -4,9 +4,9 @@ lazy from unittest.mock import AsyncMock, MagicMock
 
 lazy from starlette.responses import Response
 
+lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.domain import (
     ArtType,
-    AssetStatus,
     CollectionOrder,
     CollectionPosterStyle,
     FilterField,
@@ -20,6 +20,7 @@ lazy from overture.schemas.art import (
     ArtSourcesResponse,
     SaveCollectionArtRequest,
 )
+lazy from overture.schemas.assets import assets_read
 lazy from overture.schemas.collections import (
     ArrTagRead,
     BulkCollectionMonitorUpdate,
@@ -39,7 +40,6 @@ lazy from overture.schemas.collections import (
     CollectionRead,
     CollectionRuleRead,
     CollectionSetPreview,
-    CollectionThemeStatusResponse,
     DeleteCollectionThemeResponse,
     FilterGroup,
     SetCollectionThemeRequest,
@@ -59,14 +59,17 @@ lazy from tests.collection_helpers import library_rule
 
 
 async def test_collection_routes_delegate_to_service() -> None:
+    assets = assets_read(MediaCollection(id=1, title="Star Wars"))
     read_item = CollectionRead(
         id=1,
+        assets=assets,
         library_ids=["1:lib1"],
         media_types=[MediaType.MOVIE],
         title="Star Wars",
     )
     detail_item = CollectionDetail(
         id=1,
+        assets=assets,
         library_ids=["1:lib1"],
         media_types=[MediaType.MOVIE],
         title="Star Wars",
@@ -99,20 +102,12 @@ async def test_collection_routes_delegate_to_service() -> None:
         return_value=BulkCollectionOperationResult(collection_ids=[1], errors={})
     )
     service.reader.get = AsyncMock(return_value=detail_item)
-    service.themes.status = AsyncMock(
-        return_value=CollectionThemeStatusResponse(has_theme=True)
-    )
+    service.themes.status = AsyncMock(return_value=assets.theme)
     service.themes.queue = AsyncMock(
-        return_value=SetCollectionThemeResponse(
-            job_id="job1", theme_status=AssetStatus.PARTIAL
-        )
+        return_value=SetCollectionThemeResponse(job_id="job1", theme=assets.theme)
     )
     service.themes.remove = AsyncMock(
-        return_value=DeleteCollectionThemeResponse(
-            status=Status.OK,
-            has_theme=False,
-            theme_status=AssetStatus.MISSING,
-        )
+        return_value=DeleteCollectionThemeResponse(status=Status.OK, theme=assets.theme)
     )
     service.editor.set_monitored = AsyncMock(
         return_value=MonitoredResponse(monitored=True)
@@ -232,7 +227,7 @@ async def test_collection_routes_delegate_to_service() -> None:
 
     # Theme ops
     theme = await collections_router.get_collection_theme(1, service.themes)
-    assert theme.has_theme is True
+    assert theme == assets.theme
     set_theme = SetCollectionThemeRequest(youtube_id="dQw4w9WgXcQ")
     assert (
         await collections_router.set_collection_theme(1, set_theme, service.themes)

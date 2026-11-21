@@ -48,7 +48,7 @@
       value: serverAuditState.found,
       title: "Files that differ from what the server shows",
     },
-    { label: "errors", value: serverAuditState.errors, tone: "danger" },
+    { label: "errors", value: serverAuditState.count("Error"), tone: "danger" },
   ]}
 >
   <JobResultsList

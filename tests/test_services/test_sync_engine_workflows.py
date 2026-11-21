@@ -23,16 +23,15 @@ lazy from overture.jobs import results as job_results
 lazy from overture.jobs.gate import LibraryGate
 lazy from overture.jobs.kinds import JobKind
 lazy from overture.jobs.lifecycle import ManagedJobLifecycle
-lazy from overture.jobs.progress_log import JobLogEntry, JobOutcome, log_entry
+lazy from overture.jobs.progress_log import JobLogEntry, JobOutcome, Report
 lazy from overture.jobs.runner import JobContext, run_managed_job
-lazy from overture.jobs.tally import SyncTally
+lazy from overture.jobs.tally import JobTally
 lazy from overture.media_servers.adapters import (
     MAX_SEASONS_PER_SHOW,
     ServerCollection,
     ServerItem,
     ServerSeason,
     ServerSection,
-    SyncProgressCallback,
     SyncStopCheck,
 )
 lazy from overture.media_servers.errors import MediaServerError
@@ -47,6 +46,7 @@ lazy from overture.services.art.phash import PhashService
 lazy from overture.services.catalog.downloads import QueuedDownloads
 lazy from overture.services.local_assets.service import LocalAssets
 lazy from overture.services.scheduler import SchedulerService
+lazy from overture.services.server_copies import ServerCopies
 lazy from overture.services.sync import engine as module
 lazy from overture.services.sync import runner as sync_runner_module
 lazy from overture.services.sync.collection_sync import CollectionSync
@@ -71,7 +71,7 @@ lazy from tests.runtime_helpers import (
     server_sections,
     unused,
 )
-lazy from tests.sync_helpers import sync_full
+lazy from tests.sync_helpers import RecordedReport, sync_full
 
 LIFECYCLE = ManagedJobLifecycle(JobKind.SYNC)
 
@@ -208,16 +208,15 @@ async def test_staged_sync_assigns_shared_guid_items_to_distinct_rows(
     )
     async with StagedListing(tmp_path / "provider.sqlite") as listing:
         await listing.append([first, second])
-        result = await reconciler.sync_staged(
+        report = RecordedReport()
+        await reconciler.sync_staged(
             listing,
             ServerTurn(TEST_SERVER_ID),
             library_ids=None,
-            tally=SyncTally(),
-            progress_cb=None,
+            report=report,
             stop_check=None,
         )
-        assert result.tally.errors == 0
-        assert result.tally.done == 2
+        assert (report[JobOutcome.ERROR], report.done) == (0, 2)
         assert await listing.is_mapped(1)
         assert await listing.is_mapped(2)
 
@@ -250,14 +249,13 @@ async def test_listed_sync_skips_rows_it_already_claimed(
     )
 
     items = [first, second]
-    result = await (
-        sync_full(reconciler, items)
-        if method == "sync_full"
-        else reconciler.sync_recent(items, ServerTurn(TEST_SERVER_ID))
-    )
+    report = RecordedReport()
+    if method == "sync_full":
+        await sync_full(reconciler, items, report=report)
+    else:
+        await reconciler.sync_recent(items, ServerTurn(TEST_SERVER_ID), report=report)
 
-    assert result.tally.errors == 0
-    assert result.tally.done == 2
+    assert (report[JobOutcome.ERROR], report.done) == (0, 2)
     async with database.read_session() as session:
         ids = await copy_ids(session)
     assert sorted(ids.items()) == [
@@ -306,16 +304,16 @@ async def test_staged_sync_stamps_items_and_reports_changes_stamped(
     )
     async with StagedListing(tmp_path / "provider.sqlite") as listing:
         await listing.append([unchanged, changed])
-        result = await reconciler.sync_staged(
+        report = RecordedReport()
+        await reconciler.sync_staged(
             listing,
             ServerTurn(TEST_SERVER_ID),
             library_ids=None,
-            tally=SyncTally(),
-            progress_cb=None,
+            report=report,
             stop_check=None,
         )
 
-    assert (result.tally.unchanged, result.tally.updated) == (1, 1)
+    assert (report[JobOutcome.UNCHANGED], report[JobOutcome.UPDATED]) == (1, 1)
     async with database.read_session() as session:
         items = (await session.exec(select(MediaItem))).all()
         copies = (await session.exec(select(MediaItemCopy))).all()
@@ -411,49 +409,17 @@ class FakeReconciler(LibraryReconciler):
         turn: ServerTurn,
         *,
         library_ids: list[str] | None,
-        tally: SyncTally,
-        progress_cb: SyncProgressCallback | None,
+        report: Report,
         stop_check: SyncStopCheck | None,
     ) -> SyncResult:
         rows = await listing.batch(0)
-        return await self.reconcile_listed(
-            [item for _, item in rows],
-            library_ids=library_ids,
-            tally=tally,
-            progress_cb=progress_cb,
-            stop_check=stop_check,
-        )
-
-    async def reconcile_listed(
-        self,
-        server_items: list[ServerItem],
-        *,
-        library_ids: list[str] | None = None,
-        tally: SyncTally | None = None,
-        progress_cb: SyncProgressCallback | None = None,
-        stop_check: SyncStopCheck | None = None,
-    ) -> SyncResult:
-        assert server_items == normalized_items()
+        assert [item for _, item in rows] == normalized_items()
         assert library_ids == ["1:1"]
         assert stop_check is not None
         assert stop_check() is False
-        if progress_cb:
-            assert tally is not None
-            tally.done = 1
-            tally.added = 1
-            tally.unchanged = 0
-            tally.errors = 0
-            await progress_cb(log_entry(JobOutcome.ADDED, "One", "pulled"))
-            assert tally is not None
-            tally.done = 2
-            tally.added = 1
-            tally.unchanged = 1
-            tally.errors = 0
-            await progress_cb(log_entry(JobOutcome.UNCHANGED, "Two", "checked"))
-        return SyncResult(
-            tally=SyncTally(added=1, unchanged=1, errors=0),
-            created_item_ids=[42],
-        )
+        await report(JobOutcome.ADDED, "One", "pulled")
+        await report(JobOutcome.UNCHANGED, "Two", "checked")
+        return SyncResult(created_item_ids=[42])
 
     @override
     async def sync_recent(
@@ -461,8 +427,7 @@ class FakeReconciler(LibraryReconciler):
         server_items: list[ServerItem],
         turn: ServerTurn,
         *,
-        tally: SyncTally | None = None,
-        progress_cb: SyncProgressCallback | None = None,
+        report: Report,
         stop_check: SyncStopCheck | None = None,
     ) -> SyncResult:
         raise AssertionError("sync_recent was not expected")
@@ -489,6 +454,7 @@ def make_engine(
         app_config=app_config,
         database=database,
         groups=NoGroups(),
+        server_copies=unused(ServerCopies),
     )
 
 
@@ -597,71 +563,13 @@ async def test_run_sync_broadcasts_progress_and_saves_completed_snapshot(
     last_event, last_payload = probe.terminal()
     assert last_event == "sync.completed"
     assert last_payload["done"] == 2
-    assert last_payload["added"] == 1
-    assert last_payload["unchanged"] == 1
-    assert last_payload["errors"] == 0
+    assert last_payload["log_targets"] == {
+        JobOutcome.STARTED: 1,
+        JobOutcome.ADDED: 1,
+        JobOutcome.UNCHANGED: 1,
+    }
     assert last_payload["finished_at"]
     assert last_payload["job"]["status"] == "completed"
-
-
-async def test_run_sync_progress_counters_survive_a_throttled_callback(
-    tmp_path: Path,
-) -> None:
-    """A quiet item reported once per ten must still count as ten unchanged.
-
-    The reconciler only calls back on every tenth up-to-date item, so counting
-    callbacks understated 'unchanged' by 10x until the terminal event corrected
-    it. The counters travel with the report, so they cannot drift.
-    """
-
-    class ThrottledProvider(FakeProvider):
-        @override
-        async def iter_items(
-            self,
-            library_ids: list[str] | None = None,
-        ) -> AsyncIterator[list[ServerItem]]:
-            yield []
-
-    class ThrottledReconciler(FakeReconciler):
-        @override
-        async def reconcile_listed(
-            self,
-            server_items: list[ServerItem],
-            *,
-            library_ids: list[str] | None = None,
-            tally: SyncTally | None = None,
-            progress_cb: SyncProgressCallback | None = None,
-            stop_check: SyncStopCheck | None = None,
-        ) -> SyncResult:
-            assert progress_cb is not None
-            assert tally is not None
-            tally.done = 10
-            tally.total = 100
-            tally.added = 0
-            tally.unchanged = 10
-            tally.errors = 0
-            await progress_cb(log_entry(JobOutcome.UNCHANGED, "Quiet", "no change"))
-            return SyncResult(
-                tally=SyncTally(added=0, unchanged=10, errors=0),
-                created_item_ids=[],
-            )
-
-    probe = JobProbe(lifecycle=LIFECYCLE)
-
-    await sync_runner_module.run_sync(
-        probe.context,
-        provider_registry=NoopProviderRegistry(ThrottledProvider()),
-        reconciler=ThrottledReconciler(),
-        config_dir=tmp_path,
-        tmdb_seasons=NoTmdbShows(),
-        enrichment=NoTmdbFacts(),
-        collections=NoCollections(),
-        groups=NoGroups(),
-    )
-
-    _, progress_payload = probe.events[-2]
-    assert progress_payload["unchanged"] == 10
-    assert progress_payload["done"] == 10
 
 
 class QuietProvider(FakeProvider):
@@ -677,19 +585,16 @@ class QuietProvider(FakeProvider):
 
 class QuietReconciler(FakeReconciler):
     @override
-    async def reconcile_listed(
+    async def sync_staged(
         self,
-        server_items: list[ServerItem],
+        listing: Any,
+        turn: ServerTurn,
         *,
-        library_ids: list[str] | None = None,
-        tally: SyncTally | None = None,
-        progress_cb: SyncProgressCallback | None = None,
-        stop_check: SyncStopCheck | None = None,
+        library_ids: list[str] | None,
+        report: Report,
+        stop_check: SyncStopCheck | None,
     ) -> SyncResult:
-        return SyncResult(
-            tally=SyncTally(added=0, unchanged=0, errors=0),
-            created_item_ids=[],
-        )
+        return SyncResult()
 
 
 async def test_run_sync_reports_stopped_when_cancellation_is_requested(
@@ -745,7 +650,7 @@ async def test_run_sync_provider_error_fails_the_job(tmp_path: Path) -> None:
 
     assert probe.names()[-1] == "sync.failed"
     _, payload = probe.terminal()
-    assert payload["errors"] == 1
+    assert payload["log_targets"].get("Error", 0) == 1
 
 
 async def test_run_sync_reports_failed_when_the_run_itself_raises(
@@ -773,7 +678,7 @@ async def test_run_sync_reports_failed_when_the_run_itself_raises(
 
     assert probe.names()[-1] == "sync.failed"
     _, payload = probe.terminal()
-    assert payload["errors"] == 1
+    assert payload["log_targets"].get("Error", 0) == 1
     assert payload["job"]["error"]["message"]
 
 
@@ -863,6 +768,7 @@ async def test_full_sync_stop_interrupts_collection_requests_and_frees_the_slot(
         app_config=app_config,
         database=database,
         groups=NoGroups(),
+        server_copies=unused(ServerCopies),
     )
     try:
         assert engine.start_background_sync()
@@ -920,11 +826,12 @@ async def test_incremental_sync_forwards_items_and_preserves_failed_checkpoints(
         reconciled.append(server_items)
         if failure == "reconcile":
             raise OSError("outer reconciliation failed")
-        tally: SyncTally = kwargs["tally"]
-        tally.added += 2
-        tally.unchanged += 1
-        tally.errors += int(failure == "partial")
-        return SyncResult(tally=tally, created_item_ids=[10, 12])
+        report: Report = kwargs["report"]
+        await report(JobOutcome.ADDED, "Ten", "new library item", count=2)
+        await report(JobOutcome.UNCHANGED, "Eleven", "matches")
+        if failure == "partial":
+            await report(JobOutcome.ERROR, "Twelve", "disk unavailable")
+        return SyncResult(created_item_ids=[10, 12])
 
     async def downloads(item_ids: list[int], **kwargs: Any) -> QueuedDownloads:
         assert kwargs["database"] is database
@@ -1023,7 +930,7 @@ async def test_a_poll_replaces_a_manual_result_and_retires_its_own(
     database: Database,
 ) -> None:
     async def manual_sync(context: JobContext, **_kwargs: Any) -> None:
-        async with run_managed_job(context, SyncTally(), database=database) as job:
+        async with run_managed_job(context, JobTally(), database=database) as job:
             await job.started()
 
     monkeypatch.setattr(module, "_run_sync", manual_sync)
@@ -1066,13 +973,18 @@ async def test_full_sync_oserror_has_one_terminal_event(
 
     class Reconciler(FakeReconciler):
         @override
-        async def reconcile_listed(
-            self, server_items: list[ServerItem], **kwargs: Any
+        async def sync_staged(
+            self,
+            listing: Any,
+            turn: ServerTurn,
+            *,
+            library_ids: list[str] | None,
+            report: Report,
+            stop_check: SyncStopCheck | None,
         ) -> SyncResult:
             assert boundary != "fetch", (
                 "failed enumeration must never reconcile or remove items"
             )
-            assert server_items == normalized_items()
             raise OSError("outer reconciliation failed")
 
     class Registry(NoopProviderRegistry):
@@ -1096,7 +1008,7 @@ async def test_full_sync_oserror_has_one_terminal_event(
     )
     event, payload = probe.terminal()
     assert event == "sync.failed"
-    assert payload["errors"] == 1
+    assert payload["log_targets"].get("Error", 0) == 1
     assert (
         len(
             [
@@ -1162,6 +1074,7 @@ async def test_full_engine_reconciles_normalized_items_only_after_successful_fet
         app_config=app_config,
         database=database,
         groups=NoGroups(),
+        server_copies=unused(ServerCopies),
     )
     try:
         assert engine.start_background_sync(SyncRunRequest(library_ids=["1:1"]))
@@ -1193,7 +1106,7 @@ async def test_full_engine_reconciles_normalized_items_only_after_successful_fet
             if name in {"sync.completed", "sync.failed", "sync.stopped"}
         ]
         assert len(terminal) == 1
-        assert terminal[0][1]["errors"] == int(fetch_fails)
+        assert terminal[0][1]["log_targets"].get("Error", 0) == int(fetch_fails)
         if fetch_fails:
             assert all(
                 not name.startswith("library.item.") for name, _ in publisher.events
@@ -1309,7 +1222,7 @@ async def test_a_scheduled_full_sync_names_its_schedule_and_retires_even_errors(
     [payload] = [
         payload for event, payload in publisher.events if event == "sync.completed"
     ]
-    assert payload["errors"]
+    assert payload["log_targets"].get("Error", 0)
     # Its schedule records the errors, so even this result leaves the Sync tab.
     assert engine.job.final_snapshot() == (None, None)
     assert JobKind.SYNC not in await job_results.latest_runs(database)
@@ -1326,7 +1239,7 @@ async def test_a_clean_scheduled_full_sync_clears_its_own_result(
     database: Database,
 ) -> None:
     async def clean_sync(context: JobContext, **_kwargs: Any) -> None:
-        async with run_managed_job(context, SyncTally()) as job:
+        async with run_managed_job(context, JobTally()) as job:
             await job.started()
             await job.report(JobOutcome.ADDED, "Movie", "new")
 
@@ -1416,7 +1329,7 @@ async def test_full_sync_can_sync_chosen_groups_and_collections_instead(
     assert (groups.synced, groups.collections) == ([("Sagas", ["1:1"])], [[7, 9]])
     assert probe.names()[-1] == "sync.completed"
     _, payload = probe.terminal()
-    assert payload["errors"] == 2
+    assert payload["log_targets"].get("Error", 0) == 2
 
 
 async def test_syncing_every_collection_reads_the_server_then_syncs_every_group(

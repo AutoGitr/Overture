@@ -23,7 +23,8 @@ IDENTIFIER_RE = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*")
 OPENAPI_PATH = Path(__file__).resolve().parents[1] / "openapi" / "overture.json"
 
 
-def _openapi_document() -> dict[str, Any]:
+def read_openapi_document() -> dict[str, Any]:
+    """Return the committed OpenAPI document, or an empty one before it exists."""
     if not OPENAPI_PATH.exists():
         return {}
     return json.loads(OPENAPI_PATH.read_text())
@@ -256,7 +257,7 @@ def _job_tables(renderer: TypeScriptRenderer) -> str:
 
 def render_ws_types() -> str:
     """Render WebSocket payload map from overture.ws.events.EVENT_REGISTRY."""
-    document = _openapi_document()
+    document = read_openapi_document()
     renderer = TypeScriptRenderer(shared_types=openapi_schema_names(document))
     payload_type_by_event: dict[str, str] = {}
     for event, definition in EVENT_REGISTRY.items():
@@ -264,7 +265,9 @@ def render_ws_types() -> str:
         if model is None:
             payload_type_by_event[event] = "null"
             continue
-        schema = model.model_json_schema(ref_template="#/$defs/{model}")
+        schema = model.model_json_schema(
+            ref_template="#/$defs/{model}", mode="serialization"
+        )
         renderer.render_named_schema(model.__name__, schema)
         payload_type_by_event[event] = model.__name__
 

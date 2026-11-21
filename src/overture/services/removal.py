@@ -84,26 +84,27 @@ class AssetRemover:
         """Say what each removal choice would change for *target*, as things stand."""
         async with self._database.read_session() as session:
             repo = RemovalRepository(session)
+            asset = target.asset
+            theme = asset == "theme"
+            kinds = (
+                [ServerAsset.THEME]
+                if asset == "theme"
+                else [art.server_asset for art in ITEM_ART[asset]]
+            )
             if target.item_ids:
-                if target.asset == "theme":
-                    return _options(await repo.item_themes(target.item_ids))
                 return _options(
-                    await repo.item_art(
-                        target.item_ids, ITEM_ART[target.asset], target.season_id
-                    ),
-                    server_unavailable=self.art_deletion_unavailable,
+                    await repo.item_assets(target.item_ids, kinds, target.season_id),
+                    server_unavailable=None if theme else self.art_deletion_unavailable,
                 )
-            if target.asset == "theme":
+            counts = await repo.collection_assets(target.collection_ids, kinds)
+            if theme:
                 return _options(
-                    await repo.collection_themes(target.collection_ids),
+                    counts,
                     file_unavailable=self._collection_theme_file_unavailable(),
                     server_unavailable=self._collection_theme_server_unavailable(),
                 )
             return _options(
-                await repo.collection_art(
-                    target.collection_ids,
-                    [art for art in ITEM_ART[target.asset] if not art.owned_by_season],
-                ),
+                counts,
                 file_unavailable=NO_COLLECTION_ART_FILE,
                 server_unavailable=self.art_deletion_unavailable,
             )

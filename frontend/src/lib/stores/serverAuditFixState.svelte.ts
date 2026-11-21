@@ -2,7 +2,7 @@
 import type { ServerAuditFixEvent } from "../../generated/ws";
 import { JobLifecycleState } from "./jobLifecycleState.svelte";
 
-class ServerAuditFixState extends JobLifecycleState<ServerAuditFixEvent, "verified" | "unchanged"> {
+class ServerAuditFixState extends JobLifecycleState<ServerAuditFixEvent> {
   /**
    * Keys of the audit rows this browser asked to fix, until the run ends.
    * A row among them without an outcome yet is still waiting on the server.
@@ -10,10 +10,7 @@ class ServerAuditFixState extends JobLifecycleState<ServerAuditFixEvent, "verifi
   pending = $state<ReadonlySet<string>>(new Set());
 
   constructor() {
-    super({
-      failureMessage: "Fixing the audit findings failed",
-      counters: ["verified", "unchanged"],
-    });
+    super({ failureMessage: "Fixing the audit findings failed" });
   }
 
   override handleCompleted(data: ServerAuditFixEvent) {

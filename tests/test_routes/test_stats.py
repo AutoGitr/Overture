@@ -8,16 +8,29 @@ lazy from fastapi.testclient import TestClient
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.models.art import ArtSlot
+lazy from overture.db.ledger import (
+    ContentFacts,
+    Destination,
+    confirm_delivery,
+    record_content,
+    select_theme,
+)
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, MediaType, ServerType
+lazy from overture.domain import (
+    ArtType,
+    DeliveryChannel,
+    MediaType,
+    ServerAsset,
+    ServerType,
+    ThemeIdSource,
+)
 lazy from overture.main import create_app
 lazy from overture.schemas.stats import StatsResponse
-lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.time import utc_now
-lazy from tests.collection_helpers import stored_collection
+lazy from tests.collection_helpers import shown_on_server, stored_collection
+lazy from tests.factories import seed_asset, seed_theme
 lazy from tests.runtime_helpers import NoopProviderRegistry, make_runtime
 
 
@@ -82,7 +95,7 @@ def test_stats_authenticated_returns_valid_schema(
     table_names = {t.table_name for t in validated.database.tables}
     assert "media_items" in table_names
     assert "seasons" in table_names
-    assert "art_slots" in table_names
+    assert {"assets", "asset_deliveries"} <= table_names
     assert "media_collections" in table_names
     # Without a media server there are no collections to count.
     assert validated.library.total_collections is None
@@ -108,10 +121,8 @@ async def test_stats_with_seeded_data(
         year=2020,
         monitored=True,
         folder_path=str(movie_folder),
-        theme_file_hash="theme-hash",
-        theme_file_size=theme_size,
-        youtube_id="abc123xyz",
     )
+    seed_theme(movie1, "abc123xyz", file_hash="theme-hash", file_size=theme_size)
     movie2 = MediaItem(
         media_type=MediaType.MOVIE,
         title="Movie Two",
@@ -131,24 +142,16 @@ async def test_stats_with_seeded_data(
     await db_session.refresh(movie2)
     await db_session.refresh(show1)
 
-    # Add artwork slots
-    db_session.add(
-        ArtSlot(
-            media_item_id=movie1.id,
-            art_type=ArtType.POSTER,
-            url=PublicArtUrl("https://example.com/poster.jpg"),
-            file_hash="hash123",
-            file_size=1000,
-        )
+    # Add artwork
+    seed_asset(
+        movie1,
+        ArtType.POSTER,
+        url="https://example.com/poster.jpg",
+        file_hash="hash123",
+        file_size=1000,
     )
-    db_session.add(
-        ArtSlot(
-            media_item_id=movie1.id,
-            art_type=ArtType.BACKGROUND,
-            file_hash="background-hash",
-            file_size=2000,
-        )
-    )
+    seed_asset(movie1, ArtType.BACKGROUND, file_hash="background-hash", file_size=2000)
+    db_session.add(movie1)
 
     # Add seasons for show1
     season1 = Season(
@@ -169,36 +172,35 @@ async def test_stats_with_seeded_data(
     await db_session.refresh(season2)
 
     # Season 1 has local poster (500 bytes)
-    db_session.add(
-        ArtSlot(
-            season_id=season1.id,
-            art_type=ArtType.SEASON_POSTER,
-            file_hash="season-hash",
-            file_size=500,
-        )
-    )
+    seed_asset(season1, ArtType.SEASON_POSTER, file_hash="season-hash", file_size=500)
+    db_session.add(season1)
     await db_session.commit()
 
     # Seed a synced collection with the theme Overture stored
-    coll1 = stored_collection(
-        server_item_id="coll-1",
-        media_type=MediaType.MOVIE,
-        server_theme_id="server_th_1",
-        youtube_id="coll_yt_123",
-        monitored=True,
-        last_synced_at=utc_now(),
-    )
-    db_session.add(coll1)
-    await db_session.commit()
-    await db_session.refresh(coll1)
-    db_session.add(
-        ArtSlot(
-            collection_id=coll1.id,
-            art_type=ArtType.POSTER,
-            file_hash="collection-hash",
-            file_size=700,
+    coll1 = shown_on_server(
+        stored_collection(
+            server_item_id="coll-1",
+            media_type=MediaType.MOVIE,
+            monitored=True,
+            last_synced_at=utc_now(),
         )
     )
+    seed_asset(coll1, ArtType.POSTER, file_hash="collection-hash")
+    select_theme(
+        coll1,
+        "coll_yt_123",
+        source=ThemeIdSource.DOWNLOAD,
+        title=None,
+        duration=None,
+    )
+    record_content(coll1, ServerAsset.THEME, ContentFacts("youtube:coll_yt_123"))
+    confirm_delivery(
+        coll1,
+        ServerAsset.THEME,
+        Destination(1, "coll-1", DeliveryChannel.UPLOAD),
+        ref="server_th_1",
+    )
+    db_session.add(coll1)
     await db_session.commit()
 
     # Query stats
@@ -250,11 +252,12 @@ async def test_stats_with_seeded_data(
     assert stats.art.season_poster.matched_percentage == 0.0
     assert stats.art.season_poster.total_size_bytes == 500
 
-    # A collection has a poster and a background; its poster is local.
+    # A collection has a poster and a background; its copy shows the poster.
+    # Overture keeps the uploaded image in its image cache, not as a file here.
     collection_art = stats.art.collections
     assert collection_art is not None
     assert (collection_art.total, collection_art.local_files) == (2, 1)
-    assert collection_art.total_size_bytes == 700
+    assert collection_art.total_size_bytes == 0
 
     # Verify overall artwork totals
     assert stats.art.overall.total == 10
@@ -262,7 +265,7 @@ async def test_stats_with_seeded_data(
     assert stats.art.overall.local_percentage == 40.0
     assert stats.art.overall.matched_files == 1
     assert stats.art.overall.matched_percentage == 10.0
-    assert stats.art.overall.total_size_bytes == 4200
+    assert stats.art.overall.total_size_bytes == 3500
 
     # Theme checks
     assert stats.themes.movies.total == 2
@@ -294,7 +297,7 @@ async def test_stats_with_seeded_data(
     assert stats.themes.overall.total_size_bytes == theme_size
 
     # Storage summary
-    assert stats.storage.artwork_size_bytes == 4200
+    assert stats.storage.artwork_size_bytes == 3500
     assert stats.storage.themes_size_bytes == theme_size
     assert stats.storage.image_cache_size_bytes == stats.image_cache.total_size_bytes
-    assert stats.storage.total_footprint_bytes >= 4200 + theme_size
+    assert stats.storage.total_footprint_bytes >= 3500 + theme_size

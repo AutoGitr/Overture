@@ -11,10 +11,10 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture import protocols
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import read_art_slot
+lazy from overture.db.ledger import read_asset
 lazy from overture.db.models.media_item_copy import SeasonCopy
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, MediaType, ServerType
+lazy from overture.domain import ArtType, MediaType, ServerAsset, ServerType
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.media_servers.registry import ProviderRegistry
@@ -37,6 +37,8 @@ lazy from overture.utils.image_fetch import RateLimitedError
 lazy from tests.factories import (
     MediaItemFactory,
     SeasonFactory,
+    file_hash_of,
+    file_of,
 )
 lazy from tests.media_servers import TEST_SERVER_ID
 lazy from tests.runtime_helpers import (
@@ -261,7 +263,7 @@ async def test_clear_art_forgets_the_selection_keeps_file_facts_and_broadcasts(
             "poster": {
                 "url": "https://x/p.jpg",
                 "file_hash": "h",
-                "phash": "p",
+                "fingerprint": "p",
             }
         },
     )
@@ -277,10 +279,10 @@ async def test_clear_art_forgets_the_selection_keeps_file_facts_and_broadcasts(
 
     assert result.status == "cleared"
     await db_session.refresh(item)
-    poster = read_art_slot(item, ArtType.POSTER)
+    poster = read_asset(item, ServerAsset.POSTER)
     assert poster.url is None
-    assert poster.file_hash == "h"
-    assert poster.phash == "p"
+    assert file_hash_of(poster) == "h"
+    assert file_of(poster).fingerprint == "p"
     assert publisher.broadcasts[0][0] == "library.item.upserted"
 
 
@@ -338,12 +340,12 @@ async def test_clear_all_art_forgets_item_and_season_selections(
     assert result.status == "cleared"
     await db_session.refresh(item)
     await db_session.refresh(season)
-    assert read_art_slot(item, ArtType.POSTER).url is None
-    assert read_art_slot(item, ArtType.BACKGROUND).url is None
-    assert read_art_slot(season, ArtType.SEASON_POSTER).url is None
-    assert read_art_slot(season, ArtType.SEASON_POSTER).file_hash == "hash"
-    assert read_art_slot(item, ArtType.POSTER).file_hash == "p"
-    assert read_art_slot(item, ArtType.BACKGROUND).file_hash == "b"
+    assert read_asset(item, ServerAsset.POSTER).url is None
+    assert read_asset(item, ServerAsset.BACKGROUND).url is None
+    assert read_asset(season, ServerAsset.SEASON_POSTER).url is None
+    assert file_hash_of(read_asset(season, ServerAsset.SEASON_POSTER)) == "hash"
+    assert file_hash_of(read_asset(item, ServerAsset.POSTER)) == "p"
+    assert file_hash_of(read_asset(item, ServerAsset.BACKGROUND)) == "b"
 
 
 async def test_match_art_raises_404_for_missing_item(
@@ -622,7 +624,7 @@ async def test_save_art_returns_and_announces_the_item_as_stored(
 
     assert result.selection.status == "enqueued"
     assert result.item.id == 1
-    assert result.item.poster_url == "https://image.tmdb.org/t/p/original/a.jpg"
+    assert result.item.assets.poster.url == "https://image.tmdb.org/t/p/original/a.jpg"
     assert publisher.broadcasts == [
         (
             "library.item.upserted",
@@ -795,7 +797,7 @@ async def test_clear_season_posters_without_a_season_forgets_every_season(
     assert result.status == "cleared"
     for season in seasons:
         await db_session.refresh(season)
-        assert read_art_slot(season, ArtType.SEASON_POSTER).url is None
-        assert read_art_slot(season, ArtType.SEASON_POSTER).file_hash == "h"
+        assert read_asset(season, ServerAsset.SEASON_POSTER).url is None
+        assert file_hash_of(read_asset(season, ServerAsset.SEASON_POSTER)) == "h"
     await db_session.refresh(item)
-    assert read_art_slot(item, ArtType.POSTER).url == "https://x/p.jpg"
+    assert read_asset(item, ServerAsset.POSTER).url == "https://x/p.jpg"

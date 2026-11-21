@@ -83,8 +83,10 @@ Browsers offer this only over HTTPS, so serve Overture through a
 ## Statistics
 
 The storage footprint includes the image cache, with its originals and
-thumbnails, and your uploads. Artwork coverage and sizes include collection
-posters, backgrounds and themes, so the numbers show what still needs attention.
+thumbnails, and your uploads. Artwork coverage includes collection posters,
+backgrounds and themes, so the numbers show what still needs attention; the
+images Overture uploads to collections are kept in the image cache and counted
+there, not in the artwork sizes.
 
 Statistics count what Overture keeps, not what each server holds. A title on
 several servers is one title, with one set of files, and a collection on
@@ -95,8 +97,8 @@ files. A season poster written under each server's name counts its size once.
 ## Database record
 
 Every item and collection has a database record view that lists every stored
-column of the record and of the rows that belong to it, such as seasons, art
-slots and each server's copy, apart from what Overture derives from them.
+column of the record and of the rows that belong to it, such as seasons, its
+assets and each server's copy, apart from what Overture derives from them.
 Each row is named by what it holds, such as **Background**, **Season 2
 poster** or **Copy in Plex · Movies**. Downloads and other jobs are work done
 for a record rather than part of it, so they are left out.

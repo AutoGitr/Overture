@@ -253,9 +253,14 @@ describe("FiltersPopup edits one draft of the filter set", () => {
   it("counts operations using draft filters and the active search field", async () => {
     queryClient.setQueryData(listItemsOptions({ query: { media_type: "movie" } }).queryKey, {
       items: [
-        mediaItem({ id: 1, directors: ["Alice"], youtube_id: "theme" }),
+        mediaItem({ id: 1, directors: ["Alice"], assets: { theme: { youtube_id: "theme" } } }),
         mediaItem({ id: 2, directors: ["Alice"], monitored: false }),
-        mediaItem({ id: 3, title: "Alice", directors: ["Bob"], youtube_id: "other" }),
+        mediaItem({
+          id: 3,
+          title: "Alice",
+          directors: ["Bob"],
+          assets: { theme: { youtube_id: "other" } },
+        }),
       ],
       total: 3,
     });
@@ -283,7 +288,11 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     "removes %s as chosen in one request for a fixed filtered target set",
     async (operation, asset, label, deleteFiles) => {
       const items = [1, 2].map((id) =>
-        mediaItem({ id, title: `Item ${id}`, youtube_id: "theme", theme_status: "complete" }),
+        mediaItem({
+          id,
+          title: `Item ${id}`,
+          assets: { theme: { youtube_id: "theme", status: "complete" } },
+        }),
       );
       queryClient.setQueryData(listItemsOptions({ query: { media_type: "movie" } }).queryKey, {
         items: [...items, mediaItem({ id: 3 })],
@@ -371,7 +380,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     "does not run %s when confirmation is cancelled",
     async (label) => {
       queryClient.setQueryData(listItemsOptions({ query: { media_type: "movie" } }).queryKey, {
-        items: [mediaItem({ youtube_id: "theme" })],
+        items: [mediaItem({ assets: { theme: { youtube_id: "theme" } } })],
         total: 1,
       });
       const { calls } = mockFetchRoutes({
@@ -618,7 +627,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
       appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
     );
     queryClient.setQueryData(listCollectionsOptions().queryKey, [
-      collection({ id: 1, youtube_id: "abcdefghijk" }),
+      collection({ id: 1, assets: { theme: { youtube_id: "abcdefghijk" } } }),
       collection({ id: 2 }),
     ]);
     const { calls } = mockFetchRoutes({

@@ -8,17 +8,18 @@ lazy import pytest
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import select_art
+lazy from overture.db.ledger import select_art
 lazy from overture.db.models.catalog import CatalogCollection
 lazy from overture.db.models.settings import SETTINGS_ROW_ID, AppSettings
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, CollectionPosterStyle
+lazy from overture.domain import ArtType, CollectionPosterStyle, ServerAsset
 lazy from overture.services.catalog.export import REPORT_NAME, export_selections
 lazy from overture.services.catalog.index import CatalogIndex
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_catalog
 lazy from tests.collection_helpers import stored_collection
+lazy from tests.factories import seed_theme
 
 INDIVIDUAL = "https://image.tmdb.org/t/p/original/own.jpg"
 MATTE = "https://theposterdb.com/api/assets/668235"
@@ -138,15 +139,17 @@ async def test_a_consistent_poster_is_contributed_as_one_from_tmdb_or_theposterd
         (10, OVERLAY),
         (11, "https://assets.fanart.tv/fanart/a.jpg"),
     ):
-        row = stored_collection(
-            title=f"Saga {tmdb_id}",
-            tmdb_collection_id=tmdb_id,
-            youtube_id="dQw4w9WgXcQ",
-            last_synced_at=utc_now(),
+        row = seed_theme(
+            stored_collection(
+                title=f"Saga {tmdb_id}",
+                tmdb_collection_id=tmdb_id,
+                last_synced_at=utc_now(),
+            ),
+            "dQw4w9WgXcQ",
         )
         select_art(
             row,
-            ArtType.POSTER,
+            ServerAsset.POSTER,
             PublicArtUrl(url),
             poster_style=CollectionPosterStyle.OVERLAY,
         )
@@ -177,7 +180,7 @@ async def test_a_poster_is_contributed_as_the_style_it_was_selected_as(
     )
     select_art(
         row,
-        ArtType.POSTER,
+        ServerAsset.POSTER,
         PublicArtUrl(INDIVIDUAL),
         poster_style=CollectionPosterStyle.INDIVIDUAL,
     )

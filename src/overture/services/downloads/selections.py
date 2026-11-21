@@ -1,9 +1,9 @@
 """Download the selections an item recorded before it had a local folder."""
 
-lazy from ...db.art_slots import find_art_slot, saved_art
+lazy from ...db.ledger import read_asset, selection
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.session import Database
-lazy from ...domain import ITEM_ART_TYPES, ArtType
+lazy from ...domain import ITEM_ART_TYPES, ArtType, ServerAsset
 lazy from ...repositories.seasons import SeasonRepository
 lazy from .queue import JobTarget
 lazy from .service import DownloadService
@@ -34,11 +34,11 @@ async def queue_saved_selection_downloads(
         art = [
             (art_type, saved, None)
             for art_type in ITEM_ART_TYPES
-            if (saved := saved_art(find_art_slot(item, art_type)))
+            if (saved := selection(read_asset(item, art_type.server_asset)))
         ] + [
             (ArtType.SEASON_POSTER, saved, season.id)
             for season in seasons
-            if (saved := saved_art(find_art_slot(season, ArtType.SEASON_POSTER)))
+            if (saved := selection(read_asset(season, ServerAsset.SEASON_POSTER)))
         ]
         for art_type, saved, season_id in art:
             await downloads.queue_job(
@@ -51,7 +51,10 @@ async def queue_saved_selection_downloads(
                     season_id=season_id,
                 ),
             )
-        theme = youtube_id is not None and item.youtube_id == youtube_id
+        theme = (
+            youtube_id is not None
+            and read_asset(item, ServerAsset.THEME).youtube_id == youtube_id
+        )
         if youtube_id is not None and theme:
             await downloads.queue_job(session, JobTarget.theme(item_id, youtube_id))
 

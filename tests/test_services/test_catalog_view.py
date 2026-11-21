@@ -10,12 +10,13 @@ lazy from sqlmodel import select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.models.art import ArtSlot
+lazy from overture.db.ledger import read_asset
 lazy from overture.db.models.catalog import (
     CatalogCollection,
     CatalogDraft,
 )
 lazy from overture.db.models.media_item import MediaItem
+lazy from overture.db.models.settings import get_app_settings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     ArtType,
@@ -23,9 +24,10 @@ lazy from overture.domain import (
     CatalogMediaType,
     CollectionPosterStyle,
     MediaType,
-    ThemeBulkSource,
+    ServerAsset,
 )
 lazy from overture.jobs.progress_log import JobOutcome
+lazy from overture.repositories.collections import CollectionRepository
 lazy from overture.schemas.bulk import BulkThemeRequest
 lazy from overture.schemas.catalog import (
     CatalogDraftsDiscard,
@@ -34,20 +36,21 @@ lazy from overture.schemas.catalog import (
     CatalogSyncStats,
 )
 lazy from overture.schemas.collections import collection_read
+lazy from overture.services.asset_runs.plan import plan_run
 lazy from overture.services.catalog import staging
 lazy from overture.services.catalog.browse import CatalogBrowser
 lazy from overture.services.catalog.export import export_selections
 lazy from overture.services.catalog.index import NO_THEME
+lazy from overture.services.needs import apply_needs
 lazy from overture.services.schedule_store import (
     CATALOG_SCHEDULE,
     save_schedule,
 )
-lazy from overture.services.themes.collection_bulk import plan_collection_themes
-lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_catalog
 lazy from tests.collection_helpers import managing_rule, stored_collection
+lazy from tests.factories import seed_asset, seed_theme
 lazy from tests.test_services.test_catalog_edges import (
     catalog_jsonl,
     catalog_payload,
@@ -158,21 +161,13 @@ async def test_rows_name_the_librarys_local_files_of_the_same_art(
     movie = MediaItem(media_type=MediaType.MOVIE, title="Heat", imdb_id="tt0113277")
     db_session.add(movie)
     await db_session.flush()
-    for art_type, url, selection in (
+    for art_type, url, content in (
         # A TMDB link of another size names the same image.
         (ArtType.POSTER, "https://image.tmdb.org/t/p/w500/heat.jpg", None),
         # A file replaced outside Overture no longer holds the selection.
         (ArtType.BACKGROUND, "https://image.tmdb.org/t/p/original/b.jpg", "c" * 64),
     ):
-        db_session.add(
-            ArtSlot(
-                media_item_id=movie.id,
-                art_type=art_type,
-                url=PublicArtUrl(url),
-                file_hash="a" * 64,
-                selection_hash=selection,
-            )
-        )
+        seed_asset(movie, art_type, url=url, file_hash="a" * 64, content_hash=content)
     await db_session.commit()
 
     (heat,) = await browser.list_entries(CatalogMediaType.MOVIE)
@@ -306,19 +301,23 @@ async def test_export_puts_drafts_first_then_selections_and_collection_themes(
     )
     db_session.add_all(
         [
-            MediaItem(
-                media_type=MediaType.MOVIE,
-                title="Heat",
-                tmdb_id=949,
-                youtube_id="libraryThm1",
+            seed_theme(
+                MediaItem(
+                    media_type=MediaType.MOVIE,
+                    title="Heat",
+                    tmdb_id=949,
+                ),
+                "libraryThm1",
             ),
-            stored_collection(
-                server_item_id="saga",
-                media_type=MediaType.MOVIE,
-                title="Star Wars",
-                tmdb_collection_id=10,
-                youtube_id="collection1",
-                last_synced_at=utc_now(),
+            seed_theme(
+                stored_collection(
+                    server_item_id="saga",
+                    media_type=MediaType.MOVIE,
+                    title="Star Wars",
+                    tmdb_collection_id=10,
+                    last_synced_at=utc_now(),
+                ),
+                "collection1",
             ),
         ]
     )
@@ -361,13 +360,15 @@ async def test_correcting_a_drafts_only_identity_keeps_it_editable_and_exportabl
     assert saved.draft is not None
     assert saved.draft.tmdb_id == 11
     db_session.add(
-        stored_collection(
-            server_item_id="saga",
-            media_type=MediaType.MOVIE,
-            title="Old title",
-            tmdb_collection_id=10,
-            youtube_id="collection1",
-            last_synced_at=utc_now(),
+        seed_theme(
+            stored_collection(
+                server_item_id="saga",
+                media_type=MediaType.MOVIE,
+                title="Old title",
+                tmdb_collection_id=10,
+                last_synced_at=utc_now(),
+            ),
+            "collection1",
         )
     )
     await db_session.commit()
@@ -384,27 +385,6 @@ async def test_correcting_a_drafts_only_identity_keeps_it_editable_and_exportabl
         await browser.discard_draft(CatalogMediaType.COLLECTION, "tmdb-10")
     ).draft is None
     assert (await browser.counts()).drafts == 0
-
-
-async def test_export_preserves_themerrdb_attribution_after_the_catalog_is_cleared(
-    db_session: AsyncSession, database: Database, tmp_path: Path
-) -> None:
-    db_session.add(
-        stored_collection(
-            server_item_id="saga",
-            media_type=MediaType.MOVIE,
-            title="Saga",
-            tmdb_collection_id=10,
-            youtube_id="JG5OsfOuEy0",
-            youtube_id_source=ThemeBulkSource.THEMERRDB,
-            last_synced_at=utc_now(),
-        )
-    )
-    await db_session.commit()
-    with ZipFile(await export_selections(database, tmp_path)) as archive:
-        assert not any(
-            name.startswith("data/collections/") for name in archive.namelist()
-        )
 
 
 async def test_bulk_discard_removes_the_named_drafts_and_skips_the_rest(
@@ -459,10 +439,15 @@ async def test_no_theme_is_imported_drafted_and_skipped_by_theme_runs(
 
     detail = await browser.get_entry(CatalogMediaType.COLLECTION, "tmdb-10")
     assert detail.entry.no_theme is True
-    plan = await plan_collection_themes(
+    # A catalog sync records that the collection needs no theme.
+    async with database.write_session() as session:
+        row = await CollectionRepository(session).get(1)
+        assert row is not None
+        await apply_needs(session, collections=[row], app_config=app_config)
+    plan = await plan_run(
         BulkThemeRequest(collection_ids=[1]), app_config=app_config, database=database
     )
-    assert dict(plan.decided) == {(JobOutcome.SKIPPED, NO_THEME): 1}
+    assert dict(plan.decided) == {(True, JobOutcome.SKIPPED, NO_THEME): 1}
 
     drafted = await browser.save_draft(
         CatalogMediaType.SHOW, "tmdb-1396", CatalogDraftUpdate(no_theme=True)
@@ -476,54 +461,38 @@ async def test_no_theme_is_imported_drafted_and_skipped_by_theme_runs(
     assert cleared.draft is None or not cleared.draft.no_theme
 
 
-def test_a_collection_flagged_without_a_theme_counts_as_complete() -> None:
-    row = stored_collection(
-        id=1,
-        server_item_id="saga",
-        media_type=MediaType.MOVIE,
-        title="Saga",
-        tmdb_collection_id=10,
-    )
-    flagged = collection_read(
-        row,
-        CatalogCollection(tmdb_id=10, title="Saga", no_theme=True),
-        None,
-        copies=row.copies,
-        trust_no_theme=True,
-        backgrounds=True,
-        themes=True,
-    )
-    assert flagged.theme_status is AssetStatus.COMPLETE
-    assert flagged.catalog_no_theme
-    assert flagged.catalog_complete
-    assert (
-        collection_read(
-            row,
-            None,
-            None,
-            copies=row.copies,
-            trust_no_theme=True,
-            backgrounds=True,
-            themes=True,
+@pytest.mark.parametrize(
+    ("no_theme", "themes", "needed"),
+    [(True, True, False), (False, True, True), (False, False, False)],
+)
+async def test_a_collection_needs_no_theme_its_catalog_or_settings_rule_out(
+    no_theme: bool,
+    themes: bool,
+    needed: bool,
+    *,
+    app_config: Settings,
+    database: Database,
+) -> None:
+    """OvertureDB's trusted No theme flag, or its settings, leave it complete."""
+    async with database.write_session() as session:
+        await enable_catalog(session)
+        session.add(CatalogCollection(tmdb_id=10, title="Saga", no_theme=no_theme))
+        settings = await get_app_settings(session)
+        settings.collection_themes = themes
+        session.add(settings)
+        row = stored_collection(
+            id=1,
+            server_item_id="saga",
+            media_type=MediaType.MOVIE,
+            title="Saga",
+            tmdb_collection_id=10,
         )
-    ).theme_status is AssetStatus.MISSING
+        session.add(row)
+        await session.flush()
+        await apply_needs(session, collections=[row], app_config=app_config)
 
-
-def test_a_collection_whose_settings_need_no_theme_counts_as_complete() -> None:
-    row = stored_collection(
-        id=1, server_item_id="saga", media_type=MediaType.MOVIE, title="Saga"
-    )
-
-    read = collection_read(
-        row,
-        None,
-        None,
-        copies=row.copies,
-        trust_no_theme=True,
-        backgrounds=True,
-        themes=False,
-    )
-
-    assert read.theme_status is AssetStatus.COMPLETE
-    assert read.themes is False
-    assert not read.catalog_no_theme
+    theme = read_asset(row, ServerAsset.THEME)
+    assert theme.needed is needed
+    assert theme.status is (AssetStatus.MISSING if needed else AssetStatus.COMPLETE)
+    read = collection_read(row, None, None, copies=row.copies)
+    assert read.assets.theme.needed is needed

@@ -11,6 +11,7 @@ lazy from overture.db.session import Database
 lazy from overture.domain import MediaType
 lazy from overture.media_servers.adapters import ServerTheme
 lazy from overture.schemas.server_audit import ServerAuditResult
+lazy from overture.services import server_copies
 lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.art.phash import PhashService
 lazy from overture.services.server_audit import compare as module
@@ -22,12 +23,14 @@ lazy from overture.services.server_audit.compare import (
 lazy from overture.services.server_audit.work import AuditTarget
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.utils.hashing import compute_bytes_hash
+lazy from tests.factories import seed_theme
 lazy from tests.http_mock import mock_client_factory
 lazy from tests.media_servers import served_item
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
     StaticImageClients,
     make_local_assets,
+    make_server_copies,
     unused,
 )
 
@@ -62,7 +65,9 @@ def probed(monkeypatch: pytest.MonkeyPatch) -> list[bytes]:
         calls.append(data)
         return durations.get(data)
 
-    monkeypatch.setattr(module, "ffprobe_duration", probe)
+    # The local file is read by the audit, a served theme by the server copies.
+    for reader in (module, server_copies):
+        monkeypatch.setattr(reader, "ffprobe_duration", probe)
     return calls
 
 
@@ -81,7 +86,8 @@ def hashed(monkeypatch: pytest.MonkeyPatch) -> list[bytes]:
         packets = audio.get(data, data)
         return compute_bytes_hash(packets) if packets is not None else None
 
-    monkeypatch.setattr(module, "audio_hash", audio_hash)
+    for reader in (module, server_copies):
+        monkeypatch.setattr(reader, "audio_hash", audio_hash)
     return calls
 
 
@@ -103,16 +109,18 @@ async def _audit(
     stat = theme.stat()
     async with database.write_session() as session:
         session.add(
-            served_item(
-                id=1,
-                media_type=MediaType.MOVIE,
-                title="Movie",
-                folder_path=str(folder),
-                server_item_id="s1",
-                theme_file_hash="recorded",
-                theme_file_mtime_ns=stat.st_mtime_ns,
-                theme_file_size=recorded_size or stat.st_size,
-                theme_file_duration=recorded_duration,
+            seed_theme(
+                served_item(
+                    id=1,
+                    media_type=MediaType.MOVIE,
+                    title="Movie",
+                    folder_path=str(folder),
+                    server_item_id="s1",
+                ),
+                file_hash="recorded",
+                file_mtime_ns=stat.st_mtime_ns,
+                file_size=recorded_size or stat.st_size,
+                file_duration=recorded_duration,
             )
         )
 
@@ -131,11 +139,15 @@ async def _audit(
             app_config=app_config, database=database, phash=phash
         ),
         phash=phash,
-        image_clients=StaticImageClients(factory()),
         app_config=app_config,
         database=database,
-        config_dir=tmp_path / "config",
         collection_art=unused(CollectionArtService),
+        server_copies=make_server_copies(
+            app_config=app_config,
+            image_clients=StaticImageClients(factory()),
+            config_dir=tmp_path / "config",
+            phash=phash,
+        ),
     )
     _, results = await audit_target(AuditTarget(1), context=context)
     actionable = differences(results)

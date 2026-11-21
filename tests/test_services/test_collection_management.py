@@ -11,12 +11,9 @@ lazy from pydantic import SecretStr, ValidationError
 lazy from sqlmodel import select
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import (
-    ArtFileFacts,
-    clear_art_selection,
-    record_art_file,
+lazy from overture.db.ledger import (
+    clear_selection,
     select_art,
-    select_upload,
 )
 lazy from overture.db.models.catalog import CatalogCollection
 lazy from overture.db.models.media_collection import MediaCollection
@@ -38,6 +35,7 @@ lazy from overture.domain import (
     FilterOperator,
     MediaType,
     ScheduleKind,
+    ServerAsset,
     ServerType,
     SetDimension,
     SourceType,
@@ -123,6 +121,7 @@ lazy from overture.services.collections.service import CollectionsService
 lazy from overture.services.collections.sources import condition_label, source_label
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.media_server_roster import MediaServerRoster
+lazy from overture.services.needs import AssetNeeds
 lazy from overture.services.sync.reconciler import LibraryReconciler
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.collection_fields import FIELDS
@@ -130,6 +129,7 @@ lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import enable_catalog
 lazy from tests.collection_helpers import copy_id, library_rule, stored_collection
+lazy from tests.factories import seed_asset, seed_theme
 lazy from tests.media_servers import TEST_SERVER_ID, configure, served_item, server_of
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
@@ -648,9 +648,13 @@ async def manager(database: Database, app_config: Settings) -> Manager:
         await assign(session, show, genre=["Animation"])
         await session.flush()
         ids = [item.id or 0 for item in items]
+    registry = NoopProviderRegistry(provider)
     service = CollectionsService(
+        needs=AssetNeeds(
+            app_config=app_config, database=database, provider_registry=registry
+        ),
         database=database,
-        provider_registry=NoopProviderRegistry(provider),
+        provider_registry=registry,
         publisher=publisher,
         downloads=downloads,
         proxy_clients=unused(ProxyClientManager),
@@ -1117,9 +1121,13 @@ def make_jellyfin_service(
     provider: JellyfinProvider | None = None,
 ) -> CollectionsService:
     provider = provider or JellyfinProvider(app_config)
+    registry = NoopProviderRegistry(provider)
     return CollectionsService(
+        needs=AssetNeeds(
+            app_config=app_config, database=database, provider_registry=registry
+        ),
         database=database,
-        provider_registry=NoopProviderRegistry(provider),
+        provider_registry=registry,
         publisher=manager.publisher,
         downloads=manager.downloads,
         proxy_clients=unused(ProxyClientManager),
@@ -1172,7 +1180,7 @@ async def test_create_edit_order_and_delete_preserve_media(
         assert row is not None
         select_art(
             row,
-            ArtType.POSTER,
+            ServerAsset.POSTER,
             PublicArtUrl("https://example.test/poster.jpg"),
             poster_style=CollectionPosterStyle.INDIVIDUAL,
         )
@@ -2381,7 +2389,7 @@ async def test_franchise_sets_skip_franchises_other_collections_hold(
     )[0].title == "Saga"
 
 
-async def test_get_collection_theme_status(manager: Manager) -> None:
+async def test_a_new_collection_has_no_theme(manager: Manager) -> None:
     col = await created(
         manager.service,
         CollectionCreate(
@@ -2390,7 +2398,7 @@ async def test_get_collection_theme_status(manager: Manager) -> None:
         ),
     )
     theme = await manager.service.themes.status(col.id)
-    assert theme.has_theme is False
+    assert (theme.youtube_id, theme.status) == (None, AssetStatus.MISSING)
 
 
 async def test_sync_group_records_rule_errors(manager: Manager) -> None:
@@ -3415,22 +3423,23 @@ async def test_collection_rows_report_art_size_source_and_shape(
     async with database.write_session() as session:
         row = await session.get(MediaCollection, identity)
         assert row is not None
-        select_art(
+        seed_asset(
             row,
-            ArtType.POSTER,
-            PublicArtUrl("https://image.tmdb.org/t/p/original/a.jpg"),
+            ServerAsset.POSTER,
+            url="https://image.tmdb.org/t/p/original/a.jpg",
             poster_style=CollectionPosterStyle.INDIVIDUAL,
-        )
-        record_art_file(
-            row, ArtType.POSTER, ArtFileFacts("hash", "a" * 64, 1000, 1000, 1, 1)
+            file_hash="hash",
+            fingerprint="a" * 64,
+            width=1000,
+            height=1000,
         )
         session.add(row)
 
     [listed] = await manager.service.reader.listed()
 
-    assert (listed.poster_width, listed.poster_height) == (1000, 1000)
-    assert listed.poster_source == "tmdb"
-    assert listed.background_width is None
+    poster = listed.assets.poster
+    assert (poster.width, poster.height, poster.source) == (1000, 1000, "tmdb")
+    assert listed.assets.background.width is None
     assert listed.has_incorrect_aspect_ratio
 
 
@@ -3443,11 +3452,11 @@ async def test_bulk_clears_forget_collection_art_and_theme_choices(
         assert row is not None
         select_art(
             row,
-            ArtType.POSTER,
+            ServerAsset.POSTER,
             PublicArtUrl("https://image.tmdb.org/t/p/original/a.jpg"),
             poster_style=CollectionPosterStyle.INDIVIDUAL,
         )
-        row.youtube_id = "abcdefghijk"
+        seed_theme(row, "abcdefghijk")
         session.add(row)
 
     for operation in ("remove_artwork", "remove_themes"):
@@ -3461,7 +3470,7 @@ async def test_bulk_clears_forget_collection_art_and_theme_choices(
 
     assert manager.art.removed == [(identity, None, AssetRemoval())]
     detail = await manager.service.reader.get(identity)
-    assert detail.youtube_id is None
+    assert detail.assets.theme.youtube_id is None
 
 
 async def test_unmanaged_collections_accept_only_adoption(
@@ -3788,7 +3797,7 @@ async def test_a_new_copy_receives_the_saved_art_and_theme(
         assert row is not None
         select_art(
             row,
-            ArtType.POSTER,
+            ServerAsset.POSTER,
             PublicArtUrl("https://example.test/poster.jpg"),
             poster_style=CollectionPosterStyle.INDIVIDUAL,
         )
@@ -3959,7 +3968,10 @@ async def test_automatic_art_keeps_an_upload_and_generates_a_missing_poster(
         )
         row = await CollectionRepository(session).get(identity)
         assert row is not None
-        select_upload(row, ArtType.BACKGROUND, "b" * 64)
+        # An uploaded background every copy already shows.
+        seed_asset(
+            row, ServerAsset.BACKGROUND, upload_hash="b" * 64, file_hash="b" * 64
+        )
         session.add(row)
     manager.art.selections.clear()
 
@@ -3978,7 +3990,7 @@ async def test_automatic_art_keeps_an_upload_and_generates_a_missing_poster(
     async with database.write_session() as session:
         row = await CollectionRepository(session).get(identity)
         assert row is not None
-        clear_art_selection(row, ArtType.POSTER)
+        clear_selection(row, ServerAsset.POSTER)
         session.add(row)
     manager.art.fail = False
     await manager.service.rules.sync(identity)
@@ -4209,9 +4221,9 @@ async def test_automatic_generation_titles_posters_and_generates_backgrounds_it_
     wanted = [ArtType.POSTER, ArtType.BACKGROUND] if backgrounds else [ArtType.POSTER]
     assert manager.art.generated == wanted
     detail = await manager.service.reader.get(identity)
-    assert detail.backgrounds is backgrounds
+    assert detail.assets.background.needed is backgrounds
     if not backgrounds:
-        assert detail.background_status is AssetStatus.COMPLETE
+        assert detail.assets.background.status is AssetStatus.COMPLETE
 
 
 async def test_chosen_collections_sync_alone(manager: Manager) -> None:

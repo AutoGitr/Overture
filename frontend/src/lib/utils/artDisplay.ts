@@ -1,5 +1,6 @@
 import type {
   ArtCandidate,
+  AssetRead,
   CollectionRead,
   MediaItemRead,
   ProxyCollectionImageData,
@@ -28,6 +29,11 @@ export function remotePosterUrl(art: {
   poster_preview_url?: string | null;
 }): string | null {
   return art.poster_preview_url ?? art.poster_url ?? null;
+}
+
+/** How a stored remote selection is shown: by its preview when its source has one. */
+export function assetPreviewUrl(asset: AssetRead): string | null {
+  return asset.preview_url ?? asset.url;
 }
 
 /**
@@ -72,7 +78,8 @@ function itemArtUrl(
   size?: ImageSize,
 ): string | null {
   if (!item) return null;
-  const hash = artType === "poster" ? item.poster_hash : item.background_hash;
+  const asset = item.assets[artType];
+  const hash = asset.file?.hash;
   if (hash) {
     return localItemImageUrl(
       { item_id: item.id, art_type: artType },
@@ -85,8 +92,8 @@ function itemArtUrl(
   // Remote links are never shown in place of a file, except for an item
   // without a folder (chosen from TMDB), which can only ever show its choice.
   if (item.folder_path) return null;
-  if (artType === "background") return item.background_url;
-  return size ? remotePosterUrl(item) : item.poster_url;
+  if (artType === "background") return asset.url;
+  return size ? assetPreviewUrl(asset) : asset.url;
 }
 
 /**
@@ -113,19 +120,20 @@ export function seasonPosterUrls(
 ): { src: string | null; fallbackSrc: string | null } {
   if (!item) return { src: null, fallbackSrc: null };
 
-  const localUrl = season.poster_hash
-    ? localSeasonImageUrl({ season_id: season.id }, { t: season.poster_hash, size: "display" })
+  const fileHash = season.poster.file?.hash;
+  const localUrl = fileHash
+    ? localSeasonImageUrl({ season_id: season.id }, { t: fileHash, size: "display" })
     : null;
   const serverUrl = item.copies.length
     ? seasonProviderArtUrl(
         { season_id: season.id },
-        { t: String(season.poster_hash || item.last_synced_at || 0), size: "display" },
+        { t: String(fileHash || item.last_synced_at || 0), size: "display" },
       )
     : null;
 
   if (localUrl) return { src: localUrl, fallbackSrc: serverUrl };
   // As for items, only a season of an item without a folder shows its remote choice.
-  const chosenUrl = item.folder_path ? null : remotePosterUrl(season);
+  const chosenUrl = item.folder_path ? null : assetPreviewUrl(season.poster);
   return { src: serverUrl ?? chosenUrl, fallbackSrc: null };
 }
 
@@ -153,7 +161,7 @@ function collectionArtUrl(
   size?: ImageSize,
 ): string | null {
   if (!collection) return null;
-  const hash = artType === "poster" ? collection.poster_hash : collection.background_hash;
+  const hash = collection.assets[artType].content_hash;
   if (hash) {
     return localCollectionImageUrl(
       { collection_id: collection.id, art_type: artType },

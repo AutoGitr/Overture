@@ -8,7 +8,7 @@ lazy import pytest
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import ArtFileFacts
+lazy from overture.db.ledger import FileFacts
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
 lazy from overture.domain import (
@@ -21,14 +21,16 @@ lazy from overture.domain import (
 lazy from overture.jobs.results import log_page
 lazy from overture.schemas.art import ArtCandidate, ArtMatchResponse, MatchReference
 lazy from overture.schemas.bulk import BulkMatchArtRequest
-lazy from overture.services.art import bulk as art_bulk
-lazy from overture.services.art.bulk_work import BulkArtWork
 lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.art.matcher import ArtMatchOutcome, LocalComparison
 lazy from overture.services.art.perfect_match import PERFECT_MATCH_MAX_DISTANCE
+lazy from overture.services.asset_runs import run as asset_run
+lazy from overture.services.asset_runs.sources import Sources
+lazy from overture.services.asset_runs.support import SAVED_SELECTION
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import (
+    BulkArtWork,
     Context,
     art_matcher,
     as_job_context,
@@ -71,9 +73,9 @@ async def test_source_failure_is_reported_even_when_a_later_source_matches(
     matcher = art_matcher(app_config=app_config, database=database)
     use_art_work(monkeypatch, BulkArtWork([(item, ArtType.POSTER, None)], index))
     monkeypatch.setattr(matcher, "match_item_art", fail)
-    monkeypatch.setattr(art_bulk, "queue_download", queue)
-    stamper = bind_stamper(monkeypatch, art_bulk)
-    await art_bulk.run_bulk_art_match(
+    monkeypatch.setattr(asset_run, "queue_download", queue)
+    stamper = bind_stamper(monkeypatch)
+    await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(
             source_order=[
@@ -81,8 +83,8 @@ async def test_source_failure_is_reported_even_when_a_later_source_matches(
                 ArtBulkSource.OVERTUREDB,
             ]
         ),
-        downloads,
-        matcher,
+        downloads=downloads,
+        art_matcher=matcher,
         art=unused(CollectionArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
@@ -102,9 +104,9 @@ async def test_source_failure_is_reported_even_when_a_later_source_matches(
         assert "OvertureDB has no" in logs[0]
     assert stamper.checked == ([1] if fallback else [])
     result = context.events[-1][1]
-    assert result["errors"] == result["done"] == 1
-    assert result["queued"] == int(fallback)
-    assert result["downloaded"] == 0
+    assert result["log_targets"].get("Error", 0) == result["done"] == 1
+    assert result["log_targets"].get("Queued", 0) == int(fallback)
+    assert result["log_targets"].get("Downloaded", 0) == 0
 
 
 async def test_bulk_art_uses_source_order_and_skips_local_when_overturedb_matches(
@@ -127,18 +129,18 @@ async def test_bulk_art_uses_source_order_and_skips_local_when_overturedb_matche
             public_index(1, poster_url="https://db.example/poster.jpg"),
         ),
     )
-    monkeypatch.setattr(art_bulk, "_from_local_matching", unexpected_local)
-    monkeypatch.setattr(art_bulk, "queue_download", fake_queue)
-    bind_stamper(monkeypatch, art_bulk)
+    monkeypatch.setattr(Sources, "_match_title", unexpected_local)
+    monkeypatch.setattr(asset_run, "queue_download", fake_queue)
+    bind_stamper(monkeypatch)
 
     context = Context()
-    await art_bulk.run_bulk_art_match(
+    await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(
             source_order=[ArtBulkSource.OVERTUREDB, ArtBulkSource.LOCAL_ART_MATCHING]
         ),
-        make_bulk_downloads(app_config=app_config, database=database),
-        art_matcher(app_config=app_config, database=database),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        art_matcher=art_matcher(app_config=app_config, database=database),
         art=unused(CollectionArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
@@ -148,7 +150,7 @@ async def test_bulk_art_uses_source_order_and_skips_local_when_overturedb_matche
     assert queued == ["https://db.example/poster.jpg"]
     assert progress_logs(context) == ["Queued Movie (poster) - OvertureDB artwork"]
     completed = context.events[-1][1]
-    assert completed["queued"] == 1
+    assert completed["log_targets"].get("Queued", 0) == 1
     persisted = await log_page(database, str(completed["run_id"]), 0, 100)
     assert [entry.format() for entry in persisted.items] == progress_logs(context)
     assert persisted.total == completed["log_total"]
@@ -163,15 +165,15 @@ async def test_bulk_art_overturedb_only_no_matches_when_source_unavailable(
         raise AssertionError("local source should not run when it is not enabled")
 
     use_art_work(monkeypatch, BulkArtWork([(item, ArtType.POSTER, None)]))
-    monkeypatch.setattr(art_bulk, "_from_local_matching", unexpected_local)
-    bind_stamper(monkeypatch, art_bulk)
+    monkeypatch.setattr(Sources, "_match_title", unexpected_local)
+    bind_stamper(monkeypatch)
 
     context = Context()
-    await art_bulk.run_bulk_art_match(
+    await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(source_order=[ArtBulkSource.OVERTUREDB]),
-        make_bulk_downloads(app_config=app_config, database=database),
-        art_matcher(app_config=app_config, database=database),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        art_matcher=art_matcher(app_config=app_config, database=database),
         art=unused(CollectionArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
@@ -182,12 +184,10 @@ async def test_bulk_art_overturedb_only_no_matches_when_source_unavailable(
         "No match Movie (poster) - OvertureDB has no entry for it"
     ]
     completed = context.events[-1][1]
-    assert completed["no_match"] == 1
+    assert completed["log_targets"].get("No match", 0) == 1
 
 
-@pytest.mark.parametrize(
-    ("movies", "line"), [(150, "300 art slots"), (1, "2 art slots")]
-)
+@pytest.mark.parametrize(("movies", "line"), [(150, "300 assets"), (1, "2 assets")])
 async def test_bulk_art_targets_without_catalog_art_are_counted_in_one_step(
     movies: int,
     line: str,
@@ -214,15 +214,15 @@ async def test_bulk_art_targets_without_catalog_art_are_counted_in_one_step(
     await enable_catalog(db_session)
     local_assets = make_local_assets(app_config=app_config, database=database)
     monkeypatch.setattr(local_assets, "reconcile", unexpected)
-    monkeypatch.setattr(art_bulk, "_from_local_matching", unexpected)
-    bind_stamper(monkeypatch, art_bulk)
+    monkeypatch.setattr(Sources, "_match_title", unexpected)
+    bind_stamper(monkeypatch)
 
     context = Context()
-    await art_bulk.run_bulk_art_match(
+    await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(source_order=[ArtBulkSource.OVERTUREDB]),
-        make_bulk_downloads(app_config=app_config, database=database),
-        art_matcher(app_config=app_config, database=database),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        art_matcher=art_matcher(app_config=app_config, database=database),
         art=unused(CollectionArtService),
         local_assets=local_assets,
         app_config=app_config,
@@ -237,7 +237,10 @@ async def test_bulk_art_targets_without_catalog_art_are_counted_in_one_step(
     assert planned["done"] == 0
     completed = context.events[-1][1]
     assert (
-        completed["total"] == completed["done"] == completed["no_match"] == movies * 2
+        completed["total"]
+        == completed["done"]
+        == completed["log_targets"].get("No match", 0)
+        == movies * 2
     )
 
 
@@ -255,16 +258,16 @@ async def test_bulk_art_saved_incomplete_selection_queues_download_without_remat
         return True
 
     use_art_work(monkeypatch, BulkArtWork([(item, ArtType.POSTER, None)]))
-    monkeypatch.setattr(art_bulk, "_from_local_matching", unexpected_source)
-    monkeypatch.setattr(art_bulk, "queue_download", fake_queue)
-    bind_stamper(monkeypatch, art_bulk)
+    monkeypatch.setattr(Sources, "_match_title", unexpected_source)
+    monkeypatch.setattr(asset_run, "queue_download", fake_queue)
+    bind_stamper(monkeypatch)
 
     context = Context()
-    await art_bulk.run_bulk_art_match(
+    await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(),
-        make_bulk_downloads(app_config=app_config, database=database),
-        art_matcher(app_config=app_config, database=database),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        art_matcher=art_matcher(app_config=app_config, database=database),
         art=unused(CollectionArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
@@ -304,27 +307,25 @@ async def test_bulk_art_complete_targets_are_skipped_without_download(
         raise AssertionError("complete targets should not be matched or downloaded")
 
     use_art_work(monkeypatch, BulkArtWork([(item, ArtType.POSTER, None)]))
-    monkeypatch.setattr(art_bulk, "_from_local_matching", unexpected_call)
-    monkeypatch.setattr(art_bulk, "queue_download", unexpected_call)
+    monkeypatch.setattr(Sources, "_match_title", unexpected_call)
+    monkeypatch.setattr(asset_run, "queue_download", unexpected_call)
 
     context = Context()
-    await art_bulk.run_bulk_art_match(
+    await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(),
-        make_bulk_downloads(app_config=app_config, database=database),
-        art_matcher(app_config=app_config, database=database),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        art_matcher=art_matcher(app_config=app_config, database=database),
         art=unused(CollectionArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
         database=database,
     )
 
-    assert progress_logs(context) == [
-        f"Skipped Movie (poster) - {art_bulk.SAVED_SELECTION}"
-    ]
+    assert progress_logs(context) == [f"Skipped Movie (poster) - {SAVED_SELECTION}"]
     completed = context.events[-1][1]
-    assert completed["skipped"] == 1
-    assert completed["queued"] == 0
+    assert completed["log_targets"].get("Skipped", 0) == 1
+    assert completed["log_targets"].get("Queued", 0) == 0
 
 
 @pytest.mark.parametrize(
@@ -396,16 +397,16 @@ async def test_bulk_art_states_why_local_matching_produced_nothing(
 
     use_art_work(monkeypatch, BulkArtWork([(item, ArtType.POSTER, None)]))
     monkeypatch.setattr(matcher, "match_item_art", fake_match)
-    bind_stamper(monkeypatch, art_bulk)
+    bind_stamper(monkeypatch)
 
     context = Context()
-    await art_bulk.run_bulk_art_match(
+    await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(
             source_order=[ArtBulkSource.LOCAL_ART_MATCHING], threshold=threshold
         ),
-        make_bulk_downloads(app_config=app_config, database=database),
-        matcher,
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        art_matcher=matcher,
         art=unused(CollectionArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
@@ -431,15 +432,15 @@ async def test_bulk_art_says_a_recently_checked_target_was_skipped(
     await db_session.commit()
     local_assets = make_local_assets(app_config=app_config, database=database)
     monkeypatch.setattr(local_assets, "reconcile", unexpected)
-    monkeypatch.setattr(art_bulk, "_from_local_matching", unexpected)
-    bind_stamper(monkeypatch, art_bulk)
+    monkeypatch.setattr(Sources, "_match_title", unexpected)
+    bind_stamper(monkeypatch)
 
     context = Context()
-    await art_bulk.run_bulk_art_match(
+    await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(skip_recent_val=1, skip_recent_unit=RecentUnit.DAYS),
-        make_bulk_downloads(app_config=app_config, database=database),
-        art_matcher(app_config=app_config, database=database),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        art_matcher=art_matcher(app_config=app_config, database=database),
         art=unused(CollectionArtService),
         local_assets=local_assets,
         app_config=app_config,
@@ -447,7 +448,7 @@ async def test_bulk_art_says_a_recently_checked_target_was_skipped(
     )
 
     assert progress_logs(context) == [
-        "Skipped 2 art slots - checked within the last 1 day"
+        "Skipped 2 assets - checked within the last 1 day"
     ]
 
 
@@ -462,13 +463,13 @@ async def test_bulk_art_single_target_without_catalog_art_has_singular_plurality
     await enable_catalog(db_session)
 
     context = Context()
-    await art_bulk.run_bulk_art_match(
+    await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(
             source_order=[ArtBulkSource.OVERTUREDB], art_types=[ArtType.POSTER]
         ),
-        make_bulk_downloads(app_config=app_config, database=database),
-        art_matcher(app_config=app_config, database=database),
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        art_matcher=art_matcher(app_config=app_config, database=database),
         art=unused(CollectionArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
@@ -476,7 +477,7 @@ async def test_bulk_art_single_target_without_catalog_art_has_singular_plurality
     )
 
     assert progress_logs(context) == [
-        "No match 1 art slot - OvertureDB has no entry for it"
+        "No match 1 asset - OvertureDB has no entry for it"
     ]
 
 
@@ -517,18 +518,18 @@ async def test_local_match_queues_best_candidate_and_reports_incomplete_comparis
         matcher, "match_item_art", AsyncMock(return_value=ArtMatchOutcome(response))
     )
     queue = AsyncMock(return_value=True)
-    monkeypatch.setattr(art_bulk, "queue_download", queue)
+    monkeypatch.setattr(asset_run, "queue_download", queue)
     use_art_work(monkeypatch, BulkArtWork([(item, ArtType.POSTER, None)]))
-    stamper = bind_stamper(monkeypatch, art_bulk)
+    stamper = bind_stamper(monkeypatch)
     context = Context()
 
-    await art_bulk.run_bulk_art_match(
+    await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(
             source_order=[ArtBulkSource.LOCAL_ART_MATCHING], threshold=10
         ),
-        make_bulk_downloads(app_config=app_config, database=database),
-        matcher,
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        art_matcher=matcher,
         art=unused(CollectionArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
@@ -545,7 +546,7 @@ async def test_local_match_queues_best_candidate_and_reports_incomplete_comparis
     assert logs[0].startswith("Queued Movie (poster) - ")
     assert reason in logs[0]
     assert "incomplete comparison: could not compare 1 artwork candidates" in logs[0]
-    assert context.events[-1][1]["queued"] == 1
+    assert context.events[-1][1]["log_targets"].get("Queued", 0) == 1
 
 
 @pytest.mark.parametrize("adopted", [False, True])
@@ -557,7 +558,14 @@ async def test_perfect_match_adoption_rechecks_the_file_before_saving_selection(
 ) -> None:
     item = movie_item()
     matcher = art_matcher(app_config=app_config, database=database)
-    local = ArtFileFacts("hash", None, 1000, 1500, 100, 50)
+    local = FileFacts(
+        file_hash="hash",
+        file_mtime_ns=100,
+        file_size=50,
+        fingerprint=None,
+        width=1000,
+        height=1500,
+    )
     response = ArtMatchResponse(
         matches=[
             ArtCandidate(
@@ -571,20 +579,20 @@ async def test_perfect_match_adoption_rechecks_the_file_before_saving_selection(
     adopt = AsyncMock(return_value=adopted)
     emit = AsyncMock()
     queue = AsyncMock()
-    monkeypatch.setattr(art_bulk, "adopt_art", adopt)
-    monkeypatch.setattr(art_bulk, "emit_library_item_upserted", emit)
-    monkeypatch.setattr(art_bulk, "queue_download", queue)
+    monkeypatch.setattr(asset_run, "adopt_art", adopt)
+    monkeypatch.setattr(asset_run, "emit_library_item_upserted", emit)
+    monkeypatch.setattr(asset_run, "queue_download", queue)
     use_art_work(monkeypatch, BulkArtWork([(item, ArtType.POSTER, None)]))
-    stamper = bind_stamper(monkeypatch, art_bulk)
+    stamper = bind_stamper(monkeypatch)
     context = Context()
 
-    await art_bulk.run_bulk_art_match(
+    await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(
             source_order=[ArtBulkSource.LOCAL_ART_MATCHING], threshold=-1
         ),
-        make_bulk_downloads(app_config=app_config, database=database),
-        matcher,
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        art_matcher=matcher,
         art=unused(CollectionArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
@@ -631,14 +639,14 @@ async def test_failed_catalog_comparison_reports_error_without_stamping(
             public_index(1, poster_url="https://images.test/poster.jpg"),
         ),
     )
-    stamper = bind_stamper(monkeypatch, art_bulk)
+    stamper = bind_stamper(monkeypatch)
     context = Context()
 
-    await art_bulk.run_bulk_art_match(
+    await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(source_order=[ArtBulkSource.OVERTUREDB]),
-        make_bulk_downloads(app_config=app_config, database=database),
-        matcher,
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        art_matcher=matcher,
         art=unused(CollectionArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
@@ -649,7 +657,7 @@ async def test_failed_catalog_comparison_reports_error_without_stamping(
         "Error Movie (poster) - OvertureDB: invalid image"
     ]
     assert stamper.checked == []
-    assert context.events[-1][1]["errors"] == 1
+    assert context.events[-1][1]["log_targets"].get("Error", 0) == 1
 
 
 @pytest.mark.parametrize(
@@ -683,7 +691,7 @@ async def test_overturedb_art_is_compared_with_the_local_file_as_local_matching_
         "compare_with_local",
         AsyncMock(return_value=LocalComparison(distance=0, identical=False)),
     )
-    monkeypatch.setattr(art_bulk, "queue_download", AsyncMock(return_value=True))
+    monkeypatch.setattr(asset_run, "queue_download", AsyncMock(return_value=True))
     use_art_work(
         monkeypatch,
         BulkArtWork(
@@ -691,16 +699,16 @@ async def test_overturedb_art_is_compared_with_the_local_file_as_local_matching_
             public_index(1, poster_url="https://images.test/poster.jpg"),
         ),
     )
-    bind_stamper(monkeypatch, art_bulk)
+    bind_stamper(monkeypatch)
     context = Context()
 
-    await art_bulk.run_bulk_art_match(
+    await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(
             source_order=[ArtBulkSource.OVERTUREDB], threshold=threshold
         ),
-        make_bulk_downloads(app_config=app_config, database=database),
-        matcher,
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        art_matcher=matcher,
         art=unused(CollectionArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
@@ -724,7 +732,7 @@ async def test_slot_failure_does_not_abort_later_targets(
         monkeypatch,
         BulkArtWork([(item, ArtType.POSTER, None) for item in items], index),
     )
-    stamper = bind_stamper(monkeypatch, art_bulk)
+    stamper = bind_stamper(monkeypatch)
     flush = AsyncMock()
     monkeypatch.setattr(stamper, "flush", flush)
     if failure_point == "stamp":
@@ -737,11 +745,11 @@ async def test_slot_failure_does_not_abort_later_targets(
         )
     context = Context()
 
-    await art_bulk.run_bulk_art_match(
+    await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(source_order=[ArtBulkSource.OVERTUREDB]),
-        make_bulk_downloads(app_config=app_config, database=database),
-        matcher,
+        downloads=make_bulk_downloads(app_config=app_config, database=database),
+        art_matcher=matcher,
         art=unused(CollectionArtService),
         local_assets=make_local_assets(app_config=app_config, database=database),
         app_config=app_config,
@@ -752,4 +760,4 @@ async def test_slot_failure_does_not_abort_later_targets(
     assert any(line.startswith("Error First (poster)") for line in logs)
     assert logs[-1] == "No match Second (poster) - OvertureDB has no entry for it"
     flush.assert_awaited_once()
-    assert context.events[-1][1]["errors"] == 1
+    assert context.events[-1][1]["log_targets"].get("Error", 0) == 1

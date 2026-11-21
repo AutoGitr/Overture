@@ -68,7 +68,6 @@ class RuleSync:
             if await self._forget_gone_copies(row):
                 async with self._access.database.read_session() as session:
                     current = await CollectionRepository(session).members(collection_id)
-            had_copies = set(copy_keys(row.libraries))
             await self._take_over_copies(row)
             error = None
             try:
@@ -89,10 +88,7 @@ class RuleSync:
             if not result.skipped or not row.copies:
                 await self._mark_synced(collection_id)
         if not result.skipped and not result.withheld:
-            await self._post_sync.run(
-                collection_id,
-                new_copies=bool(set(copy_keys(row.libraries)) - had_copies),
-            )
+            await self._post_sync.run(collection_id)
         return result
 
     async def _apply(

@@ -13,7 +13,7 @@ lazy from sqlmodel import text
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import select_art
+lazy from overture.db.ledger import select_art
 lazy from overture.db.models.catalog import (
     CatalogItem,
     CatalogItemSeason,
@@ -35,6 +35,7 @@ lazy from overture.domain import (
     JobStatus,
     JobType,
     MediaType,
+    ServerAsset,
     ServerType,
 )
 lazy from overture.integrations.proxy import ProxyClientManager
@@ -55,7 +56,7 @@ lazy from overture.utils.assets import season_poster_candidates
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.hashing import compute_file_hash
 lazy from overture.utils.time import utc_now
-lazy from tests.factories import seed_art_slot
+lazy from tests.factories import seed_asset, seed_theme
 lazy from tests.media_servers import TEST_SERVER, TEST_SERVER_ID, served_item
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
@@ -114,10 +115,10 @@ async def test_library_reports_how_each_selection_agrees_with_the_catalog(
         database=database_for(one_session(db_session)),
         app_config=app_config,
     )
-    item = MediaItem(
-        id=1, media_type=MediaType.MOVIE, title="Heat", tmdb_id=949, youtube_id=theme
+    item = seed_theme(
+        MediaItem(id=1, media_type=MediaType.MOVIE, title="Heat", tmdb_id=949), theme
     )
-    seed_art_slot(item, ArtType.POSTER, url=poster)
+    seed_asset(item, ArtType.POSTER, url=poster)
     db_session.add_all(
         [
             item,
@@ -217,17 +218,21 @@ async def test_a_theme_is_as_long_as_its_local_file_else_its_video(
         app_config=app_config,
     )
     db_session.add(
-        MediaItem(
-            id=1,
-            media_type=MediaType.MOVIE,
-            title="Movie",
-            youtube_duration=youtube_duration,
-            theme_file_duration=file_duration,
+        seed_theme(
+            MediaItem(
+                id=1,
+                media_type=MediaType.MOVIE,
+                title="Movie",
+            ),
+            "abcDEF123_4",
+            duration=youtube_duration,
+            file_hash=None if file_duration is None else "theme-hash",
+            file_duration=file_duration,
         )
     )
     await db_session.commit()
 
-    assert (await service.get_item(1)).theme_duration == expected
+    assert (await service.get_item(1)).assets.theme.duration == expected
 
 
 async def test_library_reads_use_cached_theme_state_without_filesystem_access(
@@ -242,12 +247,14 @@ async def test_library_reads_use_cached_theme_state_without_filesystem_access(
         app_config=app_config,
     )
     db_session.add(
-        MediaItem(
-            id=1,
-            media_type=MediaType.MOVIE,
-            title="Movie",
-            folder_path=str(tmp_path),
-            theme_file_hash="theme-hash",
+        seed_theme(
+            MediaItem(
+                id=1,
+                media_type=MediaType.MOVIE,
+                title="Movie",
+                folder_path=str(tmp_path),
+            ),
+            file_hash="theme-hash",
         )
     )
     await db_session.commit()
@@ -263,8 +270,10 @@ async def test_library_reads_use_cached_theme_state_without_filesystem_access(
         item = await library_service.get_item(1)
 
     assert [entry.id for entry in result.items] == [1]
-    assert result.items[0].theme_file_hash == "theme-hash"
-    assert item.theme_file_hash == "theme-hash"
+    for read in (result.items[0], item):
+        theme_file = read.assets.theme.file
+        assert theme_file is not None
+        assert theme_file.hash == "theme-hash"
 
 
 async def test_list_items_reports_asset_state_and_filters_by_type(
@@ -312,31 +321,34 @@ async def test_list_items_reports_asset_state_and_filters_by_type(
     db_session.add(hidden)
     await db_session.flush()
 
-    select_art(complete, ArtType.POSTER, PublicArtUrl("https://img.test/poster.jpg"))
-    seed_art_slot(complete, ArtType.POSTER, file_hash="poster-hash")
-    select_art(
-        complete, ArtType.BACKGROUND, PublicArtUrl("https://img.test/background.jpg")
+    seed_asset(
+        complete,
+        ArtType.POSTER,
+        url="https://img.test/poster.jpg",
+        file_hash="poster-hash",
     )
-    seed_art_slot(complete, ArtType.BACKGROUND, file_hash="background-hash")
-    complete.youtube_id = "abcDEF123_4"
-    complete.youtube_title = "Theme"
-    complete.youtube_duration = 120
-    complete.theme_file_hash = "theme-hash"
+    seed_asset(
+        complete,
+        ArtType.BACKGROUND,
+        url="https://img.test/background.jpg",
+        file_hash="background-hash",
+    )
+    seed_theme(
+        complete, "abcDEF123_4", title="Theme", duration=120, file_hash="theme-hash"
+    )
 
     # Links are saved but no local file was ever recorded for them.
     select_art(
         missing_hash,
-        ArtType.POSTER,
+        ServerAsset.POSTER,
         PublicArtUrl("https://img.test/missing-hash-poster.jpg"),
     )
     select_art(
         missing_hash,
-        ArtType.BACKGROUND,
+        ServerAsset.BACKGROUND,
         PublicArtUrl("https://img.test/missing-hash-background.jpg"),
     )
-    missing_hash.youtube_id = "missingHash1"
-    missing_hash.youtube_title = "Selected Theme"
-    missing_hash.youtube_duration = 90
+    seed_theme(missing_hash, "missingHash1", title="Selected Theme", duration=90)
 
     db_session.add(
         CatalogItem(
@@ -359,11 +371,11 @@ async def test_list_items_reports_asset_state_and_filters_by_type(
 
     rows = {item.title: item for item in result.items}
     assert rows["Complete Movie"].art_status == "complete"
-    assert rows["Complete Movie"].theme_status == "complete"
+    assert rows["Complete Movie"].assets.theme.status == "complete"
     assert rows["Complete Movie"].catalog_complete is True
     assert rows["Missing Hash Movie"].art_status == "partial"
-    assert rows["Missing Hash Movie"].poster_status == "partial"
-    assert rows["Missing Hash Movie"].theme_status == "partial"
+    assert rows["Missing Hash Movie"].assets.poster.status == "partial"
+    assert rows["Missing Hash Movie"].assets.theme.status == "partial"
     assert rows["Missing Show"].art_status == "missing"
     assert rows["Missing Show"].folder_path is None
     assert rows["Missing Show"].tmdb_id is None
@@ -391,13 +403,13 @@ async def test_list_items_reports_where_selected_artwork_comes_from(
     unlisted = MediaItem(id=2, media_type=MediaType.MOVIE, title="Unlisted")
     db_session.add_all([item, unlisted])
     await db_session.flush()
-    select_art(item, ArtType.POSTER, PublicArtUrl(catalog_poster))
+    select_art(item, ServerAsset.POSTER, PublicArtUrl(catalog_poster))
     select_art(
         item,
-        ArtType.BACKGROUND,
+        ServerAsset.BACKGROUND,
         PublicArtUrl("https://image.tmdb.org/t/p/original/background.jpg"),
     )
-    select_art(unlisted, ArtType.POSTER, PublicArtUrl(catalog_poster))
+    select_art(unlisted, ServerAsset.POSTER, PublicArtUrl(catalog_poster))
     db_session.add(
         CatalogItem(
             media_type=MediaType.MOVIE,
@@ -411,10 +423,10 @@ async def test_list_items_reports_where_selected_artwork_comes_from(
     rows = {row.title: row for row in (await library_service.list_items()).items}
 
     # Matching the OvertureDB entry does not change where the artwork comes from.
-    assert rows["Movie"].poster_source == "tpdb"
-    assert rows["Movie"].background_source == "tmdb"
-    assert rows["Unlisted"].poster_source == "tpdb"
-    assert rows["Unlisted"].background_source is None
+    assert rows["Movie"].assets.poster.source == "tpdb"
+    assert rows["Movie"].assets.background.source == "tmdb"
+    assert rows["Unlisted"].assets.poster.source == "tpdb"
+    assert rows["Unlisted"].assets.background.source is None
 
 
 async def test_list_items_marks_tv_overturedb_complete_only_with_local_seasons(
@@ -582,8 +594,12 @@ async def test_show_rows_report_season_poster_completeness(
 
     for item in (arted, unarted):
         for art_type in (ArtType.POSTER, ArtType.BACKGROUND):
-            select_art(item, art_type, PublicArtUrl(f"https://img.test/{art_type}.jpg"))
-            seed_art_slot(item, art_type, file_hash="h")
+            select_art(
+                item,
+                art_type.server_asset,
+                PublicArtUrl(f"https://img.test/{art_type}.jpg"),
+            )
+            seed_asset(item, art_type, file_hash="h")
         db_session.add(item)
 
     arted_season = Season(id=10, media_item_id=1, season_num=1, file_count=3)
@@ -592,9 +608,9 @@ async def test_show_rows_report_season_poster_completeness(
     await db_session.commit()
 
     select_art(
-        arted_season, ArtType.SEASON_POSTER, PublicArtUrl("https://img.test/s.jpg")
+        arted_season, ServerAsset.SEASON_POSTER, PublicArtUrl("https://img.test/s.jpg")
     )
-    seed_art_slot(arted_season, ArtType.SEASON_POSTER, file_hash="sh")
+    seed_asset(arted_season, ArtType.SEASON_POSTER, file_hash="sh")
     db_session.add(arted_season)
     await db_session.commit()
 
@@ -637,11 +653,11 @@ async def test_items_report_incorrect_aspect_ratio_for_the_tolerance_setting(
     db_session.add(season)
     await db_session.commit()
 
-    seed_art_slot(good, ArtType.POSTER, width=1000, height=1500)
-    seed_art_slot(good, ArtType.BACKGROUND, width=1920, height=1080)
-    seed_art_slot(square, ArtType.POSTER, width=1000, height=1000)
-    select_art(unmeasured, ArtType.POSTER, PublicArtUrl("https://img.test/p.jpg"))
-    seed_art_slot(season, ArtType.SEASON_POSTER, width=500, height=500)
+    seed_asset(good, ArtType.POSTER, file_hash="g", width=1000, height=1500)
+    seed_asset(good, ArtType.BACKGROUND, file_hash="b", width=1920, height=1080)
+    seed_asset(square, ArtType.POSTER, file_hash="s", width=1000, height=1000)
+    select_art(unmeasured, ServerAsset.POSTER, PublicArtUrl("https://img.test/p.jpg"))
+    seed_asset(season, ArtType.SEASON_POSTER, file_hash="p", width=500, height=500)
     db_session.add_all([good, square, unmeasured, season])
     await db_session.commit()
 
@@ -660,11 +676,13 @@ async def test_deleting_a_media_item_takes_its_seasons_and_artwork_with_it(
     db_session.add(item)
     await db_session.commit()
 
-    select_art(item, ArtType.POSTER, PublicArtUrl("https://img.test/p.jpg"))
+    select_art(item, ServerAsset.POSTER, PublicArtUrl("https://img.test/p.jpg"))
     season = Season(id=10, media_item_id=1, season_num=1, file_count=1)
     db_session.add_all([item, season])
     await db_session.commit()
-    select_art(season, ArtType.SEASON_POSTER, PublicArtUrl("https://img.test/s.jpg"))
+    select_art(
+        season, ServerAsset.SEASON_POSTER, PublicArtUrl("https://img.test/s.jpg")
+    )
     db_session.add(season)
     await db_session.commit()
 
@@ -674,7 +692,7 @@ async def test_deleting_a_media_item_takes_its_seasons_and_artwork_with_it(
     table_queries = {
         "media_items": text("select count(*) from media_items"),
         "seasons": text("select count(*) from seasons"),
-        "art_slots": text("select count(*) from art_slots"),
+        "assets": text("select count(*) from assets"),
     }
 
     async def count(table: str) -> int:
@@ -684,7 +702,7 @@ async def test_deleting_a_media_item_takes_its_seasons_and_artwork_with_it(
 
     assert await count("media_items") == 0
     assert await count("seasons") == 0
-    assert await count("art_slots") == 0
+    assert await count("assets") == 0
 
 
 async def test_image_cache_rejects_paths_outside_root_and_invalid_hashes(
@@ -715,7 +733,7 @@ def _record_file(owner: MediaItem | Season, art_type: ArtType, path: Path) -> st
     file_stat = path.stat()
     file_hash = compute_file_hash(path)
     assert file_hash is not None
-    seed_art_slot(
+    seed_asset(
         owner,
         art_type,
         file_hash=file_hash,
@@ -974,11 +992,11 @@ async def test_refresh_imports_unchanged_recorded_file_when_cache_is_cold(
         item = MediaItem(
             id=1, media_type=MediaType.MOVIE, title="Movie", folder_path=str(folder)
         )
-        seed_art_slot(
+        seed_asset(
             item,
             ArtType.POSTER,
             file_hash=file_hash,
-            phash="0" * PHASH_HEX_LENGTH,
+            fingerprint="0" * PHASH_HEX_LENGTH,
             width=600,
             height=900,
             file_mtime_ns=file_stat.st_mtime_ns,
@@ -1309,8 +1327,8 @@ async def test_an_item_record_holds_every_row_it_owns_apart_from_what_is_derived
         season = Season(media_item_id=1, season_num=1, title="Season 1")
         session.add(season)
         await session.flush()
-        select_art(season, ArtType.SEASON_POSTER, PublicArtUrl("https://x/s1.jpg"))
-        select_art(show, ArtType.POSTER, PublicArtUrl("https://x/p.jpg"))
+        select_art(season, ServerAsset.SEASON_POSTER, PublicArtUrl("https://x/s1.jpg"))
+        select_art(show, ServerAsset.POSTER, PublicArtUrl("https://x/p.jpg"))
         session.add(MediaCollection(id=5, title="Saga"))
         await session.flush()
         session.add(MediaCollectionMember(collection_id=5, media_item_id=1))
@@ -1321,11 +1339,11 @@ async def test_an_item_record_holds_every_row_it_owns_apart_from_what_is_derived
     assert [(row.table, row.title) for row in record.stored] == [
         ("media_items", "media_items 1"),
         ("seasons", "Season 1"),
-        ("art_slots", "Season 1 poster"),
-        ("art_slots", "Poster"),
+        ("assets", "Season 1 poster"),
+        ("assets", "Poster"),
     ]
     assert record.stored[0].values["title"] == "Show"
-    # The artwork row already shows what the flat poster fields copy.
-    assert "poster_url" not in record.derived
-    assert "poster_preview_url" in record.derived
+    # The asset rows already show what the read model's assets copy.
+    assert "assets" not in record.derived
+    assert "art_status" in record.derived
     assert not record.derived.keys() & record.stored[0].values.keys()

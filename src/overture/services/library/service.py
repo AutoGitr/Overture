@@ -4,20 +4,19 @@ lazy import logging
 lazy from pathlib import Path
 
 lazy from fastapi.responses import Response
-lazy from sqlmodel import select
 
 lazy from ... import protocols
-lazy from ...db.models.art import ArtSlot
+lazy from ...db.ledger import local_file, read_asset
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.session import Database
 lazy from ...domain import (
     ArtType,
     AssetScope,
-    BulkItemOperationKind,
     ImageSize,
     JobType,
     MediaType,
+    ServerAsset,
     media_sort_key,
 )
 lazy from ...integrations.proxy import ProxyClientManager
@@ -38,6 +37,7 @@ lazy from ...schemas.library import (
     MediaItemRead,
     SeasonRead,
     folder_roots_response,
+    season_read_from_model,
 )
 lazy from ...schemas.records import DatabaseRecord
 lazy from ...utils.errors import PublicServiceError
@@ -63,20 +63,9 @@ lazy from .items import (
     emit_library_item_upserted,
     media_item_reads_with_catalog_status,
     require_item,
-    season_reads,
 )
 
 logger = logging.getLogger(__name__)
-
-#: The downloads each bulk operation cancels: clearing a selection, like
-#: deleting the item, supersedes its outstanding downloads.
-_CANCELLED_JOBS: frozendict[BulkItemOperationKind, tuple[JobType, ...]] = frozendict(
-    {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
-        "artwork": (JobType.ART,),
-        "themes": (JobType.THEME,),
-        "delete": (JobType.ART, JobType.THEME),
-    }
-)
 
 
 class LibraryService:
@@ -235,21 +224,18 @@ class LibraryService:
     ) -> BulkItemOperationResult:
         """Commit the complete target set before publishing one cache update.
 
-        Clearing or deleting cancels the affected downloads. Deleting files or
-        the server's copies goes item by item, each committed on its own.
+        Deleting cancels the affected downloads. Removing artwork or themes
+        goes item by item, under each item's lock, as removing one item's does.
         """
-        removal = body.removal
-        if body.operation in {"artwork", "themes"} and (
-            removal.delete_file or removal.delete_from_server
-        ):
+        operation = body.operation
+        if operation in ("artwork", "themes"):
             return await self._remove_each(body)
-        cancelled = _CANCELLED_JOBS.get(body.operation, ())
         async with self._database.write_session() as db:
-            if cancelled:
-                await self._downloads.cancel_items(db, body.item_ids, cancelled)
-            ids = await MediaItemRepository(db).bulk_operate(
-                body.item_ids, body.operation
-            )
+            if operation == "delete":
+                await self._downloads.cancel_items(
+                    db, body.item_ids, (JobType.ART, JobType.THEME)
+                )
+            ids = await MediaItemRepository(db).bulk_operate(body.item_ids, operation)
         await self._downloads.committed(db)
         result = BulkItemOperationResult(item_ids=ids, operation=body.operation)
         if ids:
@@ -296,11 +282,8 @@ class LibraryService:
     async def get_seasons(self, item_id: int) -> list[SeasonRead]:
         """Get a show's tracked seasons."""
         async with self._database.read_session() as db:
-            item = await db.get(MediaItem, item_id)
-            if item is None:
-                return []
             seasons = await SeasonRepository(db).list_tracked_for_item(item_id)
-        return season_reads(item, seasons)
+        return [season_read_from_model(season) for season in seasons]
 
     @staticmethod
     async def _item_folder(item: MediaItem) -> Path:
@@ -320,11 +303,11 @@ class LibraryService:
         art_type: ArtType,
         file_hash: str,
     ) -> CachedOriginal:
-        """Keep the slot's file again when the cache has lost its image.
+        """Keep the asset's file again when the cache has lost its image.
 
         Raises:
             PublicServiceError: When the file is gone, or is no longer the image
-                the slot records, which the next refresh of the item records.
+                the asset records, which the next refresh of the item records.
         """
         async with self._database.read_session() as db:
             if art_type.owned_by_season:
@@ -359,7 +342,7 @@ class LibraryService:
         size: ImageSize | None,
         version: str | None,
     ) -> Response:
-        """Serve the image a slot records from the cache, or its thumbnail."""
+        """Serve the local file an asset records from the cache, or its thumbnail."""
         if file_hash is None:
             raise PublicServiceError(404, "File not found")
         return await cached_image_response(
@@ -379,18 +362,11 @@ class LibraryService:
     ) -> Response:
         """Serve a show season poster from the cache, or its thumbnail."""
         async with self._database.read_session() as db:
-            file_hash = (
-                await db.exec(
-                    select(ArtSlot.file_hash).where(
-                        ArtSlot.season_id == season_id,
-                        ArtSlot.art_type == ArtType.SEASON_POSTER,
-                    )
-                )
-            ).first()
+            season = await db.get(Season, season_id)
         return await self._serve_cached_image(
             season_id,
             ArtType.SEASON_POSTER,
-            file_hash=file_hash,
+            file_hash=_local_hash(season, ServerAsset.SEASON_POSTER),
             size=size,
             version=version,
         )
@@ -407,18 +383,17 @@ class LibraryService:
         if art_type.owned_by_season:
             raise PublicServiceError(400, "An item has no season artwork")
         async with self._database.read_session() as db:
-            file_hash = (
-                await db.exec(
-                    select(ArtSlot.file_hash).where(
-                        ArtSlot.media_item_id == item_id,
-                        ArtSlot.art_type == art_type,
-                    )
-                )
-            ).first()
+            item = await db.get(MediaItem, item_id)
         return await self._serve_cached_image(
             item_id,
             art_type,
-            file_hash=file_hash,
+            file_hash=_local_hash(item, art_type.server_asset),
             size=size,
             version=version,
         )
+
+
+def _local_hash(owner: MediaItem | Season | None, kind: ServerAsset) -> str | None:
+    """Return the hash of the owner's local file of *kind*, if it records one."""
+    facts = local_file(read_asset(owner, kind)) if owner is not None else None
+    return facts.file_hash if facts else None

@@ -5,7 +5,7 @@ lazy from collections.abc import Collection
 lazy from dataclasses import dataclass
 lazy from pathlib import Path
 
-lazy from ...db.art_slots import find_art_slot
+lazy from ...db.ledger import read_asset
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.session import CHUNK_SIZE, Database
@@ -213,6 +213,5 @@ async def plan_collection_audit(
         if row.id is not None
         for art_type in ITEM_ART_TYPES
         if art_type in params.art_types
-        and (slot := find_art_slot(row, art_type)) is not None
-        and slot.file_hash is not None
+        and read_asset(row, art_type.server_asset).content_hash is not None
     ]

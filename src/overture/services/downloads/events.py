@@ -6,10 +6,10 @@ lazy from typing import Any
 lazy from ... import protocols
 lazy from ...catalog_contract.contract import ART_SOURCE_LABELS
 lazy from ...db.models.download_job import DownloadJob
-lazy from ...domain import ArtSource, JobStatus, JobType
+lazy from ...domain import ArtSource, JobStatus
 lazy from ...jobs.kinds import DownloadStatus, JobKind
 lazy from ...jobs.lifecycle import publish_job_lifecycle
-lazy from ...jobs.progress_log import JobOutcome, log_entry
+lazy from ...jobs.progress_log import JobOutcome, asset_target, log_entry
 lazy from ...schemas.downloads import DownloadJobEvent
 lazy from ...utils.art_urls import art_source_label
 lazy from ...utils.job_events import build_job_payload
@@ -64,11 +64,14 @@ def job_target(job: DownloadJob, title: str | None) -> dict[str, int | str | Non
 
 def _download_label(job: DownloadJob, title: str | None) -> str:
     """Name a download the way job logs name their targets."""
+    asset = job.art_type or "theme"
     if job.job_type.for_collection:
-        asset = job.art_type or "theme"
-        return f"{title or job.collection_title or 'collection'} (collection {asset})"
-    kind = job.art_type or ("theme" if job.job_type is JobType.THEME else "artwork")
-    return f"{title or f'item {job.media_item_id}'} ({kind})"
+        return asset_target(
+            title or job.collection_title or f"collection {job.collection_id}",
+            asset,
+            collection=True,
+        )
+    return asset_target(title or f"item {job.media_item_id}", asset)
 
 
 def _log_outcome(

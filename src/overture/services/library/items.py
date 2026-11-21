@@ -8,8 +8,7 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ... import protocols
 lazy from ...catalog_contract.contract import IDENTITY_FIELDS, entry_file_stem
-lazy from ...db.art_slots import find_art_slot
-lazy from ...db.completion import holds_files
+lazy from ...db.ledger import dimensions, read_asset
 lazy from ...db.models.catalog import CatalogItem
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
@@ -24,9 +23,7 @@ lazy from ...repositories.terms import TermRepository
 lazy from ...schemas.library import (
     ItemCopyRead,
     MediaItemRead,
-    SeasonRead,
     media_item_read_from_model,
-    season_read_from_model,
 )
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.image import has_incorrect_aspect_ratio
@@ -89,13 +86,11 @@ def _has_incorrect_aspect_ratio(
         (item, ArtType.BACKGROUND),
         *((season, ArtType.SEASON_POSTER) for season in seasons),
     ]
-    # Stored slots only: an absent slot has no dimensions to check, and
-    # read_art_slot would build a throwaway ORM row for it.
-    slots = ((find_art_slot(owner, art_type), art_type) for owner, art_type in owners)
     return any(
-        slot is not None
-        and has_incorrect_aspect_ratio(slot.width, slot.height, art_type, tolerance)
-        for slot, art_type in slots
+        has_incorrect_aspect_ratio(
+            *dimensions(read_asset(owner, art_type.server_asset)), art_type, tolerance
+        )
+        for owner, art_type in owners
     )
 
 
@@ -173,9 +168,6 @@ async def media_item_reads_with_catalog_status(
                 has_incorrect_aspect_ratio=_has_incorrect_aspect_ratio(
                     item, seasons, tolerance
                 ),
-                catalog_no_theme=bool(
-                    trust_no_theme and public_item and public_item.no_theme
-                ),
                 catalog_entry_key=entry_file_stem(
                     public_item.model_dump(include=set(IDENTITY_FIELDS))
                 )
@@ -185,12 +177,6 @@ async def media_item_reads_with_catalog_status(
         )
 
     return reads
-
-
-def season_reads(item: MediaItem, seasons: Sequence[Season]) -> list[SeasonRead]:
-    """Serialize the item's seasons with their poster assets."""
-    files = holds_files(item)
-    return [season_read_from_model(season, files=files) for season in seasons]
 
 
 async def require_item(db: AsyncSession, item_id: int) -> MediaItem:

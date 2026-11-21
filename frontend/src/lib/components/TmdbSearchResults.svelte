@@ -314,7 +314,7 @@
       settingsState.current.collection_themes_unavailable !== null}
     artStatus={statusTone(stored?.art_status ?? "missing", false)}
     themeStatus={statusTone(
-      stored?.theme_status ?? "missing",
+      stored?.assets.theme.status ?? "missing",
       !!stored && downloadState.isDownloadingCollection(stored.id),
     )}
     onSelect={() => select(result)}

@@ -4,23 +4,20 @@ lazy from dataclasses import dataclass
 
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ...db.art_slots import (
-    ArtFileFacts,
-    clear_art_selection,
-    record_art_file,
-    record_selected_art_file,
+lazy from ...db.ledger import (
+    FileFacts,
+    clear_selection,
+    record_file,
+    record_written,
     select_art,
+    select_theme,
     select_upload,
 )
 lazy from ...db.models.media_item import MediaItem
-lazy from ...db.theme_file import (
-    ThemeFileFacts,
-    record_selected_theme_file,
-    select_theme,
-)
-lazy from ...domain import ArtType, ThemeIdSource
+lazy from ...domain import ArtType, ServerAsset, ThemeIdSource
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...utils.art_urls import PublicArtUrl
+lazy from ...utils.time import utc_now
 lazy from ..storage.assets import StoredFile
 lazy from ..themes.youtube_resolver import DownloadError
 
@@ -32,7 +29,7 @@ class DownloadedArt:
     art_type: ArtType
     season_id: int | None
     url: PublicArtUrl | None
-    phash: str | None
+    fingerprint: str | None
     width: int | None
     height: int | None
     #: The uploaded image the file holds, selected in place of a link.
@@ -56,23 +53,24 @@ class DownloadedArt:
         if owner is None:
             raise DownloadError("Season not found")
 
-        facts = ArtFileFacts(
+        kind = self.art_type.server_asset
+        facts = FileFacts(
             file_hash=stored.file_hash,
             file_mtime_ns=stored.mtime_ns,
             file_size=stored.size,
+            fingerprint=self.fingerprint,
             width=self.width,
             height=self.height,
-            phash=self.phash,
         )
         if self.upload_hash:
-            select_upload(owner, self.art_type, self.upload_hash)
-            record_selected_art_file(owner, self.art_type, facts)
+            select_upload(owner, kind, self.upload_hash)
+            record_written(owner, kind, facts, at=utc_now())
         elif self.url:
-            select_art(owner, self.art_type, self.url)
-            record_selected_art_file(owner, self.art_type, facts)
+            select_art(owner, kind, self.url)
+            record_written(owner, kind, facts, at=utc_now())
         else:
-            clear_art_selection(owner, self.art_type)
-            record_art_file(owner, self.art_type, facts)
+            clear_selection(owner, kind)
+            record_file(owner, kind, facts, at=utc_now())
         session.add(owner)
 
 
@@ -95,14 +93,16 @@ class DownloadedTheme:
             title=self.title,
             duration=self.duration,
         )
-        record_selected_theme_file(
+        record_written(
             item,
-            ThemeFileFacts(
+            ServerAsset.THEME,
+            FileFacts(
                 file_hash=stored.file_hash,
                 file_mtime_ns=stored.mtime_ns,
                 file_size=stored.size,
                 duration=self.duration,
             ),
+            at=utc_now(),
         )
         session.add(item)
 
@@ -115,6 +115,8 @@ class DownloadedCollectionTheme:
     title: str | None
     duration: int | None
     audio_bytes: bytes
+    #: The audio stream's hash without tags, which a server's copy is compared by.
+    fingerprint: str | None = None
 
 
 type DownloadResult = DownloadedArt | DownloadedTheme

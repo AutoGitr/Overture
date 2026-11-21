@@ -21,18 +21,17 @@ lazy from ...catalog_contract.contract import (
     theme_length_problem,
     validate_entry,
 )
-lazy from ...db.art_slots import read_art_slot
+lazy from ...db.ledger import read_asset
 lazy from ...db.models.catalog import CatalogCollection
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.session import PAGE_SIZE, Database
 lazy from ...domain import (
-    ArtType,
     CatalogMediaType,
     CollectionPosterStyle,
     MediaType,
-    ThemeBulkSource,
+    ServerAsset,
 )
 lazy from ...repositories.catalog import CatalogRepository
 lazy from ...repositories.catalog_drafts import CatalogDraftRepository
@@ -66,24 +65,27 @@ def _catalog_art_url(url: str | None) -> str | None:
 
 def _theme_problem(owner: MediaItem | MediaCollection) -> str | None:
     """Why OvertureDB would refuse the chosen theme, as far as its length is known."""
-    if owner.youtube_id is None or owner.youtube_duration is None:
+    theme = read_asset(owner, ServerAsset.THEME)
+    if theme.youtube_id is None or theme.youtube_duration is None:
         return None
-    return theme_length_problem(owner.youtube_duration)
+    return theme_length_problem(theme.youtube_duration)
 
 
 def _theme(owner: MediaItem | MediaCollection) -> str | None:
     """The chosen theme, unless OvertureDB would refuse it."""
-    return None if _theme_problem(owner) else owner.youtube_id
+    if _theme_problem(owner):
+        return None
+    return read_asset(owner, ServerAsset.THEME).youtube_id
 
 
 def item_entry(item: MediaItem) -> dict[str, Any] | None:
     """Return a library item's selections as a catalog entry, if it has any."""
-    poster = _catalog_art_url(read_art_slot(item, ArtType.POSTER).url)
-    background = _catalog_art_url(read_art_slot(item, ArtType.BACKGROUND).url)
+    poster = _catalog_art_url(read_asset(item, ServerAsset.POSTER).url)
+    background = _catalog_art_url(read_asset(item, ServerAsset.BACKGROUND).url)
     seasons = [
         {"season_num": season.season_num, "poster_url": url}
         for season in sorted(item.seasons, key=lambda season: season.season_num)
-        if (url := _catalog_art_url(read_art_slot(season, ArtType.SEASON_POSTER).url))
+        if (url := _catalog_art_url(read_asset(season, ServerAsset.SEASON_POSTER).url))
     ]
     theme = _theme(item)
     if not (poster or background or theme or seasons):
@@ -113,15 +115,13 @@ def collection_entry(
     """
     if collection.tmdb_collection_id is None:
         return None
-    slot = read_art_slot(collection, ArtType.POSTER)
+    slot = read_asset(collection, ServerAsset.POSTER)
     poster = _catalog_art_url(slot.url)
     if _consistent_problem(poster, slot.poster_style):
         poster = None
-    background = _catalog_art_url(read_art_slot(collection, ArtType.BACKGROUND).url)
+    background = _catalog_art_url(read_asset(collection, ServerAsset.BACKGROUND).url)
     theme = _theme(collection)
-    if collection.youtube_id_source is ThemeBulkSource.THEMERRDB or (
-        catalog and theme == catalog.youtube_id_themerrdb
-    ):
+    if catalog and theme == catalog.youtube_id_themerrdb:
         theme = None
     if not (poster or background or theme):
         return None
@@ -231,7 +231,7 @@ def _consistent_problem(
 def collection_refusals(collection: MediaCollection) -> list[str]:
     """What OvertureDB would refuse of a collection's art and theme."""
     lines = refusals(collection.title, collection)
-    slot = read_art_slot(collection, ArtType.POSTER)
+    slot = read_asset(collection, ServerAsset.POSTER)
     if problem := _consistent_problem(_catalog_art_url(slot.url), slot.poster_style):
         lines.append(f"{collection.title}: Poster: {problem}")
     return lines
@@ -240,8 +240,8 @@ def collection_refusals(collection: MediaCollection) -> list[str]:
 def refusals(title: str, owner: MediaItem | MediaCollection) -> list[str]:
     """The selected art and theme OvertureDB would refuse, as summary lines."""
     lines = art_refusals(
-        read_art_slot(owner, ArtType.POSTER).url,
-        read_art_slot(owner, ArtType.BACKGROUND).url,
+        read_asset(owner, ServerAsset.POSTER).url,
+        read_asset(owner, ServerAsset.BACKGROUND).url,
     )
     if problem := _theme_problem(owner):
         lines.append(f"Theme: {problem}")

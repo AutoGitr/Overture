@@ -7,7 +7,7 @@ lazy from dataclasses import dataclass, field, replace
 lazy import httpx2
 
 lazy from ...config import Settings
-lazy from ...db.art_slots import ArtFileFacts, art_file_facts, read_art_slot
+lazy from ...db.ledger import FileFacts, local_file, read_asset
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.models.settings import get_app_settings
@@ -33,7 +33,7 @@ class ArtMatchOutcome:
 
     response: ArtMatchResponse
     #: The local file's facts when it was the reference.
-    local_file: ArtFileFacts | None = None
+    local_file: FileFacts | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -252,9 +252,7 @@ class ArtMatcher:
         )
         return replace(comparison, errors=sources.errors)
 
-    async def compare_with_local(
-        self, url: str, facts: ArtFileFacts
-    ) -> LocalComparison:
+    async def compare_with_local(self, url: str, facts: FileFacts) -> LocalComparison:
         """Return how the image at *url* compares with the local file.
 
         It is compared as local art matching compares candidates: by the
@@ -263,28 +261,30 @@ class ArtMatcher:
         Raises:
             ValueError: When either image cannot be fetched or read.
         """
-        if facts.phash is None:
+        if facts.fingerprint is None:
             raise ValueError("the local file could not be decoded")
         try:
-            identical = await remote_matches_file(url, facts, cache=self._cache)
+            identical = await remote_matches_file(
+                url, facts.file_hash, cache=self._cache
+            )
             remote = await self._cache.cached_url_phash(url)
         except (httpx2.HTTPError, OSError, ValueError) as exc:
             raise ValueError(f"could not compare with the local file: {exc!s}") from exc
         if remote is None:
             raise ValueError("could not compare with the local file: unreadable image")
         return LocalComparison(
-            distance=self.phash.hamming_distance(facts.phash, remote),
+            distance=self.phash.hamming_distance(facts.fingerprint, remote),
             identical=identical,
         )
 
     async def annotate_perfect(
-        self, facts: ArtFileFacts, matches: list[ArtCandidate]
+        self, content_hash: str, matches: list[ArtCandidate]
     ) -> list[str]:
-        """Mark the close *matches* whose original bytes are the file *facts* name.
+        """Mark the close *matches* whose original bytes *content_hash* names.
 
         Returns the failures that kept a match from being verified.
         """
-        return await annotate_perfect_matches(facts, matches, cache=self._cache)
+        return await annotate_perfect_matches(content_hash, matches, cache=self._cache)
 
     async def match_item_art(
         self,
@@ -316,16 +316,16 @@ class ArtMatcher:
                     ArtMatchResponse(errors=["artwork target does not exist"])
                 )
             item, season, target_obj = target
-            slot = read_art_slot(target_obj, art_type)
-        facts = art_file_facts(slot)
+            slot = read_asset(target_obj, art_type.server_asset)
+        facts = local_file(slot)
 
         reference: MatchReference
         if facts is not None:
-            if facts.phash is None:
+            if facts.fingerprint is None:
                 return ArtMatchOutcome(
                     ArtMatchResponse(errors=["local artwork could not be decoded"])
                 )
-            reference_phash, reference = facts.phash, "local_file"
+            reference_phash, reference = facts.fingerprint, "local_file"
             reference_width = facts.width or 0
         else:
             try:
@@ -356,7 +356,9 @@ class ArtMatcher:
 
         errors = list(comparison.errors)
         if facts is not None:
-            errors.extend(await self.annotate_perfect(facts, comparison.matches))
+            errors.extend(
+                await self.annotate_perfect(facts.file_hash, comparison.matches)
+            )
 
         return ArtMatchOutcome(
             ArtMatchResponse(

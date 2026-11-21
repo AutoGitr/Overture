@@ -5,15 +5,14 @@ lazy from urllib.parse import parse_qs, urlsplit
 lazy import pytest
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from overture.db.art_slots import select_art
+lazy from overture.db.ledger import select_art
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
 lazy from overture.domain import (
-    ArtType,
     CollectionPosterStyle,
     MediaType,
-    ThemeBulkSource,
+    ServerAsset,
 )
 lazy from overture.services.catalog.issue import (
     collection_issue,
@@ -24,6 +23,7 @@ lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.time import utc_now
 lazy from tests.collection_helpers import stored_collection
+lazy from tests.factories import seed_theme
 
 POSTER = "https://image.tmdb.org/t/p/original/poster.jpg"
 
@@ -40,20 +40,22 @@ def _query(url: str | None) -> dict[str, str]:
 async def test_a_show_issue_fills_its_form_with_the_saved_selections(
     db_session: AsyncSession, database: Database
 ) -> None:
-    show = MediaItem(
-        media_type=MediaType.SHOW,
-        title="Show",
-        year=2001,
-        tmdb_id=99,
-        youtube_id="abcdefghijk",
-        folder_path="/private/show",
+    show = seed_theme(
+        MediaItem(
+            media_type=MediaType.SHOW,
+            title="Show",
+            year=2001,
+            tmdb_id=99,
+            folder_path="/private/show",
+        ),
+        "abcdefghijk",
     )
-    select_art(show, ArtType.POSTER, PublicArtUrl(POSTER))
+    select_art(show, ServerAsset.POSTER, PublicArtUrl(POSTER))
     db_session.add(show)
     await db_session.flush()
     assert show.id is not None
     season = Season(media_item_id=show.id, season_num=1)
-    select_art(season, ArtType.SEASON_POSTER, PublicArtUrl(POSTER))
+    select_art(season, ServerAsset.SEASON_POSTER, PublicArtUrl(POSTER))
     db_session.add(season)
     await db_session.commit()
 
@@ -91,20 +93,21 @@ async def test_a_collection_issue_needs_its_tmdb_collection(
     db_session: AsyncSession, database: Database
 ) -> None:
     matched, unmatched = (
-        stored_collection(
-            server_item_id=key,
-            media_type=MediaType.MOVIE,
-            title="Saga",
-            tmdb_collection_id=tmdb_id,
-            youtube_id="abcdefghijk",
-            youtube_id_source=ThemeBulkSource.YOUTUBE_SEARCH,
-            last_synced_at=utc_now(),
+        seed_theme(
+            stored_collection(
+                server_item_id=key,
+                media_type=MediaType.MOVIE,
+                title="Saga",
+                tmdb_collection_id=tmdb_id,
+                last_synced_at=utc_now(),
+            ),
+            "abcdefghijk",
         )
         for key, tmdb_id in (("saga", 10), ("custom", None))
     )
     select_art(
         matched,
-        ArtType.POSTER,
+        ServerAsset.POSTER,
         PublicArtUrl(POSTER),
         poster_style=CollectionPosterStyle.INDIVIDUAL,
     )

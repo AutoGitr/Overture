@@ -23,7 +23,8 @@
   import { MEDIA_ICONS } from "../utils/mediaIcons";
   import { CatalogBrowsing } from "../utils/catalogBrowsing.svelte";
   import { ItemRecordActions } from "../utils/itemRecordActions.svelte";
-  import { catalogStatus, hasThemeAttributes, statusTone } from "../utils/sidebarDomain";
+  import { catalogStatus, holdsSomething, statusTone } from "../utils/sidebarDomain";
+  import { deliveryNote } from "../utils/assetDeliveries";
   import CollectionBadge from "./CollectionBadge.svelte";
   import ContributeIssueLink from "./ContributeIssueLink.svelte";
   import ArtPanel from "./ArtPanel.svelte";
@@ -37,6 +38,8 @@
   import SeasonGrid from "./SeasonGrid.svelte";
   import AssetModeTabs from "./AssetModeTabs.svelte";
   import ThemePanel from "./ThemePanel.svelte";
+
+  const serverTitle = (serverId: number) => settingsState.serverTitle(serverId);
 
   let {
     item = null,
@@ -89,9 +92,9 @@
           seasons: (catalogEntry.seasons ?? []).some((season) => !!season.poster_url),
         }
       : {
-          poster: !!(item?.poster_source || item?.poster_hash),
-          background: !!(item?.background_source || item?.background_hash),
-          seasons: seasons.some((season) => !!(season.poster_source || season.poster_hash)),
+          poster: !!item && holdsSomething(item.assets.poster),
+          background: !!item && holdsSomething(item.assets.background),
+          seasons: seasons.some((season) => holdsSomething(season.poster)),
         },
   );
 
@@ -101,7 +104,7 @@
         tab.key,
         catalogTones?.[tab.key] ??
           statusTone(
-            item?.[tab.statusField] ?? "missing",
+            item ? tab.status(item) : "missing",
             !!item && downloadState.isDownloadingType(item.id, "art", tab.artType),
           ),
       ]),
@@ -275,7 +278,7 @@
         )}
       themeStatus={catalogTones?.theme ??
         statusTone(
-          item?.theme_status ?? "missing",
+          item?.assets.theme.status ?? "missing",
           !!item && downloadState.isDownloadingType(item.id, "theme"),
         )}
       onart={() => selectView({ mode: "art", artSubTab: "poster", drillSeasonNum: null })}
@@ -285,7 +288,7 @@
         ? () => {
             void catalog?.draft.save({ youtube_id_overturedb: null });
           }
-        : hasThemeAttributes(item) || item?.theme_file_hash
+        : item && holdsSomething(item.assets.theme)
           ? () => void actions.clearTheme()
           : null}
       artBusy={!!catalog?.draft.busy || actions.clearingArt}
@@ -298,6 +301,12 @@
       active={view.mode === "art" ? view.artSubTab : null}
       seasons={subject?.media_type === "show"}
       statuses={artStatuses}
+      notes={item
+        ? {
+            poster: deliveryNote(item.assets.poster, serverTitle),
+            background: deliveryNote(item.assets.background, serverTitle),
+          }
+        : {}}
       clearable={savedArt}
       clearDisabled={catalog?.draft.busy || actions.clearingArt}
       clearSeason={view.mode === "art" && view.drillSeasonNum !== null}

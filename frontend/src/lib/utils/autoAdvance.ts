@@ -62,7 +62,7 @@ export function computeNextArtworkTarget(options: {
   if (settings.auto_advance === "off" || settings.workflow === "themes") return null;
 
   if (artType === "poster") {
-    if (!settings.auto_advance_skip_completed || item.background_status !== "complete") {
+    if (!settings.auto_advance_skip_completed || item.assets.background.status !== "complete") {
       return { type: "art", subtab: "background" };
     }
   }
@@ -74,7 +74,7 @@ export function computeNextArtworkTarget(options: {
     remainingSeasons = remainingSeasons.slice(index + 1);
   }
   const nextSeason = remainingSeasons.find(
-    (season) => !settings.auto_advance_skip_completed || season.poster_status !== "complete",
+    (season) => !settings.auto_advance_skip_completed || season.poster.status !== "complete",
   );
   if (nextSeason) {
     return { type: "season", season: nextSeason };
@@ -82,7 +82,7 @@ export function computeNextArtworkTarget(options: {
 
   if (
     settings.workflow === "art_and_themes" &&
-    (!settings.auto_advance_skip_completed || item.theme_status !== "complete")
+    (!settings.auto_advance_skip_completed || item.assets.theme.status !== "complete")
   ) {
     return { type: "theme" };
   }
@@ -148,7 +148,7 @@ function nextAdvanceEntry(
     if (entry.kind === "tmdb") return { entry, candidate: undefined };
     const candidate = findCachedLibraryItem(entry.id);
     if (candidate && settings.auto_advance_skip_completed) {
-      const themeComplete = candidate.theme_status === "complete";
+      const themeComplete = candidate.assets.theme.status === "complete";
       const complete = themesOnly
         ? themeComplete
         : candidate.art_status === "complete" && (settings.workflow === "art" || themeComplete);
@@ -196,9 +196,9 @@ export function advanceToNextItem(
     goToItemThemes(nextItem);
   } else if (!candidate || !settings.auto_advance_skip_completed) {
     goToItemArt(nextItem, "poster");
-  } else if (candidate.poster_status !== "complete") {
+  } else if (candidate.assets.poster.status !== "complete") {
     goToItemArt(candidate, "poster");
-  } else if (candidate.background_status !== "complete") {
+  } else if (candidate.assets.background.status !== "complete") {
     goToItemArt(candidate, "background");
   } else if (candidate.media_type === "show" && candidate.season_posters_status !== "complete") {
     goToItemArt(candidate, "seasons");

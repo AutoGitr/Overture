@@ -21,7 +21,7 @@
 
   /** Once a running run has queued a download, each lane worker keeps a row until it ends. */
   function reserved(run: Run, lane: DownloadLane): number {
-    return run.running && run.counters.queued > 0 ? workers(lane) : 0;
+    return run.running && run.count("Queued") > 0 ? workers(lane) : 0;
   }
 </script>
 
@@ -43,19 +43,19 @@
         },
         {
           label: "downloaded",
-          value: run.counters.downloaded,
+          value: run.count("Downloaded"),
           title: "Files downloaded and saved to disk",
           tone: "success",
         },
         {
           label: "adopted",
-          value: run.counters.adopted,
+          value: run.count("Adopted"),
           title: "Existing file kept and linked to an art URL or YouTube ID",
           tone: "violet",
         },
-        { label: "skipped", value: run.counters.skipped },
-        { label: "no match", value: run.counters.no_match, tone: "warning" },
-        { label: "errors", value: run.errors, tone: "danger" },
+        { label: "skipped", value: run.count("Skipped") },
+        { label: "no match", value: run.count("No match"), tone: "warning" },
+        { label: "errors", value: run.count("Error"), tone: "danger" },
       ]}
     >
       {#snippet sections()}

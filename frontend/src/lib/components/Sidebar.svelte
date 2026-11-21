@@ -352,7 +352,7 @@
       downloadState.isDownloadingType(item.id, "art"),
     )}
     themeStatus={sidebarDomain.statusTone(
-      item.theme_status,
+      item.assets.theme.status,
       downloadState.isDownloadingType(item.id, "theme"),
     )}
     onSelect={() => openDetail(() => void goToItem(item))}
@@ -369,7 +369,7 @@
     {collection}
     artStatus={sidebarDomain.statusTone(collection.art_status, false)}
     themeStatus={sidebarDomain.statusTone(
-      collection.theme_status,
+      collection.assets.theme.status,
       downloadState.isDownloadingCollection(collection.id),
     )}
     onSelect={() => openDetail(() => goToCollection(collection))}

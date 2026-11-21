@@ -9,23 +9,17 @@ lazy from sqlmodel import col, exists, func, or_, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from sqlmodel.sql.expression import SelectOfScalar
 
-lazy from ..db.models.art import ArtSlot
-lazy from ..db.models.media_collection import MediaCollection
+lazy from ..db.models.asset import Asset, AssetDelivery
 lazy from ..db.models.media_item import MediaItem
 lazy from ..db.models.media_item_copy import MediaItemCopy
 lazy from ..db.models.season import Season
 lazy from ..db.session import CHUNK_SIZE
-lazy from ..domain import ArtType
-
-
-def _held_by_a_server() -> ColumnElement[bool]:
-    """Whether any server has a copy of a title."""
-    return exists().where(col(MediaItemCopy.media_item_id) == col(MediaItem.id))
+lazy from ..domain import DeliveryChannel, ServerAsset
 
 
 @dataclass(slots=True, frozen=True)
 class RemovalCounts:
-    """How many records have a selection, a local file and a server copy."""
+    """How many records have a selection, a file and a copy on a server."""
 
     selected: int = 0
     files: int = 0
@@ -39,8 +33,34 @@ class RemovalCounts:
         )
 
 
-def _selected(slot: type[ArtSlot]) -> ColumnElement[bool]:
-    return or_(col(slot.url).is_not(None), col(slot.upload_hash).is_not(None))
+#: The asset selects something.
+_SELECTED = or_(
+    col(Asset.url).is_not(None),
+    col(Asset.upload_hash).is_not(None),
+    col(Asset.youtube_id).is_not(None),
+)
+
+
+def _delivered(*where: ColumnElement[bool]) -> ColumnElement[bool]:
+    """Whether the asset has a delivery that holds something and meets *where*."""
+    return (
+        select(AssetDelivery.id)
+        .where(
+            col(AssetDelivery.asset_id) == col(Asset.id),
+            or_(
+                col(AssetDelivery.observed_hash).is_not(None),
+                col(AssetDelivery.observed_ref).is_not(None),
+            ),
+            *where,
+        )
+        .exists()
+    )
+
+
+#: A file the asset was found or written as.
+_FILE = _delivered(col(AssetDelivery.channel) == DeliveryChannel.FILE)
+#: An image or theme a server copy of a collection shows.
+_SERVER_COPY = _delivered(col(AssetDelivery.channel) == DeliveryChannel.UPLOAD)
 
 
 class RemovalRepository:
@@ -49,126 +69,70 @@ class RemovalRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def item_art(
+    async def item_assets(
         self,
         item_ids: Sequence[int],
-        art_types: Sequence[ArtType],
-        season_id: int | None,
+        kinds: Sequence[ServerAsset],
+        season_id: int | None = None,
     ) -> RemovalCounts:
-        """Count items whose art of *art_types* is selected, on disk, on the server.
+        """Count titles whose assets of *kinds* are selected or on disk.
 
-        Season posters count the item's seasons, or only *season_id*.
+        Season posters count the title's seasons, or only *season_id*; every
+        title a server holds counts as on the server, which shows its files.
         """
         total = RemovalCounts()
         for batch in batched(item_ids, CHUNK_SIZE, strict=False):
-            owner = func.coalesce(col(ArtSlot.media_item_id), col(Season.media_item_id))
+            owner = func.coalesce(col(Asset.media_item_id), col(Season.media_item_id))
             seasons = col(Season.media_item_id).in_(batch)
             if season_id is not None:
                 seasons = seasons & (col(Season.id) == season_id)
-            in_batch = or_(
-                col(ArtSlot.media_item_id).in_(batch)
-                & col(ArtSlot.art_type).in_(
-                    [art for art in art_types if not art.owned_by_season]
-                ),
-                seasons
-                & col(ArtSlot.art_type).in_(
-                    [art for art in art_types if art.owned_by_season]
-                ),
-            )
-            slots = (
+            assets = (
                 select(owner)
-                .select_from(ArtSlot)
-                .outerjoin(Season, col(Season.id) == col(ArtSlot.season_id))
-                .join(MediaItem, col(MediaItem.id) == owner)
-                .where(in_batch)
-            )
-            selected = await self._count(slots.where(_selected(ArtSlot)))
-            files = await self._count(
-                slots.where(
-                    col(ArtSlot.file_hash).is_not(None),
-                    col(MediaItem.folder_path).is_not(None),
+                .select_from(Asset)
+                .outerjoin(Season, col(Season.id) == col(Asset.season_id))
+                .where(
+                    col(Asset.kind).in_(kinds),
+                    or_(col(Asset.media_item_id).in_(batch), seasons),
                 )
             )
             on_server = (
                 await self.session.exec(
                     select(func.count()).where(
-                        col(MediaItem.id).in_(batch), _held_by_a_server()
-                    )
-                )
-            ).one()
-            total += RemovalCounts(selected, files, on_server)
-        return total
-
-    async def item_themes(self, item_ids: Sequence[int]) -> RemovalCounts:
-        """Count items whose theme is selected, on disk, and that are on the server."""
-        total = RemovalCounts()
-        for batch in batched(item_ids, CHUNK_SIZE, strict=False):
-            selected, files, on_server = (
-                await self.session.exec(
-                    select(
-                        func.count(col(MediaItem.youtube_id)),
-                        func.count().filter(
-                            col(MediaItem.folder_path).is_not(None),
-                            col(MediaItem.theme_file_hash).is_not(None),
+                        col(MediaItem.id).in_(batch),
+                        exists().where(
+                            col(MediaItemCopy.media_item_id) == col(MediaItem.id)
                         ),
-                        func.count().filter(_held_by_a_server()),
-                    ).where(col(MediaItem.id).in_(batch))
-                )
-            ).one()
-            total += RemovalCounts(selected, files, on_server)
-        return total
-
-    async def collection_art(
-        self, collection_ids: Sequence[int], art_types: Sequence[ArtType]
-    ) -> RemovalCounts:
-        """Count collections with art selected and an image on the server."""
-        total = RemovalCounts()
-        server_images = [
-            col(
-                MediaCollection.thumb_url
-                if art is ArtType.POSTER
-                else MediaCollection.art_url
-            ).is_not(None)
-            for art in art_types
-        ]
-        for batch in batched(collection_ids, CHUNK_SIZE, strict=False):
-            selected = await self._count(
-                select(col(ArtSlot.collection_id)).where(
-                    col(ArtSlot.collection_id).in_(batch),
-                    col(ArtSlot.art_type).in_(art_types),
-                    _selected(ArtSlot),
-                )
-            )
-            on_server = (
-                await self.session.exec(
-                    select(func.count()).where(
-                        col(MediaCollection.id).in_(batch), or_(*server_images)
                     )
                 )
             ).one()
-            total += RemovalCounts(selected, 0, on_server)
+            total += RemovalCounts(
+                await self._count(assets.where(_SELECTED)),
+                await self._count(assets.where(_FILE)),
+                on_server,
+            )
         return total
 
-    async def collection_themes(self, collection_ids: Sequence[int]) -> RemovalCounts:
-        """Count collections whose theme is selected, in a folder, on the server."""
+    async def collection_assets(
+        self, collection_ids: Sequence[int], kinds: Sequence[ServerAsset]
+    ) -> RemovalCounts:
+        """Count collections whose assets of *kinds* are selected, in a folder,
+        or shown by a server copy."""
         total = RemovalCounts()
         for batch in batched(collection_ids, CHUNK_SIZE, strict=False):
-            selected, files, on_server = (
-                await self.session.exec(
-                    select(
-                        func.count(col(MediaCollection.youtube_id)),
-                        func.count(col(MediaCollection.theme_file_hash)),
-                        func.count(col(MediaCollection.server_theme_id)),
-                    ).where(col(MediaCollection.id).in_(batch))
-                )
-            ).one()
-            total += RemovalCounts(selected, files, on_server)
+            assets = select(col(Asset.collection_id)).where(
+                col(Asset.collection_id).in_(batch), col(Asset.kind).in_(kinds)
+            )
+            total += RemovalCounts(
+                await self._count(assets.where(_SELECTED)),
+                await self._count(assets.where(_FILE)),
+                await self._count(assets.where(_SERVER_COPY)),
+            )
         return total
 
     async def _count(
         self, owners: SelectOfScalar[int] | SelectOfScalar[int | None]
     ) -> int:
-        """Count the distinct owners a selection of slots names."""
+        """Count the distinct owners a selection of assets names."""
         subquery = owners.distinct().subquery()
         return (
             await self.session.exec(select(func.count()).select_from(subquery))

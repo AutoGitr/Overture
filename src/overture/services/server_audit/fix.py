@@ -22,7 +22,7 @@ lazy from ...db.session import Database
 lazy from ...domain import ArtType, ServerAsset
 lazy from ...jobs.progress_log import JobOutcome, LogServer
 lazy from ...jobs.runner import JobContext, ManagedJob, run_managed_job
-lazy from ...jobs.tally import ServerAuditFixTally
+lazy from ...jobs.tally import JobTally
 lazy from ...media_servers.errors import MediaServerError
 lazy from ...media_servers.registry import log_server
 lazy from ...schemas.server_audit import (
@@ -335,7 +335,7 @@ async def _difference(fix: _Fix, context: AuditContext) -> tuple[_Fix, str | Non
     return fix, differing[0].reason or differing[0].status
 
 
-async def _pause(job: ManagedJob[ServerAuditFixTally], seconds: float) -> None:
+async def _pause(job: ManagedJob[JobTally], seconds: float) -> None:
     """Wait *seconds*, or until the run is asked to stop."""
     with suppress(TimeoutError):
         await asyncio.wait_for(job.context.stop_event.wait(), seconds)
@@ -343,7 +343,7 @@ async def _pause(job: ManagedJob[ServerAuditFixTally], seconds: float) -> None:
 
 async def _verify(
     fixes: list[_Fix],
-    job: ManagedJob[ServerAuditFixTally],
+    job: ManagedJob[JobTally],
     context: AuditContext,
     mark: MarkRows,
 ) -> None:
@@ -417,7 +417,7 @@ async def run_audit_fix(
     Every targeted row is first marked pending, so an outcome from an earlier
     fix stops showing; each then settles as verified, unchanged or failed.
     """
-    tally = ServerAuditFixTally()
+    tally = JobTally()
     async with run_managed_job(job_context, tally, catch=AUDIT_ERRORS) as job:
         await job.started()
         audit_context = replace(

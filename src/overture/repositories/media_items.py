@@ -13,15 +13,15 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from sqlmodel.sql.expression import Select, SelectOfScalar
 
 lazy from ..catalog_contract.contract import IDENTITY_FIELDS
-lazy from ..db.completion import HOLDS_FILES
-lazy from ..db.models.art import ArtSlot
+lazy from ..db.models.asset import Asset, AssetDelivery
 lazy from ..db.models.media_item import MediaItem
 lazy from ..db.models.media_item_copy import MediaItemCopy
 lazy from ..db.models.season import Season
 lazy from ..db.session import CHUNK_SIZE
 lazy from ..domain import (
-    BulkItemOperationKind,
+    ItemRecordOperation,
     MediaType,
+    ServerAsset,
     guid_int,
     guid_text,
     media_sort_key,
@@ -31,7 +31,7 @@ lazy from .copies import in_libraries, on_server
 
 
 def _matching(for_update: bool) -> SelectOfScalar[MediaItem]:
-    """Select media items, with their artwork slots for an update.
+    """Select media items, with their assets for an update.
 
     A lookup that only identifies the row skips loading them; reading them
     from such a row raises rather than finding none.
@@ -41,7 +41,7 @@ def _matching(for_update: bool) -> SelectOfScalar[MediaItem]:
         stmt
         if for_update
         else stmt.options(
-            raiseload(cast("QueryableAttribute[list[ArtSlot]]", MediaItem.art_slots))
+            raiseload(cast("QueryableAttribute[list[Asset]]", MediaItem.assets))
         )
     )
 
@@ -72,6 +72,19 @@ class MediaItemRepository:
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
+
+    async def get_many(self, item_ids: Collection[int]) -> list[MediaItem]:
+        """Return the items with these IDs, a chunk at a time, in no order."""
+        found: list[MediaItem] = []
+        for batch in batched(dict.fromkeys(item_ids), CHUNK_SIZE, strict=False):
+            found.extend(
+                (
+                    await self.session.exec(
+                        select(MediaItem).where(col(MediaItem.id).in_(batch))
+                    )
+                ).all()
+            )
+        return found
 
     async def find_by_copy(
         self,
@@ -276,28 +289,32 @@ class MediaItemRepository:
         *art* asks about artwork, of the item or its seasons; otherwise about
         the theme.
         """
-        if art:
-            kept_slot = (
-                col(ArtSlot.file_hash).is_not(None),
-                or_(
-                    col(ArtSlot.url).is_not(None),
-                    col(ArtSlot.upload_hash).is_not(None),
-                ),
+        kept = (
+            col(Asset.kind).in_(
+                [kind for kind in ServerAsset if (kind is ServerAsset.THEME) is not art]
+            ),
+            or_(
+                col(Asset.url).is_not(None),
+                col(Asset.upload_hash).is_not(None),
+                col(Asset.youtube_id).is_not(None),
+            ),
+            select(AssetDelivery.id)
+            .where(
+                col(AssetDelivery.asset_id) == Asset.id,
+                col(AssetDelivery.server_id).is_(None),
+                col(AssetDelivery.observed_hash).is_not(None),
             )
-            keeps = or_(
-                select(ArtSlot.id)
-                .where(col(ArtSlot.media_item_id) == MediaItem.id, *kept_slot)
-                .exists(),
-                select(ArtSlot.id)
-                .join(Season, col(Season.id) == col(ArtSlot.season_id))
-                .where(col(Season.media_item_id) == MediaItem.id, *kept_slot)
-                .exists(),
-            )
-        else:
-            keeps = and_(
-                col(MediaItem.youtube_id).is_not(None),
-                col(MediaItem.theme_file_hash).is_not(None),
-            )
+            .exists(),
+        )
+        keeps = or_(
+            select(Asset.id)
+            .where(col(Asset.media_item_id) == MediaItem.id, *kept)
+            .exists(),
+            select(Asset.id)
+            .join(Season, col(Season.id) == col(Asset.season_id))
+            .where(col(Season.media_item_id) == MediaItem.id, *kept)
+            .exists(),
+        )
         stmt = _bulk_scope(
             select(MediaItem.id),
             library_ids,
@@ -511,9 +528,12 @@ class MediaItemRepository:
         )
 
     async def bulk_operate(
-        self, item_ids: Collection[int], operation: BulkItemOperationKind
+        self, item_ids: Collection[int], operation: ItemRecordOperation
     ) -> list[int]:
-        """Use set-based statements, bounded to SQLite's parameter limit."""
+        """Delete items or set their monitoring, bounded to SQLite's parameter limit.
+
+        Assets change only through the ledger, so their removal is not here.
+        """
         affected: list[int] = []
         for batch in batched(dict.fromkeys(item_ids), CHUNK_SIZE, strict=False):
             ids = [
@@ -529,45 +549,8 @@ class MediaItemRepository:
                 continue
             affected.extend(ids)
             target = col(MediaItem.id).in_(ids)
-            if operation == "artwork":
-                # Forget selections only: local files stay, and so do the facts
-                # recorded about them. Rows left describing nothing are dropped.
-                seasons = select(Season.id).where(col(Season.media_item_id).in_(ids))
-                owned = or_(
-                    col(ArtSlot.media_item_id).in_(ids),
-                    col(ArtSlot.season_id).in_(seasons),
-                )
-                await self.session.exec(
-                    update(ArtSlot)
-                    .where(owned)
-                    .values(
-                        url=None,
-                        upload_hash=None,
-                        generated_style=None,
-                        generated_title_only=False,
-                    )
-                    .execution_options(synchronize_session=False)
-                )
-                await self.session.exec(
-                    delete(ArtSlot)
-                    .where(owned, col(ArtSlot.file_hash).is_(None))
-                    .execution_options(synchronize_session=False)
-                )
-            elif operation == "delete":
+            if operation == "delete":
                 await self.session.exec(delete(MediaItem).where(target))
-            elif operation == "themes":
-                # Mirrors clear_theme_selection: the local file and its facts stay.
-                await self.session.exec(
-                    update(MediaItem)
-                    .where(target)
-                    .values(
-                        youtube_id=None,
-                        youtube_id_source=None,
-                        youtube_title=None,
-                        youtube_duration=None,
-                        theme_provenance_cleared=True,
-                    )
-                )
             else:
                 await self.session.exec(
                     update(MediaItem)
@@ -599,7 +582,10 @@ def _bulk_scope[S: SelectOfScalar[Any]](
     after_id: int,
 ) -> S:
     """Narrow *stmt* to the present items a bulk run targets, by ID from *after_id*."""
-    stmt = stmt.where(col(MediaItem.server_removed_at).is_(None), HOLDS_FILES)
+    stmt = stmt.where(
+        col(MediaItem.server_removed_at).is_(None),
+        col(MediaItem.folder_path).is_not(None),
+    )
     if item_ids is not None:
         stmt = stmt.where(col(MediaItem.id).in_(item_ids))
     if not include_unmonitored:

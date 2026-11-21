@@ -22,6 +22,7 @@ lazy from overture.services.catalog.remote import (
     OVERTUREDB_REPO_URL,
 )
 lazy from overture.services.catalog.service import CatalogService
+lazy from overture.services.needs import AssetNeeds
 lazy from overture.services.schedule_store import (
     BackupPayload,
     CatalogPayload,
@@ -31,7 +32,7 @@ lazy from overture.services.schedule_store import (
 lazy from overture.services.scheduler import ScheduledJobInfo, SchedulerService
 lazy from overture.utils.cron import validate_cron_expression
 lazy from tests.publishers import NullEventPublisher
-lazy from tests.runtime_helpers import database_for
+lazy from tests.runtime_helpers import NoopProviderRegistry, database_for
 
 
 class TestCatalogHelper:
@@ -78,6 +79,11 @@ class TestCatalogHelper:
             app_config=app_config,
             database=database,
             config_dir=tmp_path,
+            needs=AssetNeeds(
+                app_config=app_config,
+                database=database,
+                provider_registry=NoopProviderRegistry(),
+            ),
         )
         monkeypatch.setattr(service_module, "save_schedule", fake_save)
 
@@ -114,6 +120,11 @@ class TestCatalogHelper:
             app_config=app_config,
             database=database,
             config_dir=tmp_path,
+            needs=AssetNeeds(
+                app_config=app_config,
+                database=database,
+                provider_registry=NoopProviderRegistry(),
+            ),
         )
         try:
             status = service.status_from_schedule(
@@ -202,6 +213,11 @@ async def test_a_first_start_syncs_the_catalog_overturedb_starts_enabled_with(
         app_config=app_config,
         database=database,
         config_dir=tmp_path,
+        needs=AssetNeeds(
+            app_config=app_config,
+            database=database,
+            provider_registry=NoopProviderRegistry(),
+        ),
     )
     started: list[bool] = []
     monkeypatch.setattr(service_module, "load_schedule", saved)

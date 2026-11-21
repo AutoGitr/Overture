@@ -22,7 +22,7 @@ lazy from overture.jobs.kinds import JobKind
 lazy from overture.jobs.lifecycle import ManagedJobLifecycle
 lazy from overture.jobs.runner import JobContext, run_managed_job
 lazy from overture.jobs.slot import ManagedBackgroundJob
-lazy from overture.jobs.tally import SyncTally
+lazy from overture.jobs.tally import JobTally
 lazy from overture.schemas.backup import BackupRetention
 lazy from overture.services.backup.files import BackupStore
 lazy from overture.utils.types import JsonValue
@@ -219,7 +219,7 @@ async def test_broadcast_and_reconnect_soak_drops_only_failed_clients() -> None:
 
 def _cooperative_job(running: asyncio.Event):
     async def body(context: JobContext) -> None:
-        async with run_managed_job(context, SyncTally()) as job:
+        async with run_managed_job(context, JobTally()) as job:
             await job.started(total=1)
             running.set()
             await context.stop_event.wait()

@@ -19,11 +19,12 @@ lazy from overture.db.models.catalog import CatalogItem
 lazy from overture.schemas.catalog import CatalogSyncStats
 lazy from overture.services.catalog import remote, staging
 lazy from overture.services.catalog.service import CatalogService
+lazy from overture.services.needs import AssetNeeds
 lazy from overture.services.schedule_store import CATALOG_SCHEDULE, load_schedule
 lazy from overture.services.scheduler import SchedulerService
 lazy from overture.utils.time import utc_now
 lazy from tests.publishers import NullEventPublisher
-lazy from tests.runtime_helpers import JobProbe, database_for
+lazy from tests.runtime_helpers import JobProbe, NoopProviderRegistry, database_for
 lazy from tests.test_services.test_catalog_edges import (
     catalog_jsonl,
     catalog_payload,
@@ -107,6 +108,11 @@ async def test_catalog_replacement_is_atomic(
         app_config=app_config,
         database=database,
         config_dir=tmp_path,
+        needs=AssetNeeds(
+            app_config=app_config,
+            database=database,
+            provider_registry=NoopProviderRegistry(),
+        ),
     )
     original = catalog_payload()
     original_path = tmp_path / "original.jsonl"

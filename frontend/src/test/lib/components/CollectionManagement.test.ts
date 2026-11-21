@@ -24,6 +24,7 @@ import {
   mediaItem,
   artCandidate,
   mediaServers,
+  withAsset,
 } from "../../helpers/fixtures";
 import { answerConfirmation } from "../../helpers/notifications";
 import { renderWithQueryClient } from "../../helpers/render";
@@ -331,11 +332,12 @@ describe("collection management", () => {
 
   it("shows collection artwork status, clears a selected slot, and offers generated art without an ID", async () => {
     const selected = {
-      ...detail,
-      poster_url: "https://example.test/poster.jpg",
-      poster_source: "tmdb",
-      poster_status: "complete",
-      art_status: "partial",
+      ...withAsset(detail, "poster", {
+        url: "https://example.test/poster.jpg",
+        source: "tmdb",
+        status: "complete",
+      }),
+      art_status: "partial" as const,
     };
     const { calls } = mockFetchRoutes({
       "/api/collections/defaults": {},

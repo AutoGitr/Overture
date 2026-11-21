@@ -33,6 +33,7 @@ lazy from overture.domain import (
     MediaType,
     TermKind,
 )
+lazy from overture.jobs.progress_log import JobOutcome
 lazy from overture.media_servers.adapters import ServerItem
 lazy from overture.repositories.collections import CollectionItem, CollectionRepository
 lazy from overture.repositories.terms import TermRepository
@@ -115,7 +116,7 @@ async def test_first_sync_stays_within_time_and_memory_budgets(
     tracemalloc.start()
     started = time.perf_counter()
     try:
-        result = await sync_full(reconciler, items)
+        _, outcomes = await sync_full(reconciler, items)
         elapsed = time.perf_counter() - started
         _, peak = tracemalloc.get_traced_memory()
     finally:
@@ -126,8 +127,8 @@ async def test_first_sync_stays_within_time_and_memory_budgets(
             stored = (
                 await session.exec(select(func.count()).select_from(MediaItem))
             ).one()
-        assert result.tally.added == item_count
-        assert result.tally.errors == 0
+        assert outcomes[JobOutcome.ADDED] == item_count
+        assert outcomes[JobOutcome.ERROR] == 0
         assert stored == item_count
         assert elapsed <= time_budget, (elapsed, time_budget, item_count)
         assert peak <= memory_budget, (peak, memory_budget, item_count)

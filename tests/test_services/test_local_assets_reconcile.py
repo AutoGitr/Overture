@@ -7,11 +7,12 @@ lazy from PIL import Image
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import read_art_slot
+lazy from overture.db.ledger import read_asset
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, MediaType
+lazy from overture.domain import MediaType, ServerAsset
+lazy from tests.factories import file_hash_of
 lazy from tests.runtime_helpers import make_local_assets
 lazy from tests.test_services.test_bulk_state_matrix import fast_fingerprints
 
@@ -69,7 +70,7 @@ async def test_reconcile_records_item_and_season_art_only_inside_the_roots(
 
     async with database.read_session() as session:
         recorded = {
-            item_id: read_art_slot(row, ArtType.POSTER).file_hash
+            item_id: file_hash_of(read_asset(row, ServerAsset.POSTER))
             for item_id in (1, 3)
             if (row := await session.get(MediaItem, item_id)) is not None
         }
@@ -78,4 +79,4 @@ async def test_reconcile_records_item_and_season_art_only_inside_the_roots(
     assert recorded[3] is None
     assert season is not None
     assert season.folder_path == str(show / "Season 01")
-    assert read_art_slot(season, ArtType.SEASON_POSTER).file_hash is not None
+    assert file_hash_of(read_asset(season, ServerAsset.SEASON_POSTER)) is not None

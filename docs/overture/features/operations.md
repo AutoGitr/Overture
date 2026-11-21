@@ -59,22 +59,29 @@ YouTube search applies to movies and shows.
 
 Each run's log lists **Queued** lines for the downloads it starts, then a
 **Downloaded** or **Error** line as each one ends, whether it is art or a
-theme, for a title or a collection.
+theme, for a title or a collection. Every line names the title and the asset,
+such as `Alien (poster)` or `Alien (theme)`; a collection's says so, as
+`Alien (collection poster)`. A title or collection that leaves the library
+during a run is **Skipped**.
 
 ### How Assets treats existing choices and files
 
-By default, Assets skips slots that already have a saved choice and keeps
-every file it did not write for one. It downloads the saved choice again when
-its file is missing, or was replaced by another program after Overture wrote
-it, as Radarr's or Sonarr's media upgrades can do.
-This happens whichever sources the run uses, since the saved choice is never
-looked for again:
+Titles and collections follow the same rules. An asset's places are a title's
+folder, or each server copy of a collection.
 
-| Saved choice | Local file                    | Default                   | Replace existing |
-| ------------ | ----------------------------- | ------------------------- | ---------------- |
-| Yes          | The one Overture wrote for it | Skip                      | Search again     |
-| Yes          | Missing, or replaced since    | Download the saved choice | Search again     |
-| No           | Either                        | Search                    | Search again     |
+By default, Assets skips assets that already have a saved choice and keeps
+what it did not put in place. It downloads the saved choice again when a place
+lacks it: the file is missing, or was replaced by another program after
+Overture wrote it, as Radarr's or Sonarr's media upgrades can do, or a server
+copy shows another image or theme. This happens whichever sources the run
+uses, since the saved choice is never looked for again:
+
+| Saved choice | In place                       | Default                   | Replace existing |
+| ------------ | ------------------------------ | ------------------------- | ---------------- |
+| Yes          | What Overture put there for it | Skip                      | Search again     |
+| Yes          | Missing, or replaced since     | Download the saved choice | Search again     |
+| No           | A theme                        | Keep it                   | Search again     |
+| No           | Art, or nothing                | Search                    | Search again     |
 
 Saved choices include the artwork URLs Sync copies from your media server, so
 a run downloads those to the media folder when no local file exists yet. Before
@@ -83,14 +90,14 @@ unchanged file costs one look at its size and modification time and is not
 read. To keep a file you put there yourself, clear the saved choice, or upload
 the image instead.
 
-**Replace existing** only ever replaces a choice with different art: a slot
-whose file is already the art a source picks, such as OvertureDB's, is skipped
-without downloading anything. It also replaces existing theme files; a
-downloaded file identical to yours is left untouched. A source image identical to your file is
-adopted in place. OvertureDB's artwork is compared with your file as local
-image matching compares its candidates: by default only an identical file is
-taken, and a looser matching threshold also takes the same picture saved
-differently, replacing your unsaved file with OvertureDB's.
+**Replace existing** only ever replaces a choice with something different: an
+asset that already holds the art or theme a source picks, such as OvertureDB's,
+is skipped without downloading anything. A downloaded file identical to yours
+is left untouched. A source image identical to your file is adopted in place.
+OvertureDB's artwork is compared with your file as local image matching
+compares its candidates: by default only an identical file is taken, and a
+looser matching threshold also takes the same picture saved differently,
+replacing your unsaved file with OvertureDB's.
 
 **Skip recently checked** skips searches within the chosen time window, also
 with Replace existing. Restoring a saved choice always runs.
@@ -112,14 +119,18 @@ Renamer scan also notices files deleted outside Overture.
 Server audit compares the local assets on disk with what the server displays and
 plays, and optionally the images Overture uploaded to collections with the
 server's copies. Each server holding a file is compared on its own, with a
-line and a result per server. Fix the selected differences, and Server audit
-checks whether the changes took effect. If a server still shows other artwork,
+line and a result per server. Images and themes are compared the way a sync
+compares them, and what an audit finds on a collection's copies is recorded
+as a sync records it, so the collection's status shows it at once. Fix the
+selected differences, and Server audit checks whether the changes took effect. If a server still shows other artwork,
 check its [settings](../install/media-servers.mdx) and the competing file
 names in [Files](files.md#where-each-asset-goes-and-how-each-server-takes-it).
 
 ## Logs and results
 
-A run's log has a filter for each outcome it logged, and, when its lines are
+A run's log has a filter for each outcome it logged, counting the targets
+its lines name: a line such as `94 collections` counts 94, as the run's totals
+and its notifications do. When its lines are
 about particular media servers, one for each server, by its `MEDIA_SERVERS`
 name and coloured by its kind (Plex amber, Jellyfin purple, Emby green); each
 such line shows its server the same way. Sync's lines name the server they

@@ -1,46 +1,45 @@
-"""Scaffolding shared by the bulk art and bulk theme runners.
+"""The rules and effects every Assets run shares: planning, queueing, reporting.
 
-Both plan their whole run before the first decision: every target in scope is
-either decided from the database alone, by :func:`planned_outcome`, or kept as
-a visit. :func:`refresh_scope` first brings the recorded files of saved
-selections up to date, so planning keeps only those still on disk. Only
-visited targets have their files read and their sources asked, and the run's
-total is fixed before any of that starts. Both runners then stamp
-``last_matched_at`` when they are done with a target.
+A run plans every target before the first decision: each is decided from
+the database alone, by :func:`planned_outcome`, or kept as a visit.
+:func:`refresh_scope` first brings the recorded files of saved selections up
+to date, so planning keeps only those still on disk.
 """
 
 lazy import asyncio
 lazy import logging
-lazy from collections import Counter
-lazy from collections.abc import AsyncGenerator, Awaitable, Callable, Iterator
+lazy from collections.abc import AsyncGenerator, Awaitable, Callable
 lazy from contextlib import asynccontextmanager
-lazy from dataclasses import dataclass, field
 lazy from datetime import datetime, timedelta
-lazy from itertools import batched
-lazy from typing import Any, Protocol
+lazy from typing import Protocol
 
 lazy from sqlalchemy.exc import SQLAlchemyError
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ..db.art_slots import SavedArt, read_art_slot, saved_art
-lazy from ..db.models.media_collection import MediaCollection
-lazy from ..db.models.media_item import MediaItem
-lazy from ..db.session import CHUNK_SIZE, PAGE_SIZE, Database
-lazy from ..domain import PERFECT_MATCH_ONLY, MediaSortKey, RecentUnit, media_sort_key
-lazy from ..jobs.progress_log import JobOutcome
-lazy from ..jobs.runner import ManagedJob
-lazy from ..jobs.tally import BulkAssetTally
-lazy from ..repositories.media_items import MediaItemRepository
-lazy from ..repositories.seasons import SeasonRepository
-lazy from ..schemas.art import ArtMatchResponse
-lazy from ..schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
-lazy from ..utils.text import count_label
-lazy from ..utils.time import utc_now
-lazy from .catalog.index import CatalogPick
-lazy from .downloads.queue import JobTarget
-lazy from .downloads.service import DownloadService
-lazy from .downloads.watch import DownloadWatch
-lazy from .local_assets.service import LocalAssets
+lazy from ...db.ledger import Selection, read_asset, selection
+lazy from ...db.models.media_collection import MediaCollection
+lazy from ...db.models.media_item import MediaItem
+lazy from ...db.session import CHUNK_SIZE, Database
+lazy from ...domain import (
+    PERFECT_MATCH_ONLY,
+    RecentUnit,
+    ServerAsset,
+)
+lazy from ...jobs.progress_log import JobOutcome
+lazy from ...jobs.runner import ManagedJob
+lazy from ...jobs.tally import BulkAssetTally
+lazy from ...repositories.collections import CollectionRepository
+lazy from ...repositories.media_items import MediaItemRepository
+lazy from ...repositories.seasons import SeasonRepository
+lazy from ...schemas.art import ArtMatchResponse
+lazy from ...schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
+lazy from ...utils.text import count_label
+lazy from ...utils.time import utc_now
+lazy from ..catalog.index import CatalogPick
+lazy from ..downloads.queue import JobTarget
+lazy from ..downloads.service import DownloadService
+lazy from ..downloads.watch import DownloadWatch
+lazy from ..local_assets.service import LocalAssets
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +100,7 @@ class AssetRunParams(Protocol):
 def planned_outcome(
     params: AssetRunParams,
     *,
-    saved: str | SavedArt | None,
+    saved: Selection | None,
     selection_missing: bool,
     last_checked: datetime | None,
     catalog: CatalogPick | None,
@@ -133,7 +132,7 @@ def planned_outcome(
     if catalog is not None and catalog.value is None:
         outcome = JobOutcome.NO_MATCH if catalog.enabled else JobOutcome.SKIPPED
         return outcome, catalog.reason
-    saved_url = saved.url if isinstance(saved, SavedArt) else saved
+    saved_url = saved and (saved.url or saved.youtube_id)
     if catalog is not None and not selection_missing and saved_url == catalog.value:
         return JobOutcome.SKIPPED, f"saved selection is already the {catalog.label}"
     if kept:
@@ -196,68 +195,6 @@ async def refresh_scope(
         after_id = item_ids[-1]
 
 
-@dataclass(slots=True, frozen=True)
-class AssetPlan[TargetT]:
-    """Every target of one bulk run: decided while planning, or to visit.
-
-    Visits hold IDs rather than rows, so a plan for the whole library stays
-    small; each batch's rows are loaded, and its files read, when it is
-    visited.
-    """
-
-    decided: Counter[PlannedOutcome] = field(default_factory=Counter[PlannedOutcome])
-    _visits: list[tuple[MediaSortKey, int, tuple[TargetT, ...]]] = field(
-        default_factory=list[tuple[MediaSortKey, int, tuple[TargetT, ...]]]
-    )
-
-    def decide(self, outcome: PlannedOutcome) -> None:
-        """Count one target decided while planning."""
-        self.decided[outcome] += 1
-
-    def visit(self, item: MediaItem | MediaCollection, targets: list[TargetT]) -> None:
-        """Keep *item*'s *targets* for a visit, in the order they are given."""
-        if targets and item.id is not None:
-            media_type = (
-                item.media_types[0]
-                if isinstance(item, MediaCollection)
-                else item.media_type
-            )
-            key = media_sort_key(media_type, item.title, item.id)
-            self._visits.append((key, item.id, tuple(targets)))
-
-    @property
-    def total(self) -> int:
-        """Return how many targets the run reports on, decided or visited."""
-        return self.decided.total() + sum(len(t) for _, _, t in self._visits)
-
-    def batches(self) -> Iterator[dict[int, tuple[TargetT, ...]]]:
-        """Yield the visits a batch at a time, movies then shows by title."""
-        for batch in batched(sorted(self._visits), PAGE_SIZE, strict=False):
-            yield {item_id: targets for _, item_id, targets in batch}
-
-
-async def report_planned[TallyT: BulkAssetTally](
-    job: ManagedJob[TallyT],
-    plan: AssetPlan[Any],
-    label: Callable[[int], str],
-) -> None:
-    """Fix the run's total and report what planning decided, one line a reason."""
-    await job.planned(plan.total)
-    for (outcome, reason), count in plan.decided.items():
-        await job.report(outcome, label(count), reason, count=count)
-
-
-async def report_unloaded[TallyT: BulkAssetTally](
-    job: ManagedJob[TallyT],
-    batch: dict[int, tuple[Any, ...]],
-    loaded: int,
-    label: Callable[[int], str],
-) -> None:
-    """Count planned targets whose rows could not be loaded, so none go missing."""
-    if missing := sum(len(targets) for targets in batch.values()) - loaded:
-        await job.report(JobOutcome.ERROR, label(missing), LEFT_LIBRARY, count=missing)
-
-
 async def queue_and_report[TallyT: BulkAssetTally](
     job: ManagedJob[TallyT],
     target: str,
@@ -312,70 +249,44 @@ def checked_recently(last_checked: datetime | None, params: AssetRunParams) -> b
     return utc_now() - last_checked < window
 
 
-async def scope_chunks(
-    params: AssetRunParams, *, database: Database, chunk: int = CHUNK_SIZE
-) -> AsyncGenerator[tuple[AsyncSession, list[MediaItem]]]:
-    """Yield the run's scope a chunk of items at a time, by ID.
-
-    Each chunk comes with the read session it was loaded in, for the caller's
-    lookups about the same items.
-    """
-    after_id = 0
-    while True:
-        async with database.read_session() as session:
-            items = await MediaItemRepository(session).list_bulk_targets(
-                params.library_ids,
-                item_ids=params.item_ids,
-                include_unmonitored=params.include_unmonitored,
-                after_id=after_id,
-                limit=chunk,
-            )
-            yield session, items
-        if len(items) < chunk:
-            return
-        after_id = max(item.id or 0 for item in items)
-
-
 class SelectionChangedError(Exception):
     """The slot no longer holds the selection a run planned its download with."""
 
 
 async def _holds_selection(
-    session: AsyncSession, target: JobTarget, planned: str | SavedArt | None
+    session: AsyncSession, target: JobTarget, planned: Selection | None
 ) -> bool:
-    """Return whether *target*'s slot still holds the *planned* selection."""
+    """Return whether *target*'s asset still holds the *planned* selection."""
+    kind = target.art_type.server_asset if target.art_type else ServerAsset.THEME
     if target.collection_id is not None:
         collection = await session.get(MediaCollection, target.collection_id)
         if collection is None or collection.last_synced_at is None:
             return False
-        if target.art_type is None:
-            return collection.youtube_id == planned
-        return saved_art(read_art_slot(collection, target.art_type)) == planned
+        return selection(read_asset(collection, kind)) == planned
     item = await session.get(MediaItem, target.media_item_id)
     if item is None:
         return False
-    if target.art_type is None:
-        return item.youtube_id == planned
-    owner = await SeasonRepository(session).art_owner(
-        item, target.art_type, target.season_id
+    owner = (
+        item
+        if target.art_type is None
+        else await SeasonRepository(session).art_owner(
+            item, target.art_type, target.season_id
+        )
     )
-    return (
-        owner is not None
-        and saved_art(read_art_slot(owner, target.art_type)) == planned
-    )
+    return owner is not None and selection(read_asset(owner, kind)) == planned
 
 
 async def queue_download(
     target: JobTarget,
     *,
-    planned: str | SavedArt | None,
+    planned: Selection | None,
     downloads: DownloadService,
     on_queued: Callable[[str], None],
     database: Database,
 ) -> bool:
     """Queue one download in a transaction of its own; return whether it is new.
 
-    *planned* is the slot's saved selection when the run decided on *target*.
+    *planned* is the asset's selection when the run decided on *target*.
 
     Raises:
         SelectionChangedError: When the slot's selection changed since, or its item
@@ -474,7 +385,7 @@ async def report_downloads[TallyT: BulkAssetTally](
 class CheckedStamper:
     """Buffers ``last_matched_at`` stamps and writes them a batch at a time.
 
-    Targets accumulate here and leave as one statement per table, rather than
+    Owners accumulate here and leave as one statement per table, rather than
     opening a write transaction per target.
     """
 
@@ -484,28 +395,47 @@ class CheckedStamper:
         self._flush_lock = asyncio.Lock()
         self._item_ids: set[int] = set()
         self._season_ids: set[int] = set()
+        self._collection_ids: set[int] = set()
 
-    async def add(self, item_id: int, *, season_id: int | None = None) -> None:
-        """Buffer one checked target, flushing when the batch is full."""
-        self._item_ids.add(item_id)
-        if season_id is not None:
-            self._season_ids.add(season_id)
-        if len(self._item_ids) + len(self._season_ids) >= CHUNK_SIZE:
+    async def add(
+        self,
+        *,
+        item_id: int | None = None,
+        season_id: int | None = None,
+        collection_id: int | None = None,
+    ) -> None:
+        """Buffer one checked owner, flushing when the batch is full."""
+        for ids, value in (
+            (self._item_ids, item_id),
+            (self._season_ids, season_id),
+            (self._collection_ids, collection_id),
+        ):
+            if value is not None:
+                ids.add(value)
+        buffered = (
+            len(self._item_ids) + len(self._season_ids) + len(self._collection_ids)
+        )
+        if buffered >= CHUNK_SIZE:
             await self.flush()
 
     async def flush(self) -> None:
         """Write every buffered stamp and start the next batch."""
         async with self._flush_lock:
-            if not self._item_ids and not self._season_ids:
+            if not (self._item_ids or self._season_ids or self._collection_ids):
                 return
             item_ids, self._item_ids = self._item_ids, set()
             season_ids, self._season_ids = self._season_ids, set()
+            collection_ids, self._collection_ids = self._collection_ids, set()
             now = utc_now()
             try:
                 async with self._database.write_session() as session:
                     await MediaItemRepository(session).mark_matched(item_ids, now)
                     await SeasonRepository(session).mark_matched(season_ids, now)
+                    await CollectionRepository(session).mark_matched(
+                        collection_ids, now
+                    )
             except BaseException:
                 self._item_ids.update(item_ids)
                 self._season_ids.update(season_ids)
+                self._collection_ids.update(collection_ids)
                 raise

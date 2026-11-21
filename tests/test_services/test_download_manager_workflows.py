@@ -12,7 +12,7 @@ lazy from sqlmodel import select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import ArtFileFacts, read_art_slot, record_art_file
+lazy from overture.db.ledger import FileFacts, read_asset, record_file
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
@@ -25,6 +25,7 @@ lazy from overture.domain import (
     JobStatus,
     JobType,
     MediaType,
+    ServerAsset,
 )
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.jobs.kinds import INTERRUPTED_MESSAGE, DownloadStatus
@@ -46,6 +47,7 @@ lazy from overture.utils.image import (
     encoded_image_extension,
 )
 lazy from tests.collection_helpers import stored_collection
+lazy from tests.factories import file_hash_of, theme_file_hash
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
@@ -124,7 +126,7 @@ async def test_download_completion_applies_monitoring_policy(
         job, DownloadedTheme("video", "Theme", 60), StoredFile("hash", 1, 5)
     )
     await db_session.refresh(item)
-    assert item.theme_file_hash == "hash"
+    assert theme_file_hash(item) == "hash"
     assert item.monitored is (policy != "theme")
     assert job.status is JobStatus.DONE
 
@@ -374,7 +376,7 @@ async def test_two_selections_completing_in_reverse_order_keeps_newest_choice(
     async with database.read_session() as session:
         item_row = await session.get(MediaItem, 1)
         assert item_row is not None
-        assert read_art_slot(item_row, ArtType.POSTER).url == urls["blue"]
+        assert read_asset(item_row, ServerAsset.POSTER).url == urls["blue"]
         statuses = {
             job.id: job.status for job in (await session.exec(select(DownloadJob)))
         }
@@ -400,16 +402,16 @@ async def test_clear_during_preparation_cancels_download_without_overwriting(
             title="Alien",
             folder_path=str(folder),
         )
-        record_art_file(
+        record_file(
             item,
-            ArtType.POSTER,
-            ArtFileFacts(
+            ServerAsset.POSTER,
+            FileFacts(
                 file_hash="original_hash",
-                phash=None,
-                width=1000,
-                height=1500,
                 file_mtime_ns=1,
                 file_size=10,
+                fingerprint=None,
+                width=1000,
+                height=1500,
             ),
         )
         session.add(item)
@@ -457,8 +459,8 @@ async def test_clear_during_preparation_cancels_download_without_overwriting(
     async with database.read_session() as session:
         item_row = await session.get(MediaItem, 1)
         assert item_row is not None
-        slot = read_art_slot(item_row, ArtType.POSTER)
-        assert (slot.url, slot.file_hash) == (None, "original_hash")
+        slot = read_asset(item_row, ServerAsset.POSTER)
+        assert (slot.url, file_hash_of(slot)) == (None, "original_hash")
         job_row = await session.get(DownloadJob, job_id)
         assert job_row is not None
         assert job_row.status is JobStatus.CANCELLED
@@ -723,7 +725,7 @@ async def test_identical_file_completes_unchanged_unless_cancelled(
         assert job_row.status is (JobStatus.CANCELLED if cancelled else JobStatus.DONE)
         item_row = await session.get(MediaItem, 1)
         assert item_row is not None
-        assert read_art_slot(item_row, ArtType.POSTER).url == (
+        assert read_asset(item_row, ServerAsset.POSTER).url == (
             None if cancelled else "https://images.test/poster.jpg"
         )
 

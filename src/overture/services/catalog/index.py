@@ -104,8 +104,6 @@ class CatalogIndex:
     collections: dict[int, CatalogCollection] = field(
         default_factory=dict[int, CatalogCollection]
     )
-    #: Whether the user lets OvertureDB's No theme flag count as a theme.
-    trust_no_theme: bool = True
     #: The OvertureDB poster styles each collection takes, by collection ID.
     collection_posters: dict[int, tuple[CollectionPosterStyle, ...]] = field(
         default_factory=dict[int, tuple[CollectionPosterStyle, ...]]
@@ -144,7 +142,6 @@ class CatalogIndex:
             {},
             {},
             collections=entries,
-            trust_no_theme=settings.overturedb_no_theme,
             collection_posters={
                 row_id: policy.overturedb_posters for row_id, policy in policies.items()
             },
@@ -181,7 +178,6 @@ class CatalogIndex:
         return cls(
             matched,
             season_posters,
-            trust_no_theme=(await get_app_settings(session)).overturedb_no_theme,
         )
 
     def art_url(
@@ -239,20 +235,6 @@ class CatalogIndex:
             return None, None
         return catalog_collection_art(
             entry, art_type, self.collection_posters[row.id or 0]
-        )
-
-    def has_no_theme(self, item: MediaItem | MediaCollection) -> bool:
-        """Whether OvertureDB says *item* has no theme music."""
-        public_item = (
-            self.collections.get(item.tmdb_collection_id or 0)
-            if isinstance(item, MediaCollection)
-            else self.items.get(item.id or 0)
-        )
-        return (
-            self.enabled
-            and self.trust_no_theme
-            and public_item is not None
-            and public_item.no_theme
         )
 
     def theme(

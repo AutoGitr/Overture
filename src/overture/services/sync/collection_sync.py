@@ -7,25 +7,34 @@ lazy from datetime import datetime
 
 lazy from ... import protocols
 lazy from ...config import Settings
-lazy from ...db.art_slots import record_art_file
+lazy from ...db.ledger import (
+    Destination,
+    Evidence,
+    FileFacts,
+    delivery,
+    file_facts,
+    observe,
+    read_asset,
+    record_file,
+)
 lazy from ...db.models.media_collection import CollectionLibrary, MediaCollection
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
-lazy from ...db.theme_file import ThemeFileFacts, record_theme_file, theme_file_facts
 lazy from ...domain import (
-    ArtType,
     AssetScope,
     CollectionKind,
     CollectionOrder,
+    DeliveryChannel,
     IncrementalThemeOrder,
     MediaType,
     ScheduleKind,
+    ServerAsset,
 )
-lazy from ...jobs.progress_log import JobOutcome, log_entry
+lazy from ...jobs.progress_log import JobOutcome
 lazy from ...jobs.runner import ManagedJob
-lazy from ...jobs.tally import SyncTally
-lazy from ...media_servers.adapters import FolderThemes, ServerCollection
-lazy from ...media_servers.registry import CollectionProvider, Provider, log_server
+lazy from ...jobs.tally import JobTally
+lazy from ...media_servers.adapters import FolderThemes, ServerCollection, UploadThemes
+lazy from ...media_servers.registry import Provider, log_server
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.copies import CopyRepository, ServerItemFacts
 lazy from ...repositories.saved_schedules import SavedScheduleRepository
@@ -36,8 +45,11 @@ lazy from ...utils.time import utc_now
 lazy from ..catalog.downloads import queue_catalog_themes_for_collections
 lazy from ..collections import COLLECTIONS_LOCK
 lazy from ..collections.copies import held_copies, lead_part
+lazy from ..collections.destinations import place_collection
 lazy from ..collections.theme_files import collection_folder, inspect_theme_file
 lazy from ..downloads.service import DownloadService
+lazy from ..needs import apply_needs
+lazy from ..server_copies import ServerCopies
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +68,19 @@ class ListedCopy:
     @property
     def key(self) -> CopyKey:
         return self.server_id, self.collection.id
+
+
+@dataclass(slots=True, frozen=True)
+class _Observation:
+    """What a sync read of one copy's asset: its evidence, or a file it found."""
+
+    kind: ServerAsset
+    destination: Destination
+    evidence: Evidence
+    #: What the server names its current image or theme by.
+    ref: str | None
+    #: The theme file found in a server's collection folder, or ``None``.
+    file: FileFacts | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -190,15 +215,17 @@ class CollectionSync:
         app_config: Settings,
         database: Database,
         downloads: DownloadService,
+        checks: ServerCopies,
     ) -> None:
         self._publisher = publisher
         self._config = app_config
         self._database = database
         self._downloads = downloads
+        self._checks = checks
 
     async def run(
         self,
-        job: ManagedJob[SyncTally],
+        job: ManagedJob[JobTally],
         providers: Sequence[Provider],
         *,
         library_ids: list[str] | None,
@@ -215,13 +242,12 @@ class CollectionSync:
         async with self._downloads.asset_locks.acquire(COLLECTIONS_LOCK):
             listed: list[ListedCopy] = []
             for provider in providers:
-                await job.progress(
-                    log=log_entry(
-                        JobOutcome.STARTED,
-                        "Collections",
-                        f"reading collections from {provider.server.title}",
-                        server=log_server(provider),
-                    )
+                await job.report(
+                    JobOutcome.STARTED,
+                    "Collections",
+                    f"reading collections from {provider.server.title}",
+                    server=log_server(provider),
+                    finished=False,
                 )
                 listed += [
                     ListedCopy(provider.server_id, collection)
@@ -310,14 +336,13 @@ class CollectionSync:
                         current = await CollectionRepository(session).find_server(
                             *lead.key
                         )
-                    provider = by_server[lead.server_id]
-                    facts, checked = (
-                        await self._inspect_theme(
-                            provider, lead.collection, current, previous
+                    observations = [
+                        observation
+                        for copy in copies
+                        for observation in await self._observe(
+                            current, copy, by_server[copy.server_id]
                         )
-                        if leads
-                        else (None, False)
-                    )
+                    ]
                     async with self._database.write_session() as session:
                         row = await self._store(
                             CollectionRepository(session),
@@ -325,14 +350,13 @@ class CollectionSync:
                             placement=placement,
                             members=members,
                             unknown=len(unknown),
-                            folder_themes=isinstance(
-                                provider.collections, FolderThemes
-                            ),
-                            facts=facts,
-                            theme_checked=checked,
                             leads=leads,
                             managed=previous is not None and previous.id in managed_ids,
                             now=utc_now(),
+                        )
+                        self._record(row, observations)
+                        await apply_needs(
+                            session, collections=[row], app_config=self._config
                         )
                 identified += row.tmdb_collection_id is not None
                 if (
@@ -398,44 +422,93 @@ class CollectionSync:
         )
         if theme_order is IncrementalThemeOrder.OFF and newly_identified:
             await self._queue_incremental_choices(newly_identified)
-        await job.progress(
-            log=log_entry(
-                JobOutcome.STARTED,
-                "Collections",
-                f"{len(listed)} listed, {identified} with TMDB IDs, "
-                f"{len(gone) - len(managed)} removed, "
-                f"{len(managed)} managed no longer on the server",
-            )
+        await job.report(
+            JobOutcome.STARTED,
+            "Collections",
+            f"{len(listed)} listed, {identified} with TMDB IDs, "
+            f"{len(gone) - len(managed)} removed, "
+            f"{len(managed)} managed no longer on the server",
+            finished=False,
         )
 
-    async def _inspect_theme(
-        self,
-        provider: CollectionProvider,
-        collection: ServerCollection,
-        current: MediaCollection | None,
-        previous: MediaCollection | None,
-    ) -> tuple[ThemeFileFacts | None, bool]:
-        """Keep provenance when the mount is unavailable or a newer upload won."""
-        if not isinstance(provider.collections, FolderThemes):
-            changed = bool(
-                current
-                and previous
-                and current.server_theme_id != previous.server_theme_id
+    async def _observe(
+        self, current: MediaCollection | None, listed: ListedCopy, provider: Provider
+    ) -> list[_Observation]:
+        """Read what one server copy shows of each asset, with no transaction open."""
+        copy = listed.collection
+        upload = Destination(listed.server_id, copy.id, DeliveryChannel.UPLOAD)
+        observations = [
+            _Observation(
+                kind,
+                upload,
+                await self._checks.image_evidence(current, kind, upload, provider, url),
+                ref=url,
             )
-            return None, not changed
-        try:
-            folder = await owned_thread(
-                collection_folder, provider.server, collection.path
+            for kind, url in (
+                (ServerAsset.POSTER, copy.thumb_url),
+                (ServerAsset.BACKGROUND, copy.art_url),
             )
-            facts = await owned_thread(
-                inspect_theme_file,
-                folder,
-                theme_file_facts(current) if current else None,
-            )
-        except OSError, ValueError:
-            logger.debug("Collection theme folder unavailable: %s", collection.title)
-            return None, False
-        return facts, True
+        ]
+        match provider.collections:
+            case UploadThemes():
+                observations.append(
+                    _Observation(
+                        ServerAsset.THEME,
+                        upload,
+                        await self._checks.theme_evidence(
+                            current, upload, provider, copy.theme_id
+                        ),
+                        ref=copy.theme_id,
+                    )
+                )
+            case FolderThemes():
+                folder = Destination(listed.server_id, copy.id, DeliveryChannel.FILE)
+                known = (
+                    file_facts(delivery(read_asset(current, ServerAsset.THEME), folder))
+                    if current is not None
+                    else None
+                )
+                try:
+                    found = await owned_thread(
+                        collection_folder, provider.server, copy.path
+                    )
+                    facts = await owned_thread(inspect_theme_file, found, known)
+                except OSError, ValueError:
+                    logger.debug("Collection theme folder unavailable: %s", copy.title)
+                else:
+                    observations.append(
+                        _Observation(
+                            ServerAsset.THEME,
+                            folder,
+                            Evidence.SAME,
+                            ref=None,
+                            file=facts,
+                        )
+                    )
+            case _:
+                pass
+        return observations
+
+    def _record(
+        self, row: MediaCollection, observations: Sequence[_Observation]
+    ) -> None:
+        """Place the collection's assets on its copies and record what each shows."""
+        place_collection(row, self._downloads.provider_registry)
+        now = utc_now()
+        for seen in observations:
+            if seen.destination.channel is DeliveryChannel.FILE:
+                record_file(
+                    row, seen.kind, seen.file, destination=seen.destination, at=now
+                )
+            else:
+                observe(
+                    row,
+                    seen.kind,
+                    seen.destination,
+                    seen.evidence,
+                    ref=seen.ref,
+                    at=now,
+                )
 
     async def _queue_incremental_choices(self, collection_ids: list[int]) -> None:
         """Use the oldest enabled incremental policy covering each collection."""
@@ -481,16 +554,13 @@ class CollectionSync:
         placement: Sequence[_Placed],
         members: list[ServerItemFacts],
         unknown: int,
-        folder_themes: bool,
-        facts: ThemeFileFacts | None,
-        theme_checked: bool,
         leads: bool,
         managed: bool,
         now: datetime,
     ) -> MediaCollection:
         """Store a collection from its server copies, the lead copy first.
 
-        Only the lead copy, when *leads*, says the collection's images and kind.
+        Only the lead copy, when *leads*, says the collection's kind.
         """
         collection = listed[0].collection
         row = await repository.find_server(*listed[0].key) or MediaCollection(
@@ -499,8 +569,11 @@ class CollectionSync:
             if any(placed.media_type is MediaType.MOVIE for placed in placement)
             else None,
         )
-        if leads:
-            _store_lead(row, collection)
+        if leads and row.kind is not CollectionKind.SEPARATOR:
+            # A separator is Overture's, an empty collection to the server.
+            row.kind = (
+                CollectionKind.SMART if collection.smart else CollectionKind.REGULAR
+            )
         row.sqlmodel_update(
             {
                 "server_added_at": collection.added_at,
@@ -522,30 +595,6 @@ class CollectionSync:
             _store_choices(row, collection)
         if not keep_members:
             row.child_count = len(members) + unknown
-        if theme_checked:
-            replaced = (
-                (
-                    row.theme_file_hash is not None
-                    and facts is not None
-                    and row.theme_file_hash != facts.file_hash
-                )
-                if folder_themes
-                else row.server_theme_id != collection.theme_id
-            )
-            if replaced:
-                row.sqlmodel_update(
-                    {
-                        "youtube_id": None,
-                        "youtube_id_source": None,
-                        "youtube_title": None,
-                        "youtube_duration": None,
-                    }
-                )
-            if folder_themes:
-                record_theme_file(row, facts)
-                row.server_theme_id = None
-            else:
-                row.server_theme_id = collection.theme_id
         repository.session.add(row)
         await repository.session.flush()
         if row.id is None:
@@ -553,29 +602,6 @@ class CollectionSync:
         if not keep_members:
             await repository.replace_members(row.id, [member.id for member in members])
         return row
-
-
-def _store_lead(row: MediaCollection, collection: ServerCollection) -> None:
-    """Take the images and kind the collection's lead copy shows."""
-    for art_type, server_url in (
-        (ArtType.POSTER, collection.thumb_url),
-        (ArtType.BACKGROUND, collection.art_url),
-    ):
-        if row.id is not None and server_url != row.server_image_url(art_type):
-            # The server shows another image than the one Overture uploaded.
-            record_art_file(row, art_type, None)
-    row.sqlmodel_update(
-        {
-            # A separator is Overture's, an empty collection to the server.
-            "kind": row.kind
-            if row.kind is CollectionKind.SEPARATOR
-            else CollectionKind.SMART
-            if collection.smart
-            else CollectionKind.REGULAR,
-            "thumb_url": collection.thumb_url,
-            "art_url": collection.art_url,
-        }
-    )
 
 
 def _store_choices(row: MediaCollection, collection: ServerCollection) -> None:

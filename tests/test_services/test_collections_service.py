@@ -9,7 +9,7 @@ lazy from fastapi.responses import Response
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import select_art
+lazy from overture.db.ledger import Destination, delivery, select_art
 lazy from overture.db.models.catalog import CatalogCollection
 lazy from overture.db.models.media_collection import (
     MediaCollection,
@@ -22,11 +22,12 @@ lazy from overture.domain import (
     AssetScope,
     AssetStatus,
     CollectionOrder,
+    DeliveryChannel,
     ImageSize,
     MediaType,
     ServerAsset,
     ServerType,
-    ThemeBulkSource,
+    ThemeIdSource,
 )
 lazy from overture.integrations.mdblist import MDBListClient
 lazy from overture.integrations.proxy import ProxyClientManager
@@ -47,13 +48,23 @@ lazy from overture.services.collections import reader
 lazy from overture.services.collections import service as module
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.downloads.service import DownloadService
+lazy from overture.services.needs import AssetNeeds
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.locks import KeyedLock
 lazy from overture.utils.time import utc_now
 lazy from tests.bulk_helpers import disable_catalog, enable_catalog
-lazy from tests.collection_helpers import managing_rule, stored_collection
-lazy from tests.factories import seed_art_slot
+lazy from tests.collection_helpers import (
+    managing_rule,
+    shown_on_server,
+    stored_collection,
+)
+lazy from tests.factories import (
+    seed_asset,
+    seed_theme,
+    server_ref,
+    theme_of,
+)
 lazy from tests.media_servers import TEST_SERVER_ID, configure, server_of
 lazy from tests.runtime_helpers import NoopProviderRegistry, make_remover, unused
 
@@ -140,7 +151,13 @@ def _service(
     downloads: FakeDownloads | None = None,
     supported: bool = True,
 ) -> module.CollectionsService:
+    registry = NoopProviderRegistry(
+        provider or FakePlex(app_config=app_config), collections=supported
+    )
     return module.CollectionsService(
+        needs=AssetNeeds(
+            app_config=app_config, database=database, provider_registry=registry
+        ),
         tmdb=unused(TMDBClient),
         mdblist=unused(MDBListClient),
         remover=make_remover(
@@ -150,9 +167,7 @@ def _service(
         ),
         art=unused(CollectionArtService),
         database=database,
-        provider_registry=NoopProviderRegistry(
-            provider or FakePlex(app_config=app_config), collections=supported
-        ),
+        provider_registry=registry,
         publisher=publisher or FakePublisher(),
         downloads=downloads or FakeDownloads(),
         proxy_clients=unused(ProxyClientManager),
@@ -161,8 +176,18 @@ def _service(
 
 
 async def _collection(
-    session: AsyncSession, server_id: str | None = "c1", **fields: Any
+    session: AsyncSession,
+    server_id: str | None = "c1",
+    *,
+    uploaded_theme: str | None = None,
+    shown: dict[str, str] | None = None,
+    **fields: Any,
 ) -> MediaCollection:
+    """Store a managed collection.
+
+    *uploaded_theme* is the theme Overture uploaded to its copy, and *shown*
+    what the copy shows otherwise, as :func:`shown_on_server` takes it.
+    """
     row = stored_collection(
         server_item_id=server_id,
         media_type=MediaType.MOVIE,
@@ -170,6 +195,15 @@ async def _collection(
         last_synced_at=utc_now(),
         **fields,
     )
+    if shown is not None:
+        shown_on_server(row, **shown)
+    if uploaded_theme is not None:
+        seed_theme(
+            row,
+            "abcDEF12345",
+            destination=Destination(TEST_SERVER_ID, server_id, DeliveryChannel.UPLOAD),
+            uploaded_as=uploaded_theme,
+        )
     session.add(row)
     await session.flush()
     session.add(managing_rule(row.id or 0))
@@ -199,7 +233,7 @@ async def test_list_collections_shows_listed_rows_with_their_catalog_themes(
     db_session: AsyncSession, *, app_config: Settings, database: Database
 ) -> None:
     await _collection(db_session, "c1", tmdb_collection_id=10)
-    await _collection(db_session, "c2", server_theme_id="/theme/1")
+    await _collection(db_session, "c2", shown={"theme": "/theme/1"})
     # Kept from before the first sync: not shown until a sync lists it.
     db_session.add(
         stored_collection(
@@ -223,8 +257,10 @@ async def test_list_collections_shows_listed_rows_with_their_catalog_themes(
     assert sorted(c.id for c in disabled) == [1, 2]
     assert not any(c.catalog_complete for c in disabled)
     assert enabled[1].catalog_complete is True
-    assert enabled[2].has_theme is True
-    assert enabled[2].theme_status == "partial"
+    # The copy plays a theme of its own, which Overture holds nothing of.
+    theme = enabled[2].assets.theme
+    assert theme.status is AssetStatus.MISSING
+    assert [(d.present, d.delivered) for d in theme.deliveries] == [(True, False)]
 
 
 async def test_get_collection_lists_members_and_catalog_candidates(
@@ -236,10 +272,10 @@ async def test_get_collection_lists_members_and_catalog_candidates(
     )
     select_art(
         newer,
-        ArtType.POSTER,
+        ServerAsset.POSTER,
         PublicArtUrl("https://image.tmdb.org/t/p/original/empire.jpg"),
     )
-    seed_art_slot(newer, ArtType.POSTER, file_hash="poster-hash")
+    seed_asset(newer, ArtType.POSTER, file_hash="poster-hash")
     older = MediaItem(
         media_type=MediaType.MOVIE,
         title="Star Wars",
@@ -299,7 +335,7 @@ async def test_set_collection_theme_enqueues_job(
 async def test_an_inactive_collection_keeps_its_theme_for_the_sync_that_restores_it(
     db_session: AsyncSession, *, app_config: Settings, database: Database
 ) -> None:
-    await _collection(db_session, server_id=None, server_theme_id="/t/old")
+    await _collection(db_session, server_id=None)
     downloads = FakeDownloads()
     publisher = FakePublisher()
     service = _service(
@@ -313,18 +349,23 @@ async def test_an_inactive_collection_keeps_its_theme_for_the_sync_that_restores
         1, SetCollectionThemeRequest(youtube_id="abcDEF123_4")
     )
 
+    # With no copy to deliver to, the choice is all there is to hold.
     assert result.job_id is None
-    assert result.theme_status is AssetStatus.PARTIAL
+    assert result.theme.status is AssetStatus.COMPLETE
     assert downloads.targets == []
     async with database.read_session() as session:
         row = await CollectionRepository(session).get(1)
     assert row is not None
-    assert (row.youtube_id, row.youtube_id_source, row.server_theme_id) == (
+    assert (
+        theme_of(row).youtube_id,
+        theme_of(row).youtube_id_source,
+        server_ref(row, ServerAsset.THEME),
+    ) == (
         "abcDEF123_4",
-        ThemeBulkSource.YOUTUBE_SEARCH,
+        ThemeIdSource.SELECTION,
         None,
     )
-    assert publisher.broadcasts[-1][0] == "collection.theme.updated"
+    assert publisher.broadcasts[-1][0] == "collection.updated"
 
 
 async def test_set_collection_theme_says_why_jellyfin_cannot_store_it(
@@ -353,7 +394,7 @@ async def test_set_collection_theme_says_why_jellyfin_cannot_store_it(
 async def test_delete_collection_theme_clears_row_and_broadcasts(
     db_session: AsyncSession, *, app_config: Settings, database: Database
 ) -> None:
-    await _collection(db_session, youtube_id="abcDEF12345", server_theme_id="/t/1")
+    await _collection(db_session, uploaded_theme="/t/1")
     provider = FakePlex(app_config=app_config)
     publisher = FakePublisher()
     service = _service(
@@ -370,15 +411,17 @@ async def test_delete_collection_theme_clears_row_and_broadcasts(
     row = await CollectionRepository(db_session).get(1)
     assert row is not None
     await db_session.refresh(row)
-    assert (row.youtube_id, row.server_theme_id) == (None, None)
-    assert publisher.broadcasts[0][0] == "collection.theme.updated"
-    assert publisher.broadcasts[0][1]["has_theme"] is False
+    assert (theme_of(row).youtube_id, server_ref(row, ServerAsset.THEME)) == (
+        None,
+        None,
+    )
+    assert publisher.broadcasts[0] == ("collection.updated", {"collection_id": 1})
 
 
 async def test_delete_collection_theme_keeps_the_row_when_the_server_fails(
     db_session: AsyncSession, *, app_config: Settings, database: Database
 ) -> None:
-    await _collection(db_session, youtube_id="abcDEF12345", server_theme_id="/t/1")
+    await _collection(db_session, uploaded_theme="/t/1")
     service = _service(
         app_config=app_config,
         database=database,
@@ -390,7 +433,7 @@ async def test_delete_collection_theme_keeps_the_row_when_the_server_fails(
 
     row = await CollectionRepository(db_session).get(1)
     assert row is not None
-    assert row.youtube_id == "abcDEF12345"
+    assert theme_of(row).youtube_id == "abcDEF12345"
 
 
 async def test_monitored_flags_change_only_listed_collections(
@@ -427,7 +470,7 @@ async def test_proxy_collection_image_delegates_to_proxy_provider_image(
     database: Database,
 ) -> None:
     await _collection(
-        db_session, thumb_url="http://plex/library/collections/c1/composite/5"
+        db_session, shown={"poster": "http://plex/library/collections/c1/composite/5"}
     )
     provider = FakePlex(app_config=app_config)
 
@@ -457,6 +500,10 @@ async def test_proxy_collection_image_delegates_to_proxy_provider_image(
     assert len(provider.image_requests) == 1
 
 
+#: Where a Jellyfin collection keeps its theme file.
+FOLDER = Destination(TEST_SERVER_ID, "opaque-id", DeliveryChannel.FILE)
+
+
 async def test_jellyfin_detail_validates_the_mount_and_deleting_clears_file_facts(
     tmp_path: Path, *, app_config: Settings, database: Database
 ) -> None:
@@ -472,15 +519,18 @@ async def test_jellyfin_detail_validates_the_mount_and_deleting_clears_file_fact
     configure(app_config, collections_path=tmp_path)
     async with database.write_session() as session:
         session.add(
-            stored_collection(
-                id=1,
-                server_item_id="opaque-id",
-                media_type=MediaType.MOVIE,
-                server_path="/config/collections/Saga [boxset]",
-                youtube_id="a" * 11,
-                theme_file_hash="known",
-                theme_file_size=5,
-                last_synced_at=utc_now(),
+            seed_theme(
+                stored_collection(
+                    id=1,
+                    server_item_id="opaque-id",
+                    media_type=MediaType.MOVIE,
+                    server_path="/config/collections/Saga [boxset]",
+                    last_synced_at=utc_now(),
+                ),
+                "a" * 11,
+                file_hash="known",
+                file_size=5,
+                destination=FOLDER,
             )
         )
         await session.flush()
@@ -507,9 +557,9 @@ async def test_jellyfin_detail_validates_the_mount_and_deleting_clears_file_fact
     async with database.read_session() as session:
         row = await session.get(MediaCollection, 1)
         assert row is not None
-        assert row.youtube_id is None
-        assert row.theme_file_hash is None
-        assert row.theme_file_size is None
+        assert theme_of(row).youtube_id is None
+        found = delivery(theme_of(row), FOLDER)
+        assert found is None or found.observed_hash is None
 
 
 @pytest.mark.parametrize(

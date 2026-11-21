@@ -82,7 +82,7 @@ async def test_a_release_database_upgrades_and_every_row_stays_valid(
         async with database.read_session() as session:
             for model in table_models():
                 # Loading builds every row as the current models read it.
-                (await session.exec(select(model))).all()
+                (await session.exec(select(model))).unique().all()
     finally:
         await database.close()
     assert await owned_thread(_broken_checks, path) == []

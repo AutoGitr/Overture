@@ -8,10 +8,11 @@ import { appUpdate } from "../../../lib/stores/appUpdate.svelte";
 import { mediaServerState } from "../../../lib/stores/mediaServerState.svelte";
 import { syncState } from "../../../lib/stores/jobStates.svelte";
 import {
+  catalogStatus,
   logEntry,
   loggedLines,
-  catalogStatus,
   realtimeSnapshot,
+  syncEvent,
   wsMessage,
 } from "../../helpers/fixtures";
 
@@ -51,7 +52,9 @@ describe("realtime stream reconciliation", () => {
   it("keeps a running job's log across a snapshot of the same epoch", () => {
     realtimeStream.applySnapshot(snapshot(1));
     const added = logEntry("Added", "Alien", "new");
-    realtimeStream.applyEvent(wsMessage("sync.progress", { done: 1, total: 3, log: added }, 2));
+    realtimeStream.applyEvent(
+      wsMessage("sync.progress", syncEvent({ done: 1, total: 3, log: added }), 2),
+    );
     const resumed = logEntry("Updated", "Aliens", "changed");
 
     realtimeStream.applySnapshot({
@@ -72,7 +75,7 @@ describe("realtime stream reconciliation", () => {
     const observeServer = vi.spyOn(appUpdate, "observeServer").mockImplementation(() => {});
     const version = snapshot(1).app_version;
     realtimeStream.applySnapshot(snapshot(1));
-    syncState.handleProgress({ done: 1, log: logEntry("Added", "Alien", "new") });
+    syncState.handleProgress(syncEvent({ done: 1, log: logEntry("Added", "Alien", "new") }));
     expect(observeServer).toHaveBeenLastCalledWith(version, false);
 
     // A disconnect clears the connection watermark before the restarted server answers.
@@ -91,7 +94,7 @@ describe("realtime stream reconciliation", () => {
     const applied = realtimeStream.applyEvent(
       wsMessage(
         "sync.progress",
-        { done: 3, total: 10, log: logEntry("Added", "Alien", "still arriving") },
+        syncEvent({ done: 3, total: 10, log: logEntry("Added", "Alien", "still arriving") }),
         2,
       ),
     );

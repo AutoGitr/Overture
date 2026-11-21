@@ -9,13 +9,18 @@ lazy import httpx2
 lazy from sqlalchemy.exc import SQLAlchemyError
 
 lazy from ...config import Settings
-lazy from ...db.art_slots import ArtFileFacts, art_file_facts, find_art_slot
+lazy from ...db.ledger import (
+    Destination,
+    Evidence,
+    FileFacts,
+    local_file,
+    observe,
+    read_asset,
+)
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.session import Database
-lazy from ...db.theme_file import ThemeFileFacts, theme_file_facts
-lazy from ...domain import ArtType, ServerAsset
-lazy from ...integrations.proxy import ProxyClientManager
+lazy from ...domain import ArtType, DeliveryChannel, ServerAsset
 lazy from ...jobs.runner import JobContext, run_managed_job
 lazy from ...jobs.tally import ServerAuditTally
 lazy from ...media_servers.adapters import ServerTheme
@@ -27,15 +32,16 @@ lazy from ...schemas.server_audit import (
     ServerAuditRequest,
     ServerAuditResult,
 )
-lazy from ...utils.audio import audio_hash, downloaded_audio, ffprobe_duration
+lazy from ...utils.audio import audio_hash, ffprobe_duration
 lazy from ...utils.concurrency import in_order
 lazy from ...utils.errors import PublicServiceError
-lazy from ...utils.image_fetch import fetch_image
 lazy from ...utils.threads import owned_thread
+lazy from ...utils.time import utc_now
 lazy from ..art.collection_art import CollectionArtService
 lazy from ..art.phash import PhashService
 lazy from ..art.targets import target_label
 lazy from ..local_assets.service import LocalAssets
+lazy from ..server_copies import READ_ERRORS, ServerCopies
 lazy from ..server_identity import ServerCopy, resolve_art_owners, resolve_owners
 lazy from ..storage.assets import AssetStorage, require_folder_path
 lazy from .work import (
@@ -65,10 +71,9 @@ class AuditContext:
     asset_storage: AssetStorage
     local_assets: LocalAssets
     phash: PhashService
-    image_clients: ProxyClientManager
+    server_copies: ServerCopies
     app_config: Settings
     database: Database
-    config_dir: Path
     collection_art: CollectionArtService
     #: The database's numbers of the servers a run compares with, those that
     #: answered when it started; every configured server when ``None``.
@@ -126,7 +131,7 @@ async def _audit_art_one(
             _finding(result, AuditStatus.LOCAL_MISSING, "Local art file is missing")
         ]
     result.local_path = str(local_path)
-    slot = find_art_slot(season or item, art_type)
+    known = local_file(read_asset(season or item, art_type.server_asset))
 
     owners = [
         server_copy
@@ -151,7 +156,7 @@ async def _audit_art_one(
         local_phash = await local_fingerprint(
             local_path,
             Path(require_folder_path(item)),
-            art_file_facts(slot) if slot is not None else None,
+            known,
             context,
         )
     except (OSError, ValueError) as exc:
@@ -188,20 +193,21 @@ async def _compare_server_art(
             f"{server_copy.provider.server.title} has no {art_type.label} for it",
         )
     result.server_image_present = True
+    copies = context.server_copies
     try:
-        image = await fetch_image(
-            server_url,
-            await context.image_clients.get_client(server_url),
-            allow_generic_image=True,
-            allow_private=True,
-            headers=server_copy.provider.get_download_headers(server_url),
-        )
-        server_phash = await context.phash.compute_from_bytes(image.data)
-        distance = context.phash.hamming_distance(local_phash, server_phash)
-    except (httpx2.HTTPError, OSError, ValueError) as exc:
+        server_phash = await copies.item_image(server_copy.provider, server_url)
+    except READ_ERRORS as exc:
         return result.model_copy(update={"reason": str(exc)})
-    if distance == 0:
+    return _image_finding(result, copies, local_phash, server_phash)
+
+
+def _image_finding(
+    result: ServerAuditResult, copies: ServerCopies, expected: str, shown: str
+) -> ServerAuditResult:
+    """What comparing a copy's image with the one expected there found."""
+    if copies.same_image(expected, shown):
         return _finding(result, AuditStatus.PHASH_MATCH, "d=0 visual match", hamming=0)
+    distance = copies.distance(expected, shown)
     return _finding(
         result, AuditStatus.PHASH_MISMATCH, f"d={distance}", hamming=distance
     )
@@ -237,7 +243,7 @@ async def _audit_collection_art(
                 result, AuditStatus.LOCAL_MISSING, "Overture has uploaded no image"
             )
         ]
-    if uploaded.phash is None:
+    if uploaded.fingerprint is None:
         return [
             result.model_copy(
                 update={"reason": "The uploaded image could not be decoded"}
@@ -264,7 +270,7 @@ async def _audit_collection_art(
             _on(result, provider),
             provider,
             server_item_id,
-            uploaded.phash,
+            uploaded.fingerprint,
             context=context,
         )
         for provider, server_item_id in copies
@@ -279,42 +285,57 @@ async def _compare_collection_copy(
     *,
     context: AuditContext,
 ) -> ServerAuditResult:
-    """Compare one server copy's image with the one Overture uploaded."""
+    """Compare one server copy's image with the one Overture uploaded, and record it.
+
+    What the copy shows is recorded as a sync records it, so the collection's
+    status follows what the audit found.
+    """
     art_type = ArtType(result.art_type)
     result.server_item_id = server_item_id
+    copy = Destination(provider.server_id, server_item_id, DeliveryChannel.UPLOAD)
     server_url = await provider.get_collection_image_url(server_item_id, art_type)
     if not server_url:
+        await _record(context, result, copy, Evidence.DIFFERENT, ref=None)
         return _finding(
             result,
             AuditStatus.SERVER_MISSING,
             f"{provider.server.title} has no {art_type.label} for it",
         )
     result.server_image_present = True
+    copies = context.server_copies
     try:
-        request = await provider.build_collection_image_request(
-            server_item_id, art_type, None, current_url=server_url
+        server_phash = await copies.collection_image(
+            provider, server_item_id, art_type, server_url
         )
-        image = await fetch_image(
-            request.url,
-            await context.image_clients.get_client(request.url),
-            allow_generic_image=True,
-            allow_private=True,
-            headers=request.headers,
-            params=request.params,
-        )
-        server_phash = await context.phash.compute_from_bytes(image.data)
-        distance = context.phash.hamming_distance(phash, server_phash)
-    except (httpx2.HTTPError, OSError, ValueError) as exc:
+    except READ_ERRORS as exc:
         return result.model_copy(update={"reason": str(exc)})
-    if distance == 0:
-        return _finding(result, AuditStatus.PHASH_MATCH, "d=0 visual match", hamming=0)
-    return _finding(
-        result, AuditStatus.PHASH_MISMATCH, f"d={distance}", hamming=distance
+    found = _image_finding(result, copies, phash, server_phash)
+    evidence = (
+        Evidence.SAME if found.status is AuditStatus.PHASH_MATCH else Evidence.DIFFERENT
     )
+    await _record(context, result, copy, evidence, ref=server_url)
+    return found
+
+
+async def _record(
+    context: AuditContext,
+    result: ServerAuditResult,
+    copy: Destination,
+    evidence: Evidence,
+    *,
+    ref: str | None,
+) -> None:
+    """Record what a collection's copy was found to show."""
+    async with context.database.write_session() as session:
+        row = await CollectionRepository(session).get(result.collection_id or 0)
+        if row is None:
+            return
+        observe(row, result.art_type, copy, evidence, ref=ref, at=utc_now())
+        session.add(row)
 
 
 async def local_fingerprint(
-    path: Path, root: Path, known: ArtFileFacts | None, context: AuditContext
+    path: Path, root: Path, known: FileFacts | None, context: AuditContext
 ) -> str:
     """Return the fingerprint of the local file at *path* inside *root*.
 
@@ -324,11 +345,11 @@ async def local_fingerprint(
         OSError: The file changed or could not be read while it was inspected.
     """
     facts = await context.local_assets.inspector.inspect(path, root, known)
-    if not isinstance(facts, ArtFileFacts):
+    if not isinstance(facts, FileFacts):
         raise OSError("Local art file changed while it was read")
-    if facts.phash is None:
+    if facts.fingerprint is None:
         return await context.phash.compute_from_file(str(path))
-    return facts.phash
+    return facts.fingerprint
 
 
 async def _audit_theme_one(
@@ -355,7 +376,7 @@ async def _audit_theme_one(
             _finding(result, AuditStatus.LOCAL_MISSING, "Local theme file is missing")
         ]
     result.local_path = str(local_path)
-    local = _LocalTheme(local_path, theme_file_facts(item))
+    local = _LocalTheme(local_path, local_file(read_asset(item, ServerAsset.THEME)))
 
     owners = [
         server_copy
@@ -408,7 +429,7 @@ class _LocalTheme:
 
     path: Path
     #: What was recorded about the file, reused while it is the same revision.
-    known: ThemeFileFacts | None
+    known: FileFacts | None
     _audio_hash: str | None = None
     _hashed: bool = False
     _duration: float | None = None
@@ -495,24 +516,10 @@ async def _compare_served_theme(
             result, AuditStatus.THEME_UNKNOWN, "Could not read the local theme audio"
         )
     try:
-        async with downloaded_audio(
-            await context.image_clients.get_client(url),
-            url,
-            provider.get_download_headers(url),
-            config_dir=context.config_dir,
-        ) as path:
-            server_hash = await audio_hash(path)
-            if server_hash is None:
-                return _finding(
-                    result,
-                    AuditStatus.THEME_UNKNOWN,
-                    "Could not read the media-server theme audio",
-                    local_duration=await local.duration(),
-                )
-            if server_hash == local_hash:
-                return _finding(result, AuditStatus.THEME_MATCH, "Same audio")
-            server_duration = await ffprobe_duration(path)
-    except (httpx2.HTTPError, OSError, ValueError) as exc:
+        served = await context.server_copies.served_theme(
+            provider, url, compared_with=local_hash
+        )
+    except READ_ERRORS as exc:
         logger.debug("Could not download the server theme: %s", exc)
         return _finding(
             result,
@@ -520,6 +527,16 @@ async def _compare_served_theme(
             "Could not download the media-server theme",
             local_duration=await local.duration(),
         )
+    if served.audio_hash is None:
+        return _finding(
+            result,
+            AuditStatus.THEME_UNKNOWN,
+            "Could not read the media-server theme audio",
+            local_duration=await local.duration(),
+        )
+    if served.audio_hash == local_hash:
+        return _finding(result, AuditStatus.THEME_MATCH, "Same audio")
+    server_duration = served.duration
     return await _different_file(result, server_duration, local)
 
 

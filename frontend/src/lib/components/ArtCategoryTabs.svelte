@@ -1,7 +1,7 @@
 <script module lang="ts">
   import Image from "@lucide/svelte/icons/image";
   import MountainSnow from "@lucide/svelte/icons/mountain-snow";
-  import type { ArtType } from "../../generated/rest/types.gen";
+  import type { ArtType, AssetStatus, MediaItemRead } from "../../generated/rest/types.gen";
   import type { ArtSubTab } from "../router/routes";
   import { MEDIA_ICONS } from "../utils/mediaIcons";
 
@@ -10,28 +10,28 @@
     label: string;
     icon: typeof Image;
     artType: ArtType;
-    statusField: "poster_status" | "background_status" | "season_posters_status";
+    status: (item: MediaItemRead) => AssetStatus;
   }[] = [
     {
       key: "poster",
       label: "Poster",
       icon: Image,
       artType: "poster",
-      statusField: "poster_status",
+      status: (item) => item.assets.poster.status,
     },
     {
       key: "background",
       label: "Background",
       icon: MountainSnow,
       artType: "background",
-      statusField: "background_status",
+      status: (item) => item.assets.background.status,
     },
     {
       key: "seasons",
       label: "Seasons",
       icon: MEDIA_ICONS.season,
       artType: "season_poster",
-      statusField: "season_posters_status",
+      status: (item) => item.season_posters_status,
     },
   ];
 </script>
@@ -44,6 +44,7 @@
     active,
     seasons = false,
     statuses = {},
+    notes = {},
     clearable = {},
     clearDisabled = false,
     clearSeason = false,
@@ -54,6 +55,8 @@
     active: ArtSubTab | null;
     seasons?: boolean;
     statuses?: Partial<Record<ArtSubTab, StatusTone | null>>;
+    /** Why a tab's status is what it is, shown on hover. */
+    notes?: Partial<Record<ArtSubTab, string | null>>;
     clearable?: Partial<Record<ArtSubTab, boolean>>;
     clearDisabled?: boolean;
     clearSeason?: boolean;
@@ -68,6 +71,7 @@
     label={tab.label}
     active={active === tab.key}
     status={statuses[tab.key]}
+    note={notes[tab.key]}
     onselect={() => onselect(tab.key)}
     clearLabel={tab.key === "seasons" && clearSeason
       ? "Clear season poster"

@@ -3,20 +3,36 @@
 lazy import pytest
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from overture.db.art_slots import select_art
+lazy from overture.db.ledger import (
+    clear_selection,
+    place_local,
+    record_file,
+    select_art,
+)
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.models.settings import AppSettings
-lazy from overture.domain import ITEM_ART_TYPES, ArtType, AutoUnmonitor, MediaType
+lazy from overture.domain import (
+    ITEM_ART_TYPES,
+    ArtType,
+    AutoUnmonitor,
+    MediaType,
+    ServerAsset,
+)
 lazy from overture.services.library.completion import auto_unmonitor_completed
 lazy from overture.utils.art_urls import PublicArtUrl
-lazy from tests.factories import seed_art_slot
+lazy from tests.factories import seed_asset, seed_theme
+lazy from tests.media_servers import served_item
 
 
 def _art(item: MediaItem) -> None:
     for art_type in ITEM_ART_TYPES:
-        select_art(item, art_type, PublicArtUrl(f"https://images.test/{art_type}.jpg"))
-        seed_art_slot(item, art_type, file_hash="hash")
+        select_art(
+            item,
+            art_type.server_asset,
+            PublicArtUrl(f"https://images.test/{art_type}.jpg"),
+        )
+        seed_asset(item, art_type, file_hash="hash")
 
 
 @pytest.mark.parametrize("policy", list(AutoUnmonitor))
@@ -31,13 +47,15 @@ async def test_completion_policy_matrix(
     theme: bool,
 ) -> None:
     settings = AppSettings.model_validate({"auto_unmonitor": policy.value})
-    item = MediaItem(
-        id=901,
-        title="Movie",
-        media_type=MediaType.MOVIE,
-        folder_path="/media/Movie",
-        youtube_id="video" if theme else None,
-        theme_file_hash="theme-hash" if theme else None,
+    item = seed_theme(
+        served_item(
+            id=901,
+            title="Movie",
+            media_type=MediaType.MOVIE,
+            folder_path="/media/Movie",
+        ),
+        "video" if theme else None,
+        file_hash="theme-hash" if theme else None,
     )
     if art:
         _art(item)
@@ -63,11 +81,14 @@ async def test_partial_art_does_not_unmonitor(
     missing: str,
     art_type: ArtType,
 ) -> None:
-    item = MediaItem(
+    item = served_item(
         id=901, title="Movie", media_type=MediaType.MOVIE, folder_path="/media/Movie"
     )
     _art(item)
-    seed_art_slot(item, art_type, **{missing: None})
+    if missing == "url":
+        clear_selection(item, art_type.server_asset)
+    else:
+        record_file(item, art_type.server_asset, None)
     db_session.add_all([AppSettings(auto_unmonitor=AutoUnmonitor.ART), item])
     await db_session.flush()
     assert await auto_unmonitor_completed(db_session, item) is False
@@ -81,13 +102,15 @@ async def test_theme_needs_provenance_and_local_file(
     *,
     local: bool,
 ) -> None:
-    item = MediaItem(
-        id=901,
-        title="Movie",
-        media_type=MediaType.MOVIE,
-        folder_path="/media/Movie",
-        youtube_id=youtube_id,
-        theme_file_hash="theme-hash" if local else None,
+    item = seed_theme(
+        served_item(
+            id=901,
+            title="Movie",
+            media_type=MediaType.MOVIE,
+            folder_path="/media/Movie",
+        ),
+        youtube_id,
+        file_hash="theme-hash" if local else None,
     )
     db_session.add_all([AppSettings(auto_unmonitor=AutoUnmonitor.THEME), item])
     await db_session.flush()
@@ -97,7 +120,7 @@ async def test_theme_needs_provenance_and_local_file(
 async def test_show_requires_every_season_with_files_including_specials(
     db_session: AsyncSession,
 ) -> None:
-    item = MediaItem(
+    item = served_item(
         id=901, title="Show", media_type=MediaType.SHOW, folder_path="/media/Show"
     )
     _art(item)
@@ -108,26 +131,32 @@ async def test_show_requires_every_season_with_files_including_specials(
     specials = Season(id=902, media_item_id=901, season_num=0, file_count=1)
     season = Season(id=903, media_item_id=901, season_num=1, file_count=5)
     empty = Season(id=904, media_item_id=901, season_num=2, file_count=0)
+    for each in (specials, season, empty):
+        place_local(each, (ServerAsset.SEASON_POSTER,), folder=True)
     select_art(
-        season, ArtType.SEASON_POSTER, PublicArtUrl("https://images.test/season.jpg")
+        season,
+        ServerAsset.SEASON_POSTER,
+        PublicArtUrl("https://images.test/season.jpg"),
     )
-    seed_art_slot(season, ArtType.SEASON_POSTER, file_hash="hash")
+    seed_asset(season, ArtType.SEASON_POSTER, file_hash="hash")
     db_session.add_all([specials, season, empty])
     await db_session.flush()
     assert await auto_unmonitor_completed(db_session, item) is False
     select_art(
         specials,
-        ArtType.SEASON_POSTER,
+        ServerAsset.SEASON_POSTER,
         PublicArtUrl("https://images.test/specials.jpg"),
     )
-    seed_art_slot(specials, ArtType.SEASON_POSTER, file_hash="hash")
+    seed_asset(specials, ArtType.SEASON_POSTER, file_hash="hash")
     db_session.add(specials)
     assert await auto_unmonitor_completed(db_session, item) is True
     assert item.monitored is False
 
 
 async def test_never_remonitors_an_incomplete_item(db_session: AsyncSession) -> None:
-    item = MediaItem(id=901, title="Movie", media_type=MediaType.MOVIE, monitored=False)
+    item = served_item(
+        id=901, title="Movie", media_type=MediaType.MOVIE, monitored=False
+    )
     db_session.add_all([AppSettings(auto_unmonitor=AutoUnmonitor.ART_AND_THEME), item])
     await db_session.flush()
     assert await auto_unmonitor_completed(db_session, item) is False
@@ -137,8 +166,8 @@ async def test_never_remonitors_an_incomplete_item(db_session: AsyncSession) -> 
 async def test_an_item_without_a_folder_completes_on_its_selection(
     db_session: AsyncSession,
 ) -> None:
-    item = MediaItem(
-        id=901, title="Movie", media_type=MediaType.MOVIE, youtube_id="video"
+    item = seed_theme(
+        MediaItem(id=901, title="Movie", media_type=MediaType.MOVIE), "video"
     )
     db_session.add_all([AppSettings(auto_unmonitor=AutoUnmonitor.THEME), item])
     await db_session.flush()
@@ -148,7 +177,7 @@ async def test_an_item_without_a_folder_completes_on_its_selection(
 async def test_a_policy_read_by_the_caller_is_used_instead_of_the_settings(
     db_session: AsyncSession,
 ) -> None:
-    item = MediaItem(
+    item = served_item(
         id=901, title="Movie", media_type=MediaType.MOVIE, folder_path="/media/Movie"
     )
     _art(item)

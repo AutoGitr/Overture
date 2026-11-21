@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { serverAuditResult } from "../../helpers/fixtures";
 import type { SelectableServerAuditResult } from "../../../lib/stores/serverAuditState.svelte";
 import {
   auditRowKey,
@@ -10,6 +11,7 @@ function artResult(
   overrides: Partial<SelectableServerAuditResult> = {},
 ): SelectableServerAuditResult {
   return {
+    ...serverAuditResult(),
     kind: "art",
     server_id: 1,
     item_id: 1,
@@ -27,6 +29,7 @@ function themeResult(
   overrides: Partial<SelectableServerAuditResult> = {},
 ): SelectableServerAuditResult {
   return {
+    ...serverAuditResult(),
     kind: "theme",
     server_id: 1,
     item_id: 1,

@@ -1,9 +1,7 @@
 """Database models package."""
 
 lazy from .api_key import ApiKey
-lazy from .art import (
-    ArtSlot,
-)
+lazy from .asset import Asset, AssetDelivery
 lazy from .auth_session import AuthSession
 lazy from .catalog import (
     CatalogCollection,
@@ -43,7 +41,8 @@ __all__ = [
     "ApiKey",
     "AppSettings",
     "AppSettingsBase",
-    "ArtSlot",
+    "Asset",
+    "AssetDelivery",
     "AuthSession",
     "CatalogCollection",
     "CatalogDraft",

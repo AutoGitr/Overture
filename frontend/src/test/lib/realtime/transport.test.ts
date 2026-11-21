@@ -8,7 +8,7 @@ import { downloadState } from "../../../lib/stores/downloadState.svelte";
 import { realtimeConnectionState } from "../../../lib/stores/realtimeConnectionState.svelte";
 import { syncState } from "../../../lib/stores/jobStates.svelte";
 import { itemArtDisplayUrl } from "../../../lib/utils/artDisplay";
-import { logEntry, loggedLines, mediaItem } from "../../helpers/fixtures";
+import { logEntry, loggedLines, mediaItem, assetFile } from "../../helpers/fixtures";
 import { FakeWebSocket } from "../../helpers/websocket";
 
 const cache = vi.hoisted(() => ({
@@ -327,25 +327,11 @@ describe("realtimeTransport", () => {
     socket.receive(
       serverEvent(1, "library.item.upserted", { item: movie, source: "incremental_sync" }),
     );
-    socket.receive(
-      serverEvent(2, "collection.theme.updated", {
-        has_theme: true,
-        media_type: "movie",
-        collection_id: 1,
-        youtube_id: "abc123",
-        youtube_title: "Collection Theme",
-        youtube_duration: 120,
-      }),
-    );
+    socket.receive(serverEvent(2, "collection.monitored", { collection_id: 1, monitored: true }));
 
     expect(cache.upsertLibraryItem).toHaveBeenCalledWith(movie);
     expect(cache.invalidateSeasons).toHaveBeenCalledWith(movie.id);
-    expect(cache.patchCollection).toHaveBeenCalledWith(1, {
-      has_theme: true,
-      youtube_id: "abc123",
-      youtube_title: "Collection Theme",
-      youtube_duration: 120,
-    });
+    expect(cache.patchCollection).toHaveBeenCalledWith(1, { monitored: true });
   });
 
   it("defers full-sync library item updates until the terminal invalidation", async () => {
@@ -375,18 +361,21 @@ describe("realtimeTransport", () => {
       title: "Alien",
       media_type: "movie",
       server_item_id: "provider-42",
-      poster_hash: "poster-hash",
-      poster_height: 1500,
-      poster_url: null,
-      poster_width: 1000,
-      background_hash: "background-hash",
-      background_height: 1080,
-      background_url: "https://images.example/background.jpg",
-      background_width: 1920,
-      theme_file_hash: "theme-hash",
-      theme_status: "complete",
-      youtube_title: "Alien Theme",
-      youtube_id: "abcDEF123_4",
+      assets: {
+        poster: { file: assetFile("poster-hash"), height: 1500, url: null, width: 1000 },
+        background: {
+          file: assetFile("background-hash"),
+          height: 1080,
+          url: "https://images.example/background.jpg",
+          width: 1920,
+        },
+        theme: {
+          file: assetFile("theme-hash"),
+          status: "complete",
+          youtube_title: "Alien Theme",
+          youtube_id: "abcDEF123_4",
+        },
+      },
     });
 
     socket.receive(
@@ -396,10 +385,7 @@ describe("realtimeTransport", () => {
     expect(cache.upsertLibraryItem).toHaveBeenCalledTimes(1);
     const [upserted] = cache.upsertLibraryItem.mock.calls.at(0) ?? [];
     if (!upserted) throw new Error("Expected upsertLibraryItem to receive an item");
-    expect(upserted.poster_hash).toBe("poster-hash");
-    expect(upserted.theme_status).toBe("complete");
-    expect(upserted.background_hash).toBe("background-hash");
-    expect(upserted.youtube_id).toBe("abcDEF123_4");
+    expect(upserted.assets).toEqual(movie.assets);
     expect(itemArtDisplayUrl(upserted, "poster")).toBe(
       "/api/library/items/42/local-image/poster?t=poster-hash&size=display",
     );

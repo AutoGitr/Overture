@@ -82,7 +82,7 @@
   let candidateVideoIds = $derived([
     ...new Set(
       [
-        item?.youtube_id,
+        item?.assets.theme.youtube_id,
         catalog?.detail.entry.youtube_id_overturedb,
         catalogSource?.youtube_id_overturedb,
         catalogSource?.youtube_id_themerrdb,
@@ -104,14 +104,14 @@
   /** The subject's current and catalog themes first, then the videos found. */
   function presentResults(results: ThemeSearchResult[]) {
     return mergeThemeResults({
-      item: catalogEntry
+      title: catalogEntry?.title ?? item?.title ?? null,
+      theme: catalogEntry
         ? {
-            title: catalogEntry.title,
             youtube_id: catalogEntry.youtube_id_overturedb,
             youtube_title: null,
             youtube_duration: null,
           }
-        : item,
+        : (item?.assets.theme ?? null),
       overtureDbId: catalogSource?.youtube_id_overturedb,
       themerrDbId: catalogSource?.youtube_id_themerrdb,
       searchResults: results,
@@ -168,9 +168,9 @@
     }
   }
 
-  // OvertureDB says the title has no theme music; a library item then lacks none.
+  // OvertureDB says the title has no theme music; a library item then needs none.
   let flaggedNoTheme = $derived(
-    catalog ? catalog.entry.no_theme : (item?.catalog_no_theme ?? false),
+    catalog ? catalog.entry.no_theme : item ? !item.assets.theme.needed : false,
   );
 
   /** Store a TMDB title with its first theme, then show the item it became. */
@@ -249,7 +249,7 @@
             )}
         videoIds={candidateVideoIds}
         present={presentResults}
-        currentYoutubeId={catalogEntry?.youtube_id_overturedb ?? item?.youtube_id ?? null}
+        currentYoutubeId={catalogEntry?.youtube_id_overturedb ?? item?.assets.theme.youtube_id ?? null}
         busyVideoId={downloadingId}
         busy={themeBusy || (catalog?.draft.busy ?? false)}
         onselect={selectTheme}

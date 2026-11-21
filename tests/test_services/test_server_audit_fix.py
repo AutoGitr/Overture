@@ -45,6 +45,7 @@ lazy from tests.runtime_helpers import (
     StaticImageClients,
     make_local_assets,
     make_runtime,
+    make_server_copies,
     unused,
 )
 
@@ -120,7 +121,6 @@ def _context(
 ) -> AuditContext:
     phash = PhashService(app_config=app_config)
     return AuditContext(
-        config_dir=tmp_path,
         collection_art=unused(CollectionArtService),
         provider_registry=NoopProviderRegistry(),
         asset_storage=AssetStorage(app_config=app_config),
@@ -128,9 +128,14 @@ def _context(
             app_config=app_config, database=database, phash=phash
         ),
         phash=phash,
-        image_clients=StaticImageClients(),
         app_config=app_config,
         database=database,
+        server_copies=make_server_copies(
+            app_config=app_config,
+            image_clients=StaticImageClients(),
+            config_dir=tmp_path,
+            phash=phash,
+        ),
     )
 
 
@@ -218,7 +223,11 @@ async def test_art_rows_turn_verified_only_once_the_server_shows_the_local_file(
     ]
     event, payload = probe.terminal()
     assert event == "server.audit.fix.completed"
-    assert (payload["done"], payload["total"], payload["verified"]) == (2, 2, 2)
+    assert (
+        payload["done"],
+        payload["total"],
+        payload["log_targets"].get("Matched", 0),
+    ) == (2, 2, 2)
 
 
 async def test_rows_the_server_never_takes_end_unchanged_with_the_latest_difference(
@@ -247,7 +256,11 @@ async def test_rows_the_server_never_takes_end_unchanged_with_the_latest_differe
         ("art", 1, None, "poster", 1): RowFix(error="Still differs after refresh: d=12")
     }
     _, payload = probe.terminal()
-    assert (payload["done"], payload["unchanged"], payload["verified"]) == (1, 1, 0)
+    assert (
+        payload["done"],
+        payload["log_targets"].get("Mismatch", 0),
+        payload["log_targets"].get("Matched", 0),
+    ) == (1, 1, 0)
 
 
 async def test_a_stopped_fix_leaves_unsettled_rows_without_an_outcome(
@@ -348,7 +361,7 @@ async def test_a_failed_theme_delete_skips_the_refresh_and_marks_its_rows(
         )
     }
     assert server.checks == []
-    assert probe.terminal()[1]["errors"] == 1
+    assert probe.terminal()[1]["log_targets"].get("Error", 0) == 1
 
 
 async def test_fix_failures_settle_as_errors_without_a_check(
@@ -384,7 +397,7 @@ async def test_fix_failures_settle_as_errors_without_a_check(
     assert errors["art", 3, None, "poster", 1] == "Item not found"
     assert server.checks == []
     _, payload = probe.terminal()
-    assert (payload["done"], payload["errors"]) == (3, 3)
+    assert (payload["done"], payload["log_targets"].get("Error", 0)) == (3, 3)
 
 
 async def test_the_service_fixes_art_and_themes_in_one_run_and_marks_the_rows(

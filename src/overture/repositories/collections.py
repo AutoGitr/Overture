@@ -246,6 +246,16 @@ class CollectionRepository:
         )
         return list((await self.session.exec(stmt)).all())
 
+    async def mark_matched(self, collection_ids: set[int], when: datetime) -> None:
+        """Stamp ``last_matched_at`` on many collections with one statement."""
+        if not collection_ids:
+            return
+        await self.session.exec(
+            update(MediaCollection)
+            .where(col(MediaCollection.id).in_(collection_ids))
+            .values(last_matched_at=when)
+        )
+
     async def bulk_targets(
         self,
         *,

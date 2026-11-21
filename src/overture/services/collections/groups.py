@@ -241,6 +241,7 @@ class CollectionGroups:
             session.add(row)
             await session.flush()
             await self._separators.refuse_taken(session, row)
+        await self._access.needs.apply_collections()
         await self._access.changed()
         return body
 

@@ -68,7 +68,7 @@ lazy from tests.factories import (
     MediaItemFactory,
     ScheduleFactory,
     SeasonFactory,
-    seed_art_slot,
+    seed_asset,
 )
 lazy from tests.media_servers import attach_servers, seed_test_server, served_item
 lazy from tests.pause_clock import PauseClock
@@ -439,7 +439,7 @@ def _apply_art[OwnerT: MediaItem | Season](
     ``file_mtime_ns``, ``file_size``); a ``file_hash`` records a local file.
     """
     for art_type, fields in (art or {}).items():
-        seed_art_slot(owner, ArtType(art_type), **fields)
+        seed_asset(owner, ArtType(art_type), **fields)
     return owner
 
 

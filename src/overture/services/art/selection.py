@@ -7,11 +7,11 @@ still the one that was verified.
 
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ...db.art_slots import (
-    ArtFileFacts,
-    art_file_facts,
-    read_art_slot,
-    record_selected_art_file,
+lazy from ...db.ledger import (
+    FileFacts,
+    local_file,
+    read_asset,
+    record_content,
     select_art,
 )
 lazy from ...db.models.media_item import MediaItem
@@ -52,7 +52,7 @@ async def adopt_art(
     *,
     season_id: int | None,
     url: PublicArtUrl,
-    verified: ArtFileFacts,
+    verified: FileFacts,
     asset_storage: AssetStorage,
     database: Database,
 ) -> bool:
@@ -87,10 +87,12 @@ async def adopt_art(
             if target is None:
                 return False
             item, _, owner = target
-            if art_file_facts(read_art_slot(owner, art_type)) != verified:
+            kind = art_type.server_asset
+            if local_file(read_asset(owner, kind)) != verified:
                 return False
-            select_art(owner, art_type, url)
-            record_selected_art_file(owner, art_type, verified)
+            select_art(owner, kind, url)
+            # The file's bytes are the link's, so it is the selection's content.
+            record_content(owner, kind, verified.content())
             session.add(owner)
             await auto_unmonitor_completed(session, item)
     return True

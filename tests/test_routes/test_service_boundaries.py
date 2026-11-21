@@ -11,13 +11,13 @@ lazy import pytest
 lazy from PIL import Image
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import read_art_slot, select_art
+lazy from overture.db.ledger import read_asset, select_art
 lazy from overture.db.models.catalog import CatalogItem
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
 lazy from overture.dependencies import get_library
-lazy from overture.domain import ArtType, MediaType, ServerType
+lazy from overture.domain import ArtType, MediaType, ServerAsset, ServerType
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.jobs.gate import LibraryGate
@@ -32,7 +32,9 @@ lazy from overture.services.catalog.service import CatalogService
 lazy from overture.services.downloads.service import DownloadService
 lazy from overture.services.library.service import LibraryService
 lazy from overture.services.local_assets.service import LocalAssets
+lazy from overture.services.needs import AssetNeeds
 lazy from overture.services.scheduler import SchedulerService
+lazy from overture.services.server_copies import ServerCopies
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.storage.image_cache import ImageCache
 lazy from overture.services.sync.engine import SyncEngine
@@ -86,6 +88,11 @@ async def test_http_services_use_bound_database_events_and_queue(
         app_config=app_config,
         database=database,
         config_dir=tmp_path,
+        needs=AssetNeeds(
+            app_config=app_config,
+            database=database,
+            provider_registry=NoopProviderRegistry(),
+        ),
     )
     runtime = make_runtime(
         config_dir=tmp_path,
@@ -106,7 +113,9 @@ async def test_http_services_use_bound_database_events_and_queue(
             folder_path="/media/Bound movie",
             monitored=True,
         )
-        select_art(item, ArtType.POSTER, PublicArtUrl("https://images.test/old.jpg"))
+        select_art(
+            item, ServerAsset.POSTER, PublicArtUrl("https://images.test/old.jpg")
+        )
         session.add(item)
         session.add(
             stored_collection(
@@ -191,7 +200,7 @@ async def test_http_services_use_bound_database_events_and_queue(
         saved = await session.get(MediaItem, 1)
         assert saved is not None
         assert saved.monitored is False
-        assert read_art_slot(saved, ArtType.POSTER).url is None
+        assert read_asset(saved, ServerAsset.POSTER).url is None
         job = await session.get(DownloadJob, queued_selection["job_id"])
         assert job is not None
         assert job.media_item_id == 1
@@ -201,7 +210,7 @@ async def test_http_services_use_bound_database_events_and_queue(
         "library.monitored",
     ]
     assert updates[-1]["item"]["monitored"] is False
-    assert updates[-1]["item"]["poster_url"] is None
+    assert updates[-1]["item"]["assets"]["poster"]["url"] is None
     snapshots = await downloads.snapshot_events()
     assert [event.job.id for event in snapshots] == [queued_selection["job_id"]]
 
@@ -283,6 +292,7 @@ async def test_sync_http_timezone_matches_scheduler_in_winter_and_summer(
         app_config=app_config,
         database=database,
         groups=unused(CollectionGroups),
+        server_copies=unused(ServerCopies),
     )
     runtime = make_runtime(
         config_dir=tmp_path, app_config=app_config, database=database, sync=engine

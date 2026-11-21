@@ -1,28 +1,32 @@
 """Store collection themes through the provider's declared capability."""
 
 lazy from collections.abc import Sequence
+lazy from dataclasses import dataclass
 lazy from pathlib import Path
 
-lazy from sqlmodel.ext.asyncio.session import AsyncSession
-
 lazy from ... import protocols
+lazy from ...db.ledger import (
+    ContentFacts,
+    Destination,
+    FileFacts,
+    confirm_delivery,
+    record_content,
+    record_file,
+    select_theme,
+)
 lazy from ...db.models.download_job import DownloadJob
 lazy from ...db.models.media_collection import CollectionLibrary, MediaCollection
 lazy from ...db.session import Database
-lazy from ...db.theme_file import ThemeFileFacts, record_theme_file
-lazy from ...domain import AssetStatus, JobStatus, ThemeBulkSource
-lazy from ...media_servers.adapters import (
-    FolderThemes,
-    NoCollectionThemes,
-    UploadThemes,
-)
+lazy from ...domain import DeliveryChannel, JobStatus, ServerAsset, ThemeIdSource
+lazy from ...media_servers.adapters import FolderThemes, NoCollectionThemes
 lazy from ...media_servers.registry import CollectionProvider, ProviderRegistry
-lazy from ...repositories.catalog import CatalogRepository
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.downloads import DownloadJobRepository
 lazy from ...utils.assets import THEME_FILENAME
+lazy from ...utils.hashing import compute_bytes_hash
 lazy from ...utils.threads import owned_thread
 lazy from ...utils.time import utc_now
+lazy from ..collections.destinations import collection_destinations
 lazy from ..collections.theme_files import collection_folder
 lazy from ..storage.assets import AssetStorage
 lazy from ..themes.youtube_resolver import DownloadError
@@ -52,49 +56,38 @@ def collection_themes_unavailable(
     return None if None in reasons else reasons[0]
 
 
-def _theme_copies(
-    row: MediaCollection, provider_registry: ProviderRegistry
-) -> list[tuple[CollectionProvider, CollectionLibrary]]:
-    """The copies a collection's theme goes to, on servers that store themes.
-
-    Plex keeps a theme with each copy; Jellyfin reads one from its BoxSet's
-    folder, which every library's part on that server names.
-    """
-    copies: list[tuple[CollectionProvider, CollectionLibrary]] = []
-    folders: set[int] = set()
-    for part in row.copies:
-        if not provider_registry.configured_server_id(part.server_id):
-            continue
-        provider = provider_registry.get(part.server_id)
-        if _storage_unavailable(provider) is not None or provider.collections is None:
-            continue
-        if isinstance(provider.collections, FolderThemes):
-            if part.server_id in folders:
-                continue
-            folders.add(part.server_id)
-        copies.append((provider, part))
-    return copies
+def _part(row: MediaCollection, destination: Destination) -> CollectionLibrary:
+    """Return the copy of *row* a server-copy destination names."""
+    return next(
+        part
+        for part in row.copies
+        if (part.server_id, part.server_item_id) == destination.key
+    )
 
 
 async def theme_folders(
     row: MediaCollection, provider_registry: ProviderRegistry
-) -> list[tuple[CollectionProvider, CollectionLibrary, Path]]:
+) -> list[tuple[Destination, CollectionProvider, CollectionLibrary, Path]]:
     """Resolve the trusted folder each Jellyfin server keeps the collection in.
 
     Raises:
         DownloadError: When a server's folder cannot be used.
     """
-    folders: list[tuple[CollectionProvider, CollectionLibrary, Path]] = []
-    for provider, part in _theme_copies(row, provider_registry):
-        if not isinstance(provider.collections, FolderThemes):
+    folders: list[tuple[Destination, CollectionProvider, CollectionLibrary, Path]] = []
+    for destination in collection_destinations(
+        row, ServerAsset.THEME, provider_registry
+    ):
+        if destination.channel is not DeliveryChannel.FILE:
             continue
+        provider = provider_registry.get(destination.server_id or 0)
+        part = _part(row, destination)
         try:
             folder = await owned_thread(
                 collection_folder, provider.server, part.server_path
             )
         except ValueError as exc:
             raise DownloadError(str(exc)) from exc
-        folders.append((provider, part, folder))
+        folders.append((destination, provider, part, folder))
     return folders
 
 
@@ -109,7 +102,7 @@ async def folder_lacks_theme(
         folders = await theme_folders(row, provider_registry)
     except DownloadError:
         return False
-    for _, _, folder in folders:
+    for _, _, _, folder in folders:
         if not await owned_thread((folder / THEME_FILENAME).is_file):
             return True
     return False
@@ -129,7 +122,7 @@ async def collection_theme_unavailable(
         return reason
     if not row.copies:
         return None
-    if not _theme_copies(row, provider_registry):
+    if not collection_destinations(row, ServerAsset.THEME, provider_registry):
         return "None of the servers holding the collection can store its theme"
     try:
         await theme_folders(row, provider_registry)
@@ -160,79 +153,98 @@ async def store_collection_theme(
         raise DownloadError(reason)
     if not row.copies:
         raise DownloadError("The collection is inactive and has no server copy")
-    # The lead Plex copy's ID stands for them all: each holds the same theme.
-    uploaded = [
-        await provider.upload_collection_theme(
-            part.server_item_id or "", downloaded.audio_bytes
-        )
-        for provider, part in _theme_copies(row, provider_registry)
-        if isinstance(provider.collections, UploadThemes)
-    ]
-    facts = None
-    for provider, part, folder in await theme_folders(row, provider_registry):
+    delivered: list[Delivered] = []
+    for destination in collection_destinations(
+        row, ServerAsset.THEME, provider_registry
+    ):
+        if destination.channel is DeliveryChannel.UPLOAD:
+            theme_id = await provider_registry.get(
+                destination.server_id or 0
+            ).upload_collection_theme(
+                destination.server_item_id or "", downloaded.audio_bytes
+            )
+            delivered.append(Delivered(destination, ref=theme_id))
+    for destination, provider, part, folder in await theme_folders(
+        row, provider_registry
+    ):
         stored = await asset_storage.write_file_async(
             str(folder / THEME_FILENAME), downloaded.audio_bytes, str(folder)
         )
-        facts = facts or ThemeFileFacts(
-            stored.file_hash, stored.mtime_ns, stored.size, downloaded.duration
+        delivered.append(
+            Delivered(
+                destination,
+                file=FileFacts(
+                    stored.file_hash,
+                    stored.mtime_ns,
+                    stored.size,
+                    duration=downloaded.duration,
+                ),
+            )
         )
         await provider.refresh_item(part.server_item_id or "", unlock=())
     await record_collection_theme(
         job,
+        content=ContentFacts(
+            compute_bytes_hash(downloaded.audio_bytes),
+            fingerprint=downloaded.fingerprint,
+            duration=downloaded.duration,
+        ),
         title=downloaded.title,
         duration=downloaded.duration,
-        server_theme_id=next(iter(uploaded), None),
-        facts=facts,
+        delivered=delivered,
         publisher=publisher,
         database=database,
     )
 
 
-async def collection_theme_source(
-    session: AsyncSession, row: MediaCollection, youtube_id: str | None
-) -> ThemeBulkSource:
-    """Return where a collection's theme video comes from: a catalog, else a search."""
-    catalog = await CatalogRepository(session).collections_by_tmdb_id(
-        {row.tmdb_collection_id} if row.tmdb_collection_id else set()
-    )
-    entry = catalog.get(row.tmdb_collection_id or 0)
-    if entry and youtube_id == entry.youtube_id_themerrdb:
-        return ThemeBulkSource.THEMERRDB
-    if entry and youtube_id == entry.youtube_id_overturedb:
-        return ThemeBulkSource.OVERTUREDB
-    return ThemeBulkSource.YOUTUBE_SEARCH
+@dataclass(frozen=True, slots=True)
+class Delivered:
+    """One server copy a collection theme reached: its theme ID, or its file."""
+
+    destination: Destination
+    ref: str | None = None
+    file: FileFacts | None = None
 
 
 async def record_collection_theme(
     job: DownloadJob,
     *,
+    content: ContentFacts,
     title: str | None,
     duration: int | None,
-    server_theme_id: str | None,
-    facts: ThemeFileFacts | None = None,
+    delivered: Sequence[Delivered],
     publisher: protocols.EventPublisher,
     database: Database,
 ) -> None:
-    """Record a running download's committed collection theme."""
+    """Record a running download's collection theme and the copies it reached."""
     now = utc_now()
     async with database.write_session() as session:
         stored_job = await DownloadJobRepository(session).get(job.id)
         row = await session.get(MediaCollection, job.collection_id)
         if not stored_job or stored_job.status is not JobStatus.RUNNING or row is None:
             return
-        row.sqlmodel_update(
-            {
-                "youtube_id": job.target_url,
-                "youtube_id_source": await collection_theme_source(
-                    session, row, job.target_url
-                ),
-                "youtube_title": title,
-                "youtube_duration": duration,
-                "server_theme_id": server_theme_id,
-                "updated_at": now,
-            }
+        select_theme(
+            row,
+            job.target_url or "",
+            source=ThemeIdSource.DOWNLOAD,
+            title=title,
+            duration=duration,
         )
-        record_theme_file(row, facts)
+        record_content(row, ServerAsset.THEME, content)
+        for each in delivered:
+            if each.file is not None:
+                record_file(
+                    row,
+                    ServerAsset.THEME,
+                    each.file,
+                    destination=each.destination,
+                    at=now,
+                )
+            else:
+                confirm_delivery(
+                    row, ServerAsset.THEME, each.destination, ref=each.ref, at=now
+                )
+        row.updated_at = now
         session.add(row)
         stored_job.sqlmodel_update(
             {
@@ -252,14 +264,5 @@ async def record_collection_theme(
         }
     )
     await publisher.broadcast(
-        "collection.theme.updated",
-        {
-            "collection_id": job.collection_id,
-            "has_theme": True,
-            "youtube_id": job.target_url,
-            "youtube_title": title,
-            "youtube_duration": duration,
-            # Downloaded onto the server, the theme is complete.
-            "theme_status": AssetStatus.COMPLETE,
-        },
+        "collection.updated", {"collection_id": job.collection_id}
     )

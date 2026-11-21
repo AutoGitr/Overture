@@ -23,6 +23,7 @@ lazy from overture.services.art.phash import PhashService
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.themes.youtube_resolver import YouTubeResolver
 lazy from overture.utils.errors import PublicServiceError
+lazy from tests.factories import seed_theme, theme_file_hash, theme_of
 lazy from tests.media_servers import served_item
 lazy from tests.runtime_helpers import (
     NoopProviderRegistry,
@@ -250,10 +251,7 @@ async def test_theme_clear_forgets_the_selection_keeps_the_file_and_broadcasts(
     )
     db_session.add(item)
     await db_session.flush()
-    item.youtube_id = "abcDEF123_4"
-    item.youtube_title = "Theme"
-    item.youtube_duration = 120
-    item.theme_file_hash = "theme-hash"
+    seed_theme(item, "abcDEF123_4", title="Theme", duration=120, file_hash="theme-hash")
     await db_session.commit()
 
     database = database_for(one_session(db_session))
@@ -269,12 +267,12 @@ async def test_theme_clear_forgets_the_selection_keeps_the_file_and_broadcasts(
 
     item = await db_session.get(MediaItem, 1)
     assert item is not None
-    assert item.youtube_id is None
-    assert item.youtube_title is None
-    assert item.youtube_duration is None
-    assert item.theme_provenance_cleared is True
-    assert item.youtube_id_source is None
-    assert item.theme_file_hash == "theme-hash"
+    assert theme_of(item).youtube_id is None
+    assert theme_of(item).youtube_title is None
+    assert theme_of(item).youtube_duration is None
+    assert theme_of(item).provenance_cleared is True
+    assert theme_of(item).youtube_id_source is None
+    assert theme_file_hash(item) == "theme-hash"
     assert theme_path.read_bytes() == b"theme"
     # Only the selection changed; nothing on disk or on the server did.
     assert refreshed == []

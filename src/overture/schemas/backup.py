@@ -75,5 +75,3 @@ class BackupJobEvent(JobEnvelope):
 
     filename: str | None = None
     scheduled: bool | None = None
-    started_at: str | None = None
-    finished_at: str | None = None

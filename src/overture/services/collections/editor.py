@@ -533,7 +533,10 @@ class CollectionEditor:
                     422,
                     "Its group's collection set decides its criteria; edit the set",
                 )
-            return await self.save_rule_locked(row, body)
+            saved = await self.save_rule_locked(row, body)
+        # Its policy decides which of its assets are wanted.
+        await self._access.needs.apply_collections()
+        return saved
 
     async def save_rule_locked(
         self, row: MediaCollection, body: CollectionRuleWrite

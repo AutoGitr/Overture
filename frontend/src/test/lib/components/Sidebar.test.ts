@@ -1,4 +1,4 @@
-import { appSettings, mediaServers } from "../../helpers/fixtures";
+import { appSettings, mediaServers, assetFile } from "../../helpers/fixtures";
 import { QueryClient } from "@tanstack/svelte-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -328,9 +328,10 @@ describe("Sidebar", () => {
         movies: [
           mediaItem({
             ...movie,
-            poster_hash: "hash123",
             server_item_id: "plex-1",
-            poster_url: "https://remote.test/poster.jpg",
+            assets: {
+              poster: { file: assetFile("hash123"), url: "https://remote.test/poster.jpg" },
+            },
           }),
         ],
         totalMovies: 1,
@@ -350,9 +351,8 @@ describe("Sidebar", () => {
         movies: [
           mediaItem({
             ...movie,
-            poster_hash: null,
             server_item_id: "plex-1",
-            poster_url: "https://remote.test/poster.jpg",
+            assets: { poster: { file: null, url: "https://remote.test/poster.jpg" } },
           }),
         ],
         totalMovies: 1,
@@ -374,9 +374,8 @@ describe("Sidebar", () => {
           mediaItem({
             ...movie,
             folder_path: "/movies/Alien",
-            poster_hash: null,
             server_item_id: null,
-            poster_url: "https://remote.test/poster.jpg",
+            assets: { poster: { file: null, url: "https://remote.test/poster.jpg" } },
           }),
         ],
         totalMovies: 1,
@@ -430,10 +429,10 @@ describe("Sidebar", () => {
     const completedMovie1 = mediaItem({
       ...movie1,
       art_status: "complete",
-      poster_url: "https://example.com/poster.jpg",
-      poster_hash: "hash1",
-      background_url: "https://example.com/bg.jpg",
-      background_hash: "bghash1",
+      assets: {
+        poster: { url: "https://example.com/poster.jpg", file: assetFile("hash1") },
+        background: { url: "https://example.com/bg.jpg", file: assetFile("bghash1") },
+      },
     });
 
     await rerender({ movies: [completedMovie1, movie2, movie3], totalMovies: 3 });
@@ -556,8 +555,12 @@ describe("Sidebar TMDB search", () => {
       media_type: "movie",
       tmdb_id: 604,
       art_status: "complete",
-      poster_url: "https://image.tmdb.org/t/p/original/chosen.jpg",
-      poster_preview_url: "https://image.tmdb.org/t/p/w342/chosen.jpg",
+      assets: {
+        poster: {
+          url: "https://image.tmdb.org/t/p/original/chosen.jpg",
+          preview_url: "https://image.tmdb.org/t/p/w342/chosen.jpg",
+        },
+      },
     });
     await view.rerender({ client, movies: [stored, reloaded], totalMovies: 2 });
 

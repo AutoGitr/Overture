@@ -61,14 +61,9 @@ class AssetScanProgressEvent(JobEnvelope):
     """WebSocket payload for asset scan lifecycle events."""
 
     results_total: int | None = None
-    done: int | None = None
-    total: int | None = None
     total_folders: int | None = None
     issues_found: int | None = None
     results_found: int | None = None
-    errors: int | None = None
-    started_at: str | None = None
-    finished_at: str | None = None
     issues: list[AssetIssue] | None = None
 
 

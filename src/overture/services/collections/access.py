@@ -8,7 +8,6 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ... import protocols
 lazy from ...config import Settings
-lazy from ...db.completion import collection_theme_status
 lazy from ...db.models.catalog import CatalogCollection
 lazy from ...db.models.collection_group import CollectionGroup
 lazy from ...db.models.media_collection import CollectionLibrary, MediaCollection
@@ -16,7 +15,6 @@ lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
 lazy from ...domain import (
     UNMANAGED_REFUSAL,
-    AssetStatus,
     MediaType,
     ServerType,
     TermKind,
@@ -33,13 +31,13 @@ lazy from ...repositories.libraries import LibraryRepository
 lazy from ...schemas.collections import (
     CollectionLibraryCriteria,
     FilterGroup,
-    catalog_says_no_theme,
 )
 lazy from ...utils.collection_fields import PLEX_COLLECTION_KEY
 lazy from ...utils.collection_formats import is_within_active_window
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.locks import KeyedLock
 lazy from ...utils.time import local_now
+lazy from ..needs import AssetNeeds
 lazy from ..schedule_store import CATALOG_SCHEDULE, load_schedule
 lazy from . import COLLECTIONS_LOCK
 lazy from .copies import ServerCopy, held_copies, lead_part, server_copies
@@ -81,8 +79,11 @@ class CollectionAccess:
         publisher: protocols.EventPublisher,
         asset_locks: KeyedLock[int | str],
         app_config: Settings,
+        needs: AssetNeeds,
     ) -> None:
         self.database = database
+        #: Keeps assets' needs in step with the policies that decide them.
+        self.needs = needs
         self.app_config = app_config
         self.asset_locks = asset_locks
         #: The configured servers' providers.
@@ -238,35 +239,6 @@ class CollectionAccess:
         rule: RuleOrPolicy = None,
     ) -> CollectionPolicy:
         return resolve_policy(await get_app_settings(session), group, rule)
-
-    async def theme_status(
-        self,
-        session: AsyncSession,
-        row: MediaCollection,
-        *,
-        server_has_theme: bool,
-        youtube_id: str | None,
-    ) -> AssetStatus:
-        """Return the collection's theme status, given what it holds.
-
-        Its policy and OvertureDB's No theme flag decide whether it needs one.
-        """
-        settings = await get_app_settings(session)
-        entries = await catalog_collections(
-            session,
-            {row.tmdb_collection_id} if row.tmdb_collection_id else set(),
-            app_config=self.app_config,
-        )
-        no_theme = catalog_says_no_theme(
-            entries.get(row.tmdb_collection_id or 0),
-            trust_no_theme=settings.overturedb_no_theme,
-        )
-        return collection_theme_status(
-            server_has_theme=server_has_theme,
-            youtube_id=youtube_id,
-            needed=resolve_policy(settings, row.group, row.rule).themes
-            and not no_theme,
-        )
 
     async def library_types(self, library_ids: Iterable[str]) -> dict[str, MediaType]:
         """What each of the servers' libraries holds.

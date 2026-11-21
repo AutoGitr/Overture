@@ -18,17 +18,16 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ... import protocols
 lazy from ...config import Settings
+lazy from ...db.ledger import read_asset
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import PAGE_SIZE, Database
-lazy from ...domain import AutoUnmonitor, MediaType, media_sort_key
-lazy from ...jobs.progress_log import JobOutcome, log_entry
-lazy from ...jobs.tally import SyncTally
+lazy from ...domain import AutoUnmonitor, MediaType, ServerAsset, media_sort_key
+lazy from ...jobs.progress_log import JobOutcome, Report
 lazy from ...media_servers.adapters import (
     ServerItem,
     ServerSection,
     SyncItemResult,
-    SyncProgressCallback,
     SyncStopCheck,
 )
 lazy from ...media_servers.base import BaseMediaServerProvider
@@ -45,6 +44,7 @@ lazy from ...utils.time import utc_now
 lazy from ..downloads.selections import queue_saved_selection_downloads
 lazy from ..downloads.service import DownloadService
 lazy from ..local_assets.service import LocalAssets
+lazy from ..needs import apply_needs
 lazy from ..storage.assets import AssetStorage
 lazy from .art_urls import resolve_provider_art_urls
 lazy from .item_sync import CopyPlace, ItemReconciler
@@ -98,9 +98,8 @@ class ServerTurn:
 
 @dataclass(slots=True, frozen=True)
 class SyncResult:
-    """One shared tally and the items reconciliation created."""
+    """The items reconciliation created and the libraries titles moved between."""
 
-    tally: SyncTally = field(default_factory=SyncTally)
     created_item_ids: list[int] = field(default_factory=list[int])
     #: How many titles moved from one library to another, by
     #: ``(library, media type, new library)``.
@@ -215,15 +214,14 @@ class LibraryReconciler:
         turn: ServerTurn,
         *,
         library_ids: list[str] | None,
-        tally: SyncTally,
-        progress_cb: SyncProgressCallback | None,
+        report: Report,
         stop_check: SyncStopCheck | None,
     ) -> SyncResult:
         """Reconcile a complete disk snapshot in bounded item batches.
 
-        The caller has already counted the listing into the tally's total.
+        The caller has already counted the listing into the run's total.
         """
-        stats = SyncResult(tally)
+        stats = SyncResult()
         after_rowid = 0
         while rows := await listing.batch(after_rowid):
             after_rowid = rows[-1][0]
@@ -238,13 +236,11 @@ class LibraryReconciler:
                 on_reconciled=mapped,
                 stats=stats,
                 event_source="sync",
-                progress_cb=progress_cb,
+                report=report,
                 stop_check=stop_check,
             ):
                 return stats
-        await self._mark_missing_staged(
-            listing, turn.server_id, library_ids, stats, progress_cb
-        )
+        await self._mark_missing_staged(listing, turn.server_id, library_ids, report)
         return stats
 
     async def _reconcile_batch(
@@ -256,7 +252,7 @@ class LibraryReconciler:
         on_reconciled: Callable[[ServerItem, int], Awaitable[None]],
         stats: SyncResult,
         event_source: str,
-        progress_cb: SyncProgressCallback | None,
+        report: Report,
         stop_check: SyncStopCheck | None,
     ) -> bool:
         """Reconcile provider items in order, one transaction each.
@@ -266,6 +262,7 @@ class LibraryReconciler:
         """
         auto_unmonitor = await self._auto_unmonitor()
         changed: list[int] = []
+        reconciled: list[int] = []
         stopped = False
         async with self._stamping() as synced:
             for server_item in server_items:
@@ -281,15 +278,25 @@ class LibraryReconciler:
                 )
                 if isinstance(outcome, SyncItemResult) and outcome.item_id is not None:
                     synced.add(outcome.item_id)
+                    reconciled.append(outcome.item_id)
                     await on_reconciled(server_item, outcome.item_id)
                     if outcome.visible_changed:
                         changed.append(outcome.item_id)
-                await self._report(server_item, outcome, stats, progress_cb=progress_cb)
+                await self._report(server_item, outcome, stats, report)
+        await self._apply_needs(reconciled)
         # Told after the stamp, since an upsert versions server artwork by it.
         await emit_library_items_upserted(
             changed, event_source, self.publisher, database=self._database
         )
         return stopped
+
+    async def _apply_needs(self, item_ids: Sequence[int]) -> None:
+        """Record what is wanted for the batch's titles, as the catalog says."""
+        if not item_ids:
+            return
+        async with self._database.write_session() as session:
+            items = await MediaItemRepository(session).get_many(item_ids)
+            await apply_needs(session, items=items, app_config=self._app_config)
 
     @asynccontextmanager
     async def _stamping(self) -> AsyncGenerator[set[int]]:
@@ -353,8 +360,7 @@ class LibraryReconciler:
         listing: StagedListing,
         server_id: int,
         library_ids: list[str] | None,
-        stats: SyncResult,
-        progress_cb: SyncProgressCallback | None,
+        report: Report,
     ) -> None:
         """Mark the server's copies its complete listing left out as removed.
 
@@ -389,7 +395,13 @@ class LibraryReconciler:
                     )
                 ).all()
             for item in removed:
-                await self._log_removed(stats, item.title, progress_cb)
+                await report(
+                    JobOutcome.REMOVED,
+                    item.title,
+                    "no longer on the media server; hidden from the library",
+                    # Not one of the listed items the run counts through.
+                    finished=False,
+                )
                 if item.id is not None:
                     await emit_library_item_removed(
                         item.id, item.media_type, "sync", self.publisher
@@ -402,15 +414,14 @@ class LibraryReconciler:
         server_items: list[ServerItem],
         turn: ServerTurn,
         *,
-        tally: SyncTally | None = None,
-        progress_cb: SyncProgressCallback | None = None,
+        report: Report,
         stop_check: SyncStopCheck | None = None,
     ) -> SyncResult:
         """Reconcile a partial provider snapshot without removing missing items.
 
         Movies come before shows, each by title, as a full sync lists them.
         """
-        stats = SyncResult(tally if tally is not None else SyncTally())
+        stats = SyncResult()
         reconciled: set[int] = set()
 
         async def claimed(item_id: int) -> bool:
@@ -429,7 +440,7 @@ class LibraryReconciler:
             on_reconciled=mark,
             stats=stats,
             event_source="incremental_sync",
-            progress_cb=progress_cb,
+            report=report,
             stop_check=stop_check,
         )
         return stats
@@ -498,6 +509,13 @@ class LibraryReconciler:
                     )
                     if (current.id if current is not None else None) != expected_id:
                         raise RuntimeError("Media item changed during reconciliation")
+                    # The choice saved before this sync, not one the local
+                    # refresh below adopts from the file it finds.
+                    saved_theme = (
+                        read_asset(current, ServerAsset.THEME).youtube_id
+                        if current is not None
+                        else None
+                    )
                     result = await self._items.sync_item(
                         session,
                         await turn.place(session, expected_id),
@@ -530,7 +548,7 @@ class LibraryReconciler:
                     and server_item.folder_path
                     and await queue_saved_selection_downloads(
                         expected_id,
-                        youtube_id=expected.youtube_id,
+                        youtube_id=saved_theme,
                         downloads=self._downloads,
                         database=self._database,
                     )
@@ -540,56 +558,18 @@ class LibraryReconciler:
         except Exception as exc:  # noqa: BLE001 -- one item's failure is reported; the rest go on
             return _item_failure(server_item, exc)
 
-    async def _log_removed(
-        self,
-        stats: SyncResult,
-        title: str,
-        progress_cb: SyncProgressCallback | None,
-    ) -> None:
-        """Report a library item the media server no longer lists.
-
-        It is not one of the server items the run counts through, so it does
-        not advance ``done``.
-        """
-        await self._log(
-            stats,
-            JobOutcome.REMOVED,
-            title,
-            "no longer on the media server; hidden from the library",
-            progress_cb,
-            finished=False,
-        )
-
     @staticmethod
-    async def _log(
-        stats: SyncResult,
-        outcome: JobOutcome,
-        target: str,
-        reason: str,
-        progress_cb: SyncProgressCallback | None,
-        *,
-        finished: bool = True,
-    ) -> None:
-        """Count one item's outcome and send its line to the run's log."""
-        stats.tally.count(outcome)
-        if finished:
-            stats.tally.done += 1
-        if progress_cb:
-            await progress_cb(log_entry(outcome, target, reason))
-
     async def _report(
-        self,
         server_item: ServerItem,
         outcome: SyncItemResult | str,
         stats: SyncResult,
-        *,
-        progress_cb: SyncProgressCallback | None,
+        report: Report,
     ) -> None:
-        """Record the outcome and append its log message."""
+        """Record the outcome and report its line."""
         if isinstance(outcome, str):
             status, reason = JobOutcome.ERROR, outcome
         else:
             if outcome.created and outcome.item_id is not None:
                 stats.created_item_ids.append(outcome.item_id)
             status, reason = _sync_outcome(outcome)
-        await self._log(stats, status, server_item.title, reason, progress_cb)
+        await report(status, server_item.title, reason)

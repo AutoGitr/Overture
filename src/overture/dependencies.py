@@ -31,6 +31,7 @@ lazy from .services.collections.saved_filters import SavedFilters
 lazy from .services.collections.set_runner import CollectionSets
 lazy from .services.collections.themes import CollectionThemes
 lazy from .services.library.service import LibraryService
+lazy from .services.needs import AssetNeeds
 lazy from .services.notifications import NotificationSettings
 lazy from .services.realtime import RealtimeSnapshotBuilder
 lazy from .services.removal import AssetRemover
@@ -204,6 +205,11 @@ def get_stats(runtime: RuntimeDep) -> StatsService:
     return runtime.stats
 
 
+def get_needs(runtime: RuntimeDep) -> AssetNeeds:
+    """Resolve what keeps assets' needs in step with their settings."""
+    return runtime.needs
+
+
 def get_provider_registry(runtime: RuntimeDep) -> ProviderRegistry:
     """Resolve the media server provider registry."""
     return runtime.provider_registry
@@ -257,6 +263,7 @@ AssetManagerDep = Annotated[AssetManagerService, Depends(get_asset_manager)]
 StatsDep = Annotated[StatsService, Depends(get_stats)]
 NotificationsDep = Annotated[NotificationSettings, Depends(get_notifications)]
 ProviderRegistryDep = Annotated[ProviderRegistry, Depends(get_provider_registry)]
+NeedsDep = Annotated[AssetNeeds, Depends(get_needs)]
 TmdbDep = Annotated[TMDBClient, Depends(get_tmdb)]
 WebSocketsDep = Annotated[ConnectionManager, Depends(get_websockets)]
 JobSlotsDep = Annotated[dict[JobKind, ManagedBackgroundJob], Depends(get_job_slots)]

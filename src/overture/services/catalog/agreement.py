@@ -3,13 +3,13 @@
 lazy from collections.abc import Iterable, Sequence
 
 lazy from ...catalog_contract.contract import catalog_art_url
-lazy from ...db.art_slots import find_art_slot
-lazy from ...db.models.art import ArtSlot
+lazy from ...db.ledger import read_asset
+lazy from ...db.models.asset import Asset
 lazy from ...db.models.catalog import CatalogCollection, CatalogItem
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
-lazy from ...domain import ArtType, CollectionPosterStyle, MediaType
+lazy from ...domain import CollectionPosterStyle, MediaType, ServerAsset
 lazy from ...schemas.catalog import Agreement, CatalogSelections
 lazy from .entries import (
     catalog_collection_entry,
@@ -21,20 +21,18 @@ lazy from .entries import (
 type Pair = tuple[str | None, str | None]
 
 
-def _art(slot: ArtSlot | None) -> str | None:
-    """A slot's selection as OvertureDB would hold it.
+def _art(asset: Asset) -> str | None:
+    """An asset's selection as OvertureDB would hold it.
 
-    An upload, which OvertureDB cannot hold, stands as its file hash, so it
+    An upload, which OvertureDB cannot hold, stands as its hash, so it
     differs from any link.
     """
-    if slot is None:
-        return None
-    if slot.upload_hash or not slot.url:
-        return slot.upload_hash
+    if asset.upload_hash or not asset.url:
+        return asset.upload_hash
     try:
-        return catalog_art_url(slot.url)
+        return catalog_art_url(asset.url)
     except ValueError:
-        return slot.url
+        return asset.url
 
 
 def _theme(entry: CatalogItem | CatalogCollection) -> str | None:
@@ -43,7 +41,7 @@ def _theme(entry: CatalogItem | CatalogCollection) -> str | None:
 
 
 def agreement(*pairs: Pair) -> Agreement:
-    """Compare slots; a value on one side only is a difference."""
+    """Compare selections; a value on one side only is a difference."""
     return "matching" if all(local == held for local, held in pairs) else "different"
 
 
@@ -57,14 +55,16 @@ def item_agreement(
     if entry is None:
         return None
     return CatalogSelections(
-        poster=agreement((_art(find_art_slot(item, ArtType.POSTER)), entry.poster_url)),
+        poster=agreement(
+            (_art(read_asset(item, ServerAsset.POSTER)), entry.poster_url)
+        ),
         background=agreement(
-            (_art(find_art_slot(item, ArtType.BACKGROUND)), entry.background_url)
+            (_art(read_asset(item, ServerAsset.BACKGROUND)), entry.background_url)
         ),
         season_posters=agreement(
             *(
                 (
-                    _art(find_art_slot(season, ArtType.SEASON_POSTER)),
+                    _art(read_asset(season, ServerAsset.SEASON_POSTER)),
                     season_posters.get(season.season_num),
                 )
                 for season in seasons
@@ -72,7 +72,9 @@ def item_agreement(
         )
         if item.media_type is MediaType.SHOW
         else None,
-        theme=agreement((item.youtube_id, _theme(entry))),
+        theme=agreement(
+            (read_asset(item, ServerAsset.THEME).youtube_id, _theme(entry))
+        ),
     )
 
 
@@ -89,8 +91,8 @@ def collection_agreement(
     """
     if entry is None:
         return None
-    poster = find_art_slot(row, ArtType.POSTER)
-    if poster and poster.poster_style:
+    poster = read_asset(row, ServerAsset.POSTER)
+    if poster.poster_style:
         held = catalog_collection_entry(entry)[
             collection_poster_field(poster.poster_style)
         ]
@@ -100,7 +102,7 @@ def collection_agreement(
     return CatalogSelections(
         poster=agreement((_art(poster), held)),
         background=agreement(
-            (_art(find_art_slot(row, ArtType.BACKGROUND)), entry.background_url)
+            (_art(read_asset(row, ServerAsset.BACKGROUND)), entry.background_url)
         ),
-        theme=agreement((row.youtube_id, _theme(entry))),
+        theme=agreement((read_asset(row, ServerAsset.THEME).youtube_id, _theme(entry))),
     )

@@ -23,6 +23,7 @@
     routedCollectionArtType,
   } from "../router/routes";
   import { statusTone } from "../utils/sidebarDomain";
+  import { deliveryNote } from "../utils/assetDeliveries";
   import CollectionThemePanel from "./CollectionThemePanel.svelte";
   import ConfigureNavigation from "./ConfigureNavigation.svelte";
   import CollectionConfigure from "./CollectionConfigure.svelte";
@@ -41,6 +42,8 @@
   import { CatalogBrowsing } from "../utils/catalogBrowsing.svelte";
   import { createServerLinks } from "../rest/queries";
   import { setSectionView } from "../stores/sectionState.svelte";
+
+  const serverTitle = (serverId: number) => settingsState.serverTitle(serverId);
 
   let {
     collection,
@@ -190,12 +193,16 @@
       <ArtCategoryTabs
         active={view === "art" ? artType : null}
         statuses={{
-          poster: statusTone(collection.poster_status, actions.clearingArt),
-          background: statusTone(collection.background_status, actions.clearingArt),
+          poster: statusTone(collection.assets.poster.status, actions.clearingArt),
+          background: statusTone(collection.assets.background.status, actions.clearingArt),
+        }}
+        notes={{
+          poster: deliveryNote(collection.assets.poster, serverTitle),
+          background: deliveryNote(collection.assets.background, serverTitle),
         }}
         clearable={{
-          poster: !!(collection.poster_source || collection.server_poster_version),
-          background: !!(collection.background_source || collection.server_background_version),
+          poster: !!(collection.assets.poster.source || collection.server_poster_version),
+          background: !!(collection.assets.background.source || collection.server_background_version),
         }}
         clearDisabled={actions.clearingArt}
         onclear={(tab) => {
@@ -267,16 +274,16 @@
       artStatus={statusTone(collection.art_status, actions.clearingArt)}
       themeStatus={collection.theme_unavailable
         ? null
-        : statusTone(collection.theme_status, actions.themeBusy)}
+        : statusTone(collection.assets.theme.status, actions.themeBusy)}
       onart={() => goToCollectionView(collection, "art", artType)}
       onthemes={() => goToCollectionView(collection, "themes")}
-      onclearart={collection.poster_source ||
-      collection.background_source ||
+      onclearart={collection.assets.poster.source ||
+      collection.assets.background.source ||
       collection.server_poster_version ||
       collection.server_background_version
         ? () => void actions.clearArt("all")
         : null}
-      oncleartheme={!collection.theme_unavailable && collection.theme_status !== "missing"
+      oncleartheme={!collection.theme_unavailable && collection.assets.theme.status !== "missing"
         ? () => void actions.clearTheme()
         : null}
       artBusy={actions.clearingArt}

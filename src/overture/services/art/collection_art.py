@@ -1,5 +1,6 @@
 """Artwork of media-server collections: candidates, uploads and matching."""
 
+lazy import logging
 lazy from collections.abc import Callable
 
 lazy from fastapi.responses import FileResponse
@@ -7,16 +8,21 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ... import protocols
 lazy from ...config import Settings
-lazy from ...db.art_slots import (
-    ArtFileFacts,
-    art_file_facts,
-    art_generation,
-    clear_art_selection,
-    read_art_slot,
-    record_art_file,
+lazy from ...db.ledger import (
+    ContentFacts,
+    Destination,
+    Evidence,
+    clear_selection,
+    confirm_delivery,
+    content,
+    delivery,
+    observe,
+    read_asset,
+    record_content,
     select_art,
     select_upload,
 )
+lazy from ...db.ledger import generation as ledger_generation
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
@@ -57,7 +63,9 @@ lazy from ...utils.threads import owned_thread
 lazy from ...utils.time import utc_now
 lazy from ..collections import COLLECTIONS_LOCK
 lazy from ..collections.copies import lead_part
+lazy from ..collections.destinations import collection_destinations, place_collection
 lazy from ..removal import NO_COLLECTION_ART_FILE, AssetRemover
+lazy from ..server_copies import ServerCopies
 lazy from ..storage.image_cache import CachedOriginal, ImageCache
 lazy from ..storage.responses import cached_image_response
 lazy from .candidates import (
@@ -69,7 +77,10 @@ lazy from .candidates import (
 )
 lazy from .choice import ArtSelector, require_valid_aspect_ratio
 lazy from .matcher import ArtMatcher
+lazy from .phash import PhashService
 lazy from .uploads import ArtUploads
+
+logger = logging.getLogger(__name__)
 
 
 def chosen_poster_style(
@@ -113,6 +124,7 @@ class CollectionArtService:
         database: Database,
         asset_locks: KeyedLock[int | str],
         matcher: ArtMatcher,
+        phash: PhashService,
         publisher: protocols.EventPublisher,
         provider_registry: ProviderRegistry,
         candidates: ArtCandidates,
@@ -121,12 +133,15 @@ class CollectionArtService:
         selector: ArtSelector,
         uploads: ArtUploads,
         remover: AssetRemover,
+        server_copies: ServerCopies,
     ) -> None:
         self._remover = remover
+        self._server_copies = server_copies
         self._config = app_config
         self._database = database
         self._asset_locks = asset_locks
         self._matcher = matcher
+        self._phash = phash
         self._publisher = publisher
         self._provider_registry = provider_registry
         self._candidates = candidates
@@ -167,7 +182,8 @@ class CollectionArtService:
     ) -> ArtSourcesResponse:
         sources = await self._candidates.gather_collection(row, art_type, policy)
         return ArtSourcesResponse(
-            sources=sources.by_source, current_url=read_art_slot(row, art_type).url
+            sources=sources.by_source,
+            current_url=read_asset(row, art_type.server_asset).url,
         )
 
     async def sources(
@@ -334,28 +350,26 @@ class CollectionArtService:
     ) -> None:
         """Record a choice; a link is fetched with *rate_limit_retries*."""
         selection = await self._selector.select(art_type, body)
-        if isinstance(selection.source, ArtFileFacts):
-            facts = selection.source
-            data, media_type = await self._uploads.read(facts.file_hash)
+        kind = art_type.server_asset
+        if isinstance(selection.source, ContentFacts):
+            content = selection.source
+            data, media_type = await self._uploads.read(content.content_hash)
         else:
-            data, media_type, facts = await self._fetch(
+            data, media_type, content = await self._fetch(
                 selection.source, art_type, rate_limit_retries=rate_limit_retries
             )
 
         def record(row: MediaCollection) -> None:
-            if isinstance(selection.source, ArtFileFacts):
-                select_upload(row, art_type, facts.file_hash, generated=generated)
+            if isinstance(selection.source, ContentFacts):
+                select_upload(row, kind, content.content_hash, generated=generated)
             elif selection.stored_url:
                 select_art(
-                    row,
-                    art_type,
-                    selection.stored_url,
-                    poster_style=body.poster_style,
+                    row, kind, selection.stored_url, poster_style=body.poster_style
                 )
             else:
                 # A media-server image has no link, and a stored one names other art.
-                clear_art_selection(row, art_type)
-            record_art_file(row, art_type, facts)
+                clear_selection(row, kind)
+            record_content(row, kind, content)
 
         await self._send(collection_id, art_type, data, media_type, record)
 
@@ -380,11 +394,12 @@ class CollectionArtService:
         Returns:
             Whether the slot holds generated art.
         """
-        generation = art_generation(read_art_slot(row, art_type))
+        asset = read_asset(row, art_type.server_asset)
+        generation = ledger_generation(asset)
         if generation is None:
             return False
         generated = await self._generate(row, art_type, generation)
-        if resend or generated.file_hash != read_art_slot(row, art_type).upload_hash:
+        if resend or generated.file_hash != asset.upload_hash:
             await self._choose(
                 collection_id,
                 art_type,
@@ -394,37 +409,37 @@ class CollectionArtService:
         return True
 
     async def reupload(self, collection_id: int, art_type: ArtType) -> None:
-        """Send every server copy the slot's image again, and record it as shown.
+        """Send every server copy the asset's content again, and record it delivered.
 
-        The image is the art the slot generates, drawn again, else the upload
-        it selects, else the one Overture last uploaded, else its link fetched
-        again: a sync forgets what Overture uploaded when the server shows
-        another image, but not the selection.
+        The content is the art the asset generates, drawn again, else the image
+        Overture keeps for the selection, else its link fetched again.
 
         Raises:
-            PublicServiceError: 409 when the slot holds no image to send, or
-                Overture does not hold it.
+            PublicServiceError: 409 when the asset selects nothing, or Overture
+                no longer holds what it selects.
         """
         async with self._database.read_session() as db:
             row = await self._require(db, collection_id, art_type)
         if await self._redraw(collection_id, row, art_type, resend=True):
             return
-        slot = read_art_slot(row, art_type)
-        kept = slot.upload_hash or slot.file_hash
-        if kept is None:
-            if slot.url is None:
-                raise PublicServiceError(409, "Overture has uploaded no image to it")
+        asset = read_asset(row, art_type.server_asset)
+        kept = asset.upload_hash or asset.content_hash
+        if kept is None or await self._image_cache.original(kept) is None:
+            if asset.url is None:
+                raise PublicServiceError(409, "Overture holds no image to send to it")
             await self._choose(
                 collection_id,
                 art_type,
-                SaveCollectionArtRequest(url=slot.url, poster_style=slot.poster_style),
+                SaveCollectionArtRequest(
+                    url=asset.url, poster_style=asset.poster_style
+                ),
             )
             return
-        facts = await self._uploads.facts(kept)
+        content = await self._uploads.facts(kept)
         data, media_type = await self._uploads.read(kept)
 
         def record(saved: MediaCollection) -> None:
-            record_art_file(saved, art_type, facts)
+            record_content(saved, art_type.server_asset, content)
 
         await self._send(collection_id, art_type, data, media_type, record)
 
@@ -436,41 +451,43 @@ class CollectionArtService:
         media_type: str,
         record: Callable[[MediaCollection], None],
     ) -> None:
-        """Upload an image to every server copy, then *record* it on the row.
+        """Upload an image to every server copy, then *record* it and the copies.
 
-        An inactive collection has no server copy, so the image is only
-        recorded; the sync that puts the collection back sends it.
+        Each copy is recorded as holding the content, named by the image link
+        the server lists for it now. An inactive collection has no server copy,
+        so the content is only recorded; the sync that puts the collection back
+        sends it.
         """
+        kind = art_type.server_asset
         async with (
             self._asset_locks.acquire(COLLECTIONS_LOCK),
             self._asset_locks.acquire(f"collection:{collection_id}"),
         ):
             async with self._database.read_session() as db:
                 row = await self._require(db, collection_id, art_type)
-            for part in row.copies:
-                if self._provider_registry.configured_server_id(part.server_id):
-                    await self._provider_registry.get(
-                        part.server_id
-                    ).upload_collection_art(
-                        part.server_item_id or "", art_type, data, media_type
+            delivered: list[tuple[Destination, str | None]] = []
+            for destination in collection_destinations(
+                row, kind, self._provider_registry
+            ):
+                provider = self._provider_registry.get(destination.server_id or 0)
+                copy_id = destination.server_item_id or ""
+                await provider.upload_collection_art(
+                    copy_id, art_type, data, media_type
+                )
+                delivered.append(
+                    (
+                        destination,
+                        await provider.get_collection_image_url(copy_id, art_type),
                     )
-            # The lead copy's image stands for the collection, as sync reads it.
-            lead = lead_part(row, self._provider_registry.server_ids())
-            server_url = (
-                await self._provider_registry.get(
-                    lead.server_id
-                ).get_collection_image_url(lead.server_item_id or "", art_type)
-                if lead is not None
-                else None
-            )
+                )
             async with self._database.write_session() as db:
                 row = await self._require(db, collection_id, art_type)
                 record(row)
-                row.updated_at = utc_now()
-                if art_type is ArtType.POSTER:
-                    row.thumb_url = server_url
-                else:
-                    row.art_url = server_url
+                now = utc_now()
+                place_collection(row, self._provider_registry)
+                for destination, server_url in delivered:
+                    confirm_delivery(row, kind, destination, ref=server_url, at=now)
+                row.updated_at = now
                 db.add(row)
         await self._publisher.broadcast(
             "collection.updated", {"collection_id": collection_id}
@@ -478,7 +495,7 @@ class CollectionArtService:
 
     async def _fetch(
         self, url: str, art_type: ArtType, *, rate_limit_retries: int
-    ) -> tuple[bytes, str, ArtFileFacts]:
+    ) -> tuple[bytes, str, ContentFacts]:
         """Download a chosen link, keep it in the image cache and describe it.
 
         Raises:
@@ -495,21 +512,13 @@ class CollectionArtService:
         _, width, height = await owned_thread(inspect_saved_image, fetched.data)
         async with self._database.read_session() as db:
             await require_valid_aspect_ratio(db, art_type, width, height)
-        phash = await self._matcher.phash.compute_from_bytes(fetched.data)
+        phash = await self._phash.compute_from_bytes(fetched.data)
         original = await self._image_cache.store_original(fetched.data)
         await self._image_cache.thumb(original)
-        stat = await owned_thread(original.path.stat)
         return (
             fetched.data,
             fetched.media_type,
-            ArtFileFacts(
-                original.file_hash,
-                phash,
-                width,
-                height,
-                stat.st_mtime_ns,
-                stat.st_size,
-            ),
+            ContentFacts(original.file_hash, phash, width, height),
         )
 
     async def local_image(
@@ -529,7 +538,7 @@ class CollectionArtService:
         """
         async with self._database.read_session() as db:
             row = await self._require(db, collection_id, art_type)
-        file_hash = read_art_slot(row, art_type).file_hash
+        file_hash = read_asset(row, art_type.server_asset).content_hash
         if file_hash is None:
             raise PublicServiceError(404, "Collection image not found")
 
@@ -549,44 +558,45 @@ class CollectionArtService:
     async def _regenerated(
         self, row: MediaCollection, art_type: ArtType
     ) -> CachedOriginal | None:
-        """Draw the slot's generated art again, if that gives the file it recorded."""
-        slot = read_art_slot(row, art_type)
-        if (generation := art_generation(slot)) is None:
+        """Draw the asset's generated art again, if that gives its content."""
+        asset = read_asset(row, art_type.server_asset)
+        if (generation := ledger_generation(asset)) is None:
             return None
         generated = await self._generate(row, art_type, generation)
-        return generated if generated.file_hash == slot.file_hash else None
+        return generated if generated.file_hash == asset.content_hash else None
 
     async def uploaded(
         self, row: MediaCollection, art_type: ArtType
-    ) -> ArtFileFacts | None:
-        """Return the facts of the image Overture last uploaded to the slot.
+    ) -> ContentFacts | None:
+        """Return the content Overture holds for the asset, fingerprinted.
 
-        A record without a fingerprint is fingerprinted from the copy Overture
-        keeps, drawing generated art again if the cache lost it, and saved.
+        Content recorded without a fingerprint is fingerprinted from the copy
+        Overture keeps, drawing generated art again if the cache lost it, and
+        saved.
 
         Returns:
-            The facts with their fingerprint, or ``None`` when Overture
-            uploaded no image to the slot.
+            The content, or ``None`` when Overture holds none for the asset.
 
         Raises:
             PublicServiceError: 409 when Overture no longer holds the image.
         """
-        facts = art_file_facts(read_art_slot(row, art_type))
-        if facts is None or facts.phash is not None:
-            return facts
-        if await self._image_cache.original(facts.file_hash) is None:
+        kind = art_type.server_asset
+        held = content(read_asset(row, kind))
+        if held is None or held.fingerprint is not None:
+            return held
+        if await self._image_cache.original(held.content_hash) is None:
             await self._regenerated(row, art_type)
-        kept = await self._uploads.facts(facts.file_hash)
+        kept = await self._uploads.facts(held.content_hash)
         async with (
             self._asset_locks.acquire(f"collection:{row.id}"),
             self._database.write_session() as db,
         ):
             saved = await CollectionRepository(db).get_listed(row.id or 0)
-            # Another upload may have replaced the image meanwhile.
-            if saved is not None and read_art_slot(saved, art_type).file_hash == (
-                kept.file_hash
+            # Another upload may have replaced the content meanwhile.
+            if saved is not None and read_asset(saved, kind).content_hash == (
+                kept.content_hash
             ):
-                record_art_file(saved, art_type, kept)
+                record_content(saved, kind, kept)
                 db.add(saved)
         return kept
 
@@ -610,7 +620,7 @@ class CollectionArtService:
             self._database.write_session() as db,
         ):
             row = await self._require(db, collection_id, art_type)
-            select_art(row, art_type, public, poster_style=poster_style)
+            select_art(row, art_type.server_asset, public, poster_style=poster_style)
             db.add(row)
         await self._publisher.broadcast(
             "collection.updated", {"collection_id": collection_id}
@@ -643,17 +653,25 @@ class CollectionArtService:
                     await self._remover.delete_collection_art(row, slot_type)
             async with self._database.write_session() as db:
                 row = await self._require(db, collection_id, art_types[0])
+                now = utc_now()
                 for slot_type in art_types:
+                    kind = slot_type.server_asset
                     if removal.forget:
-                        clear_art_selection(row, slot_type)
+                        clear_selection(row, kind)
                     # What Overture uploaded is gone from the server too.
                     if removal.delete_from_server:
-                        record_art_file(row, slot_type, None)
-                        if slot_type is ArtType.POSTER:
-                            row.thumb_url = None
-                        else:
-                            row.art_url = None
-                row.updated_at = utc_now()
+                        for destination in collection_destinations(
+                            row, kind, self._provider_registry
+                        ):
+                            observe(
+                                row,
+                                kind,
+                                destination,
+                                Evidence.DIFFERENT,
+                                ref=None,
+                                at=now,
+                            )
+                row.updated_at = now
                 db.add(row)
         await self._publisher.broadcast(
             "collection.updated", {"collection_id": collection_id}
@@ -675,8 +693,8 @@ class CollectionArtService:
                 422, "Set a TMDB collection ID before matching artwork"
             )
         facts = await self.uploaded(row, art_type)
-        if facts is not None and facts.phash is not None:
-            reference, source = facts.phash, "local_file"
+        if facts is not None and facts.fingerprint is not None:
+            reference, source = facts.fingerprint, "local_file"
         else:
             reference, source = await self._server_phash(row, art_type), "media_server"
         sources = await self.found(collection_id, art_type)
@@ -693,7 +711,9 @@ class CollectionArtService:
         errors = list(comparison.errors)
         if facts is not None:
             errors.extend(
-                await self._matcher.annotate_perfect(facts, comparison.matches)
+                await self._matcher.annotate_perfect(
+                    facts.content_hash, comparison.matches
+                )
             )
         return ArtMatchResponse(
             matches=sorted(
@@ -707,27 +727,25 @@ class CollectionArtService:
         )
 
     async def _server_phash(self, row: MediaCollection, art_type: ArtType) -> str:
-        """Return the pHash of the image the media server shows for the slot.
+        """Return the pHash of the image the lead server copy shows for the asset.
 
         Raises:
             PublicServiceError: 422 when the server shows none.
         """
         lead = lead_part(row, self._provider_registry.server_ids())
-        if lead is None or (current_url := row.server_image_url(art_type)) is None:
+        seen = (
+            delivery(
+                read_asset(row, art_type.server_asset),
+                Destination(lead.server_id, lead.server_item_id),
+            )
+            if lead is not None
+            else None
+        )
+        if lead is None or seen is None or seen.observed_ref is None:
             raise PublicServiceError(422, "The collection has no image to match")
-        request = await self._provider_registry.get(
-            lead.server_id
-        ).build_collection_image_request(
+        return await self._server_copies.collection_image(
+            self._provider_registry.get(lead.server_id),
             lead.server_item_id or "",
             art_type,
-            ImageSize.DISPLAY,
-            current_url=current_url,
+            seen.observed_ref,
         )
-        fetched = await fetch_image(
-            request.url,
-            await self._image_clients.get_client(request.url),
-            allow_private=True,
-            headers=request.headers,
-            params=request.params,
-        )
-        return await self._matcher.phash.compute_from_bytes(fetched.data)

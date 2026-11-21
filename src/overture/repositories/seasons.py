@@ -5,7 +5,6 @@ lazy from datetime import datetime
 lazy from sqlmodel import col, or_, select, update
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ..db.completion import HOLDS_FILES
 lazy from ..db.models.media_item import MediaItem
 lazy from ..db.models.season import Season
 lazy from ..domain import ArtType
@@ -14,7 +13,9 @@ lazy from ..domain import ArtType
 #: an item without a local folder, whose seasons come from TMDB.
 TRACKED_SEASON = or_(
     col(Season.file_count) > 0,
-    col(Season.media_item_id).in_(select(MediaItem.id).where(~HOLDS_FILES)),
+    col(Season.media_item_id).in_(
+        select(MediaItem.id).where(col(MediaItem.folder_path).is_(None))
+    ),
 )
 
 

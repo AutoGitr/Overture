@@ -2,9 +2,10 @@
 
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
+lazy from ...db.ledger import place_local
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
-lazy from ...domain import ArtType
+lazy from ...domain import ArtType, ServerAsset
 lazy from ...media_servers.adapters import ServerSeason
 lazy from ...repositories.copies import CopyRepository
 lazy from ...repositories.seasons import SeasonRepository
@@ -24,12 +25,14 @@ class SeasonSynchronizer:
         server_id: int,
         lead: bool,
         only_missing_art: bool,
+        moved: bool = False,
     ) -> None:
         """Record one server's seasons of a show.
 
         The lead server describes the seasons: their titles, file counts and
         artwork. Any server adds a season the title lacks, and records its own
-        ID of each.
+        ID of each. Each season's poster goes in the show's folder; *moved*
+        says the show's folder changed.
         """
         if not item.id:
             return
@@ -67,6 +70,13 @@ class SeasonSynchronizer:
                     session.add(season)
 
         await session.flush()
+        for season in {**existing_seasons, **listed}.values():
+            place_local(
+                season,
+                (ServerAsset.SEASON_POSTER,),
+                folder=item.folder_path is not None,
+                moved=moved,
+            )
 
         copies = CopyRepository(session)
         server_ids = {s.num: s.server_item_id for s in season_data}

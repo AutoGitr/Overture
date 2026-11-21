@@ -11,7 +11,7 @@ lazy from sqlmodel import col, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.config import Settings
-lazy from overture.db.art_slots import read_art_slot, select_art
+lazy from overture.db.ledger import read_asset, select_art
 lazy from overture.db.models.catalog import CatalogItem
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.schedule import TaskSchedule
@@ -21,6 +21,7 @@ lazy from overture.domain import (
     ArtType,
     CatalogMediaType,
     MediaType,
+    ServerAsset,
     ThemeIdSource,
     TmdbLanguageFilter,
     TmdbSearchBy,
@@ -58,7 +59,8 @@ lazy from tests.bulk_helpers import disable_catalog, enable_catalog
 lazy from tests.factories import (
     CatalogItemFactory,
     MediaItemFactory,
-    seed_art_slot,
+    seed_asset,
+    theme_of,
 )
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (
@@ -321,8 +323,8 @@ async def test_catalog_members_use_only_catalog_or_draft_artwork(
             )
 
     library = MediaItem(media_type=MediaType.MOVIE, tmdb_id=605, title="Library movie")
-    select_art(library, ArtType.POSTER, PublicArtUrl(f"{IMAGE}/library.jpg"))
-    seed_art_slot(library, ArtType.POSTER, file_hash="local")
+    select_art(library, ServerAsset.POSTER, PublicArtUrl(f"{IMAGE}/library.jpg"))
+    seed_asset(library, ArtType.POSTER, file_hash="local")
     db_session.add_all(
         [
             library,
@@ -441,7 +443,7 @@ async def test_the_first_artwork_stores_the_item_and_records_only_the_choice(
         "tt0133093",
         None,
     )
-    assert read_art_slot(item, ArtType.POSTER).url == f"{IMAGE}/chosen.jpg"
+    assert read_asset(item, ServerAsset.POSTER).url == f"{IMAGE}/chosen.jpg"
 
 
 async def test_a_refused_choice_stores_nothing(
@@ -480,7 +482,7 @@ async def test_a_season_poster_stores_the_show_with_its_seasons(
         (0, 0),
         (1, 0),
     ]
-    assert read_art_slot(seasons[1], ArtType.SEASON_POSTER).url == POSTER.url
+    assert read_asset(seasons[1], ServerAsset.SEASON_POSTER).url == POSTER.url
     assert response.item.tvdb_id == 121361
 
 
@@ -492,13 +494,13 @@ async def test_the_first_theme_stores_the_item_with_the_video_details(
     )
 
     assert response.selection.status == "selected"
-    assert response.item.theme_status == "complete"
+    assert response.item.assets.theme.status == "complete"
     (item,) = await _items(db_session)
     assert (
-        item.youtube_id,
-        item.youtube_id_source,
-        item.youtube_title,
-        item.youtube_duration,
+        theme_of(item).youtube_id,
+        theme_of(item).youtube_id_source,
+        theme_of(item).youtube_title,
+        theme_of(item).youtube_duration,
     ) == ("abcDEF123_4", ThemeIdSource.SELECTION, "Main Theme", 95)
 
 
@@ -595,8 +597,8 @@ async def test_a_stored_item_without_a_folder_records_choices_only(
     assert server_art.value.status_code == 400
     assert downloads.jobs == []
     (item,) = await _items(db_session)
-    assert read_art_slot(item, ArtType.POSTER).url == POSTER.url
-    assert item.youtube_id_source == ThemeIdSource.SELECTION
+    assert read_asset(item, ServerAsset.POSTER).url == POSTER.url
+    assert theme_of(item).youtube_id_source == ThemeIdSource.SELECTION
 
 
 class RecordingDownloads(DownloadService):

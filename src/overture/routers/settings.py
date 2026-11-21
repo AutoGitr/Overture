@@ -4,6 +4,7 @@ lazy from fastapi import APIRouter, Depends
 
 lazy from ..dependencies import (
     DatabaseDep,
+    NeedsDep,
     ProviderRegistryDep,
     SettingsDep,
     TmdbDep,
@@ -37,10 +38,15 @@ async def update_settings(
     settings: SettingsDep,
     database: DatabaseDep,
     providers: ProviderRegistryDep,
+    needs: NeedsDep,
 ) -> AppSettingsRead:
     """Update settings."""
     return await settings_service.update_settings(
-        body, app_config=settings, database=database, provider_registry=providers
+        body,
+        app_config=settings,
+        database=database,
+        provider_registry=providers,
+        needs=needs,
     )
 
 

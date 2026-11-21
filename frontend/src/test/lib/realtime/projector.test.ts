@@ -10,9 +10,12 @@ import { downloadState } from "../../../lib/stores/downloadState.svelte";
 import { notify } from "../../../lib/stores/notificationState.svelte";
 import { catalogSyncState, syncState } from "../../../lib/stores/jobStates.svelte";
 import {
-  itemDownload,
   catalogStatus,
+  catalogSyncEvent,
+  itemDownload,
+  jobMetadata,
   realtimeSnapshot,
+  syncEvent,
   wsMessage as event,
 } from "../../helpers/fixtures";
 
@@ -39,7 +42,9 @@ describe("realtime projection", () => {
   });
 
   it("forgets a job's result once the server cleared it", () => {
-    syncState.handleCompleted({ done: 1, total: 1, finished_at: "2026-01-01T00:00:00Z" });
+    syncState.handleCompleted(
+      syncEvent({ done: 1, total: 1, finished_at: "2026-01-01T00:00:00Z" }),
+    );
 
     projectRealtimeMessage(
       event("job.snapshot.cleared", { kind: "sync", finished_at: "2026-01-01T00:00:00Z" }),
@@ -77,15 +82,18 @@ describe("realtime projection", () => {
     const success = vi.spyOn(notify, "success");
 
     projectRealtimeMessage(
-      event("sync.completed", { done: 1, total: 1, finished_at: "2026-01-01T00:00:00Z" }),
+      event(
+        "sync.completed",
+        syncEvent({ done: 1, total: 1, finished_at: "2026-01-01T00:00:00Z" }),
+      ),
     );
 
     expect(success).toHaveBeenCalledWith("Library sync finished.");
   });
 
   it("resumes the jobs a continuing snapshot names and forgets the others", () => {
-    syncState.handleStarted({ total: 5 });
-    catalogSyncState.handleStarted({});
+    syncState.handleStarted(syncEvent({ total: 5 }));
+    catalogSyncState.handleStarted(catalogSyncEvent({}));
 
     projectRealtimeSnapshot(
       realtimeSnapshot({
@@ -108,17 +116,21 @@ describe("OvertureDB sync liveness", () => {
 
   it("stays released once the sync ends, whatever the status broadcast says", () => {
     projectRealtimeMessage(
-      event("catalog.sync.started", { job: { kind: "catalog_sync", status: "started" } }, 1),
+      event(
+        "catalog.sync.started",
+        catalogSyncEvent({ job: jobMetadata("catalog_sync", "started") }),
+        1,
+      ),
     );
     expect(catalogSyncState.running).toBe(true);
 
     projectRealtimeMessage(
       event(
         "catalog.sync.completed",
-        {
-          job: { kind: "catalog_sync", status: "completed" },
+        catalogSyncEvent({
+          job: jobMetadata("catalog_sync", "completed"),
           finished_at: "2026-01-01T00:00:00+00:00",
-        },
+        }),
         2,
       ),
     );
@@ -143,18 +155,20 @@ describe("OvertureDB sync liveness", () => {
 
   it("reports the failure and releases the button", () => {
     projectRealtimeMessage(
-      event("catalog.sync.started", { job: { kind: "catalog_sync", status: "started" } }, 1),
+      event(
+        "catalog.sync.started",
+        catalogSyncEvent({ job: jobMetadata("catalog_sync", "started") }),
+        1,
+      ),
     );
     projectRealtimeMessage(
       event(
         "catalog.sync.failed",
-        {
-          job: {
-            kind: "catalog_sync",
-            status: "failed",
+        catalogSyncEvent({
+          job: jobMetadata("catalog_sync", "failed", {
             error: { message: "catalog unreachable" },
-          },
-        },
+          }),
+        }),
         2,
       ),
     );

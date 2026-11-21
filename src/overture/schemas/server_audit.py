@@ -173,28 +173,15 @@ class ServerAuditProgressEvent(JobEnvelope):
     """WebSocket payload for server audit lifecycle events."""
 
     results_total: int | None = None
-    done: int | None = None
-    total: int | None = None
     results_found: int | None = None
-    errors: int | None = None
-    started_at: str | None = None
-    finished_at: str | None = None
     results: list[ServerAuditResult] | None = None
 
 
 class ServerAuditFixEvent(JobEnvelope):
     """WebSocket payload for the job that fixes audit findings and checks them.
 
-    ``done`` counts the fixed files that have settled: ``verified`` once the
-    server matches the local file again, ``unchanged`` when it still differs
-    after the server stopped picking up changes, ``errors`` when the fix itself
+    ``done`` counts the fixed files that have settled: **Matched** once the
+    server matches the local file again, **Mismatch** when it still differs
+    after the server stopped picking up changes, **Error** when the fix itself
     failed.
     """
-
-    done: int | None = None
-    total: int | None = None
-    verified: int | None = None
-    unchanged: int | None = None
-    errors: int | None = None
-    started_at: str | None = None
-    finished_at: str | None = None

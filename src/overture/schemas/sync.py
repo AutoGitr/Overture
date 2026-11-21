@@ -113,13 +113,3 @@ class SyncStatusResponse(StrictBaseModel):
 
 class SyncJobEvent(JobEnvelope):
     """WebSocket payload for sync lifecycle events."""
-
-    done: int | None = None
-    total: int | None = None
-    added: int | None = None
-    updated: int | None = None
-    unchanged: int | None = None
-    removed: int | None = None
-    errors: int | None = None
-    started_at: str | None = None
-    finished_at: str | None = None

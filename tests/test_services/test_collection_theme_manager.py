@@ -10,7 +10,13 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from overture.config import Settings
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.session import Database
-lazy from overture.domain import JobStatus, MediaType, ServerAsset, ServerType
+lazy from overture.domain import (
+    AssetStatus,
+    JobStatus,
+    MediaType,
+    ServerAsset,
+    ServerType,
+)
 lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.jellyfin import JellyfinProvider
 lazy from overture.media_servers.plex import PlexProvider
@@ -30,6 +36,7 @@ lazy from overture.services.themes.youtube_resolver import (
 )
 lazy from overture.utils.time import utc_now
 lazy from tests.collection_helpers import stored_collection
+lazy from tests.factories import server_ref, theme_of
 lazy from tests.media_servers import TEST_SERVER_ID, configure, server_of
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import NoopProviderRegistry, unused
@@ -206,27 +213,18 @@ async def test_process_job_persists_complete_collection_theme_provenance(
     row = await CollectionRepository(db_session).get(1)
     assert row is not None
     if upload_fails:
-        assert row.youtube_id is None
+        assert theme_of(row).youtube_id is None
         job = await db_session.get(DownloadJob, job_id)
         assert job is not None
         assert job.error_message == "Plex rejected the collection theme upload"
         assert publisher.events[-1][0] == "download.failed"
         return
-    assert row.youtube_id == "VENZKx1iFzA"
-    assert row.youtube_title == "YouTube Theme"
-    assert row.youtube_duration == 123
-    assert row.server_theme_id == "/themes/uploaded"
-    assert publisher.events[-2] == (
-        "collection.theme.updated",
-        {
-            "collection_id": 1,
-            "has_theme": True,
-            "youtube_id": "VENZKx1iFzA",
-            "youtube_title": "YouTube Theme",
-            "youtube_duration": 123,
-            "theme_status": "complete",
-        },
-    )
+    assert theme_of(row).youtube_id == "VENZKx1iFzA"
+    assert theme_of(row).youtube_title == "YouTube Theme"
+    assert theme_of(row).youtube_duration == 123
+    assert server_ref(row, ServerAsset.THEME) == "/themes/uploaded"
+    assert theme_of(row).status is AssetStatus.COMPLETE
+    assert publisher.events[-2] == ("collection.updated", {"collection_id": 1})
 
 
 async def test_jellyfin_collection_theme_is_written_to_the_boxset_folder(
@@ -271,12 +269,15 @@ async def test_jellyfin_collection_theme_is_written_to_the_boxset_folder(
     assert refreshed == ["collection-1"]
     row = await CollectionRepository(db_session).get(1)
     assert row is not None
-    assert row.youtube_id == "VENZKx1iFzA"
+    assert theme_of(row).youtube_id == "VENZKx1iFzA"
     stat = (folder / "theme.mp3").stat()
-    assert row.server_theme_id is None
-    assert row.theme_file_hash is not None
-    assert row.theme_file_size == stat.st_size
-    assert row.theme_file_mtime_ns == stat.st_mtime_ns
+    assert server_ref(row, ServerAsset.THEME) is None
+    [folder_copy] = theme_of(row).deliveries
+    assert folder_copy.observed_hash == theme_of(row).content_hash is not None
+    assert (folder_copy.file_size, folder_copy.file_mtime_ns) == (
+        stat.st_size,
+        stat.st_mtime_ns,
+    )
 
 
 async def test_jellyfin_collection_theme_needs_the_collections_path(

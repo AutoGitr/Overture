@@ -24,6 +24,7 @@ lazy from overture.utils.locks import KeyedLock
 lazy from tests.factories import (
     MediaItemFactory,
     SeasonFactory,
+    seed_theme,
 )
 lazy from tests.runtime_helpers import row_id
 
@@ -413,13 +414,15 @@ async def test_existing_local_theme_is_never_replaced(
 ) -> None:
     """Polling fills missing files only, even when the file's source is unknown."""
     _bind_index(monkeypatch, FakeIndex(youtube_id="yt-abc"))
-    item = media_item_factory(
-        id=None,
-        server_item_id="overture-7",
-        library_id="1:lib-1",
-        folder_path="/media/Movie Seven",
-        theme_file_hash="theme-hash",
-        youtube_id=youtube_id,
+    item = seed_theme(
+        media_item_factory(
+            id=None,
+            server_item_id="overture-7",
+            library_id="1:lib-1",
+            folder_path="/media/Movie Seven",
+        ),
+        youtube_id,
+        file_hash="theme-hash",
     )
     db_session.add(item)
     await db_session.commit()

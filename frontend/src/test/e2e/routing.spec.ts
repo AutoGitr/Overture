@@ -314,13 +314,13 @@ test("collection member rows show posters, link to items and omit show matching 
       id: 1,
       title: "Alien",
       year: 1979,
-      poster_url: "https://image.tmdb.org/t/p/original/alien.jpg",
+      assets: { poster: { url: "https://image.tmdb.org/t/p/original/alien.jpg" } },
     }),
     mediaItem({
       id: 3,
       title: "Aliens",
       year: 1986,
-      poster_url: "https://image.tmdb.org/t/p/original/aliens.jpg",
+      assets: { poster: { url: "https://image.tmdb.org/t/p/original/aliens.jpg" } },
     }),
   ];
   const requestedPosters: string[] = [];
@@ -364,7 +364,7 @@ test("collection member rows show posters, link to items and omit show matching 
   await expect(second).toBeVisible();
   await expect
     .poll(() => requestedPosters)
-    .toEqual(expect.arrayContaining(members.map((member) => member.poster_url)));
+    .toEqual(expect.arrayContaining(members.map((member) => member.assets.poster.url)));
   const firstBox = await first.boundingBox();
   const secondBox = await second.boundingBox();
   expect(firstBox).not.toBeNull();

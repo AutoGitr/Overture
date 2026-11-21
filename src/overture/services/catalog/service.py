@@ -29,6 +29,7 @@ lazy from ...schemas.catalog import (
 lazy from ...schemas.common import Status, StatusResponse
 lazy from ...utils.temporary import operation_directory
 lazy from ...utils.time import utc_now, utc_now_iso
+lazy from ..needs import AssetNeeds
 lazy from ..schedule_store import (
     CATALOG_SCHEDULE,
     CatalogPayload,
@@ -69,8 +70,10 @@ class CatalogService:
         app_config: Settings,
         database: Database,
         config_dir: Path,
+        needs: AssetNeeds,
     ) -> None:
         self._app_config = app_config
+        self._needs = needs
         self._database = database
         self._config_dir = config_dir
         self._publisher = publisher
@@ -251,6 +254,8 @@ class CatalogService:
                 snapshot=True,
             )
         else:
+            # OvertureDB's No theme flags decide which themes are wanted.
+            await self._needs.apply_all()
             await self._publish_sync_event(
                 "completed",
                 context=context,

@@ -133,6 +133,10 @@ class TestBackgroundJobState:
                     "checked": 1,
                     "pulled": 1,
                     "started_at": slot.started_at,
+                    "log_total": 0,
+                    "log_outcomes": {},
+                    "log_targets": {},
+                    "log_servers": {},
                     "job": {
                         "kind": "sync",
                         "status": "progress",
