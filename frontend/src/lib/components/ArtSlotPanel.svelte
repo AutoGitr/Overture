@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ASSET_LABELS } from "../../generated/settings";
+  import { ASSET_LABELS, MAX_IMAGE_BYTES } from "../../generated/settings";
   
   import { createMutation, createQuery } from "@tanstack/svelte-query";
   import { onMount } from "svelte";
@@ -369,8 +369,12 @@
 
   async function uploadFile(file: File) {
     if (saving) return;
-    saving = true;
     feedback.clear();
+    if (file.size > MAX_IMAGE_BYTES) {
+      feedback.error(`Images may be at most ${MAX_IMAGE_BYTES / 1024 / 1024} MB`);
+      return;
+    }
+    saving = true;
     let uploaded;
     try {
       uploaded = await uploadRequest.mutateAsync({ body: file });

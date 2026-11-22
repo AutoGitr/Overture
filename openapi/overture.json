@@ -13989,6 +13989,21 @@
             },
             "description": "An API key asked for a change, or the CSRF token is missing"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -14117,9 +14132,14 @@
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
               }
             },
-            "description": "The image is larger than the limit"
+            "description": "The body is larger than the route accepts"
           },
           "415": {
             "content": {
@@ -14262,6 +14282,21 @@
             },
             "description": "The scan it names is stale; scan again"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -14382,6 +14417,21 @@
               }
             },
             "description": "An API key asked for a change, or the CSRF token is missing"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -14718,6 +14768,21 @@
             },
             "description": "A key has that name already"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -14962,6 +15027,21 @@
               }
             },
             "description": "Password login is disabled"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -15594,6 +15674,21 @@
             },
             "description": "An API key asked for a change, or the CSRF token is missing"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -15714,6 +15809,21 @@
               }
             },
             "description": "An API key asked for a change, or the CSRF token is missing"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -15938,6 +16048,21 @@
               }
             },
             "description": "An API key asked for a change, or the CSRF token is missing"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -16205,6 +16330,21 @@
             },
             "description": "Nothing has the ID or key the path names"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -16456,6 +16596,21 @@
               }
             },
             "description": "An API key asked for a change, or the CSRF token is missing"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -16854,6 +17009,21 @@
               }
             },
             "description": "OvertureDB is disabled"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -17298,6 +17468,21 @@
               }
             },
             "description": "OvertureDB is disabled"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -17800,6 +17985,21 @@
               }
             },
             "description": "An API key asked for a change, or the CSRF token is missing"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -18742,6 +18942,21 @@
             },
             "description": "No media server is configured"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -19034,6 +19249,21 @@
             },
             "description": "No media server is configured"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -19184,6 +19414,21 @@
               }
             },
             "description": "No media server is configured"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -19991,6 +20236,21 @@
             },
             "description": "No media server is configured"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -20162,6 +20422,21 @@
               }
             },
             "description": "No media server is configured"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -20466,6 +20741,21 @@
             },
             "description": "No media server is configured"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -20763,6 +21053,21 @@
             },
             "description": "No media server is configured"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -20922,6 +21227,21 @@
               }
             },
             "description": "No media server is configured"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -21213,6 +21533,21 @@
               }
             },
             "description": "No media server is configured"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -21977,6 +22312,21 @@
             },
             "description": "No media server is configured"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -22302,6 +22652,21 @@
               }
             },
             "description": "No media server is configured"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -22862,6 +23227,21 @@
               }
             },
             "description": "The uploaded image is no longer kept"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -23941,6 +24321,21 @@
             },
             "description": "No media server is configured"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -24269,6 +24664,21 @@
             },
             "description": "No media server is configured"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -24442,6 +24852,21 @@
               }
             },
             "description": "No media server is configured"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -24924,6 +25349,21 @@
               }
             },
             "description": "No media server is configured"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -25432,6 +25872,21 @@
               }
             },
             "description": "No media server is configured"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -26190,6 +26645,21 @@
             },
             "description": "No media server is configured"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -26474,6 +26944,21 @@
               }
             },
             "description": "No media server is configured"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -26800,6 +27285,21 @@
               }
             },
             "description": "No media server is configured"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -27171,6 +27671,21 @@
               }
             },
             "description": "A media server cannot do what it asks"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -27956,6 +28471,21 @@
             },
             "description": "The uploaded image is no longer kept"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -28582,6 +29112,21 @@
               }
             },
             "description": "Nothing has the ID or key the path names"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -29294,6 +29839,21 @@
               }
             },
             "description": "Nothing has the ID or key the path names"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -30214,6 +30774,21 @@
             },
             "description": "An API key asked for a change, or the CSRF token is missing"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -30589,6 +31164,21 @@
             },
             "description": "No media server is configured"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -30870,6 +31460,21 @@
               }
             },
             "description": "No media server is configured"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -31242,6 +31847,21 @@
             },
             "description": "An API key asked for a change, or the CSRF token is missing"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -31575,6 +32195,21 @@
             },
             "description": "No media server is configured"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -31858,6 +32493,21 @@
               }
             },
             "description": "No media server is configured"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -32184,6 +32834,21 @@
               }
             },
             "description": "No media server is configured"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {
@@ -33517,6 +34182,21 @@
             },
             "description": "The uploaded image is no longer kept"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -33997,6 +34677,21 @@
               }
             },
             "description": "A setting it needs is not set"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
           },
           "422": {
             "content": {

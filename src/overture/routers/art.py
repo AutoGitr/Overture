@@ -25,7 +25,6 @@ lazy from ..schemas.removal import (
     RemovalOptions,
     RemovalTarget,
 )
-lazy from ..utils.errors import PublicServiceError
 lazy from ..utils.image_fetch import MAX_IMAGE_BYTES
 lazy from .auth import authenticated_router
 lazy from .parameters import (
@@ -50,28 +49,11 @@ _IMAGE_BODY: dict[str, Any] = {
 }
 
 
-async def _image_body(request: Request) -> bytes:
-    """Read an uploaded image, refusing one larger than any image Overture keeps.
-
-    Raises:
-        PublicServiceError: 413 once the body passes the limit.
-    """
-    data = bytearray()
-    async for chunk in request.stream():
-        data += chunk
-        if len(data) > MAX_IMAGE_BYTES:
-            raise PublicServiceError(
-                413, f"Images may be at most {MAX_IMAGE_BYTES // 1024 // 1024} MB"
-            )
-    return bytes(data)
-
-
 @router.post(
     "/art/uploads",
     openapi_extra=_IMAGE_BODY,
-    responses=errors(
-        {413: "The image is larger than the limit", 415: "It is not a JPEG or PNG"}
-    ),
+    max_body_size=MAX_IMAGE_BYTES,
+    responses=errors({415: "It is not a JPEG or PNG"}),
 )
 async def upload_art(request: Request, uploads: ArtUploadsDep) -> ArtUploadResponse:
     """Keep an uploaded JPEG or PNG until an art slot selects it.
@@ -79,7 +61,7 @@ async def upload_art(request: Request, uploads: ArtUploadsDep) -> ArtUploadRespo
     Save it into a slot by sending the returned ``upload_hash`` in place of a
     link.
     """
-    return await uploads.store(await _image_body(request))
+    return await uploads.store(await request.body())
 
 
 @router.get("/library/items/{item_id}/art/{art_type}/sources")

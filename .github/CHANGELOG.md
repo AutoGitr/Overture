@@ -12,6 +12,10 @@
 - **API:** IDs in paths and bodies are at most 9007199254740991, the largest a JSON client reads exactly.
 - **API:** the `collection.theme.updated` event is removed; `collection.updated` reports a theme change.
 
+### 🔒 Security
+
+- **API:** a request body larger than 1 MiB, or 20 MB for an image upload, is refused with 413 before it is read, so no request, signed in or not, can fill Overture's memory.
+
 ### 🚀 Features
 
 - **API:** criteria fields say whether they match values ignoring case (`ignores_case`), and routes that need signing in document their 401 and 403 answers.
@@ -24,6 +28,7 @@
 
 - **Collections:** a sync checks the art and theme of every server copy, not just the first, and a collection is complete only once every copy shows them.
 - **Collections:** a chosen theme stays chosen when a server plays another; the collection's next sync or an Assets run sends it again.
+- **Interface:** an image larger than 20 MB is refused before it uploads, saying so.
 - **Interface:** a database record names an asset's copy by its server and file, such as `Background on Jellyfin`, and other rows by what they are, such as `Collection rule 19`.
 - **Library:** auto-unmonitor counts a title's theme as complete when OvertureDB says it has none and Overture trusts that flag.
 - **Operations:** Server audit compares and fixes collection images and themes exactly as a sync does, and records what it finds on a collection's copies, so the collection's status follows the audit.
@@ -34,6 +39,7 @@
 
 ### 🐛 Bug fixes
 
+- **API:** a list's limit, such as 1,000 collections for a sync, counts every ID sent, so a list padded with repeats is refused as the schema says.
 - **API:** a refused method's answer names the allowed ones in `Allow`.
 - **API:** an ID too large for the database is refused with 422 instead of failing with 500.
 - **Collections:** the bulk sort title template takes as many characters as the sort title format.

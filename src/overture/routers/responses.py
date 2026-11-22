@@ -57,6 +57,17 @@ _UNDECODABLE_BODY = {
     "description": "The body is not text in the declared encoding",
     "content": {"application/json": {"schema": _ERROR}},
 }
+#: What a route answers once a body passes its size limit. Starlette refuses
+#: a body whose Content-Length is too large with plain text before the route
+#: runs; one sent without a length is cut off as it is read, and its 413 is
+#: an error like any other.
+_TOO_LARGE = {
+    "description": "The body is larger than the route accepts",
+    "content": {
+        "application/json": {"schema": _ERROR},
+        "text/plain": {"schema": {"type": "string"}},
+    },
+}
 #: What a route answers when what its path names does not exist.
 _NOT_FOUND = {
     "description": "Nothing has the ID or key the path names",
@@ -107,7 +118,8 @@ def declare_framework_answers(schema: dict[str, Any]) -> dict[str, Any]:
     """Add to *schema* what every route answers whatever it declares.
 
     FastAPI documents its own 422 body, not the one Overture sends, and no
-    answer for a body it cannot decode or a path that names nothing.
+    answer for a body it cannot decode or one too large, or a path that names
+    nothing.
     """
     components = schema.setdefault("components", {}).setdefault("schemas", {})
     _require_tags(schema, components)
@@ -125,6 +137,7 @@ def declare_framework_answers(schema: dict[str, Any]) -> dict[str, Any]:
                 responses["422"] = _UNPROCESSABLE
             if "requestBody" in operation:
                 responses.setdefault("400", _UNDECODABLE_BODY)
+                responses.setdefault("413", _TOO_LARGE)
             if "{" in path:
                 responses.setdefault("404", _NOT_FOUND)
     return schema

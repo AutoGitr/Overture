@@ -23,15 +23,21 @@ def _unique[T](values: list[T]) -> list[T]:
 
 _T = TypeVar("_T")
 
-#: A list whose repeated values are dropped, keeping the first of each. A
-#: plain alias rather than a ``type`` statement, so FastAPI sees the list in a
-#: query model and reads each repeated parameter into it.
-UniqueList = Annotated[list[_T], AfterValidator(_unique)]
+#: Drops a list's repeated values, keeping the first of each. Put it after
+#: the list's length limits, so they count what is sent, as the schema says.
+UNIQUE = AfterValidator(_unique)
+
+#: A list whose repeated values are dropped. A plain alias rather than a
+#: ``type`` statement, so FastAPI sees the list in a query model and reads
+#: each repeated parameter into it. A limited list writes its limits first and
+#: ends with :data:`UNIQUE` instead.
+UniqueList = Annotated[list[_T], UNIQUE]
 
 #: Media-server library identifiers, without repeats.
 type LibraryIds = Annotated[
-    UniqueList[Annotated[str, Field(min_length=1, max_length=128)]],
+    list[Annotated[str, Field(min_length=1, max_length=128)]],
     Field(max_length=200),
+    UNIQUE,
 ]
 
 
@@ -63,7 +69,7 @@ type GroupNames = Annotated[
 
 #: Collections a run or a bulk change names, without repeats; at least one.
 type CollectionIds = Annotated[
-    UniqueList[PositiveId], Field(min_length=1, max_length=1000)
+    list[PositiveId], Field(min_length=1, max_length=1000), UNIQUE
 ]
 
 

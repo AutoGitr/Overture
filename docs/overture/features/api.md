@@ -26,8 +26,11 @@ A failed request answers `{"detail": "..."}` saying why, except a request
 that does not fit the schema, whose 422 lists each issue with where it is. A
 409 says what stands in the way, such as a setting that is not set (a media
 server, a TMDB token) or OvertureDB being off; 502 and 503 mean a media server
-or YouTube failed or is down. Every answer a
-route can give is in the OpenAPI description.
+or YouTube failed or is down. A body larger than 1 MiB, or 20 MB for an image
+upload, is refused with 413; when its `Content-Length` already says so, the
+answer is plain text. A list's limit, such as 1,000 collections, counts every
+entry sent, repeats included. Every answer a route can give is in the OpenAPI
+description.
 
 Errors in the web interface include a request ID that also appears in the log.
 

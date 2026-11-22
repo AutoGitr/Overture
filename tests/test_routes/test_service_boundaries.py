@@ -22,7 +22,6 @@ lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.jobs.gate import LibraryGate
 lazy from overture.main import create_app
-lazy from overture.routers import art as art_router
 lazy from overture.runtime_paths import image_cache_path, uploads_path
 lazy from overture.schemas.art import ArtCandidate
 lazy from overture.schemas.common import MonitoredResponse
@@ -40,6 +39,7 @@ lazy from overture.services.sync.engine import SyncEngine
 lazy from overture.services.sync.runner import CollectionGroups
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.http_security import CSRF_COOKIE, CSRF_HEADER
+lazy from overture.utils.image_fetch import MAX_IMAGE_BYTES
 lazy from overture.utils.time import utc_now
 lazy from tests.collection_helpers import stored_collection
 lazy from tests.media_servers import served_item
@@ -335,7 +335,6 @@ async def test_sync_http_timezone_matches_scheduler_in_winter_and_summer(
 
 async def test_art_uploads_take_the_image_file_as_the_body(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
     app_config: Settings,
     database: Database,
 ) -> None:
@@ -362,9 +361,10 @@ async def test_art_uploads_take_the_image_file_as_the_body(
         refused = await client.post(
             "/api/art/uploads", content=b"not an image", headers=headers
         )
-        monkeypatch.setattr(art_router, "MAX_IMAGE_BYTES", 10)
         too_large = await client.post(
-            "/api/art/uploads", content=buffer.getvalue(), headers=headers
+            "/api/art/uploads",
+            content=b"\0" * (MAX_IMAGE_BYTES + 1),
+            headers=headers,
         )
 
     assert kept.status_code == 200

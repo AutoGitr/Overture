@@ -78,6 +78,12 @@ health_router = APIRouter(tags=["health"])
 websocket_router = APIRouter()
 
 
+#: The largest request body a route reads unless it allows more, as the image
+#: upload does: several times the largest JSON a request needs, a collection's
+#: 10,000 member IDs, and far below what would strain memory.
+MAX_REQUEST_BODY = 1024 * 1024
+
+
 def _operation_id(route: APIRoute) -> str:
     """Return stable semantic OpenAPI operation IDs."""
     return route.name
@@ -118,6 +124,7 @@ def create_app(
         openapi_url=None,
         lifespan=_lifespan,
         generate_unique_id_function=_operation_id,
+        max_body_size=MAX_REQUEST_BODY,
     )
     app.state.runtime = runtime
     app.openapi = partial(_openapi, app.openapi)
