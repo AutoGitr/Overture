@@ -1,7 +1,9 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import CheckCheck from "@lucide/svelte/icons/check-check";
+  import LoadError from "./LoadError.svelte";
   import ResultFilters from "./ResultFilters.svelte";
+  import SelectAll from "./SelectAll.svelte";
   import VirtualList from "./VirtualList.svelte";
   import type { ResultGroup } from "../utils/resultGroups";
 
@@ -58,19 +60,17 @@
      rows' height and takes what the popup gives, past which it scrolls. -->
 <div class="findings-head">
   <div class="heading-row">
-    <label class="checkbox-group">
-      <input
-        type="checkbox"
-        checked={allSelected}
-        indeterminate={selectedCount > 0 && !allSelected}
-        disabled={running || actionableCount === 0}
-        aria-label="Select every shown {noun}"
-        onchange={(event) => onSelectAll(event.currentTarget.checked)}
-      />
+    <SelectAll
+      checked={allSelected}
+      indeterminate={selectedCount > 0 && !allSelected}
+      disabled={running || actionableCount === 0}
+      noun="shown {noun}"
+      ontoggle={onSelectAll}
+    >
       <span class="font-semibold">
         {itemCount === total ? `${total} ${noun}` : `${itemCount} of ${total} ${noun} shown`}
       </span>
-    </label>
+    </SelectAll>
     {#if !running && total > 0}
       <span class="hint">
         {subtitle}
@@ -106,10 +106,7 @@
     </div>
   {/if}
   {#if findings.loadError}
-    <div class="findings-error" role="alert">
-      <span>{findings.loadError}</span>
-      <button type="button" class="btn btn-ghost btn-sm" onclick={findings.retry}>Retry</button>
-    </div>
+    <LoadError message={findings.loadError} onretry={findings.retry} />
   {/if}
 </div>
 
@@ -159,18 +156,4 @@
     text-align: center;
   }
 
-  .findings-error {
-    position: absolute;
-    inset: auto var(--space-2) var(--space-2);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2);
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-sm);
-    background: var(--bg-elevated);
-    color: var(--danger);
-    font-size: var(--text-xs);
-    box-shadow: var(--shadow-md);
-  }
 </style>

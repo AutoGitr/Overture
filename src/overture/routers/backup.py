@@ -1,6 +1,6 @@
 """Backup router - backups and their schedule."""
 
-lazy from fastapi import APIRouter, Depends, status
+lazy from fastapi import status
 
 lazy from ..dependencies import BackupsDep
 lazy from ..schemas.backup import (
@@ -9,11 +9,9 @@ lazy from ..schemas.backup import (
     BackupScheduleResponse,
     BackupScheduleUpdate,
 )
-lazy from .auth import require_auth
+lazy from .auth import authenticated_router
 
-router = APIRouter(
-    prefix="/backups", tags=["backups"], dependencies=[Depends(require_auth)]
-)
+router = authenticated_router(prefix="/backups", tags=["backups"])
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)

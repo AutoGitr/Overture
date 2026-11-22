@@ -1,6 +1,10 @@
 import { getCatalogStatusOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type { CatalogStatus } from "../../generated/rest/types.gen";
-import type { DownloadJobEvent, ServerWebSocketDataMessage } from "../../generated/ws";
+import type {
+  DownloadJobEvent,
+  ServerWebSocketDataMessage,
+  WebSocketHandlerMap,
+} from "../../generated/ws";
 import {
   applyBulkItemOperation,
   invalidateReconnectData,
@@ -70,64 +74,53 @@ export function storeCatalogStatus(status: CatalogStatus): void {
   queryClient.setQueryData(getCatalogStatusOptions().queryKey, status);
 }
 
+/** Invalidate *tags* once an event says what they hold changed. */
+function invalidating(tags: Parameters<typeof invalidateTags>[0]) {
+  return () => void invalidateTags(tags);
+}
+
+/** Sync can store or remove items, which TMDB answers name. */
+const AFTER_SYNC = invalidating(["library", "collections", "sync", "tmdb"]);
+const AFTER_MATCH = invalidating(["library"]);
+const AFTER_THEMES = invalidating(["library", "collections"]);
+const AFTER_BACKUP = invalidating(["backups"]);
+
+/** What each event changes in the REST cache; events left out change nothing there. */
+const CACHE_POLICY: Partial<WebSocketHandlerMap> = {
+  "collections.changed": invalidating(["collections", "catalog", "library"]),
+  "collection.updated": () => {
+    if (!syncState.running) void invalidateTags(["collections", "catalog", "library"]);
+  },
+  "collection.monitored": (data) =>
+    patchCollection(data.collection_id, { monitored: data.monitored }),
+  "library.item.upserted": (data) => {
+    if (data.source === "sync") return;
+    upsertLibraryItem(data.item);
+    void invalidateSeasons(data.item.id).catch(reportRefreshFailure);
+  },
+  "library.items.changed": (data) => applyBulkItemOperation(data),
+  "library.item.removed": (data) => removeLibraryItem(data.media_item_id),
+  "catalog.updated": (data) => {
+    storeCatalogStatus(data);
+    void invalidateReconnectData().catch(reportRefreshFailure);
+  },
+  "item.updated": (data) => refreshItemAndSeasons(data.media_item_id),
+  "backup.completed": AFTER_BACKUP,
+  "backup.failed": AFTER_BACKUP,
+  "sync.completed": AFTER_SYNC,
+  "sync.stopped": AFTER_SYNC,
+  "sync.failed": AFTER_SYNC,
+  "match.completed": AFTER_MATCH,
+  "match.stopped": AFTER_MATCH,
+  "match.failed": AFTER_MATCH,
+  "theme.completed": AFTER_THEMES,
+  "theme.stopped": AFTER_THEMES,
+  "theme.failed": AFTER_THEMES,
+};
+
 /** Keep the REST caches consistent with one applied realtime event. */
 export function applyRestCachePolicy(message: ServerWebSocketDataMessage): void {
-  if (
-    message.event === "collections.changed" ||
-    (message.event === "collection.updated" && !syncState.running)
-  ) {
-    void invalidateTags(["collections", "catalog", "library"]);
-  }
-  if (message.event === "collection.monitored") {
-    patchCollection(message.data.collection_id, { monitored: message.data.monitored });
-  }
-  if (message.event === "library.item.upserted") {
-    if (message.data.source !== "sync") {
-      upsertLibraryItem(message.data.item);
-      void invalidateSeasons(message.data.item.id).catch(reportRefreshFailure);
-    }
-  }
-
-  if (message.event === "library.items.changed") {
-    applyBulkItemOperation(message.data);
-  }
-
-  if (message.event === "library.item.removed") {
-    removeLibraryItem(message.data.media_item_id);
-  }
-
-  if (message.event === "catalog.updated") {
-    storeCatalogStatus(message.data);
-    void invalidateReconnectData().catch(reportRefreshFailure);
-  }
-
-  if (message.event === "item.updated") {
-    refreshItemAndSeasons(message.data.media_item_id);
-  }
-
-  if (message.event === "backup.completed" || message.event === "backup.failed") {
-    void invalidateTags(["backups"]);
-  }
-
-  if (
-    message.event === "sync.completed" ||
-    message.event === "sync.stopped" ||
-    message.event === "sync.failed"
-  ) {
-    // Sync can store or remove items, which TMDB answers name.
-    void invalidateTags(["library", "collections", "sync", "tmdb"]);
-  }
-
-  if (
-    message.event === "match.completed" ||
-    message.event === "match.stopped" ||
-    message.event === "match.failed" ||
-    message.event === "theme.completed" ||
-    message.event === "theme.stopped" ||
-    message.event === "theme.failed"
-  ) {
-    void invalidateTags(
-      message.event.startsWith("theme.") ? ["library", "collections"] : ["library"],
-    );
-  }
+  const handler = CACHE_POLICY[message.event] as
+    ((data: unknown, message: ServerWebSocketDataMessage) => void) | undefined;
+  handler?.(message.data, message);
 }

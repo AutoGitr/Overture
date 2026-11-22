@@ -73,8 +73,10 @@ Thumbs.db
 gunicorn.ctl
 .todo.md
 /openapi/*-openapi.json
+verify.md
 
 # ── Docs site
 docs/build/
 docs/.docusaurus/
 docs/overture/changelog.md
+

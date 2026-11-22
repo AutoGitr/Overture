@@ -23,10 +23,10 @@
   import { uiState, type FilterState } from "../stores/uiState.svelte";
   import { sidebarGroup } from "../router/routes";
   import { runBulkCollections } from "../utils/bulkCollections";
-  import { ORDER_LABELS, sortedOrders } from "../utils/collectionCriteria";
+  import { sortedOrders } from "../utils/collectionCriteria";
   import { askRemoval, removedMessage } from "../utils/assetRemoval";
   import { errorMessage } from "../utils/errors";
-  import { UNGROUPED_GROUP } from "../../generated/settings";
+  import { ORDER_LABELS, TEXT_LIMITS, UNGROUPED_GROUP } from "../../generated/settings";
   import { CollectionMembers } from "../utils/collectionMembers.svelte";
   import { CustomFilterMatch } from "../utils/customFilterMatch.svelte";
   import DataStatus from "./DataStatus.svelte";
@@ -513,7 +513,7 @@
         for={`${id}-template`}
         hint="Use &#123;title&#125; and &#123;group&#125;."
       >
-        <input id={`${id}-template`} maxlength="200" bind:value={template} disabled={busy} />
+        <input id={`${id}-template`} maxlength={TEXT_LIMITS.sortTitleFormat} bind:value={template} disabled={busy} />
       </FieldRow>
     {:else if collectionOperation === "set_order"}
       <FieldRow

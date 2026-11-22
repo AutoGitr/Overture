@@ -46,7 +46,7 @@ export type PopupType =
   | "backup"
   | "stats";
 
-export type Completeness = "all" | "complete" | "incomplete";
+type Completeness = "all" | "complete" | "incomplete";
 
 /** Inclusive bounds; null leaves that side open, and two nulls disable the filter. */
 export interface NumberRange {

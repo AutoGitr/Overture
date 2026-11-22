@@ -94,7 +94,8 @@ class CollectionReader:
             records = RecordRepository(session)
             stored = await records.rows(MediaCollection, collection_id)
             libraries = await records.library_names(stored)
-        return DatabaseRecord.of(stored, read, libraries=libraries)
+            servers = await records.server_names(stored)
+        return DatabaseRecord.of(stored, read, libraries=libraries, servers=servers)
 
     async def get(self, collection_id: int) -> CollectionDetail:
         """Return one collection with its members and catalog entry.

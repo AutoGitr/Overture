@@ -22,6 +22,13 @@ cannot change anything. Revoke a key in the same place to stop it at once.
 Required JSON request bodies reject `null`. To stop all bulk asset jobs,
 `POST /api/bulk/assets/stop` accepts an omitted body, `null`, or `{}`.
 
+A failed request answers `{"detail": "..."}` saying why, except a request
+that does not fit the schema, whose 422 lists each issue with where it is. A
+409 says what stands in the way, such as a setting that is not set (a media
+server, a TMDB token) or OvertureDB being off; 502 and 503 mean a media server
+or YouTube failed or is down. Every answer a
+route can give is in the OpenAPI description.
+
 Errors in the web interface include a request ID that also appears in the log.
 
 ## Assets

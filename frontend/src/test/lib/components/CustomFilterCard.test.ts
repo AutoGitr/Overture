@@ -27,6 +27,7 @@ const unarted: CollectionFieldRead = {
   ],
   free_values: false,
   by_id: false,
+  ignores_case: true,
 };
 
 describe("CustomFilterCard", () => {

@@ -34,9 +34,7 @@ def _native(
 
 
 def _named(condition: FieldCondition) -> str:
-    return (
-        f"{FIELDS[condition.field].label} {condition.operator.value.replace('_', ' ')}"
-    )
+    return f"{FIELDS[condition.field].label} {condition.operator.label}"
 
 
 def recommend_kind(

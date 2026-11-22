@@ -315,10 +315,6 @@ class NoopProviderRegistry(ProviderRegistry):
         return self._test_server.type
 
     @override
-    def title_of(self, server_id: int) -> str:
-        return self._test_server.title
-
-    @override
     def collection_providers(self) -> list[Any]:
         return [self._provider] if self._collections and self._provider else []
 

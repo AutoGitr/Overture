@@ -1,7 +1,7 @@
 import { readJson, writeJson } from "./storage";
 
 export type ThemeMode = "system" | "dark" | "light";
-export type ContrastMode = "standard" | "more";
+type ContrastMode = "standard" | "more";
 
 export interface AppearancePreferences {
   /** "system" follows the device and changes with it. */

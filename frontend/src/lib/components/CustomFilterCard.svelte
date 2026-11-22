@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { TEXT_LIMITS } from "../../generated/settings";
   import { createMutation, createQuery } from "@tanstack/svelte-query";
   import {
     createSavedFilterMutation,
@@ -130,7 +131,7 @@
   {#if draft}
     <div class="editor">
       <FieldRow label="Name" for="custom-filter-name">
-        <input id="custom-filter-name" bind:value={draft.name} maxlength="100" />
+        <input id="custom-filter-name" bind:value={draft.name} maxlength={TEXT_LIMITS.displayName} />
       </FieldRow>
       {#if capabilities.data}
         <CriteriaEditor

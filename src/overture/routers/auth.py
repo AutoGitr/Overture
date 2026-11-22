@@ -1,14 +1,16 @@
 """Mutually exclusive password and OIDC login with local session cookies."""
 
 lazy import logging
+lazy from collections.abc import Sequence
+lazy from enum import Enum
 lazy from typing import Annotated, Any
 
-lazy from fastapi import APIRouter, Depends, Path, Query, Request, Response
+lazy from fastapi import APIRouter, Depends, Query, Request, Response, params
 lazy from fastapi.routing import APIRoute
 lazy from pydantic import SecretStr
 lazy from starlette.responses import RedirectResponse
 
-lazy from ..dependencies import AuthDep, WebSocketsDep
+lazy from ..dependencies import AuthDep, WebSocketsDep, require_media_server
 lazy from ..schemas.auth import (
     ApiKeyCreate,
     ApiKeyCreated,
@@ -30,7 +32,20 @@ lazy from ..services.oidc import (
 lazy from ..utils.errors import PublicServiceError
 lazy from ..utils.http_security import CSRF_COOKIE, SESSION_COOKIE, SIGNED_OUT_PATH
 lazy from ..ws.connection_manager import ConnectionManager
-lazy from .parameters import ApiKeyHeader, AuthTokenCookie, ForwardedForHeader
+lazy from .parameters import (
+    ApiKeyHeader,
+    ApiKeyIdPath,
+    AuthTokenCookie,
+    ForwardedForHeader,
+)
+lazy from .responses import (
+    AUTH_RESPONSES,
+    MEDIA_SERVER_RESPONSES,
+    OIDC_OFF,
+    TOO_MANY_ATTEMPTS,
+    Responses,
+    errors,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
@@ -64,7 +79,42 @@ async def require_auth(
         raise PublicServiceError(403, "API keys can only read")
 
 
-@router.post("/login")
+def authenticated_router(
+    *,
+    prefix: str = "",
+    tags: list[str | Enum] | None = None,
+    dependencies: Sequence[params.Depends] = (),
+    responses: Responses | None = None,
+) -> APIRouter:
+    """A router whose every route needs signing in, as its schema says.
+
+    *dependencies* and *responses* are what its routes need besides.
+    """
+    return APIRouter(
+        prefix=prefix,
+        tags=tags,
+        dependencies=[Depends(require_auth), *dependencies],
+        responses={**AUTH_RESPONSES, **(responses or {})},
+    )
+
+
+def media_server_router(*, prefix: str, tags: list[str | Enum]) -> APIRouter:
+    """An authenticated router whose routes all need a media server."""
+    return authenticated_router(
+        prefix=prefix,
+        tags=tags,
+        dependencies=[Depends(require_media_server)],
+        responses=MEDIA_SERVER_RESPONSES,
+    )
+
+
+@router.post(
+    "/login",
+    responses={
+        **errors({401: "The password is wrong", 404: "Password login is disabled"}),
+        **TOO_MANY_ATTEMPTS,
+    },
+)
 async def login(
     body: LoginRequest,
     request: Request,
@@ -127,7 +177,7 @@ def _oidc_failure(error: OIDCError, auth: AuthService) -> RedirectResponse:
     return response
 
 
-@router.get("/oidc/login")
+@router.get("/oidc/login", responses={**OIDC_OFF, **TOO_MANY_ATTEMPTS})
 async def oidc_login(
     request: Request,
     auth: AuthDep,
@@ -160,7 +210,7 @@ async def oidc_login(
     return response
 
 
-@router.get("/oidc/callback")
+@router.get("/oidc/callback", responses=OIDC_OFF)
 async def oidc_callback(
     request: Request, auth: AuthDep, websockets: WebSocketsDep
 ) -> RedirectResponse:
@@ -237,21 +287,32 @@ async def auth_config(auth: AuthDep) -> AuthConfig:
     return auth.public_config()
 
 
-@router.get("/api-keys", dependencies=[Depends(require_auth)])
+#: The read-only keys scripts sign in with.
+api_keys_router = authenticated_router(prefix="/api-keys")
+
+
+@api_keys_router.get("")
 async def list_api_keys(auth: AuthDep) -> list[ApiKeyRead]:
     """List the API keys, without the keys themselves."""
     return await auth.api_keys()
 
 
-@router.post("/api-keys", dependencies=[Depends(require_auth)])
+@api_keys_router.post(
+    "",
+    responses=errors({409: "A key has that name already"}),
+)
 async def create_api_key(body: ApiKeyCreate, auth: AuthDep) -> ApiKeyCreated:
     """Create a read-only API key and return it, this once."""
     return await auth.create_api_key(body.name)
 
 
-@router.delete("/api-keys/{key_id}", dependencies=[Depends(require_auth)])
-async def delete_api_key(
-    key_id: Annotated[int, Path(gt=0)], auth: AuthDep
-) -> StatusResponse:
+@api_keys_router.delete(
+    "/{key_id}",
+    responses=errors({404: "No key has that ID"}),
+)
+async def delete_api_key(key_id: ApiKeyIdPath, auth: AuthDep) -> StatusResponse:
     """Revoke an API key."""
     return await auth.delete_api_key(key_id)
+
+
+router.include_router(api_keys_router)

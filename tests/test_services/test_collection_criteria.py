@@ -12,6 +12,7 @@ lazy from overture.config import Settings
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.domain import (
     CollectionOrder,
+    FieldKind,
     FilterField,
     FilterOperator,
     MediaType,
@@ -29,6 +30,7 @@ lazy from overture.media_servers.plex.query import (
 )
 lazy from overture.repositories.collection_items import CollectionItem
 lazy from overture.schemas.collections import (
+    CollectionFieldRead,
     CollectionGeneratorBase,
     FieldCondition,
     FilterGroup,
@@ -705,3 +707,28 @@ def test_tmdb_title_list_source_available_without_tmdb_key(
         resolver.unavailable(SourceType.TMDB_LIST, MediaType.MOVIE)
         == "Set TMDB_READ_ACCESS_TOKEN to use TMDB"
     )
+
+
+@pytest.mark.parametrize(
+    ("field", "asked"),
+    [
+        (FilterField.TITLE, "STAR WARS"),
+        (FilterField.STUDIO, "lucasfilm"),
+        (FilterField.GENRE, "sci-fi"),
+        (FilterField.COUNTRY, "united states of america"),
+    ],
+)
+def test_the_contract_says_which_fields_match_ignoring_case(
+    field: FilterField, asked: str
+) -> None:
+    """The editor reads ``ignores_case`` to list a value as the one it matches."""
+    read = CollectionFieldRead.of(field, ServerType.PLEX)
+    assert read.ignores_case is True
+    assert _matches(_item(), _field(field, FilterOperator.IS, asked))
+
+
+def test_only_text_and_tag_fields_match_ignoring_case() -> None:
+    assert {kind for kind in FieldKind if kind.ignores_case} == {
+        FieldKind.TEXT,
+        FieldKind.TAG,
+    }

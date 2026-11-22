@@ -31,7 +31,6 @@ import type {
 import type {
   AssetIssue,
   AssetScanProgressEvent,
-  BackupJobEvent,
   BulkArtJobEvent,
   BulkThemeJobEvent,
   CatalogSyncEvent,
@@ -154,7 +153,7 @@ export function assetFile(hash: string, overrides: Partial<AssetFileRead> = {}):
 export type AssetOverrides = { [K in keyof TitleAssets]?: Partial<AssetRead> };
 
 /** A title's or collection's poster, background and theme. */
-export function titleAssets(overrides: AssetOverrides = {}): TitleAssets {
+function titleAssets(overrides: AssetOverrides = {}): TitleAssets {
   return {
     poster: asset("poster", overrides.poster),
     background: asset("background", overrides.background),
@@ -382,6 +381,7 @@ export function collectionCapabilities(
         choices: [],
         free_values: false,
         by_id: false,
+        ignores_case: true,
       },
       {
         field: "genre",
@@ -396,6 +396,7 @@ export function collectionCapabilities(
         choices: [],
         free_values: false,
         by_id: false,
+        ignores_case: true,
       },
       {
         field: "year",
@@ -410,6 +411,7 @@ export function collectionCapabilities(
         choices: [],
         free_values: false,
         by_id: false,
+        ignores_case: false,
       },
       {
         field: "added",
@@ -424,6 +426,7 @@ export function collectionCapabilities(
         choices: [],
         free_values: false,
         by_id: false,
+        ignores_case: false,
       },
       {
         field: "unplayed",
@@ -438,6 +441,7 @@ export function collectionCapabilities(
         choices: [],
         free_values: false,
         by_id: false,
+        ignores_case: false,
       },
       {
         field: "hdr",
@@ -452,6 +456,7 @@ export function collectionCapabilities(
         choices: [],
         free_values: false,
         by_id: false,
+        ignores_case: false,
       },
     ],
     sources: [
@@ -843,10 +848,6 @@ export function catalogSyncEvent(overrides: Partial<CatalogSyncEvent> = {}): Cat
     },
     ...overrides,
   };
-}
-
-export function backupEvent(overrides: Partial<BackupJobEvent> = {}): BackupJobEvent {
-  return { ...JOB_ENVELOPE, filename: null, scheduled: null, ...overrides };
 }
 
 export function serverAuditResult(overrides: Partial<ServerAuditResult> = {}): ServerAuditResult {

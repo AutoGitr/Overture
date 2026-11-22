@@ -319,36 +319,6 @@ def is_supported_remote_image_type(
     return allow_generic_image and mime.startswith("image/")
 
 
-async def fetch_image_bytes(
-    url: str,
-    client: httpx2.AsyncClient,
-    *,
-    allow_generic_image: bool = False,
-    allow_private: bool = False,
-    headers: dict[str, str] | None = None,
-    params: dict[str, str] | None = None,
-    max_bytes: int = MAX_IMAGE_BYTES,
-    on_progress: BytesProgress | None = None,
-    transfer_slots: asyncio.Semaphore | None = SHARED_IMAGE_TRANSFERS,
-    rate_limit_retries: int = 0,
-) -> bytes:
-    """Download an image with response-type and size limits enforced."""
-    return (
-        await fetch_image(
-            url,
-            client,
-            allow_generic_image=allow_generic_image,
-            allow_private=allow_private,
-            headers=headers,
-            params=params,
-            max_bytes=max_bytes,
-            on_progress=on_progress,
-            transfer_slots=transfer_slots,
-            rate_limit_retries=rate_limit_retries,
-        )
-    ).data
-
-
 async def fetch_image(
     url: str,
     client: httpx2.AsyncClient,

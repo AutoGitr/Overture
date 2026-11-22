@@ -110,6 +110,8 @@ export default defineConfig(({ mode }) => ({
     restoreMocks: true,
     unstubGlobals: true,
     unstubEnvs: true,
+    // The homes test reads the app's stylesheet as written.
+    css: { include: [/src\/app\.css/] },
     coverage: {
       provider: "v8",
       reporter: ["text", "html", "lcov"],

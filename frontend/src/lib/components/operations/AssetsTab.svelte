@@ -12,6 +12,7 @@
   import AssetDownloads from "../AssetDownloads.svelte";
   import AssetsSchedulePanel from "../AssetsSchedulePanel.svelte";
   import PendingButton from "../PendingButton.svelte";
+  import ScheduleSaveButton from "../ScheduleSaveButton.svelte";
   import JobFooter from "./JobFooter.svelte";
   import {
     createBulkAssetsScheduleMutation,
@@ -229,16 +230,11 @@
   >
     {#snippet start()}
       {#if form.blocker}<span class="popup-footer-note" role="status">{form.blocker}</span>{/if}
-      <button
-        class="btn btn-secondary"
-        onclick={saveSchedule}
-        title={scheduleBlocker ?? undefined}
-        disabled={!canSaveSchedule ||
-          createScheduleRequest.isPending ||
-          updateScheduleRequest.isPending}
-      >
-        {scheduleController.isEditing ? "Update schedule" : "Save schedule"}
-      </button>
+      <ScheduleSaveButton
+        controller={scheduleController}
+        blocker={scheduleBlocker}
+        onsave={saveSchedule}
+      />
       <PendingButton
         class="btn btn-primary"
         onclick={startJob}

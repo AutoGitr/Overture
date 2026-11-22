@@ -2,39 +2,62 @@
 
 ## Unreleased
 
-### Added
-
-- **Interface:** hovering a title's or collection's **Poster** or **Background** tab names the servers, or the folder, that do not yet show Overture's image.
-
-### Changed
+### 🚨 Breaking Changes
 
 - **API:** titles and collections carry their poster, background and theme under `assets`, and seasons their poster under `poster`: each with its selection, the content Overture holds, its status and where it is delivered, per server and folder. This replaces the flat `poster_*`, `background_*`, `theme_*` and `youtube_*` fields; existing choices and files are converted.
 - **API:** setting or removing a collection theme returns the theme, and job events carry `log_targets` in place of their outcome counters.
 - **API:** WebSocket events carry every field, `null` where it has no value, instead of leaving it out.
 - **API:** an asset says whether it is `selected`, `GET /api/collections/{id}/theme` returns the theme as an asset, and Server audit fixes take a collection's theme by `collection_id`.
+- **API:** a missing TMDB, Radarr, Sonarr or MDBList setting is answered with 409, as a missing media server is, instead of 503 or 400; season artwork asked of a title without a season, and clearing a kind of result that cannot be cleared, are answered with 422.
+- **API:** IDs in paths and bodies are at most 9007199254740991, the largest a JSON client reads exactly.
+- **API:** the `collection.theme.updated` event is removed; `collection.updated` reports a theme change.
+
+### 🚀 Features
+
+- **API:** criteria fields say whether they match values ignoring case (`ignores_case`), and routes that need signing in document their 401 and 403 answers.
+- **API:** the schema documents every answer a route can give: 404 for a path that names nothing, 400 for a body that is not text, 409, 502 and 503 from a route that needs a media server, and a 422 that either lists each issue or says which rule was broken.
+- **Collections:** each library's criteria are headed by its server's badge and edged in its colour when several servers are configured.
+- **Interface:** hovering a title's or collection's **Poster** or **Background** tab names the servers, or the folder, that do not yet show Overture's image.
+- **Interface:** every list of libraries, art sources, theme sources and metadata issues offers **Select all** and **Deselect all**, partly ticked while only some are chosen.
+
+### 🌟 Enhancements
+
 - **Collections:** a sync checks the art and theme of every server copy, not just the first, and a collection is complete only once every copy shows them.
 - **Collections:** a chosen theme stays chosen when a server plays another; the collection's next sync or an Assets run sends it again.
+- **Interface:** a database record names an asset's copy by its server and file, such as `Background on Jellyfin`, and other rows by what they are, such as `Collection rule 19`.
 - **Library:** auto-unmonitor counts a title's theme as complete when OvertureDB says it has none and Overture trusts that flag.
 - **Operations:** Server audit compares and fixes collection images and themes exactly as a sync does, and records what it finds on a collection's copies, so the collection's status follows the audit.
 - **Operations:** Assets runs decide titles and collections by the same rules: a saved choice is restored wherever a place lacks it, OvertureDB art replaces a different image only with Replace existing, Replace existing skips a theme already in place as it does art, and planning lines count `assets` and `collection assets`.
+- **Operations:** a sync logs each collection on each server, in each library: created, how many titles were added and removed, unchanged, deleted and why (such as a library leaving it), or left alone and why, so a run's totals count collections too. Reading the servers logs how many collections each lists, each new one and each one gone.
+- **Renovate:** Overture and OvertureDB share one preset, so a dependency both use updates alike in each.
 - **Statistics:** the images Overture uploads to collections count in the image cache, not in the artwork sizes.
 
-### Removed
+### 🐛 Bug fixes
 
-- **API:** the `collection.theme.updated` event; `collection.updated` reports a theme change.
-
-### Fixed
-
+- **API:** a refused method's answer names the allowed ones in `Allow`.
+- **API:** an ID too large for the database is refused with 422 instead of failing with 500.
+- **Collections:** the bulk sort title template takes as many characters as the sort title format.
+- **Collections:** Jellyfin and Emby collections of more than about 200 titles sync instead of failing with HTTP 414.
+- **Collections:** a criteria value spelt in another case, such as `united kingdom`, shows as the library's value it matches instead of "no title has it".
 - **Collections:** a sync keeps the art Overture uploaded while the server still shows it. Plex changes a collection's image link whenever the collection is edited, which a sync took for a replaced image, so collections lost their complete art and the next Assets run uploaded it again.
+- **Interface:** removing one season's poster from a title's record works; it was always refused.
+- **Interface:** an OvertureDB entry's art panel stays usable after a choice it cannot save, such as an upload.
 - **Interface:** a collection offers to remove its theme only when it has one.
+- **Operations:** a run's log offers its media server filters when it is about more than one server; the log covered them.
 - **Operations:** a running collection download shows its stage instead of `undefined/undefined`.
 - **Operations:** a run's log filters and its notifications count the targets each line names, so `94 collections` counts 94, as the run's totals do.
 - **Operations:** log lines name a collection's asset as one, such as `Alien (collection poster)`, so it never reads as the title of the same name; theme lines name the theme.
 - **Operations:** a title or collection that leaves the library during an Assets run is skipped, not an error, in every kind of run.
+- **Settings:** the global sort title and summary formats take as many characters as a group's or collection's.
+- **Themes:** searching by YouTube link or video ID finds the video; the IDs were always refused. A link whose ID is longer than 11 characters names no video, instead of the first 11 characters of it.
+
+### 📚 Documentation
+
+- **Docs:** a Media server settings page lists the library, metadata, collection and theme music settings each server needs, and installation warns to apply them first.
 
 ## 0.4.0 - 2026-11-20
 
-### Added
+### 🚀 Features
 
 - **API:** library items and collections list their `metadata_issues`; `/api/library/filters` lists, matches and saves custom filters.
 - **Collections:** **Theme** (global, per group or per collection) can be **Not needed**: the theme counts as complete without one and none is chosen automatically.
@@ -48,7 +71,7 @@
 - **Operations:** Assets can run **Specific collections**, beside groups and libraries, now or on a schedule.
 - **OvertureDB:** the catalog view shows your library's file when the linked title or collection has the same art chosen, instead of fetching it.
 
-### Changed
+### 🌟 Enhancements
 
 - **API:** library IDs name their server (`1:2`); titles and collections list their `copies` per server instead of one `server_item_id`; settings list `media_servers`; capabilities, server links and server audit results are per server.
 - **API:** collection field values carry a `label` and fields a `by_id` flag; job log lines carry `server_id`, `log_servers` is keyed by server number and `hide_server` takes numbers; download events name collection art and themes as one `collection` target.
@@ -70,12 +93,12 @@
 - **Storage:** uploaded images are kept for good in `uploads/` in the config folder, apart from the image cache, which moves from `cache/images` to `cache/`. Uploads in the cache move there at startup, each kept in the cache until its copy is verified. **Statistics** show uploads separately.
 - **Storage:** every file Overture writes (images, artwork, themes, uploads, settings, backups) is on disk before it replaces the previous one, so a power cut leaves the old file or the new one.
 
-### Removed
+### 🚨 Breaking Changes
 
-- **Settings:** `TMDB_API_KEY`. Set `TMDB_READ_ACCESS_TOKEN` to the **API Read Access Token** under **Settings -> API** on themoviedb.org; it is sent in a header, never in a URL. Until it is set, TMDB features are off.
-- **Settings:** `MEDIA_SERVER`, `MEDIA_SERVER_URL`, `MEDIA_SERVER_API_KEY`, `MEDIA_SERVER_VERIFY_TLS` and `JELLYFIN_COLLECTIONS_PATH`. Name the server instead: `MEDIA_SERVERS=Plex` with `MEDIA_SERVER_PLEX_TYPE=plex`, `MEDIA_SERVER_PLEX_URL`, `MEDIA_SERVER_PLEX_API_KEY` and, for Jellyfin, `MEDIA_SERVER_<NAME>_COLLECTIONS_PATH`. With the same type and URL, your library, choices and collections carry over.
+- **Settings:** `TMDB_API_KEY` is removed. Set `TMDB_READ_ACCESS_TOKEN` to the **API Read Access Token** under **Settings -> API** on themoviedb.org; it is sent in a header, never in a URL. Until it is set, TMDB features are off.
+- **Settings:** `MEDIA_SERVER`, `MEDIA_SERVER_URL`, `MEDIA_SERVER_API_KEY`, `MEDIA_SERVER_VERIFY_TLS` and `JELLYFIN_COLLECTIONS_PATH` are removed. Name the server instead: `MEDIA_SERVERS=Plex` with `MEDIA_SERVER_PLEX_TYPE=plex`, `MEDIA_SERVER_PLEX_URL`, `MEDIA_SERVER_PLEX_API_KEY` and, for Jellyfin, `MEDIA_SERVER_<NAME>_COLLECTIONS_PATH`. With the same type and URL, your library, choices and collections carry over.
 
-### Fixed
+### 🐛 Bug fixes
 
 - **Collections:** renaming a group keeps it in the Sync and Assets schedules and selections that run it.
 - **Collections:** Jellyfin 12 creates, edits, lists and syncs collections, including their members, which it shows only to a user.
@@ -101,7 +124,7 @@
 
 ## 0.3.0 - 2026-11-15
 
-### Added
+### 🚀 Features
 
 - **Interface:** **OvertureDB poster**, **OvertureDB background**, **OvertureDB season posters** and **OvertureDB theme** filters list the titles and collections whose choice for that slot matches OvertureDB's or differs from it; a choice only one side has is a difference.
 - **Interface:** searching TMDB keeps sorting (relevance, title or year) and filters by whether your library or OvertureDB holds a title.
@@ -109,7 +132,7 @@
 - **Collections:** `{source_summary}` and collections without a summary template take an MDBList list's description too, beside TMDB franchise and list overviews and TMDB people's biographies.
 - **Collections:** **Contribute to OvertureDB as** on a collection's Poster tab picks whether the poster you choose is an individual, matte or overlay poster; OvertureDB offers all three of a collection's posters, each labelled with its style.
 
-### Changed
+### 🌟 Enhancements
 
 - **Interface:** art sources are named TPDb and TVDB on candidates, filters and messages; **Automatic art** lists the single sources before their combinations, and the art panel shows TMDB right after matched candidates and OvertureDB last.
 - **Collections:** **OvertureDB posters** offers **Individual**, **Matte** and **Overlay** collection poster styles, and Overture reads version 4 of the OvertureDB catalog (`poster_url_individual`, `poster_url_matte` and `poster_url_overlay`).
@@ -117,7 +140,7 @@
 - **Interface:** database record rows are named by what they hold, such as **Background**; checkbox lists fit their labels.
 - **Notifications:** titles name the run without an "Overture:" prefix.
 
-### Fixed
+### 🐛 Bug fixes
 
 - **Notifications:** **Run now** on a schedule is a run you started, so rules limited to scheduled runs leave it out and the job panel no longer names the schedule.
 - **OvertureDB:** clearing all art of a catalog movie or collection draft is saved instead of refused.
@@ -129,13 +152,13 @@
 - **Assets:** **Replace existing** skips a slot whose file is already the art a source picks instead of downloading it again and reporting it as downloaded.
 - **Artwork:** matched candidates name their source, such as TMDB or ThePosterDB, and every candidate names a known source by its name.
 
-### Security
+### 🔒 Security
 
 - **Authentication:** sign-in rate limiting reads the client address only from the `X-Forwarded-For` entries trusted proxies add, so a forged entry cannot share one limit between every client, and trusts a proxy reached over an IPv4-mapped IPv6 address by its IPv4 network.
 
 ## 0.2.0 - 2026-11-14
 
-### Added
+### 🚀 Features
 
 - **Collections:** a collection can span several movie and show libraries, with its own criteria for each. Jellyfin and Emby hold one collection for them all; Plex holds one per library, kept alike. Movie and show collections share groups, listed together under the collections icon beside Movies and Shows.
 - **Collections:** new conditions: **In a collection** (false makes a catch-all of every title no other collection holds), **TMDB ID**, **TVDB ID** and **IMDb ID**. TMDB conditions take links as well as IDs, TMDB and MDBList conditions can be searched by name, and a copied condition or group pastes into any criteria that can test it.
@@ -153,7 +176,7 @@
 - **Interface:** the database record of a title or collection lists every stored column of it and of its rows; the item filters can show one collection's titles; collections can be filtered by **Made as** and groups sorted by name, size, date added or last sync.
 - **API:** `GET /api/library/items/{id}/record` and `GET /api/collections/{id}/record` return a record's stored rows, `GET /api/media-server/links` where the server's web app opens titles, and `GET /api/collections/{id}/art/{art_type}/generated/{style}` art generated from a collection's title.
 
-### Changed
+### 🌟 Enhancements
 
 - **Collections:** only **Sync** under Operations changes collections on the media server. Saving a collection, group or set stays in Overture and returns at once, and **Save and Sync** saves, then opens Sync with only that collection chosen. Collection syncs run on **Sync** schedules; the upgrade turns each enabled per-group or global collection schedule into one.
 - **Collections:** Overture never deletes a collection it manages unless you do. Below its minimum, out of season or left out by its set, a collection only leaves the media server; one deleted on the server is made again by its next sync, and one without a server copy takes over the server's unmanaged collection of its title.
@@ -171,7 +194,7 @@
 - **Database:** the upgrade converts stored data: titles keep their genres, people, labels and TMDB facts as shared values and movies every director, the server's libraries are recorded so their names show while it is offline, and OvertureDB's tables, job and schedule are named `catalog`.
 - **API:** item art and theme routes move under `/api/library/items/{id}/art` and `/api/library/items/{id}/theme`, as collections' are; `/api/public-dataset` is `/api/catalog`, with `catalog.*` events. Collections drop `server_type` and `media_type`, a rule holds `libraries`, and a full sync's `collection_ids` replaces the collection and group sync routes, `GET /api/collections/{id}/sources` and the `to_server` query. Removals take `forget`, `delete_file` and `delete_from_server`.
 
-### Fixed
+### 🐛 Bug fixes
 
 - **Assets:** a saved choice whose file was replaced outside Overture, such as a `poster.jpg` from Radarr or Sonarr metadata, or deleted since the last sync, is downloaded again.
 - **Performance:** collection syncs, previews and library loading read only the values they need, so a collection syncs in moments instead of minutes and large libraries no longer run out of memory, and a burst of live updates no longer slows the page.
@@ -187,7 +210,7 @@
 - **Library:** TVDB links open by ID, so titles whose TVDB slug differs from their name no longer lead to a missing page.
 - **Media servers:** an error answer to one request no longer marks the server unreachable, and an unsuccessful response names its HTTP status.
 
-### Security
+### 🔒 Security
 
 - **Container:** the image applies Debian's security updates when it is built and leaves out `apt`, PyYAML and watchfiles, which Overture never uses.
 
@@ -196,7 +219,7 @@
 The first public release of Overture: artwork, collections and theme songs for
 Plex, Jellyfin and Emby, kept as ordinary files beside your media.
 
-### Added
+### 🚀 Features
 
 - **Artwork:** compare posters, backgrounds and season posters from your media
   server, TMDB and OvertureDB, ranked by resolution and by visual similarity to

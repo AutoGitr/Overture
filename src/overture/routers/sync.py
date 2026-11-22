@@ -1,8 +1,8 @@
 """Sync router - sync status, runs and saved schedules."""
 
-lazy from fastapi import APIRouter, Depends, status
+lazy from fastapi import status
 
-lazy from ..dependencies import SyncDep, require_media_server
+lazy from ..dependencies import SyncDep
 lazy from ..schemas.common import StatusResponse
 lazy from ..schemas.sync import (
     SyncRunRequest,
@@ -10,14 +10,10 @@ lazy from ..schemas.sync import (
     SyncScheduleWrite,
     SyncStatusResponse,
 )
-lazy from .auth import require_auth
+lazy from .auth import media_server_router
 lazy from .parameters import ScheduleIdPath
 
-router = APIRouter(
-    prefix="/sync",
-    tags=["sync"],
-    dependencies=[Depends(require_auth), Depends(require_media_server)],
-)
+router = media_server_router(prefix="/sync", tags=["sync"])
 
 
 @router.get("/status")

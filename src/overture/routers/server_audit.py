@@ -1,20 +1,14 @@
 """Server Audit router - compare local assets against media-server state."""
 
-lazy from fastapi import APIRouter, Depends
-
-lazy from ..dependencies import AuditDep, require_media_server
+lazy from ..dependencies import AuditDep
 lazy from ..schemas.common import StatusResponse
 lazy from ..schemas.server_audit import (
     FixAuditRequest,
     ServerAuditRequest,
 )
-lazy from .auth import require_auth
+lazy from .auth import media_server_router
 
-router = APIRouter(
-    prefix="/server-audit",
-    tags=["server-audit"],
-    dependencies=[Depends(require_auth), Depends(require_media_server)],
-)
+router = media_server_router(prefix="/server-audit", tags=["server-audit"])
 
 
 @router.post("/scan")

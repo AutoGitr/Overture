@@ -129,7 +129,7 @@ class TmdbItemsService:
             PublicServiceError: When TMDB is not configured.
         """
         if not self._config.tmdb_configured:
-            raise PublicServiceError(503, "TMDB is not configured.")
+            raise PublicServiceError(409, "Set TMDB_READ_ACCESS_TOKEN to use TMDB")
 
     @staticmethod
     async def _fetch[T](request: Awaitable[T]) -> T:

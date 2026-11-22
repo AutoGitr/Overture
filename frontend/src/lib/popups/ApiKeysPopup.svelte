@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { TEXT_LIMITS } from "../../generated/settings";
   import Copy from "@lucide/svelte/icons/copy";
   import KeyRound from "@lucide/svelte/icons/key-round";
   import Trash2 from "@lucide/svelte/icons/trash-2";
@@ -133,7 +134,7 @@
         id="new-api-key-name"
         class="text-input flex-1"
         placeholder="Name, such as Homepage"
-        maxlength="100"
+        maxlength={TEXT_LIMITS.apiKeyName}
         required
         bind:value={name}
       />

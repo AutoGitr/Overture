@@ -9,7 +9,9 @@ description: Theme songs from OvertureDB, ThemerrDB and YouTube, saved as MP3.
 Choose OvertureDB or [ThemerrDB](https://github.com/LizardByte/ThemerrDB)
 picks, search YouTube with a duration limit, or paste a YouTube link. Every
 candidate has a preview. Saving a choice downloads it as `theme.mp3` beside the
-media, with optional loudness normalization.
+media, with optional loudness normalization. Each media server app plays it
+once its theme music setting is on; see
+[Media server settings](../install/server-settings.mdx).
 
 ## YouTube search
 

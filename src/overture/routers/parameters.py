@@ -1,22 +1,37 @@
 """Shared FastAPI path, query, header, and cookie parameter types."""
 
-lazy from typing import Annotated
+lazy from typing import Annotated, Any
 
 lazy from fastapi import Cookie, Header, Path, Query
 lazy from pydantic import SecretStr
 
-lazy from ..domain import ArtType, ImageSize, MediaType
+lazy from ..domain import MAX_SAFE_INTEGER, ArtType, ImageSize, MediaType
 lazy from ..utils.http_security import API_KEY_HEADER, SESSION_COOKIE
 
-ItemIdPath = Annotated[int, Path(description="Media item ID")]
-CollectionIdPath = Annotated[int, Path(gt=0, description="Collection ID")]
-SeasonIdPath = Annotated[int, Path(description="Season ID")]
+
+def _id_path(description: str) -> Any:
+    """A path parameter naming a row, or a TMDB record a row stores."""
+    return Path(gt=0, le=MAX_SAFE_INTEGER, description=description)
+
+
+ItemIdPath = Annotated[int, _id_path("Media item ID")]
+CollectionIdPath = Annotated[int, _id_path("Collection ID")]
+SeasonIdPath = Annotated[int, _id_path("Season ID")]
+SavedFilterIdPath = Annotated[int, _id_path("Saved filter ID")]
+ApiKeyIdPath = Annotated[int, _id_path("API key ID")]
+TmdbIdPath = Annotated[int, _id_path("TMDB ID")]
+TmdbCollectionIdPath = Annotated[int, _id_path("TMDB collection ID")]
+
 SeasonIdQuery = Annotated[
     int | None,
-    Query(description="Required for season_poster, ignored otherwise"),
+    Query(
+        gt=0,
+        le=MAX_SAFE_INTEGER,
+        description="Required for season_poster, ignored otherwise",
+    ),
 ]
 ArtTypePath = Annotated[ArtType, Path(description="Which artwork slot")]
-ScheduleIdPath = Annotated[int, Path(description="Saved schedule ID")]
+ScheduleIdPath = Annotated[int, _id_path("Saved schedule ID")]
 ImageSizeQuery = Annotated[
     ImageSize | None,
     Query(description="Downscaled rendition to return; omit for the original"),

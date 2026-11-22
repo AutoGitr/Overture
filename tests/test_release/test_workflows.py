@@ -12,6 +12,16 @@ lazy import yaml
 lazy from scripts.sync_labels import load_labels
 
 ROOT = Path(__file__).resolve().parents[2]
+#: The Renovate preset both repositories extend.
+SHARED_RENOVATE = ".github/renovate-shared"
+
+
+def renovate_config() -> dict[str, Any]:
+    """Overture's Renovate config merged over the shared preset it extends."""
+    own = json.loads((ROOT / ".github/renovate.json").read_text())
+    shared = json.loads((ROOT / f"{SHARED_RENOVATE}.json").read_text())
+    assert own["extends"] == [f"local>AutoGitr/Overture//{SHARED_RENOVATE}"]
+    return {**shared, "packageRules": shared["packageRules"] + own["packageRules"]}
 
 
 def test_the_container_builds_with_the_pinned_uv_python_and_bun() -> None:
@@ -114,8 +124,14 @@ def test_codeql_runs_for_analysed_code_and_then_analyses_every_language(
     patterns = triggers["pull_request"]["paths"]
     assert triggers["push"]["paths"] == patterns
     assert _filtered_in(path, patterns) is analysed
-    matrix = workflow["jobs"]["analyze"]["strategy"]["matrix"]["language"]
-    assert set(matrix) == {"python", "javascript-typescript", "actions"}
+    job = workflow["jobs"]["analyze"]
+    # The analysis itself is shared with OvertureDB.
+    assert job["uses"] == "./.github/workflows/codeql-analysis.yml"
+    assert set(json.loads(job["with"]["languages"])) == {
+        "python",
+        "javascript-typescript",
+        "actions",
+    }
 
 
 def test_release_workflow_triggers_on_semver_tags_and_dispatch() -> None:
@@ -138,23 +154,15 @@ def test_labels_in_templates_and_renovate_exist_in_manifest() -> None:
         form = yaml.safe_load(path.read_text())
         assert set(form.get("labels", [])) <= names
 
-    renovate = json.loads((ROOT / ".github/renovate.json").read_text())
+    renovate = renovate_config()
     assert set(renovate["labels"]) <= names
     assert set(renovate["vulnerabilityAlerts"]["labels"]) <= names
     for rule in renovate["packageRules"]:
         assert set(rule.get("addLabels", [])) <= names
 
-    sibling_manifest = ROOT.parent / "OvertureDB/.github/labels.json"
-    if sibling_manifest.is_file():
-        sibling_by_name = {
-            item["name"]: item for item in json.loads(sibling_manifest.read_text())
-        }
-        for label in labels:
-            assert sibling_by_name.get(label["name"]) == label
-
 
 def test_runner_updates_are_enabled_without_automatic_os_upgrades() -> None:
-    renovate = json.loads((ROOT / ".github/renovate.json").read_text())
+    renovate = renovate_config()
     rule = next(
         rule
         for rule in renovate["packageRules"]
@@ -173,6 +181,23 @@ def test_runner_updates_are_enabled_without_automatic_os_upgrades() -> None:
     }
 
 
+def test_shared_tools_keep_their_group_over_broader_ones() -> None:
+    """Renovate applies later rules over earlier ones: a shared group comes last."""
+    groups = [
+        rule["groupName"]
+        for rule in renovate_config()["packageRules"]
+        if "groupName" in rule
+    ]
+    for shared in (
+        "Tooling, Linters & Testing Rules",
+        "Python Version",
+        "uv",
+        "Catalog contract",
+    ):
+        for broad in ("Docker Infrastructure", "Backend Core", "Frontend Core", "Docs"):
+            assert groups.index(shared) > groups.index(broad)
+
+
 APP = {"backend", "contracts", "container", "e2e"}
 WEB = {"frontend", "container", "e2e"}
 DEPENDENCIES = APP
@@ -181,19 +206,26 @@ DEPENDENCIES = APP
 @pytest.mark.parametrize(
     ("path", "selected"),
     [
-        ("src/overture/main.py", APP),
+        ("src/overture/main.py", APP | {"duplication"}),
         ("pyproject.toml", DEPENDENCIES),
         ("uv.lock", DEPENDENCIES),
-        ("frontend/src/App.svelte", WEB),
-        ("frontend/package.json", WEB | {"contracts", "backend"}),
-        ("frontend/bun.lock", WEB | {"contracts"}),
-        ("frontend/src/generated/rest/types.gen.ts", WEB | {"contracts"}),
-        ("scripts/contracts.py", {"backend", "contracts"}),
-        ("scripts/release_metadata.py", {"backend"}),
+        ("frontend/src/App.svelte", WEB | {"duplication"}),
+        ("frontend/package.json", WEB | {"contracts", "backend", "duplication"}),
+        ("frontend/bun.lock", WEB | {"contracts", "duplication"}),
+        (
+            "frontend/src/generated/rest/types.gen.ts",
+            WEB | {"contracts", "duplication"},
+        ),
+        ("scripts/contracts.py", {"backend", "contracts", "duplication"}),
+        (".github/labels.json", {"backend", "contracts"}),
+        (".github/renovate-shared.json", {"backend", "contracts"}),
+        ("tests/test_release/test_shared_files.py", {"backend", "contracts"}),
+        ("scripts/release_metadata.py", {"backend", "duplication"}),
         ("frontend/index.html", WEB | {"backend"}),
         ("tests/test_api.py", {"backend"}),
         ("tests/test_release/test_capacity.py", {"backend"}),
         (".agents/skills.json", {"contracts"}),
+        (".jscpd.json", {"duplication"}),
         ("openapi/overture.json", {"contracts"}),
         ("Dockerfile", {"dockerfile", "backend", "container"}),
         ("compose.yaml", {"backend", "container"}),
@@ -203,7 +235,7 @@ DEPENDENCIES = APP
         (".github/workflows/codeql.yml", {"backend"}),
         (".github/CHANGELOG.md", {"backend"}),
         ("AGENTS.md", {"backend"}),
-        ("docs/overture/index.md", set[str]()),
+        ("docs/overture/index.md", {"duplication"}),
         ("docs/package.json", {"backend"}),
     ],
 )
@@ -226,3 +258,11 @@ def test_async_database_dependency_is_declared_and_locked() -> None:
     )
     lock = tomllib.loads((ROOT / "uv.lock").read_text())
     assert any(package["name"] == "greenlet" for package in lock["package"])
+
+
+def test_the_contributor_guide_lives_only_in_the_docs() -> None:
+    """GitHub's file points at the docs page, so the guide is written once."""
+    pointer = (ROOT / ".github/CONTRIBUTING.md").read_text()
+    assert "/overture/developer/contributing" in pointer
+    assert pointer.count("\n") < 10
+    assert (ROOT / "docs/overture/developer/contributing.md").is_file()

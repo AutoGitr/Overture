@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { TEXT_LIMITS } from "../../generated/settings";
   import { countOf } from "../utils/plural";
   import { createMutation } from "@tanstack/svelte-query";
   import { previewCollectionSetMutation } from "../../generated/rest/@tanstack/svelte-query.gen";
@@ -12,10 +13,10 @@
   import { inLibraryOrder, libraryScope } from "../utils/libraries.svelte";
   import CriteriaEditor from "./CriteriaEditor.svelte";
   import FieldRow from "./FieldRow.svelte";
+  import LibraryName from "./LibraryName.svelte";
   import PendingButton from "./PendingButton.svelte";
   import SegmentedControl from "./SegmentedControl.svelte";
   import SetDimensionField from "./SetDimensionField.svelte";
-  import { settingsState } from "../stores/settingsState.svelte";
 
   let {
     generator = $bindable(),
@@ -82,10 +83,6 @@
     });
   }
 
-  function libraryName(id: string) {
-    const library = libraries.find((each) => each.id === id);
-    return library ? settingsState.libraryLabel(library) : id;
-  }
 </script>
 
 {#if standalone}
@@ -102,7 +99,7 @@
     <input
       id={`${id}-title`}
       required
-      maxlength="200"
+      maxlength={TEXT_LIMITS.setTitleFormat}
       bind:value={generator.title_format}
       placeholder={"{value}"}
     />
@@ -153,13 +150,13 @@
   >
     <input
       id={`${id}-prefix`}
-      maxlength="100"
+      maxlength={TEXT_LIMITS.setAffix}
       placeholder="Leading text, e.g. The"
       bind:value={generator.strip_prefix}
     />
     <input
       aria-label="Trailing text to remove"
-      maxlength="100"
+      maxlength={TEXT_LIMITS.setAffix}
       placeholder="Trailing text, e.g. Collection"
       bind:value={generator.strip_suffix}
     />
@@ -190,7 +187,7 @@
         <div class="custom-head">
           <input
             aria-label={`Collection ${index + 1} name`}
-            maxlength="200"
+            maxlength={TEXT_LIMITS.setValueName}
             placeholder="Name, such as A"
             bind:value={value.name}
           />
@@ -237,7 +234,7 @@
         />
         <input
           aria-label={`Alias ${index + 1} title`}
-          maxlength="200"
+          maxlength={TEXT_LIMITS.setAliasName}
           placeholder="Collection title"
           bind:value={alias.name}
         />
@@ -298,9 +295,12 @@
     {/if}
     <ul class="entries">
       {#each entries as entry (`${entry.library_id}:${entry.value}`)}
+        {@const library = libraries.find((each) => each.id === entry.library_id)}
         <li class={{ skipped: entry.below_minimum || !!entry.title_taken_by }}>
-          <span
-            >{entry.title}{libraryIds.length > 1 ? ` (${libraryName(entry.library_id)})` : ""}</span
+          <span class="entry-title"
+            >{entry.title}{#if libraryIds.length > 1}
+              {#if library}<LibraryName {library} />{:else}({entry.library_id}){/if}
+            {/if}</span
           >
           <span class="hint"
             >{countOf(entry.member_count, "title")}{entry.title_taken_by

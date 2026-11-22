@@ -101,7 +101,7 @@ class LibraryService:
     ) -> Response:
         """Proxy the lead server's current poster or background for an item."""
         if art_type.owned_by_season:
-            raise PublicServiceError(400, "An item has no season artwork")
+            raise PublicServiceError(422, "An item has no season artwork")
         # Shown for every title in view, so a title no sync found is not looked up.
         return await self._proxy_lead_art(item_id, art_type, None, size, discover=False)
 
@@ -204,8 +204,11 @@ class LibraryService:
             records = RecordRepository(db)
             stored = await records.rows(MediaItem, item_id)
             libraries = await records.library_names(stored)
+            servers = await records.server_names(stored)
             values = await TermRepository(db).values_of(item_id)
-        return DatabaseRecord.of(stored, read, values, libraries=libraries)
+        return DatabaseRecord.of(
+            stored, read, values, libraries=libraries, servers=servers
+        )
 
     async def set_monitored(self, item_id: int, monitored: bool) -> MonitoredResponse:
         """Set whether an item is monitored."""
@@ -249,7 +252,7 @@ class LibraryService:
         if body.operation == "artwork" and body.removal.delete_from_server:
             self._remover.require_art_deletion()
         result = BulkItemOperationResult(item_ids=[], operation=body.operation)
-        for item_id in dict.fromkeys(body.item_ids):
+        for item_id in body.item_ids:
             try:
                 if body.operation == "artwork":
                     await self._art.remove(item_id, "art", body.removal)
@@ -381,7 +384,7 @@ class LibraryService:
     ) -> Response:
         """Serve an item's poster or background from the cache, or its thumbnail."""
         if art_type.owned_by_season:
-            raise PublicServiceError(400, "An item has no season artwork")
+            raise PublicServiceError(422, "An item has no season artwork")
         async with self._database.read_session() as db:
             item = await db.get(MediaItem, item_id)
         return await self._serve_cached_image(

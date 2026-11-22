@@ -29,7 +29,7 @@
   import DetailForm from "./DetailForm.svelte";
   import FieldRow from "./FieldRow.svelte";
   import LibraryOptions from "./LibraryOptions.svelte";
-  import { toggleSelectedValue } from "../utils/popupSelection";
+  import { selectedValuesForAll, toggleSelectedValue } from "../utils/popupSelection";
 
   let {
     group,
@@ -170,6 +170,11 @@
           {libraries}
           selected={generator.library_ids}
           ontoggle={(id) => (generator.library_ids = toggleSelectedValue(generator.library_ids, id))}
+          ontoggleall={(checked) =>
+            (generator.library_ids = selectedValuesForAll(
+              checked,
+              libraries.map((library) => library.id),
+            ))}
         />
       </fieldset>
       <CollectionSetEditor

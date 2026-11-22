@@ -1,6 +1,6 @@
 """Bulk assets router - unified art and theme workflows and their schedules."""
 
-lazy from fastapi import APIRouter, Depends, status
+lazy from fastapi import status
 
 lazy from ..dependencies import AssetsDep
 lazy from ..schemas.bulk import (
@@ -11,10 +11,10 @@ lazy from ..schemas.bulk import (
     BulkAssetsStopRequest,
 )
 lazy from ..schemas.common import StatusResponse
-lazy from .auth import require_auth
+lazy from .auth import authenticated_router
 lazy from .parameters import ScheduleIdPath
 
-router = APIRouter(prefix="/bulk", tags=["bulk"], dependencies=[Depends(require_auth)])
+router = authenticated_router(prefix="/bulk", tags=["bulk"])
 
 
 @router.post("/assets")

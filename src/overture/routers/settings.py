@@ -1,7 +1,5 @@
 """Settings router - get, update, connectivity test."""
 
-lazy from fastapi import APIRouter, Depends
-
 lazy from ..dependencies import (
     DatabaseDep,
     NeedsDep,
@@ -15,11 +13,9 @@ lazy from ..schemas.settings import (
     ConnectivityStatusResponse,
 )
 lazy from ..services import settings as settings_service
-lazy from .auth import require_auth
+lazy from .auth import authenticated_router
 
-router = APIRouter(
-    prefix="/settings", tags=["settings"], dependencies=[Depends(require_auth)]
-)
+router = authenticated_router(prefix="/settings", tags=["settings"])
 
 
 @router.get("")

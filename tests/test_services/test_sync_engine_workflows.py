@@ -45,7 +45,6 @@ lazy from overture.media_servers.adapters import (
 )
 lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.repositories.copies import CopyRepository
-lazy from overture.schemas.collections import CollectionGroupSyncResult
 lazy from overture.schemas.sync import (
     SyncRunRequest,
     SyncScheduleConfig,
@@ -413,13 +412,11 @@ class NoGroups:
         return []
 
     async def sync(
-        self, name: str, *, library_ids: list[str] | None = None
-    ) -> CollectionGroupSyncResult:
+        self, name: str, report: Report, *, library_ids: list[str] | None = None
+    ) -> None:
         raise AssertionError("There are no groups to sync")
 
-    async def sync_collections(
-        self, collection_ids: list[int]
-    ) -> CollectionGroupSyncResult:
+    async def sync_collections(self, collection_ids: list[int], report: Report) -> None:
         raise AssertionError("There are no collections to sync")
 
 
@@ -1331,17 +1328,18 @@ async def test_full_sync_can_sync_chosen_groups_and_collections_instead(
         async def sync(
             self,
             name: str,
+            report: Report,
             *,
             library_ids: list[str] | None = None,
-        ) -> CollectionGroupSyncResult:
+        ) -> None:
             self.synced.append((name, library_ids))
-            return CollectionGroupSyncResult(synced=2, errors={"Broken": "refused"})
+            await report(JobOutcome.ERROR, "Broken", "refused", finished=False)
 
         async def sync_collections(
-            self, collection_ids: list[int]
-        ) -> CollectionGroupSyncResult:
+            self, collection_ids: list[int], report: Report
+        ) -> None:
             self.collections.append(collection_ids)
-            return CollectionGroupSyncResult(synced=1, errors={"Alien": "refused"})
+            await report(JobOutcome.ERROR, "Alien", "refused", finished=False)
 
     class EveryCollection(NoCollections):
         @override
@@ -1385,15 +1383,15 @@ async def test_syncing_every_collection_reads_the_server_then_syncs_every_group(
         async def sync(
             self,
             name: str,
+            report: Report,
             *,
             library_ids: list[str] | None = None,
-        ) -> CollectionGroupSyncResult:
+        ) -> None:
             order.append(f"{name}:{library_ids}")
-            return CollectionGroupSyncResult(synced=1)
 
         async def sync_collections(
-            self, collection_ids: list[int]
-        ) -> CollectionGroupSyncResult:
+            self, collection_ids: list[int], report: Report
+        ) -> None:
             raise AssertionError("Every collection covers each one")
 
     class ReadServer(NoCollections):

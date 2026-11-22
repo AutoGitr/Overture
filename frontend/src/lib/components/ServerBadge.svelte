@@ -15,39 +15,21 @@
 </script>
 
 <!-- A media server, named as MEDIA_SERVERS names it now and coloured by its kind. -->
-<span class={["server-badge", server?.type]} title={server ? `${server.title} (${server.type})` : undefined}
+<span class="server-badge" data-server={server?.type} title={server ? `${server.title} (${server.type})` : undefined}
   >{settingsState.serverTitle(serverId, name)}</span
 >
 
 <style>
   .server-badge {
-    --server-colour: var(--text-secondary);
-    --server-bg: transparent;
-
     flex: none;
     padding: 0 var(--space-1);
-    border: 1px solid oklch(from var(--server-colour) l c h / 0.45);
+    border: 1px solid oklch(from var(--server-colour, var(--text-secondary)) l c h / 0.45);
     border-radius: var(--radius-sm);
-    background: var(--server-bg);
-    color: var(--server-colour);
+    background: var(--server-bg, transparent);
+    color: var(--server-colour, var(--text-secondary));
     font-size: var(--text-xs);
     font-weight: 500;
     line-height: 16px;
     white-space: nowrap;
-  }
-
-  .plex {
-    --server-colour: var(--server-plex);
-    --server-bg: var(--server-plex-muted);
-  }
-
-  .jellyfin {
-    --server-colour: var(--server-jellyfin);
-    --server-bg: var(--server-jellyfin-muted);
-  }
-
-  .emby {
-    --server-colour: var(--server-emby);
-    --server-bg: var(--server-emby-muted);
   }
 </style>

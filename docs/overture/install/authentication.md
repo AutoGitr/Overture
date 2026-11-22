@@ -1,5 +1,5 @@
 ---
-sidebar_position: 6
+sidebar_position: 7
 title: Authentication
 description: Password sign-in, single sign-on with OpenID Connect, or open access.
 ---

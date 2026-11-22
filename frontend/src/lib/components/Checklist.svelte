@@ -16,6 +16,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import CheckboxList from "./CheckboxList.svelte";
+  import SelectAll from "./SelectAll.svelte";
 
   let {
     label,
@@ -43,16 +44,14 @@
 <div class="checklist">
   <div class="heading-row">
     <span class="form-label">{label}</span>
-    <label class="checkbox-group">
-      <input
-        type="checkbox"
-        checked={allSelected}
-        disabled={selectAllDisabled}
-        aria-label="{allSelected ? 'Deselect' : 'Select'} all {label.toLowerCase()}"
-        onchange={(event) => ontoggleall(event.currentTarget.checked)}
-      />
-      <span aria-hidden="true">{allSelected ? "Deselect all" : "Select all"}</span>
-    </label>
+    <SelectAll
+      checked={allSelected}
+      indeterminate={!allSelected &&
+        groups.some((group) => group.options.some((option) => option.checked))}
+      noun={label.toLowerCase()}
+      disabled={selectAllDisabled}
+      ontoggle={ontoggleall}
+    />
   </div>
   {#if notice}
     {@render notice()}

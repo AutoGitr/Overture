@@ -718,6 +718,23 @@ img {
   color: var(--text-secondary);
 }
 
+/* Anything about one kind of media server takes its colours from
+   `data-server`, as --server-colour and --server-bg. */
+[data-server="plex"] {
+  --server-colour: var(--server-plex);
+  --server-bg: var(--server-plex-muted);
+}
+
+[data-server="jellyfin"] {
+  --server-colour: var(--server-jellyfin);
+  --server-bg: var(--server-jellyfin-muted);
+}
+
+[data-server="emby"] {
+  --server-colour: var(--server-emby);
+  --server-bg: var(--server-emby-muted);
+}
+
 /* ==============================================================
    Panels / Cards
    ============================================================== */

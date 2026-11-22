@@ -51,7 +51,7 @@ reinstalls or switches.
 ## Contributing
 
 Share artwork and theme selections with OvertureDB from inside Overture, or
-help improve Overture itself with the [contributor guide](CONTRIBUTING.md).
+help improve Overture itself with the [contributor guide](https://autogitr.github.io/Overture/overture/developer/contributing).
 Report security issues [privately](SECURITY.md).
 
 ## License

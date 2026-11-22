@@ -140,11 +140,6 @@ def inspect_saved_image(source: Path | bytes) -> tuple[str, int, int]:
     return saved_image_extension(image_format), width, height
 
 
-def encoded_image_extension(image_data: bytes) -> str:
-    """Return the extension readable JPEG or PNG bytes are saved under."""
-    return inspect_saved_image(image_data)[0]
-
-
 def is_valid_aspect_ratio(
     width: int,
     height: int,

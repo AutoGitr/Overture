@@ -20,7 +20,10 @@ export function filterAvailableValues(
   return selectedValues.filter((value) => available.has(value));
 }
 
-export function selectedValuesForAll(checked: boolean, availableValues: string[]): string[] {
+export function selectedValuesForAll<T extends string>(
+  checked: boolean,
+  availableValues: readonly T[],
+): T[] {
   return checked ? [...availableValues] : [];
 }
 

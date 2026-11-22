@@ -1,6 +1,6 @@
 """Radarr and Sonarr v3 API client: tags, libraries and requested titles."""
 
-lazy from collections.abc import Callable, Sequence
+lazy from collections.abc import Sequence
 lazy from dataclasses import dataclass
 lazy from typing import Any, Literal
 
@@ -15,7 +15,13 @@ lazy from pydantic import (
 )
 
 lazy from ..utils.errors import PublicServiceError
-lazy from .http import LazyClient, RequestLimiter, create_client, request_with_retry
+lazy from .http import (
+    ClientFactory,
+    LazyClient,
+    RequestLimiter,
+    create_client,
+    request_with_retry,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,7 +118,7 @@ class ArrClient:
         base_url: str,
         api_key: SecretStr,
         verify_tls: bool = True,
-        client_factory: Callable[..., httpx2.AsyncClient] = create_client,
+        client_factory: ClientFactory = create_client,
     ) -> None:
         self._kind = kind
         self._label = "Radarr" if kind == "radarr" else "Sonarr"
@@ -142,7 +148,7 @@ class ArrClient:
         if not self._configured:
             setting = "RADARR" if self._kind == "radarr" else "SONARR"
             raise PublicServiceError(
-                400,
+                409,
                 f"Set {setting}_URL and {setting}_API_KEY to use {self._label} tags",
             )
 

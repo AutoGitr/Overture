@@ -19,6 +19,10 @@ lazy from .catalog_contract.contract import (
     ASPECT_TOLERANCE,
 )
 
+#: The largest integer a JSON client reads exactly, JavaScript's
+#: ``Number.MAX_SAFE_INTEGER``, and well within what SQLite stores.
+MAX_SAFE_INTEGER = 2**53 - 1
+
 
 class MediaType(StrEnum):
     """Kind of library item Overture tracks."""
@@ -107,6 +111,41 @@ class CollectionOrder(StrEnum):
     UNPLAYED_EPISODES_DESC = "unplayed_episodes.desc"
     UNPLAYED_EPISODES_ASC = "unplayed_episodes.asc"
     RANDOM = "random"
+
+    @property
+    def label(self) -> str:
+        """Return how the order is named to users."""
+        return _ORDER_LABELS[self]
+
+
+_ORDER_LABELS: frozendict[CollectionOrder, str] = frozendict(
+    {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
+        CollectionOrder.CUSTOM: "Custom (manual or source order)",
+        CollectionOrder.RELEASE_ASC: "Release date (oldest first)",
+        CollectionOrder.RELEASE_DESC: "Release date (newest first)",
+        CollectionOrder.TITLE_ASC: "Title (A to Z)",
+        CollectionOrder.TITLE_DESC: "Title (Z to A)",
+        CollectionOrder.ADDED_DESC: "Date added (newest first)",
+        CollectionOrder.ADDED_ASC: "Date added (oldest first)",
+        CollectionOrder.CRITIC_RATING_DESC: "Critic rating (highest first)",
+        CollectionOrder.CRITIC_RATING_ASC: "Critic rating (lowest first)",
+        CollectionOrder.AUDIENCE_RATING_DESC: "Audience rating (highest first)",
+        CollectionOrder.AUDIENCE_RATING_ASC: "Audience rating (lowest first)",
+        CollectionOrder.USER_RATING_DESC: "User rating (highest first)",
+        CollectionOrder.USER_RATING_ASC: "User rating (lowest first)",
+        CollectionOrder.DURATION_DESC: "Duration (longest first)",
+        CollectionOrder.DURATION_ASC: "Duration (shortest first)",
+        CollectionOrder.PLAYS_DESC: "Plays (most first)",
+        CollectionOrder.PLAYS_ASC: "Plays (fewest first)",
+        CollectionOrder.LAST_PLAYED_DESC: "Last played (most recent first)",
+        CollectionOrder.LAST_PLAYED_ASC: "Last played (least recent first)",
+        CollectionOrder.EPISODE_ADDED_DESC: "Latest episode added (newest first)",
+        CollectionOrder.EPISODE_ADDED_ASC: "Latest episode added (oldest first)",
+        CollectionOrder.UNPLAYED_EPISODES_DESC: "Unplayed episodes (most first)",
+        CollectionOrder.UNPLAYED_EPISODES_ASC: "Unplayed episodes (fewest first)",
+        CollectionOrder.RANDOM: "Random",
+    }
+)
 
 
 class AutoAdvance(StrEnum):
@@ -323,6 +362,11 @@ class FieldKind(StrEnum):
     DATE = "date"
     BOOLEAN = "boolean"
 
+    @property
+    def ignores_case(self) -> bool:
+        """Whether criteria match the field's values ignoring their case."""
+        return self in {FieldKind.TEXT, FieldKind.TAG}
+
 
 class FilterOperator(StrEnum):
     """Comparison operator for a filter condition."""
@@ -341,6 +385,36 @@ class FilterOperator(StrEnum):
     NOT_IN_LAST = "not_in_last"
     BEFORE = "before"
     AFTER = "after"
+
+    @property
+    def label(self) -> str:
+        """Return how a condition's operator reads, after its field."""
+        return _OPERATOR_LABELS[self]
+
+    @property
+    def membership_label(self) -> str | None:
+        """Return how the operator reads for a list or tag source; ``None`` if none."""
+        return {"is": "in", "is_not": "not in"}.get(self.value)
+
+
+_OPERATOR_LABELS: frozendict[FilterOperator, str] = frozendict(
+    {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
+        FilterOperator.IS: "is",
+        FilterOperator.IS_NOT: "is not",
+        FilterOperator.CONTAINS: "contains",
+        FilterOperator.DOES_NOT_CONTAIN: "does not contain",
+        FilterOperator.STARTS_WITH: "starts with",
+        FilterOperator.ENDS_WITH: "ends with",
+        FilterOperator.GT: "is greater than",
+        FilterOperator.GTE: "is at least",
+        FilterOperator.LT: "is less than",
+        FilterOperator.LTE: "is at most",
+        FilterOperator.IN_LAST: "in the last (days)",
+        FilterOperator.NOT_IN_LAST: "not in the last (days)",
+        FilterOperator.BEFORE: "is before",
+        FilterOperator.AFTER: "is after",
+    }
+)
 
 
 class SetDimension(StrEnum):
@@ -385,6 +459,17 @@ class ThemeIdSource(StrEnum):
     METADATA_URL = "metadata_url"
     #: Chosen for an item without a local folder, so nothing was downloaded.
     SELECTION = "selection"
+
+    @property
+    def label(self) -> str:
+        """Return how the source of a theme's ID is named to users."""
+        return {
+            "download": "Downloaded",
+            "embedded_id": "File ID tag",
+            "source_url": "File source link",
+            "metadata_url": "Other file link",
+            "selection": "Selected",
+        }[self.value]
 
 
 class AssetStatus(StrEnum):
@@ -432,6 +517,11 @@ class ServerAsset(StrEnum):
     def art_type(self) -> ArtType | None:
         """Return the artwork slot this asset is, or ``None`` for the theme."""
         return None if self is ServerAsset.THEME else ArtType(self.value)
+
+    @property
+    def label(self) -> str:
+        """Return how the asset is named to users."""
+        return self.value.replace("_", " ").capitalize()
 
 
 class DeliveryChannel(StrEnum):
@@ -537,6 +627,11 @@ class CollectionPosterStyle(StrEnum):
     INDIVIDUAL = "individual"
     MATTE = "matte"
     OVERLAY = "overlay"
+
+    @property
+    def label(self) -> str:
+        """Return how the poster style is named to users."""
+        return self.value.capitalize()
 
 
 class AutoArtSource(StrEnum):

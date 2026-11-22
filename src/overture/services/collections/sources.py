@@ -186,7 +186,7 @@ class SourceResolver:
             PublicServiceError: 400 without an MDBList key.
         """
         if not self._config.mdblist_configured:
-            raise PublicServiceError(400, "Set MDBLIST_API_KEY to search MDBList")
+            raise PublicServiceError(409, "Set MDBLIST_API_KEY to search MDBList")
         return await self._mdblist.search_lists(query)
 
     async def summary(

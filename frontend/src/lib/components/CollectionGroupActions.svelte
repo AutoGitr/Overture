@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { TEXT_LIMITS } from "../../generated/settings";
   import { createQuery } from "@tanstack/svelte-query";
   import {
     listCollectionGroupsOptions,
@@ -41,7 +42,7 @@
   collapsible
 >
   <FieldRow label="Group name" for={`${id}-name`}>
-    <input id={`${id}-name`} maxlength="200" bind:value={actions.name} />
+    <input id={`${id}-name`} maxlength={TEXT_LIMITS.groupName} bind:value={actions.name} />
   </FieldRow>
   <div class="actions-row">
     <PendingButton

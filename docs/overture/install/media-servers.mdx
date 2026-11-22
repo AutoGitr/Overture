@@ -39,11 +39,8 @@ shows as "Living Room"). Each server takes these variables, with
 | `PATH_MAP`         | No       | Where Overture sees the server's media folders; see [Path maps](#path-maps)        |
 | `COLLECTIONS_PATH` | No       | Jellyfin only: its collections directory, mounted into Overture, for BoxSet themes |
 
-Overture writes artwork and themes beside your media and uploads collection
-art to the server, so each server should show local files and leave
-collections to Overture. The settings below do that; Overture works without
-them, but a server that saves its own images into your media folders or makes
-its own collections keeps showing those instead.
+Then apply each server's [Media server settings](server-settings.mdx), which
+Overture needs to show its files and manage collections.
 
 <Tabs groupId="media-server" queryString>
   <TabItem value="plex" label="Plex" default>
@@ -54,13 +51,7 @@ its own collections keeps showing those instead.
    Keep `VERIFY_TLS=true`: Overture connects through Plex's verified
    `*.plex.direct` address, so every **Secure connections** setting works,
    including **Required**.
-3. In each library, under **Edit -> Advanced**:
-   - Turn on **Use local assets**, so Plex shows the posters, backgrounds and
-     `theme.mp3` beside your media.
-   - Set **Minimum automatic collection size** to **Disabled** in movie
-     libraries whose collections Overture manages. Collections Plex already
-     made stay until you delete them or a managed collection takes them over.
-4. Theme music plays only in Plex apps whose own settings play it.
+3. Apply the [Plex settings](server-settings.mdx).
 
 If your router's DNS rebinding protection blocks `plex.direct`, allow that
 domain.
@@ -70,16 +61,7 @@ domain.
 
 1. Create a key under **Dashboard -> API Keys**.
 2. Set `TYPE=jellyfin`, `URL=http://<server>:8096` and `API_KEY=<key>`.
-3. In each library's settings:
-   - Turn off **Save artwork into media folders**. Jellyfin then keeps the
-     images it downloads in its own metadata folder, and the file Overture
-     writes beside your media is the one it shows. Images Jellyfin saved
-     there earlier, such as `backdrop.jpg` or `fanart.jpg`, can outrank
-     Overture's; **Renamer** lists them.
-   - In movie libraries whose collections Overture manages, turn off
-     **Automatically add to collection**.
-4. Theme songs play for users who turn on **Theme songs** under their
-   **Display** settings.
+3. Apply the [Jellyfin settings](server-settings.mdx).
 
 Jellyfin always reads the images beside the media, but adds a local
 background after the ones it already has. When Overture writes a background
@@ -102,19 +84,7 @@ them as one of its administrators; keep at least one.
 1. Create a key under **Dashboard -> Advanced -> API Keys**.
 2. Set `TYPE=emby`, `URL=http://<server>:8096` (include a base path such as
    `/emby` if you use one) and `API_KEY=<key>`.
-3. In each library's settings:
-   - Turn off **Save artwork into media folders**, for the same reason as in
-     Jellyfin: Emby saves backgrounds there as `fanart.jpg`, which outranks
-     Overture's `background.jpg`.
-   - In movie libraries whose collections Overture manages, turn off the
-     option that imports collection information from TheMovieDb. Emby keeps
-     those collections in folders named `<title>-tmdb-<id>`.
-4. Theme songs play for users who turn them on in their display settings.
-   Emby keeps no collection themes.
-
-A managed collection takes over the server's collection of the same TMDB
-collection, or of the same title, instead of making a second one, so turning
-automatic collections off only stops new ones.
+3. Apply the [Emby settings](server-settings.mdx).
 
   </TabItem>
 </Tabs>

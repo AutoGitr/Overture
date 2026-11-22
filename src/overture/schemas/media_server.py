@@ -8,12 +8,6 @@ lazy from ..media_servers.health import MediaServerHealth
 lazy from .base import PublicText, StrictBaseModel
 
 
-class MediaServerErrorResponse(StrictBaseModel):
-    """Provider failure, distinct from a successful empty library list."""
-
-    detail: PublicText
-
-
 class ServerLibraryRead(StrictBaseModel):
     """One movie or show library on a media server."""
 

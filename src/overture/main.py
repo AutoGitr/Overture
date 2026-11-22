@@ -3,7 +3,7 @@
 lazy import asyncio
 lazy import logging
 lazy import sys
-lazy from collections.abc import AsyncGenerator
+lazy from collections.abc import AsyncGenerator, Callable, Mapping
 lazy from contextlib import asynccontextmanager
 lazy from functools import partial
 lazy from pathlib import Path
@@ -31,7 +31,7 @@ lazy from .dependencies import RuntimeDep
 lazy from .media_servers.errors import MediaServerError
 lazy from .routers.art import router as art_router
 lazy from .routers.asset_manager import router as asset_manager_router
-lazy from .routers.auth import require_auth
+lazy from .routers.auth import authenticated_router
 lazy from .routers.auth import router as auth_router
 lazy from .routers.backup import router as backup_router
 lazy from .routers.bulk_assets import router as bulk_assets_router
@@ -43,6 +43,7 @@ lazy from .routers.library_filters import router as library_filters_router
 lazy from .routers.media_server import router as media_server_router
 lazy from .routers.notifications import router as notifications_router
 lazy from .routers.realtime import router as realtime_router
+lazy from .routers.responses import declare_framework_answers
 lazy from .routers.server_audit import router as server_audit_router
 lazy from .routers.settings import router as settings_router
 lazy from .routers.stats import router as stats_router
@@ -72,7 +73,7 @@ lazy from .ws.resync import send_client_resync
 
 logger = logging.getLogger(__name__)
 
-docs_router = APIRouter(dependencies=[Depends(require_auth)])
+docs_router = authenticated_router()
 health_router = APIRouter(tags=["health"])
 websocket_router = APIRouter()
 
@@ -80,6 +81,11 @@ websocket_router = APIRouter()
 def _operation_id(route: APIRoute) -> str:
     """Return stable semantic OpenAPI operation IDs."""
     return route.name
+
+
+def _openapi(build: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+    """The app's schema, with what every route answers whatever it declares."""
+    return declare_framework_answers(build())
 
 
 @asynccontextmanager
@@ -114,6 +120,7 @@ def create_app(
         generate_unique_id_function=_operation_id,
     )
     app.state.runtime = runtime
+    app.openapi = partial(_openapi, app.openapi)
     app.middleware("http")(partial(security_middleware, app_config=config))
     # Registered second so request logging is outermost: it also records
     # requests rejected by CSRF validation and is the unhandled-error boundary.
@@ -125,16 +132,25 @@ def create_app(
     return app
 
 
-def _error(body: ErrorResponse | ValidationErrorResponse, status: int) -> JSONResponse:
+def _error(
+    body: ErrorResponse | ValidationErrorResponse,
+    status: int,
+    headers: Mapping[str, str] | None = None,
+) -> JSONResponse:
     """Serialise an error body, which redacts its free text, as the response."""
-    return JSONResponse(body.model_dump(mode="json"), status_code=status)
+    return JSONResponse(
+        body.model_dump(mode="json"), status_code=status, headers=headers
+    )
 
 
 async def http_exception_handler(
     _request: Request, exc: StarletteHTTPException
 ) -> JSONResponse:
-    """Return a routing or framework error."""
-    return _error(ErrorResponse(detail=str(exc.detail)), exc.status_code)
+    """Return a routing or framework error, with the headers it names.
+
+    A 405 names the methods the path allows in ``Allow``, as RFC 9110 requires.
+    """
+    return _error(ErrorResponse(detail=str(exc.detail)), exc.status_code, exc.headers)
 
 
 async def public_service_exception_handler(

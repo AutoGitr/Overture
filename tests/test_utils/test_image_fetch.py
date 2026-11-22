@@ -16,7 +16,6 @@ lazy from overture.utils.image_fetch import (
     RateLimitedError,
     RemoteImageError,
     fetch_image,
-    fetch_image_bytes,
     is_supported_remote_image_type,
     normalise_content_type,
     raise_if_rate_limited,
@@ -49,7 +48,7 @@ def test_content_type_and_tmdb_preview_helpers() -> None:
     )
 
 
-async def test_fetch_image_bytes_rejects_unsupported_content_type() -> None:
+async def test_fetch_image_rejects_unsupported_content_type() -> None:
     def handler(_: httpx2.Request) -> httpx2.Response:
         return httpx2.Response(
             200,
@@ -59,10 +58,10 @@ async def test_fetch_image_bytes_rejects_unsupported_content_type() -> None:
 
     async with httpx2.AsyncClient(transport=httpx2.MockTransport(handler)) as client:
         with pytest.raises(RemoteImageError, match="text/html instead of a JPG or PNG"):
-            await fetch_image_bytes("https://images.test/poster.jpg", client)
+            await fetch_image("https://images.test/poster.jpg", client)
 
 
-async def test_fetch_image_bytes_enforces_content_length_limit() -> None:
+async def test_fetch_image_enforces_content_length_limit() -> None:
     def handler(_: httpx2.Request) -> httpx2.Response:
         return httpx2.Response(
             200,
@@ -75,10 +74,10 @@ async def test_fetch_image_bytes_enforces_content_length_limit() -> None:
 
     async with httpx2.AsyncClient(transport=httpx2.MockTransport(handler)) as client:
         with pytest.raises(RemoteImageError, match="exceeds"):
-            await fetch_image_bytes("https://images.test/huge.jpg", client)
+            await fetch_image("https://images.test/huge.jpg", client)
 
 
-async def test_fetch_image_bytes_allows_valid_png() -> None:
+async def test_fetch_image_allows_valid_png() -> None:
 
     def handler(_: httpx2.Request) -> httpx2.Response:
         return httpx2.Response(
@@ -89,8 +88,8 @@ async def test_fetch_image_bytes_allows_valid_png() -> None:
 
     async with httpx2.AsyncClient(transport=httpx2.MockTransport(handler)) as client:
         assert (
-            await fetch_image_bytes("https://images.test/one.png", client) == PNG_DATA
-        )
+            await fetch_image("https://images.test/one.png", client)
+        ).data == PNG_DATA
 
 
 def _webp() -> bytes:
@@ -136,7 +135,7 @@ async def test_fetch_image_refuses_undecodable_bytes_even_when_generic() -> None
             )
 
 
-async def test_fetch_image_bytes_reports_the_bytes_it_receives() -> None:
+async def test_fetch_image_reports_the_bytes_it_receives() -> None:
     reports: list[tuple[int, int | None]] = []
 
     async def on_progress(received: int, total: int | None) -> None:
@@ -150,7 +149,7 @@ async def test_fetch_image_bytes_reports_the_bytes_it_receives() -> None:
         )
 
     async with httpx2.AsyncClient(transport=httpx2.MockTransport(handler)) as client:
-        await fetch_image_bytes(
+        await fetch_image(
             "https://images.test/one.png",
             client,
             on_progress=on_progress,
@@ -159,7 +158,7 @@ async def test_fetch_image_bytes_reports_the_bytes_it_receives() -> None:
     assert reports == [(len(PNG_DATA), len(PNG_DATA))]
 
 
-async def test_fetch_image_bytes_strips_credentials_on_cross_origin_redirect() -> None:
+async def test_fetch_image_strips_credentials_on_cross_origin_redirect() -> None:
 
     def handler(request: httpx2.Request) -> httpx2.Response:
         if request.url.host == "images.test":
@@ -181,12 +180,14 @@ async def test_fetch_image_bytes_strips_credentials_on_cross_origin_redirect() -
         )
 
     async with httpx2.AsyncClient(transport=httpx2.MockTransport(handler)) as client:
-        result = await fetch_image_bytes(
-            "https://images.test/one.png",
-            client,
-            headers={"X-Api-Key": "secret"},
-            params={"credential": "secret"},
-        )
+        result = (
+            await fetch_image(
+                "https://images.test/one.png",
+                client,
+                headers={"X-Api-Key": "secret"},
+                params={"credential": "secret"},
+            )
+        ).data
 
     assert result == PNG_DATA
 
@@ -221,7 +222,7 @@ async def test_image_request_rejects_untrusted_private_redirect(
             ) == (0, 0)
         else:
             with pytest.raises(RemoteImageError, match="Unsafe image redirect"):
-                await fetch_image_bytes(
+                await fetch_image(
                     "https://images.test/one.png",
                     client,
                     allow_private=True,
@@ -293,7 +294,7 @@ async def test_image_request_bounds_redirect_loops(
             )
         else:
             with pytest.raises(RemoteImageError, match="Too many image redirects"):
-                await fetch_image_bytes("https://images.test/one.png", client)
+                await fetch_image("https://images.test/one.png", client)
 
     assert len(requests) == 3
 
@@ -309,7 +310,7 @@ async def test_fetch_rejects_invalid_content_length(length: str) -> None:
 
     async with httpx2.AsyncClient(transport=httpx2.MockTransport(handler)) as client:
         with pytest.raises(RemoteImageError, match="Invalid Content-Length"):
-            await fetch_image_bytes("https://images.test/one.png", client)
+            await fetch_image("https://images.test/one.png", client)
 
 
 async def test_fetch_enforces_limit_on_received_bytes() -> None:
@@ -322,7 +323,7 @@ async def test_fetch_enforces_limit_on_received_bytes() -> None:
 
     async with httpx2.AsyncClient(transport=httpx2.MockTransport(handler)) as client:
         with pytest.raises(RemoteImageError, match="exceeds"):
-            await fetch_image_bytes("https://images.test/one.png", client, max_bytes=10)
+            await fetch_image("https://images.test/one.png", client, max_bytes=10)
 
 
 async def test_a_transfer_without_slots_does_not_wait_for_shared_transfers() -> None:
@@ -336,21 +337,19 @@ async def test_a_transfer_without_slots_does_not_wait_for_shared_transfers() -> 
     slots = asyncio.Semaphore(1)
     await slots.acquire()
     async with httpx2.AsyncClient(transport=httpx2.MockTransport(handler)) as client:
-        data = await asyncio.wait_for(
-            fetch_image_bytes(
-                "https://images.test/poster.png", client, transfer_slots=None
-            ),
+        fetched = await asyncio.wait_for(
+            fetch_image("https://images.test/poster.png", client, transfer_slots=None),
             timeout=1,
         )
         with pytest.raises(TimeoutError):
             await asyncio.wait_for(
-                fetch_image_bytes(
+                fetch_image(
                     "https://images.test/poster.png", client, transfer_slots=slots
                 ),
                 timeout=0.05,
             )
 
-    assert data == PNG_DATA
+    assert fetched.data == PNG_DATA
 
 
 def _host_handler(
@@ -380,8 +379,8 @@ async def test_a_rate_limited_host_pauses_only_its_own_later_fetches(
             RateLimitedError,
             match=r"tpdb\.test is rate limiting requests; pausing them for 120s",
         ):
-            await fetch_image_bytes("https://tpdb.test/poster.png", client)
-        assert await fetch_image_bytes("https://other.test/a.png", client) == PNG_DATA
+            await fetch_image("https://tpdb.test/poster.png", client)
+        assert (await fetch_image("https://other.test/a.png", client)).data == PNG_DATA
         assert pause_clock.waits == []
 
         with pytest.raises(RateLimitedError, match=r"tpdb\.test .*try again in 120s"):
@@ -390,7 +389,7 @@ async def test_a_rate_limited_host_pauses_only_its_own_later_fetches(
             raise_if_rate_limited()
         raise_if_rate_limited("https://other.test/a.png")
 
-        assert await fetch_image_bytes("https://tpdb.test/p.png", client) == PNG_DATA
+        assert (await fetch_image("https://tpdb.test/p.png", client)).data == PNG_DATA
     assert pause_clock.waits == [120]
     raise_if_rate_limited()
 
@@ -403,7 +402,7 @@ async def test_a_failed_status_names_the_host_without_pausing_it(
         with pytest.raises(
             RemoteImageError, match=r"tpdb\.test returned HTTP 404"
         ) as exc:
-            await fetch_image_bytes("https://tpdb.test/poster.png", client)
+            await fetch_image("https://tpdb.test/poster.png", client)
     assert not isinstance(exc.value, RateLimitedError)
     raise_if_rate_limited()
 
@@ -436,15 +435,13 @@ async def test_a_fetch_waiting_out_a_pause_holds_no_transfer_slot(
     slots = asyncio.Semaphore(1)
     async with httpx2.AsyncClient(transport=_host_handler({})) as client:
         paused = asyncio.create_task(
-            fetch_image_bytes("https://tpdb.test/p.png", client, transfer_slots=slots)
+            fetch_image("https://tpdb.test/p.png", client, transfer_slots=slots)
         )
         await waiting.wait()
-        other = fetch_image_bytes(
-            "https://other.test/a.png", client, transfer_slots=slots
-        )
-        assert await asyncio.wait_for(other, timeout=1) == PNG_DATA
+        other = fetch_image("https://other.test/a.png", client, transfer_slots=slots)
+        assert (await asyncio.wait_for(other, timeout=1)).data == PNG_DATA
         release.set()
-        assert await paused == PNG_DATA
+        assert (await paused).data == PNG_DATA
 
 
 @pytest.mark.parametrize("content_type", [None, "application/octet-stream"])
@@ -471,14 +468,9 @@ async def test_background_fetches_wait_out_rate_limits_then_ask_again(
     transport = _host_handler({"tpdb.test": limited})
     async with httpx2.AsyncClient(transport=transport) as client:
         with pytest.raises(RateLimitedError):
-            await fetch_image_bytes(
-                "https://tpdb.test/p.png", client, rate_limit_retries=1
-            )
+            await fetch_image("https://tpdb.test/p.png", client, rate_limit_retries=1)
         assert (
-            await fetch_image_bytes(
-                "https://tpdb.test/p.png", client, rate_limit_retries=1
-            )
-            == PNG_DATA
-        )
+            await fetch_image("https://tpdb.test/p.png", client, rate_limit_retries=1)
+        ).data == PNG_DATA
     # Each limit doubles the pause from the first minute.
     assert pause_clock.waits == [60, 120, 240]

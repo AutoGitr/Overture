@@ -121,7 +121,7 @@ class CollectionValidator:
                 raise PublicServiceError(
                     422,
                     f"{field_label(condition.field, server)} cannot be tested with "
-                    f"{condition.operator.value.replace('_', ' ')}"
+                    f"{condition.operator.label}"
                     + (" in Plex smart collections" if smart else ""),
                 )
         self._sources_available(media_type, criteria)
@@ -154,8 +154,7 @@ class CollectionValidator:
             if condition.operator not in field_operators(condition.field, smart=False):
                 raise PublicServiceError(
                     422,
-                    f"{label} cannot be tested with "
-                    f"{condition.operator.value.replace('_', ' ')}",
+                    f"{label} cannot be tested with {condition.operator.label}",
                 )
         self._sources_available(media_type, criteria)
 

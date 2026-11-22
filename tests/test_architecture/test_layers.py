@@ -1,4 +1,4 @@
-"""The layering AGENTS.md describes, read from the code itself."""
+"""Which layer may import which, read from the code itself."""
 
 lazy import ast
 lazy from collections.abc import Iterator

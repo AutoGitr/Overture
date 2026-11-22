@@ -6,7 +6,7 @@ selection stores it; from then on the item routes serve it.
 
 lazy from typing import Annotated, Literal
 
-lazy from fastapi import APIRouter, Depends, Path, Query
+lazy from fastapi import Path, Query
 
 lazy from ..dependencies import TmdbItemsDep
 lazy from ..domain import CatalogMediaType, TmdbSearchBy
@@ -20,12 +20,18 @@ lazy from ..schemas.tmdb import (
     TmdbPersonSearchResponse,
     TmdbSearchResponse,
 )
-lazy from .auth import require_auth
-lazy from .parameters import ArtTypePath, MediaTypePath, MediaTypeQuery
+lazy from .auth import authenticated_router
+lazy from .parameters import (
+    ArtTypePath,
+    MediaTypePath,
+    MediaTypeQuery,
+    TmdbCollectionIdPath,
+    TmdbIdPath,
+)
+lazy from .responses import NOT_CONFIGURED, UPLOAD_GONE
 
-router = APIRouter(prefix="/tmdb", tags=["tmdb"], dependencies=[Depends(require_auth)])
+router = authenticated_router(prefix="/tmdb", tags=["tmdb"], responses=NOT_CONFIGURED)
 
-TmdbIdPath = Annotated[int, Path(gt=0, description="TMDB ID")]
 SeasonNumQuery = Annotated[
     int | None,
     Query(ge=0, description="Required for season_poster, ignored otherwise"),
@@ -54,7 +60,7 @@ async def search_tmdb_people(
 
 @router.get("/collections/{collection_id}")
 async def get_tmdb_collection(
-    collection_id: Annotated[int, Path(gt=0, description="TMDB collection ID")],
+    collection_id: TmdbCollectionIdPath,
     tmdb_items: TmdbItemsDep,
     artwork_source: Annotated[
         Literal["overturedb", "tmdb"], Query(description="Collection member artwork")
@@ -96,7 +102,7 @@ async def get_tmdb_catalog_sources(
     return await tmdb_items.catalog_sources(media_type, tmdb_id)
 
 
-@router.put("/{media_type}/{tmdb_id}/art/{art_type}")
+@router.put("/{media_type}/{tmdb_id}/art/{art_type}", responses=UPLOAD_GONE)
 async def save_tmdb_art(
     media_type: MediaTypePath,
     tmdb_id: TmdbIdPath,

@@ -16,7 +16,7 @@ lazy from ...catalog_contract.contract import canonical_art_url
 lazy from ...domain import ArtType, CollectionOrder, MediaType
 lazy from ...schemas.art import ArtCandidate
 lazy from ...utils.art_urls import art_preview_url, art_source_label
-lazy from ..adapters import ItemIdentity, ServerTheme
+lazy from ..adapters import CollectionDetails, ItemIdentity, MemberWrite, ServerTheme
 lazy from ..errors import MediaServerError
 lazy from ..http_client import MediaServerHttpClient
 lazy from ..wire import (
@@ -72,6 +72,10 @@ class JellyfinClient(MediaServerHttpClient):
     _PAGE_SIZE: ClassVar[int] = 5000
     # Ids per People lookup; the batch size did not change the time measured.
     _PEOPLE_BATCH: ClassVar[int] = 100
+    # Ids per collection membership write, which carries them in the query
+    # string. A 32-character ID spells 35 with its encoded comma, so 200 fit
+    # the 8 KiB request line Kestrel accepts by default; more fail with 414.
+    _MEMBER_BATCH: ClassVar[int] = 200
     #: Item fields a library listing asks for. People is resolved per credit on
     #: the server, so listings carry only the movie Etag (its DateLastSaved) and
     #: get_people fetches on change.
@@ -493,20 +497,20 @@ class JellyfinClient(MediaServerHttpClient):
             return False
 
     async def create_collection(self, title: str, member_ids: list[str]) -> str:
-        """Create a BoxSet; credentials remain in the client's headers."""
+        """Create a BoxSet holding ``member_ids``."""
         response = await self._request(
-            "POST",
-            "/Collections",
-            params=self.query_params(name=title, ids=",".join(member_ids)),
+            "POST", "/Collections", params=self.query_params(name=title)
         )
         value = wire_object(self._json(response))
         if not isinstance(value.get("Id"), str) or not value["Id"]:
             raise MediaServerError("Media server did not return the new collection ID")
-        return str(value["Id"])
+        collection_id = str(value["Id"])
+        await self._change_members("POST", collection_id, member_ids)
+        return collection_id
 
     async def set_collection_members(
         self, collection_id: str, member_ids: list[str], *, append: bool = False
-    ) -> list[str]:
+    ) -> MemberWrite:
         """Apply only additions and removals to a BoxSet."""
         current_ids = await self.get_boxset_member_ids(collection_id)
         current = set(current_ids)
@@ -517,41 +521,41 @@ class JellyfinClient(MediaServerHttpClient):
                 *(identity for identity in current_ids if identity not in requested),
             ]
         wanted = set(member_ids)
-        for method, ids in (("POST", wanted - current), ("DELETE", current - wanted)):
-            for batch in batched(sorted(ids), self._PAGE_SIZE, strict=False):
-                await self._request(
-                    method,
-                    f"/Collections/{collection_id}/Items",
-                    params=self.query_params(ids=",".join(batch)),
-                )
+        additions, removals = sorted(wanted - current), sorted(current - wanted)
+        await self._change_members("POST", collection_id, additions)
+        await self._change_members("DELETE", collection_id, removals)
+        return MemberWrite(member_ids, len(additions), len(removals))
 
-        return member_ids
+    async def _change_members(
+        self, method: str, collection_id: str, member_ids: list[str]
+    ) -> None:
+        """Add (``POST``) or remove (``DELETE``) BoxSet members in batches."""
+        for batch in batched(member_ids, self._MEMBER_BATCH, strict=False):
+            await self._request(
+                method,
+                f"/Collections/{collection_id}/Items",
+                params=self.query_params(ids=",".join(batch)),
+            )
 
     async def update_collection_details(
-        self,
-        collection_id: str,
-        title: str,
-        summary: str | None,
-        sort_title: str | None,
-        order: CollectionOrder,
+        self, collection_id: str, details: CollectionDetails
     ) -> None:
-        """Preserve metadata fields the server requires in its replacement DTO.
+        """Send the details a BoxSet keeps, in the complete DTO the server requires.
 
-        ``None`` keeps the overview or sort name; an empty sort name hands it
-        back to the server, which derives one from the name.
+        A BoxSet keeps no mode, visibility or filtering.
         """
-        details = await self.collection_metadata(collection_id)
-        details.update(
-            Name=title,
+        item = await self.collection_metadata(collection_id)
+        item.update(
+            Name=details.title,
             DisplayOrder="PremiereDate"
-            if order is CollectionOrder.RELEASE_ASC
+            if details.order is CollectionOrder.RELEASE_ASC
             else "SortName",
         )
-        if summary is not None:
-            details["Overview"] = summary
-        if sort_title is not None:
-            self._set_sort_title(details, sort_title)
-        await self._request("POST", f"/Items/{collection_id}", json=details)
+        if details.summary is not None:
+            item["Overview"] = details.summary
+        if details.sort_title is not None:
+            self._set_sort_title(item, details.sort_title)
+        await self._request("POST", f"/Items/{collection_id}", json=item)
 
     @staticmethod
     def _set_sort_title(details: dict[str, Any], sort_title: str) -> None:

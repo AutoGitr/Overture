@@ -1,6 +1,6 @@
 import type { CatalogMediaType, MediaItemRead } from "../../generated/rest/types.gen";
 
-export function buildTmdbCollectionUrl(id: number): string {
+function buildTmdbCollectionUrl(id: number): string {
   return `https://www.themoviedb.org/collection/${id}`;
 }
 

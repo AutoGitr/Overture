@@ -1,10 +1,11 @@
 <script lang="ts">
+  import { ASSET_LABELS } from "../../generated/settings";
   import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
   import IssueRow from "./IssueRow.svelte";
   import JobPanel from "./JobPanel.svelte";
   import JobResultsList from "./JobResultsList.svelte";
   import { assetManagerState, FALSE_POSITIVE_LABEL } from "../stores/assetManagerState.svelte";
-  import { ASSET_BADGES, ASSET_LABELS } from "../utils/artTypes";
+  import { ASSET_BADGES } from "../utils/artTypes";
 
   let selectedCount = $derived(assetManagerState.selectedItems.length);
 </script>

@@ -12,6 +12,7 @@
   import CardColumn from "../CardColumn.svelte";
   import JobPanel from "../JobPanel.svelte";
   import PendingButton from "../PendingButton.svelte";
+  import ScheduleSaveButton from "../ScheduleSaveButton.svelte";
   import JobFooter from "./JobFooter.svelte";
   import CollectionChecklist from "../CollectionChecklist.svelte";
   import LibraryChecklist from "../LibraryChecklist.svelte";
@@ -451,16 +452,11 @@
           class="popup-footer-note"
           role="status">Choose a library or collections</span
         >{/if}
-      <button
-        class="btn btn-secondary"
-        onclick={saveSchedule}
-        title={scheduleBlocker ?? undefined}
-        disabled={!canSaveSchedule ||
-          createScheduleRequest.isPending ||
-          updateScheduleRequest.isPending}
-      >
-        {scheduleController.isEditing ? "Update schedule" : "Save schedule"}
-      </button>
+      <ScheduleSaveButton
+        controller={scheduleController}
+        blocker={scheduleBlocker}
+        onsave={saveSchedule}
+      />
       <PendingButton
         class="btn btn-primary"
         onclick={runNow}

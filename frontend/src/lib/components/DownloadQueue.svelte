@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ASSET_LABELS } from "../../generated/settings";
   import LoaderCircle from "@lucide/svelte/icons/loader-circle";
   import type { ServerAsset } from "../../generated/rest/types.gen";
   import {
@@ -7,7 +8,7 @@
     downloadStageLabel,
     downloadState,
   } from "../stores/downloadState.svelte";
-  import { ASSET_BADGES, ASSET_LABELS } from "../utils/artTypes";
+  import { ASSET_BADGES } from "../utils/artTypes";
 
   let {
     lane,

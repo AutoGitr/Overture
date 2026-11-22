@@ -16,7 +16,7 @@ lazy from ..domain import (
     RecentUnit,
     ThemeBulkSource,
 )
-lazy from .base import StrictBaseModel
+lazy from .base import PositiveId, StrictBaseModel
 lazy from .common import JobEnvelope
 lazy from .schedules import ScheduleResponseBase, ScheduleWrite
 lazy from .validators import GroupNames, LibraryIds, UniqueList
@@ -53,8 +53,8 @@ class _BulkSharedRunFields(StrictBaseModel):
     """Shared library and skip fields for bulk asset work."""
 
     library_ids: LibraryIds = Field(default_factory=list[str])
-    item_ids: UniqueList[Annotated[int, Field(gt=0)]] | None = None
-    collection_ids: UniqueList[Annotated[int, Field(gt=0)]] | None = Field(
+    item_ids: UniqueList[PositiveId] | None = None
+    collection_ids: UniqueList[PositiveId] | None = Field(
         default=None, description="These collections, besides any groups."
     )
     collection_groups: GroupNames | None = Field(

@@ -11,6 +11,10 @@ lazy from pydantic import AfterValidator, Field
 lazy from ..domain import ARR_ADDED_TAG
 
 MAX_COLLECTION_SUMMARY_LENGTH = 10_000
+#: The longest sort title format, wherever one is set.
+SORT_TITLE_FORMAT_LENGTH = 400
+#: The longest summary format: room for a full summary and its placeholders.
+SUMMARY_FORMAT_LENGTH = MAX_COLLECTION_SUMMARY_LENGTH * 2
 
 _SUMMARY_FIELDS = frozenset(
     {"title", "group", "start_date", "end_date", "summary", "source_summary"}
@@ -33,7 +37,9 @@ def validate_sort_title_format(value: str) -> str:
 
 # Escaped literal braces can double expression length without growing the output.
 type SortTitleFormat = Annotated[
-    str, Field(max_length=400), AfterValidator(validate_sort_title_format)
+    str,
+    Field(max_length=SORT_TITLE_FORMAT_LENGTH),
+    AfterValidator(validate_sort_title_format),
 ]
 
 
@@ -129,7 +135,7 @@ def validate_summary_format(value: str) -> str:
 
 type SummaryFormat = Annotated[
     str,
-    Field(max_length=MAX_COLLECTION_SUMMARY_LENGTH * 2),
+    Field(max_length=SUMMARY_FORMAT_LENGTH),
     AfterValidator(validate_summary_format),
 ]
 

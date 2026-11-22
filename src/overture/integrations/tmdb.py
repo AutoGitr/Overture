@@ -1,6 +1,5 @@
 """TMDB API client."""
 
-lazy from collections.abc import Callable
 lazy from dataclasses import dataclass
 lazy from typing import Any, Literal
 
@@ -20,7 +19,13 @@ lazy from ..domain import (
 lazy from ..schemas.art import ArtCandidate
 lazy from ..utils.art_urls import art_preview_url
 lazy from ..utils.cache import AsyncMemoizer
-lazy from .http import LazyClient, RequestLimiter, create_client, request_with_retry
+lazy from .http import (
+    ClientFactory,
+    LazyClient,
+    RequestLimiter,
+    create_client,
+    request_with_retry,
+)
 
 _TMDB_BASE = "https://api.themoviedb.org/3"
 _TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/original"
@@ -342,7 +347,7 @@ class TMDBClient:
         self,
         *,
         app_config: Settings,
-        client_factory: Callable[..., httpx2.AsyncClient] = create_client,
+        client_factory: ClientFactory = create_client,
         limiter: RequestLimiter | None = None,
     ) -> None:
         """Initialize instance state."""

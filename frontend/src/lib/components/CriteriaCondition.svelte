@@ -10,14 +10,8 @@
     ConditionInput,
     MediaType,
   } from "../../generated/rest/types.gen";
-  import {
-    OPERATOR_LABELS,
-    SOURCE_OPERATOR_LABELS,
-    defaultValue,
-    fieldCondition,
-    sourceCondition,
-  } from "../utils/collectionCriteria";
-  import { FIELD_LABELS } from "../../generated/settings";
+  import { defaultValue, fieldCondition, sourceCondition } from "../utils/collectionCriteria";
+  import { FIELD_LABELS, OPERATOR_LABELS, SOURCE_OPERATOR_LABELS } from "../../generated/settings";
   import { countOf } from "../utils/plural";
   import SourceFields from "./SourceFields.svelte";
   import DataStatus from "./DataStatus.svelte";
@@ -92,6 +86,13 @@
       : (values.data ?? []),
   );
   let current = $derived(condition.kind === "field" ? String(condition.value) : "");
+  /** The listed value the condition holds, as its field's criteria match it. */
+  let listed = $derived.by(() => {
+    const exact = known.find((entry) => entry.value === current);
+    if (exact || !field?.ignores_case) return exact;
+    const folded = current.toLocaleLowerCase();
+    return known.find((entry) => entry.value.toLocaleLowerCase() === folded);
+  });
   /** Most values a list offers; a library holding more of them, such as actors, has them typed. */
   const MAX_LISTED = 500;
   // A fixed set, or the values a tag field holds in the library, is chosen
@@ -207,10 +208,10 @@
       <select
         aria-label={`${label} value`}
         required
-        value={current}
+        value={listed?.value ?? current}
         onchange={(event) => (condition.value = event.currentTarget.value)}
       >
-        {#if !known.some((entry) => entry.value === current)}
+        {#if !listed}
           <option value={current} disabled
             >{missing}</option
           >

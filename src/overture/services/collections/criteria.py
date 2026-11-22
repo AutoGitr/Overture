@@ -153,6 +153,7 @@ def field_value(
 
 
 def _text(candidate: str, operator: FilterOperator, target: str) -> bool:
+    """Compare text as ``FieldKind.ignores_case`` says: ignoring case."""
     left, right = candidate.casefold(), target.casefold()
     match operator:
         case FilterOperator.IS:

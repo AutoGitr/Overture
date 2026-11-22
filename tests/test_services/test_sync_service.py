@@ -11,7 +11,6 @@ lazy from overture.db.session import Database
 lazy from overture.domain import IncrementalThemeOrder
 lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.jobs.gate import LibraryGate
-lazy from overture.protocols import CollectionGroups
 lazy from overture.schemas.common import Status, StatusResponse
 lazy from overture.schemas.sync import (
     SyncRunRequest,
@@ -24,6 +23,7 @@ lazy from overture.services.local_assets.service import LocalAssets
 lazy from overture.services.scheduler import SchedulerService
 lazy from overture.services.server_copies import ServerCopies
 lazy from overture.services.sync.engine import SyncEngine
+lazy from overture.services.sync.runner import CollectionGroups
 lazy from overture.utils.errors import PublicServiceError
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import NoopProviderRegistry, unused

@@ -22,7 +22,6 @@ lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.jobs.gate import LibraryGate
 lazy from overture.main import create_app
-lazy from overture.protocols import CollectionGroups
 lazy from overture.routers import art as art_router
 lazy from overture.runtime_paths import image_cache_path, uploads_path
 lazy from overture.schemas.art import ArtCandidate
@@ -38,6 +37,7 @@ lazy from overture.services.server_copies import ServerCopies
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.storage.image_cache import ImageCache
 lazy from overture.services.sync.engine import SyncEngine
+lazy from overture.services.sync.runner import CollectionGroups
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.http_security import CSRF_COOKIE, CSRF_HEADER
 lazy from overture.utils.time import utc_now

@@ -94,6 +94,18 @@ def copy_keys(parts: Iterable[CollectionLibrary]) -> list[CopyKey]:
     ]
 
 
+def copy_libraries(
+    parts: Iterable[CollectionLibrary],
+) -> dict[CopyKey, tuple[str, ...]]:
+    """The libraries each server collection of these parts holds the members of."""
+    found: dict[CopyKey, tuple[str, ...]] = {}
+    for part in parts:
+        if part.server_item_id is not None:
+            key = (part.server_id, part.server_item_id)
+            found[key] = (*found.get(key, ()), part.library_id)
+    return found
+
+
 def server_copies(
     row: MediaCollection, *, spans_libraries: Callable[[int], bool]
 ) -> list[ServerCopy]:

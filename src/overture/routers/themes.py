@@ -2,20 +2,23 @@
 
 lazy from typing import Annotated
 
-lazy from fastapi import APIRouter, Depends, Query
+lazy from fastapi import Query
 
 lazy from ..dependencies import ThemesDep
 lazy from ..schemas.common import StatusResponse
 lazy from ..schemas.library import ItemSelectionResponse
 lazy from ..schemas.removal import AssetRemoval
 lazy from ..schemas.themes import SearchRequest, SelectThemeRequest, ThemeSearchResponse
-lazy from .auth import require_auth
+lazy from .auth import authenticated_router
 lazy from .parameters import ItemIdPath
+lazy from .responses import errors
 
-router = APIRouter(tags=["themes"], dependencies=[Depends(require_auth)])
+router = authenticated_router(tags=["themes"])
 
 
-@router.get("/themes/search")
+@router.get(
+    "/themes/search", responses=errors({502: "YouTube did not answer the search"})
+)
 async def search_youtube(
     params: Annotated[SearchRequest, Query()], themes: ThemesDep
 ) -> ThemeSearchResponse:

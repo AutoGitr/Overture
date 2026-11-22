@@ -42,4 +42,31 @@ describe("JobLog", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(retry).toHaveBeenCalledOnce();
   });
+
+  it("fills two rows of its panel, filtering by server only across several", async () => {
+    const feed = new JobLogFeed();
+    const event = {
+      run_id: "run",
+      log_total: 3,
+      log_outcomes: { Added: 2, Started: 1 },
+      log_servers: { "1": { Added: 1 } },
+    } as const;
+    feed.apply(event);
+
+    const { container } = render(JobLog, { feed });
+    await tick();
+
+    // JobPanel spans a fixed number of grid rows, two of them this log's.
+    expect(container.children).toHaveLength(2);
+    expect(screen.getByRole("group", { name: "Show log lines by outcome" })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Show log lines by media server" })).toBeNull();
+
+    feed.apply({ ...event, log_servers: { "1": { Added: 1 }, "2": { Added: 1 } } });
+    await tick();
+
+    expect(container.children).toHaveLength(2);
+    expect(
+      screen.getByRole("group", { name: "Show log lines by media server" }),
+    ).toBeInTheDocument();
+  });
 });

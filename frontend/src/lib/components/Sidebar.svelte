@@ -39,7 +39,13 @@
     filterSidebarCollections,
     filterSidebarItems,
   } from "../utils/sidebarDomain";
-  import * as sidebarFilters from "../utils/sidebarFilters";
+  import {
+    activeFilterCount,
+    catalogFilterCount,
+    defaultCatalogFilters,
+    defaultTmdbFilters,
+    tmdbFilterKeysFor,
+  } from "../utils/sidebarFilters";
   import { searchFieldGroups, searchPlaceholder } from "../utils/sidebarSearches";
   import {
     collectionGroupNames,
@@ -189,7 +195,7 @@
       : defaultSort(sortFields),
   );
   let tmdbFilterKeys = $derived(
-    sidebarFilters.tmdbFilterKeys(uiState.sidebarSource, uiState.sidebarMode, catalog.enabled),
+    tmdbFilterKeysFor(uiState.sidebarSource, uiState.sidebarMode, catalog.enabled),
   );
   let catalogRows = $derived(
     filterCatalogEntries({
@@ -461,16 +467,16 @@
     activeFilters={searchingTmdb
       ? tmdbFilterKeys.filter((key) => uiState.tmdbFilters[key] !== "all").length
       : uiState.sidebarSource === "overturedb"
-      ? sidebarFilters.catalogFilterCount(uiState.catalogFilters, uiState.sidebarTab)
-      : sidebarFilters.activeFilterCount(
+      ? catalogFilterCount(uiState.catalogFilters, uiState.sidebarTab)
+      : activeFilterCount(
           uiState.currentFilters,
           catalog.enabled,
           uiState.sidebarMode,
         )}
     onResetFilters={() => {
-      if (searchingTmdb) uiState.tmdbFilters = sidebarFilters.defaultTmdbFilters();
+      if (searchingTmdb) uiState.tmdbFilters = defaultTmdbFilters();
       else if (uiState.sidebarSource === "overturedb")
-        uiState.catalogFilters = sidebarFilters.defaultCatalogFilters();
+        uiState.catalogFilters = defaultCatalogFilters();
       else uiState.setFilters(defaultFilters());
     }}
     searchQuery={uiState.searchQuery}

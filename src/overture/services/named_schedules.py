@@ -266,17 +266,6 @@ class NamedSchedules[ConfigT: BaseModel, ResponseT: BaseModel]:
         self._enqueue(schedule_id, by_hand=True)
         return StatusResponse(status=Status.QUEUED)
 
-    async def reset(self, rewrite: Callable[[ConfigT], ConfigT]) -> None:
-        """Rewrite every schedule's settings and clear its run state."""
-        async with self._database.write_session() as session:
-            for record in await SavedScheduleRepository(session).of_kind(self.kind):
-                config = self._config_model.model_validate(record.payload)
-                record.payload = rewrite(config).model_dump(mode="json")
-                record.state = {}
-                record.updated_at = utc_now()
-                session.add(record)
-        self._announce()
-
     def _saved(self, record: SavedSchedule) -> ResponseT:
         if record.id is not None:
             self._register(

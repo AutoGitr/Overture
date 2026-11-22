@@ -2,7 +2,7 @@
 
 lazy from typing import Annotated
 
-lazy from fastapi import APIRouter, Depends, Query
+lazy from fastapi import Query
 lazy from fastapi.responses import Response
 
 lazy from ..dependencies import (
@@ -16,7 +16,6 @@ lazy from ..dependencies import (
     CollectionReaderDep,
     CollectionSetsDep,
     CollectionThemesDep,
-    require_media_server,
 )
 lazy from ..domain import (
     MATCH_THRESHOLD_DEFAULT,
@@ -76,7 +75,7 @@ lazy from ..schemas.common import (
 )
 lazy from ..schemas.records import DatabaseRecord
 lazy from ..schemas.removal import AssetRemoval
-lazy from .auth import READS_ONLY, require_auth
+lazy from .auth import READS_ONLY, media_server_router
 lazy from .parameters import (
     ArtTypePath,
     CollectionIdPath,
@@ -85,12 +84,10 @@ lazy from .parameters import (
     ImageVersionQuery,
     MediaTypeQuery,
 )
+lazy from .responses import NOT_CONFIGURED, UPLOAD_GONE, errors
 
-router = APIRouter(
-    prefix="/collections",
-    tags=["collections"],
-    dependencies=[Depends(require_auth), Depends(require_media_server)],
-)
+router = media_server_router(prefix="/collections", tags=["collections"])
+_NO_GROUP = errors({404: "No collection group has that name"})
 
 
 @router.get("")
@@ -146,7 +143,7 @@ async def preview_collection(
     return await discovery.preview(body)
 
 
-@router.get("/arr-options")
+@router.get("/arr-options", responses=NOT_CONFIGURED)
 async def get_collection_arr_options(
     arr: CollectionArrDep, media_type: MediaTypeQuery
 ) -> CollectionArrOptions:
@@ -166,7 +163,7 @@ async def list_collection_field_values(
     return await discovery.field_values(media_type, library_id, field, query)
 
 
-@router.get("/mdblist-lists")
+@router.get("/mdblist-lists", responses=NOT_CONFIGURED)
 async def search_mdblist_lists(
     discovery: CollectionDiscoveryDep,
     query: Annotated[str, Query(min_length=1, max_length=200)],
@@ -191,7 +188,7 @@ async def preview_collection_set(
     return await sets.preview(body)
 
 
-@router.patch("/groups")
+@router.patch("/groups", responses=_NO_GROUP)
 async def rename_collection_group(
     body: CollectionGroupRename,
     groups: CollectionGroupsDep,
@@ -201,7 +198,7 @@ async def rename_collection_group(
     return await groups.rename(name, body.name)
 
 
-@router.delete("/groups")
+@router.delete("/groups", responses=_NO_GROUP)
 async def delete_collection_group(
     body: CollectionGroupDelete,
     groups: CollectionGroupsDep,
@@ -233,13 +230,13 @@ async def save_collection_group_policy(
     return await groups.save_policy(name, body, new_set=new_set)
 
 
-@router.get("/tags/radarr")
+@router.get("/tags/radarr", responses=NOT_CONFIGURED)
 async def list_radarr_tags(arr: CollectionArrDep) -> list[ArrTagRead]:
     """Return available Radarr tags when Radarr is configured."""
     return await arr.radarr_tags()
 
 
-@router.get("/tags/sonarr")
+@router.get("/tags/sonarr", responses=NOT_CONFIGURED)
 async def list_sonarr_tags(arr: CollectionArrDep) -> list[ArrTagRead]:
     """Return available Sonarr tags when Sonarr is configured."""
     return await arr.sonarr_tags()
@@ -491,7 +488,7 @@ async def get_generated_collection_art(
     )
 
 
-@router.put("/{collection_id}/art/{art_type}")
+@router.put("/{collection_id}/art/{art_type}", responses=UPLOAD_GONE)
 async def save_collection_art(
     collection_id: CollectionIdPath,
     art_type: ArtTypePath,

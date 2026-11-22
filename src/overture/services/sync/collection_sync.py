@@ -246,10 +246,17 @@ class CollectionSync:
                     server=log_server(provider),
                     finished=False,
                 )
+                found = await provider.list_collections()
                 listed += [
-                    ListedCopy(provider.server_id, collection)
-                    for collection in await provider.list_collections()
+                    ListedCopy(provider.server_id, collection) for collection in found
                 ]
+                await job.report(
+                    JobOutcome.CHECKED,
+                    "Collections",
+                    f"{len(found)} listed on {provider.server.title}",
+                    server=log_server(provider),
+                    finished=False,
+                )
             by_server = {provider.server_id: provider for provider in providers}
             async with self._database.read_session() as session:
                 import_unmanaged = (
@@ -354,6 +361,16 @@ class CollectionSync:
                         self._record(row, observations)
                         await apply_needs(session, collections=[row])
                 identified += row.tmdb_collection_id is not None
+                if previous is None:
+                    await job.report(
+                        JobOutcome.ADDED,
+                        row.title,
+                        f"read from {by_server[lead.server_id].server.title} "
+                        f"with {row.child_count} titles; Overture does not "
+                        "manage it",
+                        finished=False,
+                        server=log_server(by_server[lead.server_id]),
+                    )
                 if (
                     row.id is not None
                     and row.tmdb_collection_id is not None
@@ -366,9 +383,7 @@ class CollectionSync:
                 await self._publisher.broadcast(
                     "collection.updated", {"collection_id": row.id}
                 )
-            removed, missing_managed = await self._reconcile_missing(
-                by_server, seen, library_ids
-            )
+            await self._reconcile_missing(job, by_server, seen, library_ids)
             await self._publisher.broadcast("collections.changed")
         await queue_catalog_themes_for_collections(
             newly_identified,
@@ -379,24 +394,24 @@ class CollectionSync:
         if theme_order is IncrementalThemeOrder.OFF and newly_identified:
             await self._queue_incremental_choices(newly_identified)
         await job.report(
-            JobOutcome.STARTED,
+            JobOutcome.CHECKED,
             "Collections",
-            f"{len(listed)} listed, {identified} with TMDB IDs, "
-            f"{removed} removed, "
-            f"{missing_managed} managed no longer on the server",
+            f"{len(listed)} read from the servers, {identified} of them "
+            "identified as TMDB collections",
             finished=False,
         )
 
     async def _reconcile_missing(
         self,
+        job: ManagedJob[JobTally],
         by_server: Mapping[int, Provider],
         seen: set[CopyKey],
         library_ids: list[str] | None,
-    ) -> tuple[int, int]:
+    ) -> None:
         """Forget managed copies missing from synced servers and drop unmanaged rows."""
         async with self._database.read_session() as session:
-            gone = {
-                row.id: missing
+            rows = {
+                row.id: (row.title, missing)
                 for row in await CollectionRepository(session).list_all()
                 if row.id is not None
                 and (
@@ -416,8 +431,8 @@ class CollectionSync:
                     )
                 )
             }
-            managed = await CollectionRepository(session).managed_ids(list(gone))
-        for collection_id, missing in gone.items():
+            managed = await CollectionRepository(session).managed_ids(list(rows))
+        for collection_id, (title, missing) in rows.items():
             async with (
                 self._downloads.asset_locks.acquire(f"collection:{collection_id}"),
                 self._database.write_session() as session,
@@ -432,13 +447,25 @@ class CollectionSync:
                     if saved is not None:
                         place_collection(saved, self._downloads.provider_registry)
                         session.add(saved)
-                    continue
-                await self._downloads.cancel_assets(
-                    session, AssetScope(collection_id=collection_id)
-                )
-                await repo.delete_ids([collection_id])
+                else:
+                    await self._downloads.cancel_assets(
+                        session, AssetScope(collection_id=collection_id)
+                    )
+                    await repo.delete_ids([collection_id])
             await self._downloads.committed(session)
-        return len(gone) - len(managed), len(managed)
+            reason = (
+                "gone from the server; Overture keeps it and its sync makes it again"
+                if collection_id in managed
+                else "gone from the server, so Overture forgets it"
+            )
+            for server_id in sorted({server_id for server_id, _ in missing}):
+                await job.report(
+                    JobOutcome.REMOVED,
+                    title,
+                    reason,
+                    finished=False,
+                    server=log_server(by_server[server_id]),
+                )
 
     async def _observe(
         self, current: MediaCollection | None, listed: ListedCopy, provider: Provider

@@ -1,14 +1,14 @@
 """Shared public schema primitives."""
 
 lazy from enum import StrEnum
-lazy from typing import Annotated, Literal, Self
+lazy from typing import Literal, Self
 
 lazy from pydantic import Field, model_validator
 
 lazy from ..jobs.kinds import JobKind, LifecycleStatus
 lazy from ..jobs.progress_log import JobLogEntry, JobOutcome
 lazy from ..utils.types import JsonValue
-lazy from .base import PublicText, StrictBaseModel
+lazy from .base import PositiveId, PublicText, StrictBaseModel
 lazy from .validators import UniqueList
 
 
@@ -17,7 +17,7 @@ class MediaFolderScope(StrictBaseModel):
 
     movie_folders: list[str] = Field(default_factory=list[str])
     show_folders: list[str] = Field(default_factory=list[str])
-    item_ids: UniqueList[Annotated[int, Field(gt=0)]] | None = Field(
+    item_ids: UniqueList[PositiveId] | None = Field(
         default=None,
         description="Visit these items' folders instead of the selected roots.",
     )

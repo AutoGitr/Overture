@@ -11,10 +11,14 @@
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import { defaultFilters, uiState, type FilterState } from "../stores/uiState.svelte";
   import { errorMessage } from "../utils/errors";
-  import { filterAvailableValues, toggleSelectedValue } from "../utils/popupSelection";
+  import {
+    filterAvailableValues,
+    selectedValuesForAll,
+    toggleSelectedValue,
+  } from "../utils/popupSelection";
   import { filterCatalogEntries } from "../utils/sidebarDomain";
-  import * as sidebarFilters from "../utils/sidebarFilters";
-  import { METADATA_ISSUES } from "../../generated/settings";
+  import { ART_SOURCES, CATALOG_FILTER_KEYS, CATALOG_FILTER_LABELS, FILTERS, FILTER_GROUPS, type FilterGroup, type FilterKey, THEME_SOURCES, TMDB_FILTER_LABELS, defaultCatalogFilters, defaultTmdbFilters, filterSections, metadataIssuesFor, tmdbFilterKeysFor, withoutCatalogFilters } from "../utils/sidebarFilters";
+  import { METADATA_ISSUES, SELECTED_ART_SOURCE_LABELS, THEME_ID_SOURCE_LABELS } from "../../generated/settings";
   import BulkOperationsCard from "../components/BulkOperationsCard.svelte";
   import CardColumn from "../components/CardColumn.svelte";
   import CatalogDraftsCard from "../components/CatalogDraftsCard.svelte";
@@ -155,23 +159,23 @@
     ),
   );
   let metadataIssueOptions = $derived(
-    sidebarFilters.metadataIssuesFor(uiState.sidebarTab, catalogEnabled, uiState.sidebarMode),
+    metadataIssuesFor(uiState.sidebarTab, catalogEnabled, uiState.sidebarMode),
   );
   let groupedSections = $derived.by(() => {
-    const shown = sidebarFilters.filterSections(uiState.sidebarMode, {
+    const shown = filterSections(uiState.sidebarMode, {
       tab: uiState.sidebarTab,
       catalogEnabled,
       smart: !!capabilities.data?.smart,
       collections: settingsState.current.collections_supported,
     });
-    return (Object.keys(sidebarFilters.FILTER_GROUPS) as sidebarFilters.FilterGroup[])
-      .map((group) => [group, shown.filter((key) => sidebarFilters.FILTERS[key].group === group)] as const)
+    return (Object.keys(FILTER_GROUPS) as FilterGroup[])
+      .map((group) => [group, shown.filter((key) => FILTERS[key].group === group)] as const)
       .filter(([, keys]) => keys.length > 0);
   });
 
   /** Splits *keys* into runs of neighbours offering the same choices. */
-  function choiceRuns(keys: readonly sidebarFilters.FilterKey[]): sidebarFilters.FilterKey[][] {
-    const runs: sidebarFilters.FilterKey[][] = [];
+  function choiceRuns(keys: readonly FilterKey[]): FilterKey[][] {
+    const runs: FilterKey[][] = [];
     for (const key of keys) {
       const run = runs.at(-1);
       const previous = run?.at(-1);
@@ -181,7 +185,7 @@
     return runs;
   }
 
-  function choicesOf(key: sidebarFilters.FilterKey) {
+  function choicesOf(key: FilterKey) {
     return key in CHOICES ? CHOICES[key as keyof typeof CHOICES].options : key;
   }
 
@@ -210,7 +214,7 @@
   let catalogPosters = $state(uiState.catalogPosters);
   let tmdbDraft = $state($state.snapshot(uiState.tmdbFilters));
   let tmdbFilterKeys = $derived(
-    sidebarFilters.tmdbFilterKeys(uiState.sidebarSource, uiState.sidebarMode, catalogEnabled),
+    tmdbFilterKeysFor(uiState.sidebarSource, uiState.sidebarMode, catalogEnabled),
   );
   const catalogQuery = createQuery(() => ({
     ...listCatalogEntriesOptions({
@@ -255,20 +259,20 @@
     }
     const applied = $state.snapshot(filters);
     uiState.setFilters(
-      catalogEnabled ? applied : sidebarFilters.withoutCatalogFilters(applied, defaultFilters()),
+      catalogEnabled ? applied : withoutCatalogFilters(applied, defaultFilters()),
     );
     uiState.closePopup();
   }
 
   function clear() {
     draft = defaultFilters();
-    catalogDraft = sidebarFilters.defaultCatalogFilters();
-    tmdbDraft = sidebarFilters.defaultTmdbFilters();
+    catalogDraft = defaultCatalogFilters();
+    tmdbDraft = defaultTmdbFilters();
   }
 </script>
 
-{#snippet filter(key: sidebarFilters.FilterKey)}
-  {@const label = sidebarFilters.FILTERS[key].label}
+{#snippet filter(key: FilterKey)}
+  {@const label = FILTERS[key].label}
   {#if key === "resolution"}
     <FieldRow {label}>
       <SegmentedControl
@@ -293,13 +297,18 @@
       />
     </FieldRow>
     <CheckboxList
-      options={sidebarFilters.ART_SOURCES.map((source) => ({
+      options={ART_SOURCES.map((source) => ({
         value: source,
-        label: sidebarFilters.ART_SOURCE_LABELS[source],
+        label: SELECTED_ART_SOURCE_LABELS[source],
       }))}
       selected={draft.artSource.sources}
       ontoggle={(source) =>
         (draft.artSource.sources = toggleSelectedValue(draft.artSource.sources, source))}
+      selectAll={{
+        noun: "art sources",
+        ontoggle: (checked) =>
+          (draft.artSource.sources = selectedValuesForAll(checked, ART_SOURCES)),
+      }}
     />
   {:else if key === "collection"}
     <FieldRow {label} for={`${id}-collection`}>
@@ -332,12 +341,17 @@
   {:else if key === "themeSources"}
     <FieldRow {label} />
     <CheckboxList
-      options={sidebarFilters.THEME_SOURCES.map((source) => ({
+      options={THEME_SOURCES.map((source) => ({
         value: source,
-        label: sidebarFilters.THEME_SOURCE_LABELS[source],
+        label: THEME_ID_SOURCE_LABELS[source],
       }))}
       selected={draft.themeSources}
       ontoggle={(source) => (draft.themeSources = toggleSelectedValue(draft.themeSources, source))}
+      selectAll={{
+        noun: "theme sources",
+        ontoggle: (checked) =>
+          (draft.themeSources = selectedValuesForAll(checked, THEME_SOURCES)),
+      }}
     />
   {:else if key === "metadataIssues"}
     <FieldRow label="Match">
@@ -355,6 +369,11 @@
       selected={draft.metadataIssues.flags}
       ontoggle={(flag) =>
         (draft.metadataIssues.flags = toggleSelectedValue(draft.metadataIssues.flags, flag))}
+      selectAll={{
+        noun: "metadata issues",
+        ontoggle: (checked) =>
+          (draft.metadataIssues.flags = selectedValuesForAll(checked, metadataIssueOptions)),
+      }}
     />
   {:else if key !== "libraries"}
     <FieldRow {label}>
@@ -383,9 +402,9 @@
     {#if uiState.searchingTmdb}
       <PopupSection label="TMDB results">
         {#each tmdbFilterKeys as key (key)}
-          <FieldRow label={sidebarFilters.TMDB_FILTER_LABELS[key]}>
+          <FieldRow label={TMDB_FILTER_LABELS[key]}>
             <SegmentedControl
-              label={sidebarFilters.TMDB_FILTER_LABELS[key]}
+              label={TMDB_FILTER_LABELS[key]}
               options={MEDIA_SERVER_OPTIONS}
               bind:value={tmdbDraft[key]}
             />
@@ -393,7 +412,7 @@
         {/each}
       </PopupSection>
     {:else if uiState.sidebarSource === "overturedb"}
-      <PopupSection label={sidebarFilters.FILTER_GROUPS.status}>
+      <PopupSection label={FILTER_GROUPS.status}>
         {#if uiState.sidebarMode === "collections"}
           <FieldRow label="Poster style">
             <SegmentedControl
@@ -403,11 +422,11 @@
             />
           </FieldRow>
         {/if}
-        {#each sidebarFilters.CATALOG_FILTER_KEYS as key (key)}
+        {#each CATALOG_FILTER_KEYS as key (key)}
           {#if key !== "seasonPosters" || uiState.sidebarTab === "show"}
-            <FieldRow label={sidebarFilters.CATALOG_FILTER_LABELS[key]}>
+            <FieldRow label={CATALOG_FILTER_LABELS[key]}>
               <SegmentedControl
-                label={sidebarFilters.CATALOG_FILTER_LABELS[key]}
+                label={CATALOG_FILTER_LABELS[key]}
                 options={MEDIA_SERVER_OPTIONS}
                 bind:value={catalogDraft[key]}
               />
@@ -418,7 +437,7 @@
       <CatalogDraftsCard entries={catalogEntries} />
     {:else}
       {#each groupedSections as [group, keys] (group)}
-        {@const title = sidebarFilters.FILTER_GROUPS[group]}
+        {@const title = FILTER_GROUPS[group]}
         {#if title}
           <PopupSection label={title}>
             <!-- Status holds one-line choices only, evenly spaced as one run;
@@ -434,16 +453,16 @@
         {:else}
           {#each keys as key (key)}
             {#if key !== "libraries"}
-              <PopupSection label={sidebarFilters.FILTERS[key].label}>
+              <PopupSection label={FILTERS[key].label}>
                 {@render filter(key)}
               </PopupSection>
             {:else if librariesQuery.isError}
-              <PopupSection label={sidebarFilters.FILTERS.libraries.label}>
+              <PopupSection label={FILTERS.libraries.label}>
                 <p class="hint">{errorMessage(librariesQuery.error, "Failed to load libraries")}</p>
               </PopupSection>
             {:else if libraries.length > 1}
               <PopupSection
-                label={sidebarFilters.FILTERS.libraries.label}
+                label={FILTERS.libraries.label}
                 description={filters.libraryIds.length === 0
                   ? "All libraries"
                   : `${filters.libraryIds.length} of ${libraries.length} selected`}
@@ -453,6 +472,11 @@
                   selected={filters.libraryIds}
                   ontoggle={(id) =>
                     (draft.libraryIds = toggleSelectedValue(filters.libraryIds, id))}
+                  ontoggleall={(checked) =>
+                    (draft.libraryIds = selectedValuesForAll(
+                      checked,
+                      libraries.map((library) => library.id),
+                    ))}
                 />
               </PopupSection>
             {/if}

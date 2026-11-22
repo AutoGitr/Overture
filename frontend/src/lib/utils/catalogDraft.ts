@@ -16,7 +16,7 @@ import type { collectionPosterField } from "./collectionPosters";
 import { errorMessage } from "./errors";
 
 /** The entry field a catalog poster tab shows and edits. */
-export type CatalogPosterField = "poster_url" | ReturnType<typeof collectionPosterField>;
+type CatalogPosterField = "poster_url" | ReturnType<typeof collectionPosterField>;
 
 export type CatalogContext = {
   detail: CatalogEntryDetail;

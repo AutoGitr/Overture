@@ -1,3 +1,4 @@
+import { ORDER_LABELS } from "../../generated/settings";
 import type {
   CollectionCapabilities,
   CollectionFieldRead,
@@ -11,53 +12,6 @@ import type {
   MediaType,
   SourceType,
 } from "../../generated/rest/types.gen";
-
-export const OPERATOR_LABELS: Record<FilterOperator, string> = {
-  is: "is",
-  is_not: "is not",
-  contains: "contains",
-  does_not_contain: "does not contain",
-  starts_with: "starts with",
-  ends_with: "ends with",
-  gt: "is greater than",
-  gte: "is at least",
-  lt: "is less than",
-  lte: "is at most",
-  in_last: "in the last (days)",
-  not_in_last: "not in the last (days)",
-  before: "is before",
-  after: "is after",
-};
-
-/** Source conditions read as membership, so their operators do too. */
-export const SOURCE_OPERATOR_LABELS = { is: "in", is_not: "not in" } as const;
-
-export const ORDER_LABELS: Record<CollectionOrder, string> = {
-  custom: "Custom (manual or source order)",
-  "release.asc": "Release date (oldest first)",
-  "release.desc": "Release date (newest first)",
-  "title.asc": "Title (A to Z)",
-  "title.desc": "Title (Z to A)",
-  "added.desc": "Date added (newest first)",
-  "added.asc": "Date added (oldest first)",
-  "critic_rating.desc": "Critic rating (highest first)",
-  "critic_rating.asc": "Critic rating (lowest first)",
-  "audience_rating.desc": "Audience rating (highest first)",
-  "audience_rating.asc": "Audience rating (lowest first)",
-  "user_rating.desc": "User rating (highest first)",
-  "user_rating.asc": "User rating (lowest first)",
-  "duration.desc": "Duration (longest first)",
-  "duration.asc": "Duration (shortest first)",
-  "plays.desc": "Plays (most first)",
-  "plays.asc": "Plays (fewest first)",
-  "last_played.desc": "Last played (most recent first)",
-  "last_played.asc": "Last played (least recent first)",
-  "episode_added.desc": "Latest episode added (newest first)",
-  "episode_added.asc": "Latest episode added (oldest first)",
-  "unplayed_episodes.desc": "Unplayed episodes (most first)",
-  "unplayed_episodes.asc": "Unplayed episodes (fewest first)",
-  random: "Random",
-};
 
 /** Sort orders alphabetically, keeping a field's two directions together and custom first. */
 export function sortedOrders(orders: readonly CollectionOrder[]): CollectionOrder[] {

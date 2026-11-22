@@ -1,0 +1,138 @@
+---
+sidebar_position: 5
+title: Media server settings
+description: The library, metadata, collection and theme music settings each media server needs for Overture.
+---
+
+import Tabs from "@theme/Tabs";
+import TabItem from "@theme/TabItem";
+
+# Media server settings
+
+Set these up before your first sync. Overture writes artwork and themes
+beside your media and manages collections; a server left on its defaults keeps
+showing its own downloaded images and making its own collections, so your
+choices seem not to apply.
+
+Each server needs three things:
+
+1. **Libraries that show local files**, so the files Overture writes win.
+2. **External IDs (TMDB, IMDb, TVDB) on every title**, which Overture matches
+   titles, catalog entries and lists by. A title without them gets no
+   OvertureDB art and cannot be found in lists.
+3. **No automatic collections** in libraries whose collections Overture
+   manages.
+
+Changes to a library's metadata settings apply to items the server adds or
+refreshes afterwards. Refresh the library's metadata once after changing them.
+
+<Tabs groupId="media-server" queryString>
+  <TabItem value="plex" label="Plex" default>
+
+## Libraries
+
+In each movie and show library, under **Edit -> Advanced**:
+
+| Setting                               | Set to                              | Why                                                                                             |
+| ------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------- |
+| **Scanner** and **Agent**             | **Plex Movie** / **Plex TV Series** | The current agents store TMDB, IMDb and TVDB IDs; the legacy agents do not                      |
+| **Use local assets**                  | On                                  | Plex shows the posters, backgrounds and `theme.mp3` Overture writes                             |
+| **Minimum automatic collection size** | **Disabled**, in movie libraries    | Plex stops making a collection for each TMDB franchise; Overture's collections take their place |
+
+Plex needs no plugins: its agents read TMDB, IMDb and TVDB themselves.
+
+## Theme music
+
+Plex plays the `theme.mp3` beside a movie or show once **Use local assets** is
+on. Each Plex app plays it only when its own setting is on:
+
+| App                       | Setting                                                 |
+| ------------------------- | ------------------------------------------------------- |
+| Plex Web and Plex Desktop | **Settings -> Plex Web -> General -> Play Theme Music** |
+| Plex for Android TV       | **Settings -> Experience -> Play theme music**          |
+| Other Plex apps           | The app's own settings, where it offers theme music     |
+
+  </TabItem>
+  <TabItem value="jellyfin" label="Jellyfin">
+
+## Libraries
+
+In each movie and show library's settings:
+
+| Setting                             | Set to                  | Why                                                                                                   |
+| ----------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Metadata downloaders**            | **TheMovieDb** on       | Stores the TMDB and IMDb IDs, and TVDB IDs of shows, that Overture matches titles by                  |
+| **Save artwork into media folders** | Off                     | Jellyfin keeps its downloads apart, so the files Overture writes beside your media are the ones shown |
+| **Automatically add to collection** | Off, in movie libraries | Jellyfin stops making a collection for each TMDB franchise                                            |
+
+TheMovieDb ships with Jellyfin. **TheTVDB** and **Fanart** are optional
+plugins from **Dashboard -> Plugins -> Catalog**; Overture does not need them.
+
+Images Jellyfin saved beside your media earlier, such as `backdrop.jpg` or
+`fanart.jpg`, can outrank Overture's; **Renamer** lists them.
+
+## Collections library
+
+Jellyfin keeps collections (BoxSets) in a library of their own. Overture sets
+their titles, summaries and art on every sync, so Jellyfin should not fetch its
+own. In the **Collections** library's settings:
+
+| Setting                                              | Set to | Why                                                        |
+| ---------------------------------------------------- | ------ | ---------------------------------------------------------- |
+| **Metadata downloaders (Film Collections)**          | Off    | A refresh does not replace Overture's titles and summaries |
+| **Image fetchers (Film Collections)**                | Off    | A refresh does not replace the art Overture uploads        |
+| **Automatically refresh metadata from the internet** | Never  | The same, between syncs                                    |
+
+## Theme music
+
+Jellyfin plays the `theme.mp3` beside a title in its detail view. Each user
+turns it on for themselves:
+
+| App                                                           | Setting                                                                       |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Jellyfin Web, Jellyfin Media Player, the Android and iOS apps | **User menu -> Settings -> Display -> Library -> Theme songs**                |
+| Other apps                                                    | The app's own settings, where it offers theme songs; not every app plays them |
+
+  </TabItem>
+  <TabItem value="emby" label="Emby">
+
+## Libraries
+
+In each movie and show library's settings:
+
+| Setting                                                                    | Set to                  | Why                                                                                               |
+| -------------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------- |
+| **Metadata downloaders**                                                   | **TheMovieDb** on       | Stores the TMDB and IMDb IDs, and TVDB IDs of shows, that Overture matches titles by              |
+| **Save artwork into media folders**                                        | Off                     | Emby saves backgrounds there as `fanart.jpg`, which outranks Overture's `background.jpg`          |
+| **Collections -> Import collection information from metadata downloaders** | Off, in movie libraries | Emby stops making a collection for each TMDB franchise, kept in folders named `<title>-tmdb-<id>` |
+
+Emby ships with TheMovieDb, TheTVDB, OMDb and FanArt; no plugins are needed.
+
+## Collections library
+
+Emby keeps collections in a library of their own. Overture sets their titles,
+summaries and art on every sync, so Emby should not fetch its own. In the
+**Collections** library's settings, turn off every **Collection Metadata
+Downloader** and **Collection Image Fetcher**, and set **After the initial
+import, automatically refresh metadata from the Internet** to **Never**.
+
+## Theme music
+
+Emby plays the `theme.mp3` beside a title in its detail view, in apps whose
+setting is on. Emby keeps no collection themes.
+
+| App                          | Setting                                                |
+| ---------------------------- | ------------------------------------------------------ |
+| Emby Web and the Android app | **Settings -> App Settings -> General -> Theme songs** |
+| Emby for Android TV          | The **Theme songs** option in the app's settings       |
+| Other apps                   | The app's own settings                                 |
+
+  </TabItem>
+</Tabs>
+
+## Afterwards
+
+A managed collection takes over the server's collection of the same TMDB
+collection, or of the same title, instead of making a second one, so turning
+automatic collections off stops only new ones. Run a [sync](../features/operations.md)
+once the settings are in place.

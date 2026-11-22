@@ -1,8 +1,10 @@
 # Agent guide
 
 Write correct, secure, fully typed, tested and minimal code, following each
-framework's best practice through the skills below. Setup, commands and
-workflow are in [CONTRIBUTING.md](.github/CONTRIBUTING.md).
+framework's best practice through the skills below. Setup and commands are in
+[Contributing](docs/overture/developer/contributing.md).
+`scripts/pre-commit-check.sh` enforces every rule a check can; this guide holds
+only the ones that need judgment.
 
 ## Repositories
 
@@ -11,13 +13,12 @@ workflow are in [CONTRIBUTING.md](.github/CONTRIBUTING.md).
   `packaging/linux/`, documentation site in `docs/` (Overture's pages in
   `docs/overture/`; OvertureDB's are read from `../OvertureDB/docs/`).
 - **OvertureDB**: the curated catalog, checked out as `../OvertureDB`. Its
-  `schema/` is the authoritative catalog contract and `data/` holds the entries.
+  `schema/` is the catalog contract and `data/` holds the entries.
 
 The two never drift:
 
-- Edit the contract only in `../OvertureDB/schema/` and copy it into
-  `src/overture/catalog_contract/`. Rules both apply (entry validation, the
-  catalog format, canonical artwork links) are imported from it, never
+- Edit the contract in `../OvertureDB/schema/`, then copy it with
+  `scripts.catalog_contract`. Rules both apply are imported from it, never
   re-implemented.
 - A change on one side that affects the other is finished on both sides in the
   same task: code, tests, `data/` entries, docs and issue templates. Bump
@@ -40,26 +41,21 @@ commands from skills as `bunx`.
 | End-to-end tests and browser checks                        | `playwright-best-practices`, `playwright-cli`                                                                      |
 | Failed end-to-end runs                                     | `playwright-trace`                                                                                                 |
 
-`uv run python -m scripts.sync_skills` installs the skills in
-`.agents/skills.json` (run it again after a dependency update); only
-`.agents/skills/svelte-query` is edited by hand.
-
 ## Engineering standards
 
 - **Root cause first.** Fix problems where they originate; no wrappers or
   defensive fallbacks around code that should be corrected.
-- **Minimal code.** No dead code, redundant helpers or abstractions with a
-  single user. Prefer deleting code to adding it.
-- **One source of truth.** Define every rule, constant and mapping once.
-  Business rules live in the backend; the frontend uses the generated
-  contracts. A low-level concern has one home in `utils/`
-  (`tests/test_architecture/test_homes.py` lists them); a new one gets its own
-  module, named for what it does.
+- **Minimal code.** No helper or abstraction with a single user. Prefer
+  deleting code to adding it.
+- **One source of truth.** Business rules live in the backend; the frontend
+  reads them from the generated contracts. Before adding a component, constant
+  or mapping, find the one that exists and extend it. A constant names one
+  limit: a second limit gets its own, even at the same value. A concern that
+  must stay in one place gets an entry in a homes test.
 - **Secure by default.** Remote fetches go through the private-address guards
   (`utils/ssrf.py`, `utils/image_fetch.py`), errors and logs through
   `sanitise_error`; credentials never reach URLs, responses or the browser.
-- **Data is never lost.** A file Overture keeps is written with
-  `utils.file.staged_file`. Never delete the only copy of something before its
+- **Data is never lost.** Never delete the only copy of something before its
   replacement is verified.
 
 ## Comments and documentation
@@ -71,13 +67,11 @@ messages and the changelog.
   ("no longer", "previously", "the new"). A test name says what holds.
 - **Comment the why, not the what:** an outside constraint, a non-obvious
   invariant, or why the obvious approach is wrong. Rename or restructure
-  instead of explaining unclear code.
+  instead of explaining unclear code. No author tags.
 - **Docstrings** state in one present-tense line what a module, class or
   function is or returns; add `Raises:` or argument notes only when a caller
   needs them. Document a field (`#:` in Python, `/** */` in TypeScript) when
   its meaning, unit or `None` case is not obvious.
-- **No noise:** no TODOs, commented-out code or author tags. A suppression
-  (`noqa`, `pyright: ignore`, `eslint-disable`) names its rule and says why.
 - **Docs follow the code.** A change to behaviour, settings or the API updates
   `docs/overture/` in the same task, written for the person running Overture.
   A catalog change updates `../OvertureDB/docs/` too.
@@ -85,37 +79,31 @@ messages and the changelog.
 ## Backend
 
 - `routers/` parse and authorise a request and call one service. `services/`
-  own the rules, transactions and their effects; `runtime.py` alone wires them
-  together, and a feature package keeps each responsibility in its own class.
-  `repositories/` query the session they are given and never commit.
-  `test_layers.py` holds which layer may import which.
-- `Database.write_session()` serialises every writer behind SQLite's write
-  lock: keep transactions short, with no network, file I/O or hashing inside;
-  run blocking work with `owned_thread`. Take asset locks before opening a
-  write session, never inside one.
+  own the rules, transactions and their effects, and a feature package keeps
+  each responsibility in its own class.
+- Keep write transactions short: `Database.write_session()` serialises every
+  writer behind SQLite's write lock.
 - Effects others observe (broadcasts, scheduler registration, waking download
   workers through `DownloadService.committed(session)`) happen after the
   commit. Work over many rows commits per item or per `CHUNK_SIZE` chunk.
-- Overture's database is reached through SQLModel sessions; an operation's
-  working rows go in a scratch database (`utils/scratch.py`).
+- An operation's working rows go in a scratch database (`utils/scratch.py`).
 
 ### Database migrations
 
-- Any model change ships a migration: autogenerate at head, then review.
 - A new stored format converts existing rows with the rule the app uses,
   including JSON copies in `saved_schedules.payload` and `job_results.payload`.
-- Implement `downgrade()`, or say in it why data stays. Add a test to
-  `test_migrations.py` that seeds the previous revision with rows as the app
-  stores them. `test_release_upgrades.py` also upgrades the databases every
-  release wrote; `scripts/release.sh` adds them, and they are never edited.
+- Implement `downgrade()`, or say in it why data stays. The migration's test
+  in `test_migrations.py` seeds the previous revision with rows as the app
+  stores them.
+- The databases in `tests/fixtures/databases/` are what releases wrote;
+  `scripts/release.sh` adds them, and they are never edited.
 
 ## Frontend
 
-- `src/generated/` holds the generated contracts; never edit it. Talk to the
-  backend only through `lib/rest/`; `lib/realtime/` applies WebSocket events.
 - Views live in `lib/router/` (pages), `lib/components/` and `lib/popups/`
   (opened through `popups/registry.ts`); client state in `lib/stores/`; pure
-  helpers and `.svelte.ts` classes in `lib/utils/`. `src/test/` mirrors `src/`.
+  helpers and `.svelte.ts` classes in `lib/utils/`; `lib/realtime/` applies
+  WebSocket events. `src/test/` mirrors `src/`.
 - **One owner per piece of state.** Server data lives in the query cache; what
   is open lives in the URL (`routes.ts`); stores hold only client state and
   realtime projections. Route pages own their queries and pass data as props.
@@ -131,26 +119,25 @@ messages and the changelog.
 ## Tests
 
 - Backend tests use the real services and test database, replacing only the
-  network and collaborators a test is not about; they never touch the real
-  network or DNS.
-- Frontend: `bun run test:unit` (never `bun --bun`); test components through
-  their props and find elements by role or label. Run `bun run test:e2e` after
-  changing layout or styles.
-- The guards (`tests/conftest.py`, `tests/test_architecture/`,
-  `tests/test_release/`, `.dependency-cruiser.mjs`, `check-bundle.ts`,
-  `performance.spec.ts`) fail a change that costs more or crosses a layer: fix
-  the cause, and raise a budget only for a change that earns it. Add a new
-  write path or background operation to `OPERATIONS` in `test_workloads.py`.
+  network and collaborators a test is not about.
+- Test components through their props and find elements by role or label. Run
+  `bun run test:e2e` after changing layout or styles, and refresh a snapshot
+  only for a change you meant.
+- When a guard fails, fix the cause. Raise a budget or limit only for a change
+  that earns it, and never the ESLint complexity limit. Add a new write path
+  or background operation to `OPERATIONS` in `test_workloads.py`. An
+  exception a guard allows names why.
 
 ## Environment and finishing
 
 - Always `uv run ...` and Bun (never `.venv`, bare `python`, `pip`, `npm`,
-  `npx`, `yarn` or `pnpm`). Leave staging and commits to the user; never push.
+  `npx`, `yarn`, `pnpm` or `bun --bun`). Leave staging and commits to the
+  user; never push.
 - A change users notice adds one line under `## Unreleased` in
-  `.github/CHANGELOG.md` ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/)),
-  as `- **Area:** What changed.`, written for the person running Overture; skip
-  refactors, tests and CI, and never edit released sections. Within an area,
-  put what matters most first; the pre-commit check orders the rest.
+  `.github/CHANGELOG.md`, as `- **Area:** What changed.`, written for the
+  person running Overture, under the section it belongs to (a change that asks
+  something of the reader is 🚨 Breaking Changes); skip refactors, tests and CI, and never edit
+  released sections. Within an area, put what matters most first.
 - Before finishing, run `scripts/pre-commit-check.sh --fix` (and OvertureDB's
   when it changed) and `bun run ci` in `docs/` when docs changed. End with a
   Conventional Commits message.

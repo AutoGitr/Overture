@@ -227,7 +227,8 @@ async def _removal_options(bed: Bed) -> object:
 
 #: Each operation, and how many statements it may take at any library size.
 OPERATIONS: dict[str, tuple[Operation, int]] = {
-    "regular rule sync": (lambda bed: bed.service.rules.sync(bed.regular), 40),
+    # A rule sync reads its libraries' names once, for its log lines.
+    "regular rule sync": (lambda bed: bed.service.rules.sync(bed.regular), 41),
     "smart rule sync": (lambda bed: bed.service.rules.sync(bed.smart), 40),
     "preview": (_preview, 10),
     "field values": (_actors, 3),

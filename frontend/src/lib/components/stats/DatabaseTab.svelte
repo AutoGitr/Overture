@@ -3,44 +3,26 @@
   import HardDrive from "@lucide/svelte/icons/hard-drive";
   import type { StatsResponse } from "../../../generated/rest/types.gen";
   import { formatBytes, formatDateInTimezone } from "../../utils/popupFormat";
+  import Metric from "../Metric.svelte";
+  import MetricGrid from "../MetricGrid.svelte";
 
   let { stats }: { stats: StatsResponse } = $props();
 </script>
-
-{#snippet metric(label: string, value: string, detail: string | null = null)}
-  <div class="metric-item">
-    <span class="metric-label">{label}</span>
-    <span class="metric-val">
-      {value}
-      {#if detail}
-        <span class="dimmed">({detail})</span>
-      {/if}
-    </span>
-  </div>
-{/snippet}
 
 <section class="option-card">
   <div class="section-title-row">
     <span class="accent"><Database size={16} /></span>
     <span class="form-label">SQLite Engine & Storage</span>
   </div>
-  <div class="metrics-row">
-    {@render metric("Database file", formatBytes(stats.database.file_size_bytes))}
+  <MetricGrid>
+    <Metric label="Database file" value={formatBytes(stats.database.file_size_bytes)} />
     {#if stats.database.wal_size_bytes > 0}
-      {@render metric("WAL File", formatBytes(stats.database.wal_size_bytes))}
+      <Metric label="WAL File" value={formatBytes(stats.database.wal_size_bytes)} />
     {/if}
-    {@render metric("Total DB Footprint", formatBytes(stats.database.total_size_bytes))}
-    {@render metric(
-      "Pages",
-      stats.database.page_count.toLocaleString(),
-      `${stats.database.page_size} B/page`,
-    )}
-    {@render metric(
-      "Freelist / Free",
-      formatBytes(stats.database.free_size_bytes),
-      `${stats.database.freelist_count} pages`,
-    )}
-  </div>
+    <Metric label="Total DB Footprint" value={formatBytes(stats.database.total_size_bytes)} />
+    <Metric label="Pages" value={stats.database.page_count.toLocaleString()} detail={`${stats.database.page_size} B/page`} />
+    <Metric label="Freelist / Free" value={formatBytes(stats.database.free_size_bytes)} detail={`${stats.database.freelist_count} pages`} />
+  </MetricGrid>
 </section>
 
 <section class="option-card">
@@ -72,48 +54,20 @@
     <span class="accent"><HardDrive size={16} /></span>
     <span class="form-label">Backups</span>
   </div>
-  <div class="metrics-row">
-    {@render metric("Total backups", String(stats.backups.total_backups))}
-    {@render metric("Backup storage", formatBytes(stats.backups.total_size_bytes))}
-    {@render metric(
-      "Latest backup",
-      stats.backups.latest_backup_at
+  <MetricGrid>
+    <Metric label="Total backups" value={String(stats.backups.total_backups)} />
+    <Metric label="Backup storage" value={formatBytes(stats.backups.total_size_bytes)} />
+    <Metric label="Latest backup" value={stats.backups.latest_backup_at
         ? formatDateInTimezone(stats.backups.latest_backup_at, "UTC")
-        : "None",
-    )}
-  </div>
+        : "None"} />
+  </MetricGrid>
 </section>
 
 <style>
-  .metrics-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: var(--space-3);
-  }
 
-  .metric-item {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
 
-  .metric-label {
-    font-size: var(--text-xs);
-    color: var(--text-tertiary);
-  }
 
-  .metric-val {
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    font-weight: 600;
-    color: var(--text-primary);
-  }
 
-  .dimmed {
-    color: var(--text-tertiary);
-    font-size: var(--text-xs);
-    font-weight: normal;
-  }
 
   .section-title-row {
     display: flex;

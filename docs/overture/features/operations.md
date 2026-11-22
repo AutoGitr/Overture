@@ -131,13 +131,24 @@ names in [Files](files.md#where-each-asset-goes-and-how-each-server-takes-it).
 
 A run's log has a filter for each outcome it logged, counting the targets
 its lines name: a line such as `94 collections` counts 94, as the run's totals
-and its notifications do. When its lines are
-about particular media servers, one for each server, by its `MEDIA_SERVERS`
-name and coloured by its kind (Plex amber, Jellyfin purple, Emby green); each
-such line shows its server the same way. Sync's lines name the server they
-were read from, including the collections it reads, and Server audit's and its
-fixes' the server compared. Server audit's results can be filtered by server
-the same way. A renamed server keeps its lines and filters.
+and its notifications do. When its lines are about more than one media
+server, it also has a filter for each server, by its `MEDIA_SERVERS` name and
+coloured by its kind (Plex amber, Jellyfin purple, Emby green); each such line
+shows its server the same way. Sync's lines name the server they were read
+from, including the collections it reads, and Server audit's and its fixes'
+the server compared.
+
+Sync logs each managed collection on each server, in each library:
+
+| Outcome                                                     | Means                                                                                             |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Added                                                       | The server collection was created, with how many titles it holds                                  |
+| Updated                                                     | Titles were added or removed, with how many of each and what it holds now                         |
+| Unchanged                                                   | It holds the same titles                                                                          |
+| Removed                                                     | It was deleted, and why: a library left it, its set or season ended, or it fell below its minimum |
+| Skipped                                                     | It was left alone, and why, such as out of season or below its minimum                            |
+| Error                                                       | What the server refused; the other collections still sync                                         | Server audit's results can be filtered by server |
+| the same way. A renamed server keeps its lines and filters. |
 
 ## Schedules
 

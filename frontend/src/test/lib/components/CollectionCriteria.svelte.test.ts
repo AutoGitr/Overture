@@ -187,6 +187,31 @@ describe("collection criteria", () => {
     ]);
   });
 
+  it("lists a value spelt in another case as the library's, as criteria match it", async () => {
+    mockFetchRoutes({
+      "/api/collections/field-values": [
+        { value: "United Kingdom", label: "United Kingdom", count: 258 },
+      ],
+    });
+    const group = $state<FilterGroupInput>({
+      ...emptyGroup(),
+      conditions: [{ kind: "field", field: "genre", operator: "is", value: "united kingdom" }],
+    });
+    renderWithQueryClient(CriteriaEditor, {
+      group,
+      fields: capabilities.fields,
+      sources: capabilities.sources,
+      mediaType: "movie",
+      libraryId: "movies",
+      scope: "Movies on Plex",
+      label: "Criteria",
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText("Criteria condition 1 value")).toHaveValue("United Kingdom"),
+    );
+    expect(screen.queryByRole("option", { name: /no title has it/ })).toBeNull();
+  });
+
   it("chooses a tag value from the library's, keeps one it lacks, and types text to match part of", async () => {
     mockFetchRoutes({
       "/api/collections/field-values": [{ value: "Action", label: "Action", count: 3 }],

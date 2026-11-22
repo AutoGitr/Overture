@@ -15,8 +15,19 @@ DOCKERHUB_IMAGE = "autogitr/overture"
 SIGNATURES = f"{IMAGE}-signatures"
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 CHANGELOG = ".github/CHANGELOG.md"
-#: The change types Keep a Changelog groups a release's entries under, in order.
-CHANGE_TYPES = ("Added", "Changed", "Deprecated", "Removed", "Fixed", "Security")
+#: What a breaking change is filed under: one that asks something of the reader.
+BREAKING = "🚨 Breaking Changes"
+#: The sections a release's entries are grouped under, in order: Immich's, less
+#: Translations, which Overture has none of.
+CHANGE_TYPES = (
+    BREAKING,
+    "🫥 Deprecated Changes",
+    "🔒 Security",
+    "🚀 Features",
+    "🌟 Enhancements",
+    "🐛 Bug fixes",
+    "📚 Documentation",
+)
 REQUIRED_RELEASE_FILES = (
     CHANGELOG,
     ".github/README.md",
@@ -96,12 +107,8 @@ def _changelog_sections(root: Path) -> dict[str, str]:
     return sections
 
 
-def _ordered_unreleased(body: str) -> str:
-    """The Unreleased section in order, or why it cannot be.
-
-    Change types follow Keep a Changelog's order, and each one's entries are
-    grouped by area alphabetically, keeping the order written within an area,
-    which puts what matters most first.
+def _unreleased_groups(body: str) -> dict[str, list[str]]:
+    """The Unreleased section's entries by change type, as written.
 
     Raises:
         ValueError: When an entry is not one line naming its area, or repeats.
@@ -120,6 +127,17 @@ def _ordered_unreleased(body: str) -> str:
             if line in group:
                 raise ValueError(f"{CHANGELOG} repeats an entry: {line}")
             group.append(line)
+    return groups
+
+
+def _ordered_unreleased(body: str) -> str:
+    """The Unreleased section in order, or why it cannot be.
+
+    Change types follow :data:`CHANGE_TYPES`, and each one's entries are
+    grouped by area alphabetically, keeping the order written within an area,
+    which puts what matters most first.
+    """
+    groups = _unreleased_groups(body)
 
     def area(entry: str) -> str:
         match = _UNRELEASED_ENTRY.fullmatch(entry)
@@ -139,6 +157,22 @@ def format_changelog(root: Path = ROOT) -> None:
     if (ordered := _ordered_unreleased(body)) != body:
         text = path.read_text()
         path.write_text(text.replace(body, ordered, 1), newline="\n")
+
+
+def require_api_entry(root: Path = ROOT) -> None:
+    """Refuse an incompatible API change the changelog does not call breaking.
+
+    Raises:
+        ValueError: When the Unreleased section has no ``**API:**`` entry under
+            :data:`BREAKING`.
+    """
+    breaking = _unreleased_groups(_changelog_sections(root)[_UNRELEASED])
+    if not any(entry.startswith("- **API:**") for entry in breaking.get(BREAKING, [])):
+        raise ValueError(
+            f"The API changes incompatibly; add a - **API:** line under "
+            f"### {BREAKING} in ## {_UNRELEASED} of {CHANGELOG} saying what "
+            "clients must change"
+        )
 
 
 def release_notes(version: str, root: Path = ROOT) -> str:
@@ -245,10 +279,18 @@ def main() -> int:
         "--notes-file", type=Path, help="Write the tag's changelog section here."
     )
     parser.add_argument("--github-output", type=Path)
+    parser.add_argument(
+        "--require-api-entry",
+        action="store_true",
+        help="Fail unless the unreleased changelog names an API change.",
+    )
     args = parser.parse_args()
     if args.notes_file and args.tag is None:
         parser.error("--notes-file requires --tag")
     try:
+        if args.require_api_entry:
+            require_api_entry()
+            return 0
         if args.format_changelog:
             format_changelog()
         if args.prepare is not None:

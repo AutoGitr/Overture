@@ -1,7 +1,8 @@
 /** State for the Asset Renamer scan job. */
+import { ASSET_LABELS } from "../../generated/settings";
 import type { AssetRenameResult } from "../../generated/rest/types.gen";
 import type { AssetIssue, AssetScanProgressEvent } from "../../generated/ws";
-import { ASSET_LABELS } from "../utils/artTypes";
+
 import { CollectingJobState, type Selectable } from "./collectingJobState.svelte";
 
 export const FALSE_POSITIVE_LABEL = "Possible false positive";

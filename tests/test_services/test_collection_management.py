@@ -62,7 +62,13 @@ lazy from overture.integrations.tmdb import (
     TmdbPerson,
     TmdbTitle,
 )
-lazy from overture.media_servers.adapters import ServerCollection, ServerSection
+lazy from overture.jobs.progress_log import JobOutcome
+lazy from overture.media_servers.adapters import (
+    CollectionDetails,
+    MemberWrite,
+    ServerCollection,
+    ServerSection,
+)
 lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.plex.provider import PlexProvider
 lazy from overture.media_servers.registry import ProviderRegistry
@@ -142,6 +148,7 @@ lazy from tests.runtime_helpers import (
     make_remover,
     unused,
 )
+lazy from tests.sync_helpers import RecordedReport
 lazy from tests.term_helpers import assign, holding
 lazy from tests.test_services.test_collections_service import (
     FakeDownloads,
@@ -276,24 +283,19 @@ class Provider(PlexProvider):
     async def update_collection_details(
         self,
         server_collection_id: str,
-        *,
         library_id: str,
-        title: str,
-        summary: str | None,
-        sort_title: str | None,
-        mode: CollectionMode,
-        order: CollectionOrder,
-        smart: bool,
-        visible_home: bool,
-        visible_shared: bool = False,
-        visible_library: bool = False,
-        filtering: CollectionFiltering | None = None,
+        details: CollectionDetails,
     ) -> None:
         if server_collection_id in self.rejected_updates:
             raise ValueError("Server refused this update")
-        self.options[server_collection_id] = title, mode, order, visible_home
-        self.sort_titles[server_collection_id] = sort_title
-        self.summaries[server_collection_id] = summary
+        self.options[server_collection_id] = (
+            details.title,
+            details.mode,
+            details.order,
+            details.visible_home,
+        )
+        self.sort_titles[server_collection_id] = details.sort_title
+        self.summaries[server_collection_id] = details.summary
 
     @override
     async def get_collection_member_ids(self, server_collection_id: str) -> list[str]:
@@ -307,7 +309,7 @@ class Provider(PlexProvider):
         *,
         order: CollectionOrder,
         append: bool = False,
-    ) -> list[str]:
+    ) -> MemberWrite:
         if self.fail:
             raise MediaServerError("Write failed")
         if append:
@@ -320,8 +322,10 @@ class Provider(PlexProvider):
                     if identity not in wanted
                 ),
             ]
+        before = set(self.members.get(server_collection_id, []))
         self.members[server_collection_id] = server_item_ids
-        return server_item_ids
+        after = set(server_item_ids)
+        return MemberWrite(server_item_ids, len(after - before), len(before - after))
 
     @override
     async def delete_collection(self, server_collection_id: str) -> None:
@@ -692,6 +696,22 @@ async def created(
     return await synced(service, detail.id)
 
 
+async def group_sync(manager: Manager, name: str) -> tuple[RecordedReport, list[int]]:
+    """Sync a group as a run does; return its log and the group's collections."""
+    report = RecordedReport()
+    await manager.service.groups.sync(name, report)
+    return report, [
+        row.id
+        for row in sorted(await manager.service.reader.listed(), key=lambda r: r.id)
+        if row.collection_group == name
+    ]
+
+
+def errors(report: RecordedReport) -> list[str]:
+    """The lines of a run's log that report a failure."""
+    return [line for line in report.lines if " Error " in f" {line} "]
+
+
 async def synced(service: CollectionsService, collection_id: int) -> CollectionDetail:
     """Sync a saved collection and read it back."""
     await service.rules.sync(collection_id)
@@ -974,7 +994,7 @@ async def test_set_collections_leave_only_with_their_set(manager: Manager) -> No
     await manager.service.groups.save_policy(
         "Decades", CollectionGroupPolicy(minimum_items=1, generator=decades)
     )
-    first, _ = (await manager.service.groups.sync("Decades")).created
+    first, _ = (await group_sync(manager, "Decades"))[1]
     for remove in (
         manager.service.editor.delete(first),
         manager.service.adoption.orphan(first),
@@ -1019,9 +1039,8 @@ async def test_sets_create_update_and_withhold_their_collections(
             generator=decades,
         ),
     )
-    result = await manager.service.groups.sync("Decades")
-    assert not result.errors
-    first, second = result.created
+    report, (first, second) = await group_sync(manager, "Decades")
+    assert not errors(report)
     detail = await manager.service.reader.get(first)
     assert (detail.title, detail.sort_title, detail.generated_value) == (
         "1990s",
@@ -1034,8 +1053,9 @@ async def test_sets_create_update_and_withhold_their_collections(
     )
     assert [member.title for member in await members(manager, detail)] == ["First"]
 
-    repeated = await manager.service.groups.sync("Decades")
-    assert (repeated.created, repeated.synced) == ([], 2)
+    repeated, ids = await group_sync(manager, "Decades")
+    assert ids == [first, second]
+    assert repeated[JobOutcome.UNCHANGED] == 2
 
     await manager.service.groups.save_policy(
         "Decades",
@@ -1050,8 +1070,13 @@ async def test_sets_create_update_and_withhold_their_collections(
             ),
         ),
     )
-    edited = await manager.service.groups.sync("Decades")
-    assert edited.withheld == [first]
+    edited, _ = await group_sync(manager, "Decades")
+    assert [line for line in edited.lines if "Removed" in line] == [
+        (
+            "[Plex] Removed 1990s - deleted from Movies: "
+            "its group's set no longer selects it"
+        )
+    ]
     assert (await manager.service.reader.get(second)).title == "The 2000s"
     # Overture keeps the deselected collection, and its own sync leaves it
     # off the server until the set selects its value again.
@@ -1098,11 +1123,14 @@ async def test_sets_skip_titles_other_collections_hold(manager: Manager) -> None
             )
         ),
     )
-    result = await manager.service.groups.sync("Genres")
-    assert result.created == []
-    assert result.errors == {
-        "Action": "One of its libraries already has a collection titled Action"
-    }
+    result, ids = await group_sync(manager, "Genres")
+    assert ids == []
+    assert errors(result) == [
+        (
+            "Error Action - its group's set could not save it: "
+            "One of its libraries already has a collection titled Action"
+        )
+    ]
 
 
 async def test_inherited_placeholders_resolve_group_before_global(
@@ -1286,7 +1314,7 @@ async def test_rule_sync_uses_global_defaults_and_nullable_overrides(
     result = await manager.service.rules.sync(identity)
     detail = await manager.service.reader.get(identity)
     assert len(detail.member_ids) == expected
-    assert result.removed == 3 - expected
+    assert sum(change.removed for change in result.changes) == 3 - expected
     assert detail.rule is not None
     assert detail.rule.last_synced_at is not None
     assert manager.provider.members["1"] == (
@@ -1740,7 +1768,7 @@ async def test_smart_collections_label_sources_and_filter_by_plex_keys(
 
     manager.lists.ids = [13]
     result = await manager.service.rules.sync(detail.id)
-    assert result.added == 0
+    assert [change.added for change in result.changes] == [0]
     assert manager.provider.synced_labels[-1] == (label, ["m2"], ["m0", "m1"])
 
     # Without a smart collection filtering on it, Overture removes the label.
@@ -1761,9 +1789,7 @@ async def test_a_franchise_set_gives_each_collection_its_tmdb_summary(
         ),
     )
 
-    result = await manager.service.groups.sync("Franchises")
-
-    [created] = result.created
+    _, [created] = await group_sync(manager, "Franchises")
     detail = await manager.service.reader.get(created)
     assert detail.summary == "Collection overview"
     assert list(manager.provider.summaries.values()) == ["Collection overview"]
@@ -1897,7 +1923,7 @@ async def test_franchise_sets_name_collections_after_tmdb(manager: Manager) -> N
             ),
         ),
     )
-    await manager.service.groups.sync("Franchises")
+    await manager.service.groups.sync("Franchises", RecordedReport())
     listed = await manager.service.reader.listed()
     assert [
         (row.title, row.collection_group, row.sort_title, row.generated_value)
@@ -2198,7 +2224,7 @@ async def test_radarr_and_sonarr_tag_builder_sync(manager: Manager) -> None:
     )
     assert radarr_col.child_count == 2
     res = await manager.service.rules.sync(radarr_col.id)
-    assert res.added == 0
+    assert [change.added for change in res.changes] == [0]
 
     # SonarrTagSource sync
     sonarr_col = await created(
@@ -2214,7 +2240,7 @@ async def test_radarr_and_sonarr_tag_builder_sync(manager: Manager) -> None:
     )
     assert sonarr_col.child_count == 1
     show_res = await manager.service.rules.sync(sonarr_col.id)
-    assert show_res.added == 0
+    assert [change.added for change in show_res.changes] == [0]
 
 
 async def test_create_collection_custom_order(manager: Manager) -> None:
@@ -2388,8 +2414,8 @@ async def test_franchise_sets_skip_franchises_other_collections_hold(
         "Franchises",
         CollectionGroupPolicy(minimum_items=1, generator=generator),
     )
-    res = await manager.service.groups.sync("Franchises")
-    assert res.created == []
+    _, ids = await group_sync(manager, "Franchises")
+    assert ids == []
     assert (
         await manager.service.sets.preview(
             CollectionSetPreview(generator=generator, group="OtherGroup")
@@ -2419,8 +2445,8 @@ async def test_sync_group_records_rule_errors(manager: Manager) -> None:
         ),
     )
     manager.lists.failure = True
-    res = await manager.service.groups.sync("ErrorGroup")
-    assert "Will Fail" in res.errors
+    res, _ = await group_sync(manager, "ErrorGroup")
+    assert any("Will Fail" in line for line in errors(res))
 
 
 async def test_a_collection_below_its_minimum_waits_in_overture_for_the_server(
@@ -2562,9 +2588,9 @@ async def test_group_apply_updates_inherited_templates_and_preserves_overrides(
     # Saving writes only; the group's sync sends what its collections inherit.
     assert (await manager.service.reader.get(inherited.id)).sort_title != "02_Inherited"
     for _ in range(2):
-        result = await manager.service.groups.sync("Charts")
-        assert not result.errors
-        assert result.synced == 2
+        result, _ = await group_sync(manager, "Charts")
+        assert not errors(result)
+        assert result[JobOutcome.ADDED] + result[JobOutcome.UNCHANGED] == 2
         refreshed = await manager.service.reader.get(inherited.id)
         assert refreshed.sort_title == "02_Inherited"
         assert refreshed.summary == "Updated Inherited"
@@ -2643,9 +2669,8 @@ async def test_group_sync_commits_successful_collections_and_reports_failures(
     await manager.service.groups.save_policy(
         "Shared", CollectionGroupPolicy(sort_title_format="01_{title}")
     )
-    result = await manager.service.groups.sync("Shared")
-    assert result.synced == 1
-    assert result.errors == {"First": "Server refused this update"}
+    result, _ = await group_sync(manager, "Shared")
+    assert errors(result) == ["Error First - Server refused this update"]
     first = await manager.service.reader.get(collections[0].id)
     second = await manager.service.reader.get(collections[1].id)
     assert first.sort_title is None
@@ -2932,10 +2957,10 @@ async def test_custom_sets_list_their_collections_across_libraries(
         "Letters",
         CollectionGroupPolicy(minimum_items=1, generator=generator),
     )
-    result = await manager.service.groups.sync("Letters")
+    _, ids = await group_sync(manager, "Letters")
     # A value is one collection across the libraries holding it.
-    assert len(result.created) == 2
-    spanning = await manager.service.reader.get(result.created[0])
+    assert len(ids) == 2
+    spanning = await manager.service.reader.get(ids[0])
     assert spanning.library_ids == ["1:movies", "1:extra"]
 
 
@@ -3288,9 +3313,9 @@ async def test_group_sync_keeps_plexs_order_for_smart_members_under_a_custom_one
         CollectionGroupPolicy(order_type=CollectionOrder.CUSTOM),
     )
 
-    result = await manager.service.groups.sync("Mixed")
+    result, _ = await group_sync(manager, "Mixed")
 
-    assert result.synced == 2, result.errors
+    assert not errors(result)
     assert (await manager.service.reader.get(regular.id)).order_type is (
         CollectionOrder.CUSTOM
     )
@@ -3335,7 +3360,7 @@ async def test_missing_group_membership_uses_reserved_fallback(
         (
             where(FilterField.TMDB_RATING, FilterOperator.GTE, 7),
             CollectionOrder.TITLE_ASC,
-            (CollectionKind.REGULAR, "Plex has no filter for TMDB rating gte"),
+            (CollectionKind.REGULAR, "Plex has no filter for TMDB rating is at least"),
         ),
         # Only Plex tests HDR, and a smart collection tests TMDB facts by label.
         (
@@ -3773,8 +3798,8 @@ async def test_movie_and_show_collections_share_one_group(manager: Manager) -> N
 
     assert "Shared" in await manager.service.groups.names()
     assert set(manager.provider.sort_titles.values()) == {"1_Films", "1_Series"}
-    result = await manager.service.groups.sync("Shared")
-    assert result.synced == 2
+    result, _ = await group_sync(manager, "Shared")
+    assert not errors(result)
     assert {
         tuple(row.media_types)
         for row in await manager.service.reader.listed()
@@ -3930,7 +3955,7 @@ async def test_a_plex_group_separator_heads_its_collections_while_it_is_on(
             row.kind is not CollectionKind.SEPARATOR
             for row in await CollectionRepository(session).list_listed()
         )
-    await manager.service.groups.sync("Sagas")
+    await manager.service.groups.sync("Sagas", RecordedReport())
 
     # The group keeps it, so it is never listed on its own.
     assert all(
@@ -3958,7 +3983,7 @@ async def test_a_plex_group_separator_heads_its_collections_while_it_is_on(
     await manager.service.groups.save_policy(
         "Sagas", CollectionGroupPolicy(sort_title_format="{group} {title}")
     )
-    await manager.service.groups.sync("Sagas")
+    await manager.service.groups.sync("Sagas", RecordedReport())
     async with database.read_session() as session:
         assert not [
             row
@@ -4086,7 +4111,7 @@ async def test_a_separated_group_without_a_sort_title_still_sorts_behind_its_sep
     await manager.service.groups.save_policy(
         "The Sagas", CollectionGroupPolicy(separator=True)
     )
-    await manager.service.groups.sync("The Sagas")
+    await manager.service.groups.sync("The Sagas", RecordedReport())
 
     async with database.read_session() as session:
         rows = await CollectionRepository(session).list_listed()
@@ -4114,7 +4139,7 @@ async def test_deleting_group_with_separator_discards_separator(
         "Sagas",
         CollectionGroupPolicy(separator=True, sort_title_format="{group} {title}"),
     )
-    await manager.service.groups.sync("Sagas")
+    await manager.service.groups.sync("Sagas", RecordedReport())
     async with manager.database.read_session() as session:
         listed = await CollectionRepository(session).list_listed()
     assert any(row.kind is CollectionKind.SEPARATOR for row in listed)
@@ -4248,9 +4273,10 @@ async def test_chosen_collections_sync_alone(manager: Manager) -> None:
     )
     await manager.service.editor.create(CollectionCreate(title="Left", rule=rule))
 
-    result = await manager.service.groups.sync_collections([chosen_one.id, 999])
+    result = RecordedReport()
+    await manager.service.groups.sync_collections([chosen_one.id, 999], result)
 
-    assert (result.synced, result.errors) == (1, {})
+    assert result.lines == ["[Plex] Added Chosen - created in Movies with 1 title"]
     assert manager.provider.created == ["Chosen"]
 
 
@@ -4605,3 +4631,56 @@ async def test_collection_mutations_keep_ledger_needs_and_deliveries_current(
             delivery.server_item_id
             for delivery in read_asset(row, ServerAsset.POSTER).deliveries
         ] == ["2"]
+
+
+async def test_a_sync_logs_what_it_did_to_each_server_collection(
+    manager: Manager, database: Database
+) -> None:
+    async with database.write_session() as session:
+        session.add(
+            served_item(
+                media_type=MediaType.MOVIE,
+                title="Spare",
+                tmdb_id=40,
+                server_item_id="x0",
+                library_id="1:extra",
+            )
+        )
+    starts = where(FilterField.TITLE, FilterOperator.STARTS_WITH, "S")
+    detail = await manager.service.editor.create(
+        CollectionCreate(
+            title="Esses",
+            rule=CollectionRuleWrite(
+                libraries=[
+                    CollectionLibraryCriteria(library_id=library, criteria=starts)
+                    for library in ("1:movies", "1:extra")
+                ],
+                minimum_items=1,
+            ),
+        )
+    )
+    first = RecordedReport()
+    await manager.service.groups.sync_collections([detail.id], first)
+    again = RecordedReport()
+    await manager.service.groups.sync_collections([detail.id], again)
+    await manager.service.editor.save_rule(
+        detail.id, library_rule(criteria=starts, minimum_items=1)
+    )
+    unticked = RecordedReport()
+    await manager.service.groups.sync_collections([detail.id], unticked)
+
+    assert first.lines == [
+        "[Plex] Added Esses - created in Movies with 1 title",
+        "[Plex] Added Esses - created in Extra movies with 1 title",
+    ]
+    assert again.lines == [
+        "[Plex] Unchanged Esses - holds the same 1 title in Movies",
+        "[Plex] Unchanged Esses - holds the same 1 title in Extra movies",
+    ]
+    assert unticked.lines == [
+        (
+            "[Plex] Removed Esses - deleted from Extra movies: "
+            "the collection no longer spans that library"
+        ),
+        "[Plex] Unchanged Esses - holds the same 1 title in Movies",
+    ]

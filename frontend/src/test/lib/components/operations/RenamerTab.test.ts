@@ -90,7 +90,7 @@ describe("RenamerTab results", () => {
       }),
     );
     renderWithQueryClient(OperationsPopup);
-    const header = await screen.findByRole("checkbox", { name: "Select every shown issues" });
+    const header = await screen.findByRole("checkbox", { name: "Deselect all shown issues" });
     const row = (name: string) =>
       screen.getByRole("checkbox", { name: new RegExp(`^${name}[.]jpg`) });
 

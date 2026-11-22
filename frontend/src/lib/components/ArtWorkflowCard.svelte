@@ -1,13 +1,7 @@
 <script lang="ts">
   import type { ArtType } from "../../generated/rest/types.gen";
-  import {
-    ART_SOURCE_LABELS,
-    ITEM_ART_TYPES,
-    MATCH_THRESHOLD_MAX,
-    PERFECT_MATCH_ONLY,
-    SEASON_ART_TYPES,
-  } from "../../generated/settings";
-  import { ASSET_LABELS, SEASON_ONLY } from "../utils/artTypes";
+  import { ART_SOURCE_LABELS, ASSET_LABELS, ITEM_ART_TYPES, MATCH_THRESHOLD_MAX, PERFECT_MATCH_ONLY, SEASON_ART_TYPES } from "../../generated/settings";
+  import { SEASON_ONLY } from "../utils/artTypes";
   import type { AssetsForm } from "../utils/assetsForm.svelte";
   import SourceOrderList from "./SourceOrderList.svelte";
   import WorkflowCard from "./WorkflowCard.svelte";

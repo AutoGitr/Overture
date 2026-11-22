@@ -1,13 +1,7 @@
 <script lang="ts">
   import ChevronRight from "@lucide/svelte/icons/chevron-right";
-  import type {
-    ArtType,
-    MediaItemRead,
-    SeasonRead,
-    TmdbItemPreview,
-    TmdbSeasonPreview,
-  } from "../../generated/rest/types.gen";
-  import { createSeasonsQuery } from "../rest/queries";
+  import type { ArtType, MediaItemRead, TmdbItemPreview } from "../../generated/rest/types.gen";
+  import { createTitleSeasons } from "../rest/queries";
   import { goToCatalogEntry, goToSeason, goToSeasonsList } from "../router/routes";
   import type { CatalogContext } from "../utils/catalogDraft";
   import type { ArtSlotTarget } from "../utils/tmdbItems";
@@ -29,12 +23,10 @@
   } = $props();
 
   let subject = $derived(item ?? preview ?? catalog?.entry);
-  const seasonsQuery = createSeasonsQuery(() => item);
-  // A TMDB title's seasons come with it; a stored show's are loaded.
-  let seasons = $derived<(SeasonRead | TmdbSeasonPreview)[]>(
-    catalog ? catalog.seasons : item ? (seasonsQuery.data ?? []) : (preview?.seasons ?? []),
-  );
-  let seasonsLoaded = $derived(!item || seasonsQuery.isSuccess);
+  const titleSeasons = createTitleSeasons(() => ({ item, preview, catalog }));
+  const seasonsQuery = titleSeasons.query;
+  let seasons = $derived(titleSeasons.seasons);
+  let seasonsLoaded = $derived(titleSeasons.loaded);
   let drillSeason = $derived(
     seasons.find((season) => season.season_num === drillSeasonNum) ??
       (catalog && drillSeasonNum !== null

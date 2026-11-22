@@ -1,5 +1,5 @@
 ---
-sidebar_position: 5
+sidebar_position: 6
 title: Environment variables
 description: Every setting Overture reads at start.
 ---

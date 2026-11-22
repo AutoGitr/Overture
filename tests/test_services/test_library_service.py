@@ -41,7 +41,9 @@ lazy from overture.domain import (
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.media_servers.adapters import ProviderImageRequest, ServerSection
 lazy from overture.repositories.libraries import LibraryRepository
+lazy from overture.schemas.common import Status, StatusResponse
 lazy from overture.schemas.library import BulkItemOperation
+lazy from overture.schemas.records import DatabaseRecord
 lazy from overture.services.art.phash import PHASH_HEX_LENGTH
 lazy from overture.services.art.service import ArtService
 lazy from overture.services.downloads.service import DownloadService
@@ -56,6 +58,7 @@ lazy from overture.utils.assets import season_poster_candidates
 lazy from overture.utils.errors import PublicServiceError
 lazy from overture.utils.hashing import compute_file_hash
 lazy from overture.utils.time import utc_now
+lazy from overture.utils.types import JsonValue
 lazy from tests.factories import seed_asset, seed_theme
 lazy from tests.media_servers import TEST_SERVER, TEST_SERVER_ID, served_item
 lazy from tests.publishers import NullEventPublisher
@@ -901,7 +904,7 @@ async def test_local_image_rejects_season_artwork_for_an_item(
             version=None,
         )
 
-    assert exc_info.value.status_code == 400
+    assert exc_info.value.status_code == 422
 
 
 async def test_local_image_rejects_an_unreadable_file_when_sized(
@@ -1257,7 +1260,7 @@ async def test_item_provider_art_is_proxied_by_its_server_id(
     assert server.art_requests == [("s1", ArtType.POSTER, ImageSize.DISPLAY)]
     assert proxied == ["http://plex.local/s1"]
     for item_id, art_type, status in (
-        (1, ArtType.SEASON_POSTER, 400),
+        (1, ArtType.SEASON_POSTER, 422),
         (2, ArtType.POSTER, 404),
         (404, ArtType.POSTER, 404),
     ):
@@ -1312,7 +1315,7 @@ async def test_an_item_record_names_its_copies_and_leaves_out_its_jobs(
     record = await _service(database, ArtServer()).item_record(1)
 
     assert [(row.table, row.title) for row in record.stored] == [
-        ("media_items", "media_items 1"),
+        ("media_items", "Media item 1"),
         ("media_item_copies", f"Copy in {TEST_SERVER.title} · 1"),
     ]
 
@@ -1337,7 +1340,7 @@ async def test_an_item_record_holds_every_row_it_owns_apart_from_what_is_derived
 
     # Each row is followed by the rows referring to it; link rows add nothing.
     assert [(row.table, row.title) for row in record.stored] == [
-        ("media_items", "media_items 1"),
+        ("media_items", "Media item 1"),
         ("seasons", "Season 1"),
         ("assets", "Season 1 poster"),
         ("assets", "Poster"),
@@ -1347,3 +1350,25 @@ async def test_an_item_record_holds_every_row_it_owns_apart_from_what_is_derived
     assert "assets" not in record.derived
     assert "art_status" in record.derived
     assert not record.derived.keys() & record.stored[0].values.keys()
+
+
+def test_record_rows_name_the_asset_and_server_a_delivery_is_on() -> None:
+    rows: list[tuple[str, dict[str, JsonValue]]] = [
+        ("media_items", {"id": 1, "title": "Ali G"}),
+        ("assets", {"id": 3, "kind": "background", "season_id": None}),
+        ("asset_deliveries", {"asset_id": 3, "server_id": 6}),
+        ("asset_deliveries", {"asset_id": 3, "server_id": None}),
+        ("collection_rules", {"id": 19}),
+    ]
+
+    record = DatabaseRecord.of(
+        rows, StatusResponse(status=Status.OK), libraries={}, servers={6: "Jellyfin"}
+    )
+
+    assert [row.title for row in record.stored] == [
+        "Media item 1",
+        "Background",
+        "Background on Jellyfin",
+        "Background file in the media folder",
+        "Collection rule 19",
+    ]

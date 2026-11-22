@@ -1,7 +1,8 @@
 <script lang="ts">
+  import { COLLECTION_POSTER_LABELS } from "../../generated/settings";
   import type { ArtCandidate } from "../../generated/rest/types.gen";
   import { candidateImageUrl, candidateSourceLabel } from "../utils/artDisplay";
-  import { COLLECTION_POSTER_LABELS } from "../utils/collectionPosters";
+  
 
   let {
     art,

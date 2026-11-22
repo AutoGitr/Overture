@@ -5,7 +5,7 @@ lazy from collections.abc import Callable, Mapping
 lazy from typing import Any
 
 lazy from ..config import MediaServerConfig, Settings
-lazy from ..domain import ArtType, ServerType, library_parts
+lazy from ..domain import ArtType, ServerType
 lazy from ..jobs.progress_log import LogServer
 lazy from ..utils.errors import PublicServiceError
 lazy from .adapters import ServerSection, ServerWebLinks
@@ -110,17 +110,6 @@ class ProviderRegistry:
         self._providers[server_id] = provider
         return provider
 
-    def for_library(self, library_id: str) -> Provider:
-        """Return the provider of the server holding a library.
-
-        Raises:
-            PublicServiceError: 409 when that server is not configured.
-        """
-        parts = library_parts(library_id)
-        if parts is None:
-            raise PublicServiceError(409, f"Library {library_id} names no server")
-        return self.get(parts[0])
-
     def configured_server_id(self, server_id: int) -> bool:
         """Return whether the database's server *server_id* is configured."""
         return server_id in self._ids.values()
@@ -128,10 +117,6 @@ class ProviderRegistry:
     def type_of(self, server_id: int) -> ServerType:
         """Return the kind of a configured server, without building its provider."""
         return self._server(server_id).type
-
-    def title_of(self, server_id: int) -> str:
-        """Return how a configured server is named to users."""
-        return self._server(server_id).title
 
     @staticmethod
     def spans_libraries(server_type: ServerType) -> bool:

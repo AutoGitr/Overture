@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { JobLogFeed } from "../stores/jobLogFeed.svelte";
   import { OUTCOME_TONES, logEntryTime } from "../utils/jobLog";
+  import LoadError from "./LoadError.svelte";
   import ResultFilters from "./ResultFilters.svelte";
   import ServerBadge from "./ServerBadge.svelte";
   import { settingsState } from "../stores/settingsState.svelte";
@@ -11,19 +12,26 @@
   const ROW_HEIGHT = 24;
 </script>
 
-<!-- A region of the panel that asks for its lines' height; the popup gives
-     it what the screen allows, down to three lines, and it scrolls past
-     that. -->
-<ResultFilters
-  label="Show log lines by outcome"
-  groups={feed.groups}
-  ontoggle={(outcome) => feed.toggleOutcome(outcome)}
-/>
-<ResultFilters
-  label="Show log lines by media server"
-  groups={feed.serverGroups}
-  ontoggle={(server) => feed.toggleServer(Number(server))}
-/>
+<!-- Two rows of the panel's grid, whatever filters it offers: the filters,
+     then a region that asks for its lines' height; the popup gives it what
+     the screen allows, down to three lines, and it scrolls past that.
+     Servers filter only a run about more than one. -->
+{#if feed.groups.length > 0}
+  <div class="job-log-filters">
+    <ResultFilters
+      label="Show log lines by outcome"
+      groups={feed.groups}
+      ontoggle={(outcome) => feed.toggleOutcome(outcome)}
+    />
+    {#if feed.serverGroups.length > 1}
+      <ResultFilters
+        label="Show log lines by media server"
+        groups={feed.serverGroups}
+        ontoggle={(server) => feed.toggleServer(Number(server))}
+      />
+    {/if}
+  </div>
+{/if}
 <div
   class="job-log"
   role="log"
@@ -63,14 +71,18 @@
     </span>
   {/if}
   {#if feed.error}
-    <div class="log-error" role="alert">
-      <span>{feed.error}</span>
-      <button type="button" class="btn btn-ghost btn-sm" onclick={() => feed.retry()}>Retry</button>
-    </div>
+    <LoadError message={feed.error} onretry={() => feed.retry()} />
   {/if}
 </div>
 
 <style>
+  .job-log-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-3);
+    min-width: 0;
+  }
+
   /* Its height is the room its grid row gets: the strut below is the height
      it asks for, and it gives way down to three lines. The rows, empty text
      and error share the strut's cell. */
@@ -182,18 +194,4 @@
     font-family: var(--font-sans);
   }
 
-  .log-error {
-    position: absolute;
-    inset: auto var(--space-2) var(--space-2);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2);
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-sm);
-    background: var(--bg-elevated);
-    color: var(--danger);
-    font-family: var(--font-sans);
-    box-shadow: var(--shadow-md);
-  }
 </style>

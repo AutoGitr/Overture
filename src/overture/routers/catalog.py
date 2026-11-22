@@ -2,7 +2,7 @@
 
 lazy from typing import Annotated
 
-lazy from fastapi import APIRouter, Depends, Path, Query
+lazy from fastapi import Path, Query
 lazy from fastapi.responses import Response
 
 lazy from ..dependencies import CatalogDep
@@ -21,19 +21,17 @@ lazy from ..schemas.catalog import (
     ContributionIssue,
 )
 lazy from ..schemas.common import StatusResponse
-lazy from .auth import require_auth
+lazy from .auth import authenticated_router
 lazy from .parameters import CollectionIdPath, ItemIdPath
+lazy from .responses import errors
 
 CatalogMediaTypePath = Annotated[CatalogMediaType, Path(description="Entry kind")]
 EntryKeyPath = Annotated[
     str, Path(description="Entry name, as its file is named: tmdb-603")
 ]
 
-router = APIRouter(
-    prefix="/catalog",
-    tags=["catalog"],
-    dependencies=[Depends(require_auth)],
-)
+router = authenticated_router(prefix="/catalog", tags=["catalog"])
+_CATALOG_OFF = errors({409: "OvertureDB is disabled"})
 
 
 @router.get(
@@ -120,13 +118,13 @@ async def get_catalog_entry_record(
     return await catalog.get_record_for_entry(media_type, entry_key)
 
 
-@router.get("/catalog/counts")
+@router.get("/catalog/counts", responses=_CATALOG_OFF)
 async def get_catalog_counts(catalog: CatalogDep) -> CatalogCounts:
     """Return catalog and draft counts without reading every entry."""
     return await catalog.browser.counts()
 
 
-@router.get("/catalog")
+@router.get("/catalog", responses=_CATALOG_OFF)
 async def list_catalog_entries(
     catalog: CatalogDep,
     media_type: Annotated[CatalogMediaType, Query(description="Entry kind")],
@@ -138,7 +136,7 @@ async def list_catalog_entries(
     return await catalog.browser.list_entries(media_type, posters=posters)
 
 
-@router.get("/catalog/{media_type}/{entry_key}")
+@router.get("/catalog/{media_type}/{entry_key}", responses=_CATALOG_OFF)
 async def get_catalog_entry(
     media_type: CatalogMediaTypePath, entry_key: EntryKeyPath, catalog: CatalogDep
 ) -> CatalogEntryDetail:
@@ -146,7 +144,7 @@ async def get_catalog_entry(
     return await catalog.browser.get_entry(media_type, entry_key)
 
 
-@router.delete("/catalog/{media_type}/drafts")
+@router.delete("/catalog/{media_type}/drafts", responses=_CATALOG_OFF)
 async def discard_catalog_drafts(
     media_type: CatalogMediaTypePath,
     body: CatalogDraftsDiscard,
@@ -156,7 +154,7 @@ async def discard_catalog_drafts(
     return await catalog.browser.discard_drafts(media_type, body)
 
 
-@router.put("/catalog/{media_type}/{entry_key}/draft")
+@router.put("/catalog/{media_type}/{entry_key}/draft", responses=_CATALOG_OFF)
 async def save_catalog_draft(
     media_type: CatalogMediaTypePath,
     entry_key: EntryKeyPath,
@@ -167,7 +165,7 @@ async def save_catalog_draft(
     return await catalog.browser.save_draft(media_type, entry_key, body)
 
 
-@router.delete("/catalog/{media_type}/{entry_key}/draft")
+@router.delete("/catalog/{media_type}/{entry_key}/draft", responses=_CATALOG_OFF)
 async def discard_catalog_draft(
     media_type: CatalogMediaTypePath, entry_key: EntryKeyPath, catalog: CatalogDep
 ) -> CatalogEntryDetail:

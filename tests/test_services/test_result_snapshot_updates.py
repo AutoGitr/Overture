@@ -5,6 +5,7 @@ lazy from pathlib import Path
 lazy from typing import Any, override
 
 lazy import pytest
+lazy from starlette.testclient import TestClient
 
 lazy from overture.config import Settings
 lazy from overture.db.session import Database
@@ -340,17 +341,17 @@ async def test_clearing_a_stored_snapshot_retires_its_findings(
     assert exc_info.value.status_code == 404
 
 
-async def test_only_result_views_can_be_cleared(
-    tmp_path: Path, *, app_config: Settings, database: Database
+def test_only_result_views_can_be_cleared(
+    authenticated_client: TestClient, auth_headers: dict[str, str]
 ) -> None:
-    runtime = make_runtime(
-        config_dir=tmp_path, app_config=app_config, database=database
+    response = authenticated_client.delete(
+        "/api/job-snapshots/backup?finished_at=finish", headers=auth_headers
     )
 
-    with pytest.raises(PublicServiceError) as exc_info:
-        await job_snapshots.clear_snapshot(JobKind.BACKUP, "finish", runtime.job_slots)
-
-    assert exc_info.value.status_code == 400
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["msg"].endswith(
+        "Backup results cannot be cleared"
+    )
 
 
 @pytest.mark.parametrize("restarted", [False, True])

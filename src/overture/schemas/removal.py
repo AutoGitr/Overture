@@ -1,11 +1,11 @@
 """What removing artwork or a theme does, and what each choice would affect."""
 
-lazy from typing import Annotated, Literal, Self
+lazy from typing import Literal, Self
 
 lazy from pydantic import Field, model_validator
 
 lazy from ..domain import ArtType
-lazy from .base import StrictBaseModel
+lazy from .base import PositiveId, StrictBaseModel
 lazy from .validators import UniqueList
 
 #: An item's art a removal names: one slot, or every slot of it and its seasons.
@@ -36,16 +36,25 @@ class AssetRemoval(StrictBaseModel):
         return self
 
 
+class ArtRemoval(AssetRemoval):
+    """Removing one art slot, of every season or of one.
+
+    A query model reads every query parameter, so the season is one of its
+    fields rather than a parameter beside it.
+    """
+
+    #: The season; omit to remove every season's poster.
+    season_id: PositiveId | None = None
+
+
 class RemovalTarget(StrictBaseModel):
     """The items or collections, and which of their assets, a removal acts on."""
 
     asset: RemovableAsset
-    item_ids: UniqueList[Annotated[int, Field(gt=0)]] = Field(default_factory=list[int])
-    collection_ids: UniqueList[Annotated[int, Field(gt=0)]] = Field(
-        default_factory=list[int]
-    )
+    item_ids: UniqueList[PositiveId] = Field(default_factory=list[int])
+    collection_ids: UniqueList[PositiveId] = Field(default_factory=list[int])
     #: One season of the one item; without it a season poster names them all.
-    season_id: Annotated[int, Field(gt=0)] | None = None
+    season_id: PositiveId | None = None
 
     @model_validator(mode="after")
     def validate_target(self) -> Self:

@@ -129,6 +129,16 @@ def _select_items() -> Select[Any]:
     )
 
 
+def _named_terms[*Ts](stmt: Select[*Ts]) -> Select[*Ts]:
+    """*stmt* over titles' values, with each title's copies and value names."""
+    return (
+        stmt.select_from(MediaItemTerm)
+        .join(MediaItem, col(MediaItem.id) == col(MediaItemTerm.media_item_id))
+        .join(MediaItemCopy, col(MediaItemCopy.media_item_id) == col(MediaItem.id))
+        .join(Term, col(Term.id) == col(MediaItemTerm.term_id))
+    )
+
+
 def _in_library(media_type: MediaType, library_id: str) -> list[ColumnElement[bool]]:
     """Match the listed copies of one library, joined to their titles."""
     return [
@@ -299,14 +309,13 @@ class CollectionItemRepository:
         found: dict[int, dict[TermKind, list[str]]] = {}
         for read in reads:
             rows = await self.session.exec(
-                select(
-                    col(MediaItemTerm.media_item_id), col(MediaItemTerm.kind), Term.name
+                _named_terms(
+                    select(
+                        col(MediaItemTerm.media_item_id),
+                        col(MediaItemTerm.kind),
+                        Term.name,
+                    )
                 )
-                .join(MediaItem, col(MediaItem.id) == col(MediaItemTerm.media_item_id))
-                .join(
-                    MediaItemCopy, col(MediaItemCopy.media_item_id) == col(MediaItem.id)
-                )
-                .join(Term, col(Term.id) == col(MediaItemTerm.term_id))
                 .where(*library, read)
                 .order_by(
                     col(MediaItemTerm.media_item_id),
@@ -357,11 +366,7 @@ class CollectionItemRepository:
                     counts[label] = counts.get(label, 0) + 1
             return counts
         rows = await self.session.exec(
-            select(Term.name, func.count())
-            .select_from(MediaItemTerm)
-            .join(MediaItem, col(MediaItem.id) == col(MediaItemTerm.media_item_id))
-            .join(MediaItemCopy, col(MediaItemCopy.media_item_id) == col(MediaItem.id))
-            .join(Term, col(Term.id) == col(MediaItemTerm.term_id))
+            _named_terms(select(Term.name, func.count()))
             .where(
                 *_in_library(media_type, library_id), col(MediaItemTerm.kind) == kind
             )

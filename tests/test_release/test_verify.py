@@ -8,9 +8,15 @@ lazy from typing import Any, cast, override
 lazy import httpx2
 lazy import pytest
 
-lazy from overture.domain import MediaType
-lazy from overture.media_servers.adapters import ServerCollection, ServerSection
+lazy from overture.domain import AssetStatus, MediaType, ServerAsset
+lazy from overture.media_servers.adapters import (
+    CollectionDetails,
+    MemberWrite,
+    ServerCollection,
+    ServerSection,
+)
 lazy from overture.media_servers.errors import MediaServerError
+lazy from overture.schemas.assets import TitleAssets
 lazy from overture.schemas.collections import CollectionCapabilities
 lazy from overture.utils.http_security import API_KEY_HEADER
 lazy from scripts import verify as module
@@ -55,6 +61,31 @@ def _capabilities(server: str) -> dict[str, Any]:
     return CollectionCapabilities.model_validate(capabilities).model_dump(mode="json")
 
 
+def _assets(
+    *,
+    poster: dict[str, Any] | None = None,
+    background: dict[str, Any] | None = None,
+    theme: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a serialized TitleAssets payload matching the API schema."""
+
+    def slot(kind: ServerAsset, overrides: dict[str, Any] | None) -> dict[str, Any]:
+        return {
+            "kind": kind,
+            "status": AssetStatus.MISSING,
+            "needed": True,
+            "selected": False,
+            **(overrides or {}),
+        }
+
+    assets = {
+        "poster": slot(ServerAsset.POSTER, poster),
+        "background": slot(ServerAsset.BACKGROUND, background),
+        "theme": slot(ServerAsset.THEME, theme),
+    }
+    return TitleAssets.model_validate(assets).model_dump(mode="json")
+
+
 def _collection(identity: int, title: str, *, managed: bool) -> dict[str, Any]:
     return {
         "id": identity,
@@ -72,20 +103,20 @@ def _collection(identity: int, title: str, *, managed: bool) -> dict[str, Any]:
         ],
         "server_poster_version": "1",
         "server_background_version": None,
-        "poster_hash": None,
-        "background_hash": None,
-        "has_theme": False,
-        "youtube_id": None,
-        "backgrounds": True,
         # Overture chose a poster but keeps no record of sending it.
-        "poster_source": "tmdb" if managed else None,
-        "poster_status": "partial",
-        "background_source": None,
-        "background_status": "missing",
+        "assets": _assets(
+            poster={
+                "source": "tmdb" if managed else None,
+                "selected": managed,
+                "status": "partial" if managed else "missing",
+            }
+        ),
     }
 
 
-def _item(identity: int, title: str) -> dict[str, Any]:
+def _item(
+    identity: int, title: str, *, poster: dict[str, Any] | None = None
+) -> dict[str, Any]:
     return {
         "id": identity,
         "title": title,
@@ -94,6 +125,7 @@ def _item(identity: int, title: str) -> dict[str, Any]:
             {"server_id": 1, "server_item_id": f"m{identity}", "library_id": "1:1"}
         ],
         "server_removed_at": None,
+        "assets": _assets(poster=poster),
     }
 
 
@@ -126,8 +158,7 @@ _MOVIES: dict[str, Any] = {
         },
         "server_poster_version": "1",
         "server_background_version": None,
-        "poster_hash": None,
-        "background_hash": None,
+        "assets": _assets(),
     },
     # Plex names the genre as it lists it, not as the editor offers it.
     "/api/collections/6/adopt": {
@@ -184,7 +215,16 @@ _FIXED: dict[str, Any] = {
     "/api/library/items": {
         # Alien's poster was uploaded, and Overture does not hold the image.
         "items": [
-            {**_item(1, "Alien"), "poster_source": "upload", "poster_hash": "h1"},
+            _item(
+                1,
+                "Alien",
+                poster={
+                    "source": "upload",
+                    "selected": True,
+                    "content_hash": "h1",
+                    "file": {"hash": "h1"},
+                },
+            ),
             _item(2, "Aliens"),
         ],
         "total": 2,
@@ -647,7 +687,7 @@ class _Collections:
 
     async def set_collection_members(
         self, collection_id: str, members: list[str], **_kwargs: Any
-    ) -> list[str]:
+    ) -> MemberWrite:
         if self.fail_at == "members":
             # The server refuses the request, as Overture's client reports it.
             request = httpx2.Request(
@@ -659,23 +699,29 @@ class _Collections:
                 "Verify returned an unsuccessful response"
             ) from cause
         # Jellyfin keeps its own order.
+        before = set(self.held[collection_id].member_ids)
         self.held[collection_id] = replace(
             self.held[collection_id], member_ids=tuple(sorted(members))
         )
-        return members
+        return MemberWrite(
+            members, len(set(members) - before), len(before - set(members))
+        )
 
     async def update_collection_details(
-        self, collection_id: str, **kwargs: Any
+        self, collection_id: str, _library: str, details: CollectionDetails
     ) -> None:
+        if self.fail_at == "details":
+            # The server answers the edit but keeps what it had.
+            return
         self.held[collection_id] = replace(
-            self.held[collection_id], title=kwargs["title"]
+            self.held[collection_id], title=details.title
         )
         self.items[collection_id] |= {
-            "Name": kwargs["title"],
-            "ForcedSortName": kwargs["sort_title"],
-            "Overview": kwargs["summary"],
+            "Name": details.title,
+            "ForcedSortName": details.sort_title,
+            "Overview": details.summary,
             "DisplayOrder": "SortName"
-            if kwargs["order"] is module.CollectionOrder.TITLE_ASC
+            if details.order is module.CollectionOrder.TITLE_ASC
             else "PremiereDate",
         }
 
@@ -703,6 +749,10 @@ class _Jellyfin(module.MediaBrowserServer):
 
     @override
     async def get(self, path: str, **params: Any) -> Any:
+        if path == "/Users":
+            return [{"Id": "admin", "Policy": {"IsAdministrator": True}}]
+        if path.startswith("/Users/admin/Items/"):
+            return self.server_state.items[path.rsplit("/", 1)[1]]
         assert path == "/Items"
         return {"Items": [self.server_state.items[params["Ids"]]]}
 
@@ -746,6 +796,36 @@ async def test_writes_touch_only_their_own_collections_and_delete_them_whatever_
         ),
         "upload a poster and a background": "the server names the same background",
     }
+
+
+async def test_writes_fill_a_large_collection_and_explain_an_unsaved_edit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    server = _Collections(fail_at="details")
+
+    def provider(*_args: object, **_kwargs: object) -> tuple[Any, Any]:
+        return server, server
+
+    monkeypatch.setattr(module, "write_provider", provider)
+    direct = _Jellyfin(server)
+    try:
+        cases = {
+            case.label: case
+            for case in await module.WriteCheck(
+                direct, "http://jellyfin.test", "key", verify=True
+            ).run()
+        }
+    finally:
+        await direct.client.aclose()
+
+    large = cases[f"create a collection of up to {module.LARGE_COLLECTION} members"]
+    assert (large.count, large.held, large.problem) == (3, 3, "")
+    edit = cases["edit the title, sort title, summary and order"]
+    assert edit.problem.startswith("the server holds another title")
+    # Read as an administrator, the title shows the edit was never saved.
+    assert (
+        edit.note == f"an administrator sees the title '{module.WRITE_PREFIX} regular'"
+    )
 
 
 def test_the_kind_expected_follows_who_tests_the_condition() -> None:
@@ -1016,3 +1096,172 @@ async def test_servers_are_asked_what_overture_cannot_see_for_itself(
         "jellyfin answers hidden as Dune (Movie) at /m/Dune.mkv, to a user only"
     )
     assert renamed == {"greats": "BFI Greats"}
+
+
+async def test_collection_assets_and_plex_themes_are_read_from_asset_deliveries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def collection_row(
+        identity: int, title: str, *, theme: dict[str, Any], poster: dict[str, Any]
+    ) -> dict[str, Any]:
+        return {
+            **_collection(identity, title, managed=True),
+            "server_poster_version": None,
+            "assets": _assets(poster=poster, theme=theme),
+        }
+
+    # Collection 1 matches Plex; 2 has a queued theme not yet on Plex; 3 has a
+    # theme only on another server while Plex holds one Overture does not know.
+    collections = [
+        collection_row(
+            1,
+            "Held",
+            poster={"status": "complete", "selected": True, "content_hash": "h1"},
+            theme={
+                "status": "complete",
+                "selected": True,
+                "youtube_id": "yt1",
+                "deliveries": [
+                    {
+                        "server_id": 1,
+                        "channel": "upload",
+                        "required": True,
+                        "delivered": True,
+                        "present": True,
+                        "checked_at": None,
+                    }
+                ],
+            },
+        ),
+        collection_row(
+            2,
+            "Queued",
+            poster={"status": "missing", "selected": False},
+            theme={
+                "status": "partial",
+                "selected": True,
+                "youtube_id": "yt2",
+                "deliveries": [
+                    {
+                        "server_id": 1,
+                        "channel": "upload",
+                        "required": True,
+                        "delivered": False,
+                        "present": False,
+                        "checked_at": None,
+                    }
+                ],
+            },
+        ),
+        collection_row(
+            3,
+            "OtherServer",
+            poster={"status": "missing", "selected": False},
+            theme={
+                "status": "partial",
+                "selected": False,
+                "deliveries": [
+                    {
+                        "server_id": 2,
+                        "channel": "upload",
+                        "required": True,
+                        "delivered": True,
+                        "present": True,
+                        "checked_at": None,
+                    }
+                ],
+            },
+        ),
+    ]
+
+    def plex(request: httpx2.Request) -> httpx2.Response:
+        match request.url.path:
+            case "/library/sections/1/all":
+                return httpx2.Response(200, json={"MediaContainer": {"Metadata": []}})
+            case "/library/sections/1/collections":
+                return httpx2.Response(
+                    200,
+                    json={
+                        "MediaContainer": {
+                            "Metadata": [
+                                {
+                                    "ratingKey": "c1",
+                                    "title": "Held",
+                                    "childCount": 3,
+                                    "smart": 0,
+                                    "thumb": "/library/metadata/c1/thumb/1",
+                                    "theme": "/library/metadata/c1/theme/1",
+                                },
+                                {
+                                    "ratingKey": "c2",
+                                    "title": "Queued",
+                                    "childCount": 3,
+                                    "smart": 0,
+                                },
+                                {
+                                    "ratingKey": "c3",
+                                    "title": "OtherServer",
+                                    "childCount": 3,
+                                    "smart": 0,
+                                    "theme": "/library/metadata/c3/theme/1",
+                                },
+                            ]
+                        }
+                    },
+                )
+            case _:
+                return httpx2.Response(404)
+
+    def overture_handler(request: httpx2.Request) -> httpx2.Response:
+        if request.url.path == "/api/collections/1/local-image/poster":
+            assert request.url.params.get("t") == "h1"
+            return httpx2.Response(
+                200, content=b"png", headers={"content-type": "image/png"}
+            )
+        return httpx2.Response(404)
+
+    original = httpx2.AsyncClient
+
+    def client(**kwargs: Any) -> httpx2.AsyncClient:
+        def dispatch(request: httpx2.Request) -> httpx2.Response:
+            if request.url.host == "plex-server.test":
+                return plex(request)
+            return overture_handler(request)
+
+        return original(transport=httpx2.MockTransport(dispatch), **kwargs)
+
+    monkeypatch.setattr(module.httpx2, "AsyncClient", client)
+    overture = module.Overture("http://overture.test", "key")
+    plex_server = module.PlexServer("http://plex-server.test", "token")
+    library = module.Library(
+        overture,
+        "Plex",
+        _capabilities("plex"),
+        "movie",
+        {"id": "1:1", "title": "Movies"},
+        set(),
+        [],
+        collections,
+        plex_server,
+        module.Listing(frozenset(), import_unmanaged=True),
+        lead=True,
+    )
+    try:
+        await plex_server.check_inventory(library)
+        for row in collections:
+            library.check_assets(row, str(row["copies"][0]["server_item_id"]))
+            await library.check_images(row)
+    finally:
+        await overture.client.aclose()
+        await plex_server.client.aclose()
+
+    problems = {
+        (case.check, case.label): case.problem for case in library.cases if case.problem
+    }
+    assert problems == {
+        (
+            "inventory",
+            "OtherServer members",
+        ): "Plex holds a theme Overture does not know",
+        ("assets", "Queued"): "the server holds none of the theme Overture holds",
+    }

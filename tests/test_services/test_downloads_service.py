@@ -55,7 +55,11 @@ lazy from overture.services.themes.youtube_resolver import (
     YouTubeResolver,
 )
 lazy from overture.utils.hashing import compute_bytes_hash
-lazy from overture.utils.image_fetch import RATE_LIMIT_RETRIES, RateLimitedError
+lazy from overture.utils.image_fetch import (
+    RATE_LIMIT_RETRIES,
+    FetchedImage,
+    RateLimitedError,
+)
 lazy from overture.utils.progress import ProgressCallback, ProgressUpdate
 lazy from overture.ws.events import validate_event_payload
 lazy from tests.collection_helpers import stored_collection
@@ -469,16 +473,16 @@ async def test_process_art_job_downloads_writes_hashes_and_refreshes_provider(
     async def fake_private_url(_url: str) -> bool:
         return False
 
-    async def fake_fetch_image_bytes(
+    async def fake_fetch_image(
         _url: str, _client: httpx2.AsyncClient, **_kwargs: object
-    ) -> bytes:
-        return _jpeg_bytes()
+    ) -> FetchedImage:
+        return FetchedImage(_jpeg_bytes(), "image/jpeg")
 
     async def fake_phash(_data: bytes) -> str:
         return "0" * PHASH_HEX_LENGTH
 
     monkeypatch.setattr(art_module, "is_private_url", fake_private_url)
-    monkeypatch.setattr(art_module, "fetch_image_bytes", fake_fetch_image_bytes)
+    monkeypatch.setattr(art_module, "fetch_image", fake_fetch_image)
     monkeypatch.setattr(phash, "compute_from_bytes", fake_phash)
 
     movie_dir = tmp_path / "Movie"
@@ -562,16 +566,16 @@ async def test_art_job_writes_only_when_the_bytes_differ(
     async def fake_private_url(_url: str) -> bool:
         return False
 
-    async def fake_fetch_image_bytes(
+    async def fake_fetch_image(
         _url: str, _client: httpx2.AsyncClient, **_kwargs: object
-    ) -> bytes:
-        return downloaded
+    ) -> FetchedImage:
+        return FetchedImage(downloaded, "image/jpeg")
 
     async def fake_phash(_data: bytes) -> str:
         return "0" * PHASH_HEX_LENGTH
 
     monkeypatch.setattr(art_module, "is_private_url", fake_private_url)
-    monkeypatch.setattr(art_module, "fetch_image_bytes", fake_fetch_image_bytes)
+    monkeypatch.setattr(art_module, "fetch_image", fake_fetch_image)
     monkeypatch.setattr(phash, "compute_from_bytes", fake_phash)
 
     movie_dir = tmp_path / "Movie"
@@ -660,23 +664,23 @@ async def test_process_art_job_allows_trusted_private_media_server_url(
     async def fake_private_url(_url: str) -> bool:
         return True
 
-    async def fake_fetch_image_bytes(
+    async def fake_fetch_image(
         url: str,
         _client: httpx2.AsyncClient,
         *,
         on_progress: Any,
         **kwargs: Any,
-    ) -> bytes:
+    ) -> FetchedImage:
         fetches.append(
             {"url": url, "reports_progress": on_progress is not None, **kwargs}
         )
-        return _jpeg_bytes()
+        return FetchedImage(_jpeg_bytes(), "image/jpeg")
 
     async def fake_phash(_data: bytes) -> str:
         return "2" * PHASH_HEX_LENGTH
 
     monkeypatch.setattr(art_module, "is_private_url", fake_private_url)
-    monkeypatch.setattr(art_module, "fetch_image_bytes", fake_fetch_image_bytes)
+    monkeypatch.setattr(art_module, "fetch_image", fake_fetch_image)
     monkeypatch.setattr(phash, "compute_from_bytes", fake_phash)
 
     movie_dir = tmp_path / "Movie"
@@ -815,11 +819,11 @@ async def test_art_download_failures_say_why(
     async def public_url(_url: str) -> bool:
         return False
 
-    async def fail(*_args: object, **_kwargs: object) -> bytes:
+    async def fail(*_args: object, **_kwargs: object) -> FetchedImage:
         raise failure
 
     monkeypatch.setattr(art_module, "is_private_url", public_url)
-    monkeypatch.setattr(art_module, "fetch_image_bytes", fail)
+    monkeypatch.setattr(art_module, "fetch_image", fail)
     movie_dir = tmp_path / "Movie"
     movie_dir.mkdir()
     item = MediaItem(
@@ -863,16 +867,16 @@ async def test_process_season_poster_job_updates_asset_and_parent_aggregates(
     async def fake_private_url(_url: str) -> bool:
         return False
 
-    async def fake_fetch_image_bytes(
+    async def fake_fetch_image(
         _url: str, _client: httpx2.AsyncClient, **_kwargs: object
-    ) -> bytes:
-        return _jpeg_bytes()
+    ) -> FetchedImage:
+        return FetchedImage(_jpeg_bytes(), "image/jpeg")
 
     async def fake_phash(_data: bytes) -> str:
         return "1" * PHASH_HEX_LENGTH
 
     monkeypatch.setattr(art_module, "is_private_url", fake_private_url)
-    monkeypatch.setattr(art_module, "fetch_image_bytes", fake_fetch_image_bytes)
+    monkeypatch.setattr(art_module, "fetch_image", fake_fetch_image)
     monkeypatch.setattr(phash, "compute_from_bytes", fake_phash)
 
     show_dir = tmp_path / "Show"
@@ -1398,15 +1402,15 @@ async def test_stop_during_file_write_finishes_file_and_metadata(
 
     async def fetch_image(
         _url: str, _client: httpx2.AsyncClient, **_kwargs: object
-    ) -> bytes:
-        return data
+    ) -> FetchedImage:
+        return FetchedImage(data, "image/jpeg")
 
     class Resolver:
         async def download_audio(self, **kwargs: Any) -> ThemeAudio:
             return ThemeAudio(audio_bytes=data, title="Theme", duration=60)
 
     monkeypatch.setattr(art_module, "is_private_url", public_url)
-    monkeypatch.setattr(art_module, "fetch_image_bytes", fetch_image)
+    monkeypatch.setattr(art_module, "fetch_image", fetch_image)
     write_started = asyncio.Event()
     write_finished = asyncio.Event()
     release_write = threading.Event()
@@ -1590,10 +1594,10 @@ async def test_art_download_from_a_down_media_server_gives_its_reason(
     app_config: Settings,
     database: Database,
 ) -> None:
-    async def fail(*_args: object, **_kwargs: object) -> bytes:
+    async def fail(*_args: object, **_kwargs: object) -> FetchedImage:
         raise httpx2.ConnectError("Connection refused")
 
-    monkeypatch.setattr(art_module, "fetch_image_bytes", fail)
+    monkeypatch.setattr(art_module, "fetch_image", fail)
     movie_dir = tmp_path / "Movie"
     movie_dir.mkdir()
     item = MediaItem(

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ASSET_LABELS, AUDIT_STATUS_LABELS } from "../../generated/settings";
   import LoaderCircle from "@lucide/svelte/icons/loader-circle";
   import IssueRow from "./IssueRow.svelte";
   import JobPanel from "./JobPanel.svelte";
@@ -10,8 +11,8 @@
     serverAuditState,
     type SelectableServerAuditResult,
   } from "../stores/serverAuditState.svelte";
-  import { ASSET_BADGES, ASSET_LABELS } from "../utils/artTypes";
-  import { AUDIT_STATUS_LABELS, auditRowKey } from "../utils/serverAuditPopup";
+  import { ASSET_BADGES } from "../utils/artTypes";
+  import { auditRowKey } from "../utils/serverAuditPopup";
 
   let {
     selectedArtCount,

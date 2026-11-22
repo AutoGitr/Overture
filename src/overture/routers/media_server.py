@@ -1,28 +1,17 @@
 """Media Server router - the configured servers' libraries and web links."""
 
-lazy from fastapi import APIRouter, Depends
-
-lazy from ..dependencies import ProviderRegistryDep, require_media_server
+lazy from ..dependencies import ProviderRegistryDep
 lazy from ..schemas.media_server import (
-    MediaServerErrorResponse,
     ServerLibraryRead,
     ServerWebLinksRead,
 )
-lazy from .auth import require_auth
+lazy from .auth import media_server_router
 
-router = APIRouter(
-    prefix="/media-server",
-    tags=["media-server"],
-    dependencies=[Depends(require_auth), Depends(require_media_server)],
-)
+router = media_server_router(prefix="/media-server", tags=["media-server"])
 
 
 @router.get(
     "/libraries",
-    responses={
-        502: {"model": MediaServerErrorResponse},
-        503: {"model": MediaServerErrorResponse},
-    },
 )
 async def list_server_libraries(
     providers: ProviderRegistryDep,
@@ -36,10 +25,6 @@ async def list_server_libraries(
 
 @router.get(
     "/links",
-    responses={
-        502: {"model": MediaServerErrorResponse},
-        503: {"model": MediaServerErrorResponse},
-    },
 )
 async def get_server_web_links(
     providers: ProviderRegistryDep,

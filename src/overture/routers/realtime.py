@@ -1,16 +1,10 @@
 """Realtime snapshot route."""
 
-lazy from fastapi import APIRouter, Depends
-
 lazy from ..dependencies import RealtimeSnapshotDep, WebSocketsDep
 lazy from ..schemas.realtime import RealtimeSnapshot
-lazy from .auth import require_auth
+lazy from .auth import authenticated_router
 
-router = APIRouter(
-    prefix="/realtime",
-    tags=["realtime"],
-    dependencies=[Depends(require_auth)],
-)
+router = authenticated_router(prefix="/realtime", tags=["realtime"])
 
 
 @router.get("/snapshot")

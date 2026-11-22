@@ -1,7 +1,7 @@
 """FastAPI application coverage using TestClient."""
 
 lazy from collections import deque
-lazy from collections.abc import Iterator
+lazy from collections.abc import Iterator, Sequence
 lazy from pathlib import Path
 lazy from typing import cast
 
@@ -18,6 +18,8 @@ lazy from overture.db.session import Database
 lazy from overture.domain import ArtType, MediaType
 lazy from overture.main import APP_VERSION, create_app, websocket_endpoint
 lazy from overture.passwords import hash_password
+lazy from overture.schemas.themes import ThemeSearchResult
+lazy from overture.services.themes.youtube_resolver import YouTubeResolver
 lazy from overture.utils.http_security import CSRF_COOKIE, CSRF_HEADER
 lazy from overture.ws.connection_manager import ConnectionManager
 lazy from tests.factories import seed_asset
@@ -62,6 +64,32 @@ def test_theme_search_accepts_defaults_and_limit_boundaries(
     response = authenticated_client.get(f"/api/themes/search{query}")
     assert response.status_code == 200
     assert response.json() == {"results": []}
+
+
+def test_theme_search_reads_every_repeated_video_id(
+    authenticated_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    searched: list[Sequence[str] | None] = []
+
+    async def search(
+        _resolver: YouTubeResolver,
+        _query: str = "",
+        _limit: int = 10,
+        video_ids: Sequence[str] | None = None,
+        *,
+        wait: bool = True,
+    ) -> list[ThemeSearchResult]:
+        del wait
+        searched.append(video_ids)
+        return []
+
+    monkeypatch.setattr(YouTubeResolver, "search", search)
+    response = authenticated_client.get(
+        "/api/themes/search?video_ids=abcdefghijk&video_ids=bbcdefghijk"
+    )
+
+    assert response.status_code == 200
+    assert searched == [["abcdefghijk", "bbcdefghijk"]]
 
 
 @pytest.mark.parametrize("query", ["limit=0", "limit=51", "video_ids=invalid"])
@@ -273,7 +301,7 @@ def test_provider_art_rejects_invalid_type(
     season_slot = client.get("/api/library/items/1/provider-art?type=season_poster")
 
     assert unknown.status_code == 422
-    assert season_slot.status_code == 400
+    assert season_slot.status_code == 422
     assert season_slot.json() == {"detail": "An item has no season artwork"}
 
 

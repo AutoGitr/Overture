@@ -1,4 +1,5 @@
 <script module lang="ts">
+  import { TEXT_LIMITS } from "../../generated/settings";
   import type { ScheduleData } from "../utils/collectionFormShared.svelte";
 
   const REMOVE_KEEP = [
@@ -34,7 +35,7 @@
   >
     <input
       id={`${id}-from`}
-      maxlength="5"
+      maxlength={TEXT_LIMITS.seasonalDate}
       size="8"
       placeholder={defaults?.active_start_mmdd ?? "All year"}
       value={policy.active_start_mmdd ?? ""}
@@ -44,7 +45,7 @@
   <FieldRow label="Active until (MM-DD)" for={`${id}-until`}>
     <input
       id={`${id}-until`}
-      maxlength="5"
+      maxlength={TEXT_LIMITS.seasonalDate}
       size="8"
       placeholder={defaults?.active_end_mmdd ?? "All year"}
       value={policy.active_end_mmdd ?? ""}

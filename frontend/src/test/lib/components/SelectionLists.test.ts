@@ -5,6 +5,7 @@ import { appSettings } from "../../helpers/fixtures";
 import CheckboxList from "../../../lib/components/CheckboxList.svelte";
 import CollectionChecklist from "../../../lib/components/CollectionChecklist.svelte";
 import LibraryChecklist from "../../../lib/components/LibraryChecklist.svelte";
+import LibraryOptions from "../../../lib/components/LibraryOptions.svelte";
 
 describe("selection lists", () => {
   it("updates checkbox membership when selection props change", async () => {
@@ -43,6 +44,25 @@ describe("selection lists", () => {
     expect(screen.getByRole("checkbox", { name: "Series" })).toBeChecked();
     await rerender({ selectedIds: ["movies", "shows"] });
     expect(screen.getByRole("checkbox", { name: "Deselect all libraries" })).toBeChecked();
+  });
+  it("offers to choose every library wherever libraries are chosen", async () => {
+    settingsState.load(appSettings());
+    const ontoggleall = vi.fn();
+    const libraries = [
+      { id: "movies", title: "Films", server_id: 1 },
+      { id: "shows", title: "Series", server_id: 1 },
+    ];
+    const { rerender } = render(LibraryOptions, {
+      libraries,
+      selected: [],
+      ontoggle: vi.fn(),
+      ontoggleall,
+    });
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Select all libraries" }));
+    expect(ontoggleall).toHaveBeenLastCalledWith(true);
+    await rerender({ selected: ["movies", "shows"] });
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Deselect all libraries" }));
+    expect(ontoggleall).toHaveBeenLastCalledWith(false);
   });
   it("chooses collections apart from libraries, every collection including every group", async () => {
     const onchange = vi.fn();

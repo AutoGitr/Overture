@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { UNGROUPED_GROUP } from "../../generated/settings";
+  import { TEXT_LIMITS, UNGROUPED_GROUP } from "../../generated/settings";
 
   import { uiState } from "../stores/uiState.svelte";
   import DetailForm from "./DetailForm.svelte";
@@ -64,6 +64,13 @@
       {libraries}
       selected={editor.libraryIds}
       ontoggle={(id) => editor.setLibrary(id, !editor.libraryIds.includes(id))}
+      ontoggleall={(checked) => {
+        for (const library of libraries) {
+          if (editor.libraryIds.includes(library.id) !== checked) {
+            editor.setLibrary(library.id, checked);
+          }
+        }
+      }}
     />
     {#if editor.libraryIds.length > 1 && !creatingSet}
       <span class="hint"
@@ -84,7 +91,7 @@
       <input
         id={`${id}-title`}
         required
-        maxlength="200"
+        maxlength={TEXT_LIMITS.setTitleFormat}
         bind:value={form.generator.title_format}
         placeholder={"{value}"}
       />
@@ -96,7 +103,7 @@
     >
       <input
         id={`${id}-group`}
-        maxlength="200"
+        maxlength={TEXT_LIMITS.groupName}
         bind:value={form.collectionGroup}
         placeholder="e.g. Decades"
         list={`${id}-groups`}
@@ -123,7 +130,7 @@
       <input
         id={`${id}-title`}
         required
-        maxlength="200"
+        maxlength={TEXT_LIMITS.collectionTitle}
         bind:value={editor.title}
         disabled={editor.generated}
         placeholder="Collection title"

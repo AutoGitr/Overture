@@ -1,6 +1,9 @@
 import type { AssetRead, MediaItemRead, ThemeSearchResult } from "../../generated/rest/types.gen";
+import { YOUTUBE_ID_PATTERN } from "../../generated/settings";
 
-export interface ThemeResultBadge {
+const YOUTUBE_ID = new RegExp(YOUTUBE_ID_PATTERN);
+
+interface ThemeResultBadge {
   label: string;
   variant?: "success" | "accent" | "warning" | "danger" | "muted" | string;
 }
@@ -49,8 +52,10 @@ export function isYouTubeUrl(value: string): boolean {
   return /(?:youtube\.com\/watch|youtu\.be\/|youtube\.com\/shorts\/)/.test(value);
 }
 
+/** The video ID a link names, when it is one the catalog contract accepts. */
 export function extractYouTubeId(value: string): string | null {
-  return value.match(/(?:v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})/)?.[1] ?? null;
+  const candidate = value.match(/(?:v=|youtu\.be\/|shorts\/)([^&?#/\s]+)/)?.[1];
+  return candidate !== undefined && YOUTUBE_ID.test(candidate) ? candidate : null;
 }
 
 /** Return unique non-empty YouTube IDs in order, trimming surrounding whitespace. */
@@ -75,6 +80,17 @@ export interface MergeThemeResultsParams {
   overtureDbId?: string | null;
   themerrDbId?: string | null;
   searchResults?: ThemeSearchResult[];
+}
+
+/** A search result's fields that say something, which replace a pick's guesses. */
+function knownFields(result: ThemeSearchResult): Partial<ThemeSearchResultItem> {
+  const fields: Partial<ThemeSearchResultItem> = {};
+  if (result.title) fields.title = result.title;
+  if (result.channel) fields.channel = result.channel;
+  if (result.duration != null) fields.duration = result.duration;
+  if (result.thumbnail) fields.thumbnail = result.thumbnail;
+  if (result.url) fields.url = result.url;
+  return fields;
 }
 
 export function mergeThemeResults({
@@ -114,57 +130,47 @@ export function mergeThemeResults({
     }
   }
 
-  // 1. Currently selected video first (if any)
-  if (theme?.youtube_id?.trim()) {
-    const currentId = theme.youtube_id.trim();
-    const title = theme.youtube_title?.trim() || (subject ? `${subject} Theme` : "Current theme");
-    addOrUpdateBadge(
-      currentId,
-      { label: "Currently selected", variant: "success" },
-      title,
-      theme.youtube_duration ?? null,
-    );
+  // The current theme first, then each database's pick, each once with every
+  // badge that names it.
+  const titled = (fallback: string) => (subject ? `${subject} Theme` : fallback);
+  const picks = [
+    {
+      id: theme?.youtube_id,
+      badge: { label: "Currently selected", variant: "success" },
+      title: theme?.youtube_title?.trim() || titled("Current theme"),
+      duration: theme?.youtube_duration ?? null,
+    },
+    {
+      id: overtureDbId,
+      badge: { label: "OvertureDB", variant: "accent" },
+      title: titled("OvertureDB theme"),
+      duration: null,
+    },
+    {
+      id: themerrDbId,
+      badge: { label: "ThemerrDB", variant: "warning" },
+      title: titled("ThemerrDB theme"),
+      duration: null,
+    },
+  ] satisfies {
+    id: string | null | undefined;
+    badge: ThemeResultBadge;
+    title: string;
+    duration: number | null;
+  }[];
+  for (const pick of picks) {
+    const id = pick.id?.trim();
+    if (id) addOrUpdateBadge(id, pick.badge, pick.title, pick.duration);
   }
 
-  // 2. OvertureDB selection (if any)
-  if (overtureDbId?.trim()) {
-    const ovtId = overtureDbId.trim();
-    const title = subject ? `${subject} Theme` : "OvertureDB theme";
-    addOrUpdateBadge(ovtId, { label: "OvertureDB", variant: "accent" }, title);
-  }
-
-  // 3. ThemerrDB public selection (if any)
-  if (themerrDbId?.trim()) {
-    const thmId = themerrDbId.trim();
-    const title = subject ? `${subject} Theme` : "ThemerrDB theme";
-    addOrUpdateBadge(thmId, { label: "ThemerrDB", variant: "warning" }, title);
-  }
-
-  // 4. YouTube search results
+  // YouTube's results, which fill in what a pick of the same video lacks.
   for (const result of searchResults) {
     if (!result?.id) continue;
     const existing = byId.get(result.id);
     if (existing) {
-      if (result.title) {
-        existing.title = result.title;
-      }
-      if (result.channel) {
-        existing.channel = result.channel;
-      }
-      if (result.duration !== null && result.duration !== undefined) {
-        existing.duration = result.duration;
-      }
-      if (result.thumbnail) {
-        existing.thumbnail = result.thumbnail;
-      }
-      if (result.url) {
-        existing.url = result.url;
-      }
+      Object.assign(existing, knownFields(result));
     } else {
-      const item: ThemeSearchResultItem = {
-        ...result,
-        badges: [],
-      };
+      const item: ThemeSearchResultItem = { ...result, badges: [] };
       byId.set(result.id, item);
       list.push(item);
     }

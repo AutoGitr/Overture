@@ -268,9 +268,9 @@ export type AppSettingsRead = {
  *
  * Every field of :class:`AppSettingsBase` is here as optional: only the ones
  * a request actually sends are applied, which is what
- * ``model_dump(exclude_unset=True)`` gives the service. Ranges are validated
- * against the persisted model's own declarations, and a test keeps the two
- * field lists equal.
+ * ``model_dump(exclude_unset=True)`` gives the service. Each field takes its
+ * range from the persisted model below, so the schema states it, and a test
+ * keeps the two field lists equal.
  */
 export type AppSettingsUpdate = {
     aspect_ratio_tolerance?: AspectRatioTolerance | null;
@@ -1029,7 +1029,10 @@ export type BackupStats = {
  * Art-specific assets workflow configuration.
  */
 export type BulkAssetsArtConfigInput = {
-    art_types?: UniqueListArtType;
+    /**
+     * Art Types
+     */
+    art_types?: Array<ArtType>;
     source_order?: SourceOrderArtBulkSource;
     /**
      * Threshold
@@ -1043,7 +1046,10 @@ export type BulkAssetsArtConfigInput = {
  * Art-specific assets workflow configuration.
  */
 export type BulkAssetsArtConfigOutput = {
-    art_types: UniqueListArtType;
+    /**
+     * Art Types
+     */
+    art_types: Array<ArtType>;
     source_order: SourceOrderArtBulkSource;
     /**
      * Threshold
@@ -1067,16 +1073,21 @@ export type BulkAssetsRequestInput = {
      */
     collection_groups?: GroupNames | null;
     /**
+     * Collection Ids
+     *
      * These collections, besides any groups.
      */
-    collection_ids?: UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0 | null;
+    collection_ids?: Array<number> | null;
     /**
      * Include Unmonitored
      *
      * Include unmonitored items in either target scope.
      */
     include_unmonitored?: boolean;
-    item_ids?: UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0 | null;
+    /**
+     * Item Ids
+     */
+    item_ids?: Array<number> | null;
     library_ids?: LibraryIds;
     /**
      * Overwrite Existing
@@ -1108,16 +1119,21 @@ export type BulkAssetsRequestOutput = {
      */
     collection_groups: GroupNames | null;
     /**
+     * Collection Ids
+     *
      * These collections, besides any groups.
      */
-    collection_ids: UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0 | null;
+    collection_ids: Array<number> | null;
     /**
      * Include Unmonitored
      *
      * Include unmonitored items in either target scope.
      */
     include_unmonitored: boolean;
-    item_ids: UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0 | null;
+    /**
+     * Item Ids
+     */
+    item_ids: Array<number> | null;
     library_ids: LibraryIds;
     /**
      * Overwrite Existing
@@ -1261,10 +1277,7 @@ export type BulkAssetsThemeConfigOutput = {
  * Validate bulk collection monitor updates.
  */
 export type BulkCollectionMonitorUpdate = {
-    /**
-     * Collection Ids
-     */
-    collection_ids: Array<number>;
+    collection_ids: CollectionIds;
     /**
      * Monitored
      */
@@ -1278,10 +1291,7 @@ export type BulkCollectionMonitorUpdate = {
  */
 export type BulkCollectionOperation = {
     collection_group?: GroupName | null;
-    /**
-     * Collection Ids
-     */
-    collection_ids: Array<number>;
+    collection_ids: CollectionIds;
     collection_mode?: CollectionMode | null;
     delete_target?: CollectionDeleteTarget;
     /**
@@ -2190,7 +2200,10 @@ export type CollectionDefaults = {
     active_end_mmdd: SeasonalDate | null;
     active_start_mmdd: SeasonalDate | null;
     arr_tag: MemberTagFormat | null;
-    auto_art: UniqueListAutoArtSource | null;
+    /**
+     * Auto Art
+     */
+    auto_art: Array<AutoArtSource> | null;
     /**
      * Auto Match Theme
      */
@@ -2224,7 +2237,10 @@ export type CollectionDefaults = {
      */
     minimum_items: number | null;
     order_type: CollectionOrder | null;
-    overturedb_posters: UniqueListCollectionPosterStyle | null;
+    /**
+     * Overturedb Posters
+     */
+    overturedb_posters: Array<CollectionPosterStyle> | null;
     /**
      * Request Missing
      */
@@ -2516,6 +2532,10 @@ export type CollectionFieldRead = {
      * Free Values
      */
     free_values: boolean;
+    /**
+     * Ignores Case
+     */
+    ignores_case: boolean;
     kind: FieldKind;
     /**
      * Label
@@ -2694,7 +2714,10 @@ export type CollectionGroupPolicyInput = {
     active_end_mmdd?: SeasonalDate | null;
     active_start_mmdd?: SeasonalDate | null;
     arr_tag?: MemberTagFormat | null;
-    auto_art?: UniqueListAutoArtSource | null;
+    /**
+     * Auto Art
+     */
+    auto_art?: Array<AutoArtSource> | null;
     /**
      * Auto Match Theme
      */
@@ -2729,7 +2752,10 @@ export type CollectionGroupPolicyInput = {
      */
     minimum_items?: number | null;
     order_type?: CollectionOrder | null;
-    overturedb_posters?: UniqueListCollectionPosterStyle | null;
+    /**
+     * Overturedb Posters
+     */
+    overturedb_posters?: Array<CollectionPosterStyle> | null;
     /**
      * Request Missing
      */
@@ -2768,7 +2794,10 @@ export type CollectionGroupPolicyOutput = {
     active_end_mmdd: SeasonalDate | null;
     active_start_mmdd: SeasonalDate | null;
     arr_tag: MemberTagFormat | null;
-    auto_art: UniqueListAutoArtSource | null;
+    /**
+     * Auto Art
+     */
+    auto_art: Array<AutoArtSource> | null;
     /**
      * Auto Match Theme
      */
@@ -2803,7 +2832,10 @@ export type CollectionGroupPolicyOutput = {
      */
     minimum_items: number | null;
     order_type: CollectionOrder | null;
-    overturedb_posters: UniqueListCollectionPosterStyle | null;
+    /**
+     * Overturedb Posters
+     */
+    overturedb_posters: Array<CollectionPosterStyle> | null;
     /**
      * Request Missing
      */
@@ -2842,7 +2874,7 @@ export type CollectionGroupRename = {
     name: GroupName;
 };
 
-export type CollectionIds = UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0MinLenMinLength1;
+export type CollectionIds = Array<number>;
 
 /**
  * CollectionKind
@@ -3277,7 +3309,10 @@ export type CollectionRuleRead = {
     active_end_mmdd: SeasonalDate | null;
     active_start_mmdd: SeasonalDate | null;
     arr_tag: MemberTagFormat | null;
-    auto_art: UniqueListAutoArtSource | null;
+    /**
+     * Auto Art
+     */
+    auto_art: Array<AutoArtSource> | null;
     /**
      * Auto Match Theme
      */
@@ -3324,7 +3359,10 @@ export type CollectionRuleRead = {
      */
     minimum_items: number | null;
     order_type: CollectionOrder | null;
-    overturedb_posters: UniqueListCollectionPosterStyle | null;
+    /**
+     * Overturedb Posters
+     */
+    overturedb_posters: Array<CollectionPosterStyle> | null;
     /**
      * Request Missing
      */
@@ -3367,7 +3405,10 @@ export type CollectionRuleWriteInput = {
     active_end_mmdd?: SeasonalDate | null;
     active_start_mmdd?: SeasonalDate | null;
     arr_tag?: MemberTagFormat | null;
-    auto_art?: UniqueListAutoArtSource | null;
+    /**
+     * Auto Art
+     */
+    auto_art?: Array<AutoArtSource> | null;
     /**
      * Auto Match Theme
      */
@@ -3409,7 +3450,10 @@ export type CollectionRuleWriteInput = {
      */
     minimum_items?: number | null;
     order_type?: CollectionOrder | null;
-    overturedb_posters?: UniqueListCollectionPosterStyle | null;
+    /**
+     * Overturedb Posters
+     */
+    overturedb_posters?: Array<CollectionPosterStyle> | null;
     /**
      * Request Missing
      */
@@ -3448,7 +3492,10 @@ export type CollectionRuleWriteOutput = {
     active_end_mmdd: SeasonalDate | null;
     active_start_mmdd: SeasonalDate | null;
     arr_tag: MemberTagFormat | null;
-    auto_art: UniqueListAutoArtSource | null;
+    /**
+     * Auto Art
+     */
+    auto_art: Array<AutoArtSource> | null;
     /**
      * Auto Match Theme
      */
@@ -3490,7 +3537,10 @@ export type CollectionRuleWriteOutput = {
      */
     minimum_items: number | null;
     order_type: CollectionOrder | null;
-    overturedb_posters: UniqueListCollectionPosterStyle | null;
+    /**
+     * Overturedb Posters
+     */
+    overturedb_posters: Array<CollectionPosterStyle> | null;
     /**
      * Request Missing
      */
@@ -3928,6 +3978,15 @@ export type DownloadJobMetadata = {
 export type DownloadStatus = 'pending' | 'started' | 'progress' | 'completed' | 'failed' | 'cancelled';
 
 /**
+ * ErrorResponse
+ *
+ * The body of every failed request.
+ */
+export type ErrorResponse = {
+    detail: PublicText;
+};
+
+/**
  * FieldChoice
  *
  * A value a field can hold and how it is named to people.
@@ -3953,7 +4012,7 @@ export type FieldConditionInput = {
     /**
      * Kind
      */
-    kind?: 'field';
+    kind: 'field';
     operator?: FilterOperator;
     /**
      * Value
@@ -4081,17 +4140,7 @@ export type FolderRootsResponse = {
 
 export type GroupName = string;
 
-export type GroupNames = UniqueListAnnotatedStrFieldInfoAnnotationNoneTypeRequiredTrueMetadataMinLenMinLength1MaxLenMaxLength200MinLenMinLength1;
-
-/**
- * HTTPValidationError
- */
-export type HttpValidationError = {
-    /**
-     * Detail
-     */
-    detail?: Array<ValidationError>;
-};
+export type GroupNames = Array<string>;
 
 /**
  * HealthResponse
@@ -4415,7 +4464,7 @@ export type LibraryFilterMatchRequest = {
 
 export type LibraryId = string;
 
-export type LibraryIds = UniqueListAnnotatedStrFieldInfoAnnotationNoneTypeRequiredTrueMetadataMinLenMinLength1MaxLenMaxLength128MaxLenMaxLength200;
+export type LibraryIds = Array<string>;
 
 /**
  * LibrarySectionRead
@@ -4571,7 +4620,7 @@ export type MdblistSourceInput = {
     /**
      * Type
      */
-    type?: 'mdblist';
+    type: 'mdblist';
 };
 
 /**
@@ -4734,15 +4783,6 @@ export type MediaItemRead = {
      * Year
      */
     year: number | null;
-};
-
-/**
- * MediaServerErrorResponse
- *
- * Provider failure, distinct from a successful empty library list.
- */
-export type MediaServerErrorResponse = {
-    detail: PublicText;
 };
 
 /**
@@ -4946,7 +4986,7 @@ export type RadarrTagSourceInput = {
     /**
      * Type
      */
-    type?: 'radarr_tag';
+    type: 'radarr_tag';
 };
 
 /**
@@ -5081,8 +5121,14 @@ export type RemovalOptions = {
  */
 export type RemovalTarget = {
     asset: RemovableAsset;
-    collection_ids?: UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0;
-    item_ids?: UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0;
+    /**
+     * Collection Ids
+     */
+    collection_ids?: Array<number>;
+    /**
+     * Item Ids
+     */
+    item_ids?: Array<number>;
     /**
      * Season Id
      */
@@ -5248,11 +5294,16 @@ export type SavedFilterWrite = {
  * Validate the asset scan request payload.
  */
 export type ScanRequest = {
-    art_types?: UniqueListServerAsset;
     /**
+     * Art Types
+     */
+    art_types?: Array<ServerAsset>;
+    /**
+     * Item Ids
+     *
      * Visit these items' folders instead of the selected roots.
      */
-    item_ids?: UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0 | null;
+    item_ids?: Array<number> | null;
     /**
      * Movie Folders
      */
@@ -5378,7 +5429,10 @@ export type ServerAuditRefreshTarget = {
  * Validate the server audit request payload.
  */
 export type ServerAuditRequest = {
-    art_types?: UniqueListArtType;
+    /**
+     * Art Types
+     */
+    art_types?: Array<ArtType>;
     /**
      * Check Collections
      */
@@ -5388,9 +5442,11 @@ export type ServerAuditRequest = {
      */
     check_themes?: boolean;
     /**
+     * Item Ids
+     *
      * Visit these items' folders instead of the selected roots.
      */
-    item_ids?: UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0 | null;
+    item_ids?: Array<number> | null;
     /**
      * Movie Folders
      */
@@ -5543,7 +5599,7 @@ export type SonarrTagSourceInput = {
     /**
      * Type
      */
-    type?: 'sonarr_tag';
+    type: 'sonarr_tag';
 };
 
 /**
@@ -5573,7 +5629,7 @@ export type SourceConditionInput = {
     /**
      * Kind
      */
-    kind?: 'source';
+    kind: 'source';
     /**
      * Operator
      */
@@ -5598,9 +5654,9 @@ export type SourceConditionOutput = {
     source: CollectionSourceOutput;
 };
 
-export type SourceOrderArtBulkSource = UniqueListArtBulkSourceMinLenMinLength1;
+export type SourceOrderArtBulkSource = Array<ArtBulkSource>;
 
-export type SourceOrderThemeBulkSource = UniqueListThemeBulkSourceMinLenMinLength1;
+export type SourceOrderThemeBulkSource = Array<ThemeBulkSource>;
 
 /**
  * SourceType
@@ -6018,7 +6074,7 @@ export type TmdbChartSourceInput = {
     /**
      * Type
      */
-    type?: 'tmdb_chart';
+    type: 'tmdb_chart';
 };
 
 /**
@@ -6099,7 +6155,7 @@ export type TmdbCollectionSourceInput = {
     /**
      * Type
      */
-    type?: 'tmdb_collection';
+    type: 'tmdb_collection';
 };
 
 /**
@@ -6223,7 +6279,7 @@ export type TmdbItemSourceInput = {
     /**
      * Type
      */
-    type?: 'tmdb_item';
+    type: 'tmdb_item';
 };
 
 /**
@@ -6262,7 +6318,7 @@ export type TmdbListSourceInput = {
     /**
      * Type
      */
-    type?: 'tmdb_list';
+    type: 'tmdb_list';
 };
 
 /**
@@ -6349,7 +6405,7 @@ export type TmdbPersonSourceInput = {
     /**
      * Type
      */
-    type?: 'tmdb_person';
+    type: 'tmdb_person';
 };
 
 /**
@@ -6429,52 +6485,31 @@ export type TmdbSeasonPreview = {
     title: string | null;
 };
 
-export type UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0 = Array<number>;
-
-export type UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0MinLenMinLength1 = Array<number>;
-
-export type UniqueListAnnotatedStrFieldInfoAnnotationNoneTypeRequiredTrueMetadataMinLenMinLength1MaxLenMaxLength128MaxLenMaxLength200 = Array<string>;
-
-export type UniqueListAnnotatedStrFieldInfoAnnotationNoneTypeRequiredTrueMetadataMinLenMinLength1MaxLenMaxLength200MinLenMinLength1 = Array<string>;
-
-export type UniqueListArtBulkSourceMinLenMinLength1 = Array<ArtBulkSource>;
-
-export type UniqueListArtType = Array<ArtType>;
-
-export type UniqueListAutoArtSource = Array<AutoArtSource>;
-
-export type UniqueListCollectionPosterStyle = Array<CollectionPosterStyle>;
-
-export type UniqueListServerAsset = Array<ServerAsset>;
-
-export type UniqueListThemeBulkSourceMinLenMinLength1 = Array<ThemeBulkSource>;
-
-export type UniqueListYouTubeIdMaxLenMaxLength20 = Array<YouTubeId>;
+/**
+ * ValidationErrorResponse
+ *
+ * The body of a request that failed validation.
+ */
+export type ValidationErrorResponse = {
+    /**
+     * Detail
+     */
+    detail: Array<ValidationIssue>;
+};
 
 /**
- * ValidationError
+ * ValidationIssue
+ *
+ * Where a request failed validation, and why; never the value it sent.
  */
-export type ValidationError = {
+export type ValidationIssue = {
     /**
-     * Context
-     */
-    ctx?: {
-        [key: string]: unknown;
-    };
-    /**
-     * Input
-     */
-    input?: unknown;
-    /**
-     * Location
+     * Loc
      */
     loc: Array<string | number>;
+    msg: PublicText;
     /**
-     * Message
-     */
-    msg: string;
-    /**
-     * Error Type
+     * Type
      */
     type: string;
 };
@@ -6510,8 +6545,6 @@ export type ArtTypeStatsWritable = {
 
 export type BulkItemOperationKindWritable = 'artwork' | 'themes' | ItemRecordOperation;
 
-export type CollectionIdsWritable = UniqueListAnnotatedIntFieldInfoAnnotationNoneTypeRequiredTrueMetadataGtGt0MinLenMinLength1;
-
 /**
  * Coverage
  *
@@ -6536,21 +6569,17 @@ export type CoverageWritable = {
     total_size_bytes: number;
 };
 
-export type GroupNamesWritable = UniqueListAnnotatedStrFieldInfoAnnotationNoneTypeRequiredTrueMetadataMinLenMinLength1MaxLenMaxLength200MinLenMinLength1;
-
 export type ItemArtAssetWritable = ArtType | 'art';
 
 export type JsonValueWritable = string | number | number | boolean | Array<JsonValueWritable> | {
     [key: string]: JsonValueWritable;
 } | null;
 
-export type LibraryIdsWritable = UniqueListAnnotatedStrFieldInfoAnnotationNoneTypeRequiredTrueMetadataMinLenMinLength1MaxLenMaxLength128MaxLenMaxLength200;
-
 export type RemovableAssetWritable = ItemArtAssetWritable | 'theme';
 
-export type SourceOrderArtBulkSourceWritable = UniqueListArtBulkSourceMinLenMinLength1Writable;
+export type SourceOrderArtBulkSourceWritable = Array<ArtBulkSource>;
 
-export type SourceOrderThemeBulkSourceWritable = UniqueListThemeBulkSourceMinLenMinLength1Writable;
+export type SourceOrderThemeBulkSourceWritable = Array<ThemeBulkSource>;
 
 /**
  * StatsResponse
@@ -6586,20 +6615,6 @@ export type ThemeStatsWritable = {
     shows: CoverageWritable;
 };
 
-export type UniqueListArtBulkSourceMinLenMinLength1Writable = Array<ArtBulkSource>;
-
-export type UniqueListArtTypeWritable = Array<ArtType>;
-
-export type UniqueListAutoArtSourceWritable = Array<AutoArtSource>;
-
-export type UniqueListCollectionPosterStyleWritable = Array<CollectionPosterStyle>;
-
-export type UniqueListServerAssetWritable = Array<ServerAsset>;
-
-export type UniqueListThemeBulkSourceMinLenMinLength1Writable = Array<ThemeBulkSource>;
-
-export type UniqueListYouTubeIdMaxLenMaxLength20Writable = Array<YouTubeId>;
-
 export type GetRemovalOptionsData = {
     body: RemovalTarget;
     headers?: {
@@ -6617,9 +6632,21 @@ export type GetRemovalOptionsData = {
 
 export type GetRemovalOptionsErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetRemovalOptionsError = GetRemovalOptionsErrors[keyof GetRemovalOptionsErrors];
@@ -6650,9 +6677,29 @@ export type UploadArtData = {
 
 export type UploadArtErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The image is larger than the limit
+     */
+    413: ErrorResponse;
+    /**
+     * It is not a JPEG or PNG
+     */
+    415: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type UploadArtError = UploadArtErrors[keyof UploadArtErrors];
@@ -6683,9 +6730,25 @@ export type RenameAssetsData = {
 
 export type RenameAssetsErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The scan it names is stale; scan again
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type RenameAssetsError = RenameAssetsErrors[keyof RenameAssetsErrors];
@@ -6716,9 +6779,21 @@ export type StartScanData = {
 
 export type StartScanErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type StartScanError = StartScanErrors[keyof StartScanErrors];
@@ -6749,9 +6824,17 @@ export type StopScanData = {
 
 export type StopScanErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type StopScanError = StopScanErrors[keyof StopScanErrors];
@@ -6782,9 +6865,17 @@ export type ListApiKeysData = {
 
 export type ListApiKeysErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type ListApiKeysError = ListApiKeysErrors[keyof ListApiKeysErrors];
@@ -6817,9 +6908,25 @@ export type CreateApiKeyData = {
 
 export type CreateApiKeyErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * A key has that name already
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type CreateApiKeyError = CreateApiKeyErrors[keyof CreateApiKeyErrors];
@@ -6846,6 +6953,8 @@ export type DeleteApiKeyData = {
     path: {
         /**
          * Key Id
+         *
+         * API key ID
          */
         key_id: number;
     };
@@ -6855,9 +6964,21 @@ export type DeleteApiKeyData = {
 
 export type DeleteApiKeyErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No key has that ID
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type DeleteApiKeyError = DeleteApiKeyErrors[keyof DeleteApiKeyErrors];
@@ -6904,9 +7025,25 @@ export type LoginData = {
 
 export type LoginErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * The password is wrong
+     */
+    401: ErrorResponse;
+    /**
+     * Password login is disabled
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * Too many sign-in attempts
+     */
+    429: ErrorResponse;
 };
 
 export type LoginError = LoginErrors[keyof LoginErrors];
@@ -6945,9 +7082,9 @@ export type MeData = {
 
 export type MeErrors = {
     /**
-     * Validation Error
+     * The request breaks the schema or a rule
      */
-    422: HttpValidationError;
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type MeError = MeErrors[keyof MeErrors];
@@ -6967,6 +7104,15 @@ export type OidcCallbackData = {
     query?: never;
     url: '/api/auth/oidc/callback';
 };
+
+export type OidcCallbackErrors = {
+    /**
+     * OIDC login is disabled
+     */
+    404: ErrorResponse;
+};
+
+export type OidcCallbackError = OidcCallbackErrors[keyof OidcCallbackErrors];
 
 export type OidcCallbackResponses = {
     /**
@@ -6997,9 +7143,17 @@ export type OidcLoginData = {
 
 export type OidcLoginErrors = {
     /**
-     * Validation Error
+     * OIDC login is disabled
      */
-    422: HttpValidationError;
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * Too many sign-in attempts
+     */
+    429: ErrorResponse;
 };
 
 export type OidcLoginError = OidcLoginErrors[keyof OidcLoginErrors];
@@ -7028,9 +7182,17 @@ export type ListBackupsData = {
 
 export type ListBackupsErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type ListBackupsError = ListBackupsErrors[keyof ListBackupsErrors];
@@ -7061,9 +7223,17 @@ export type CreateBackupData = {
 
 export type CreateBackupErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type CreateBackupError = CreateBackupErrors[keyof CreateBackupErrors];
@@ -7094,9 +7264,17 @@ export type GetBackupScheduleData = {
 
 export type GetBackupScheduleErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetBackupScheduleError = GetBackupScheduleErrors[keyof GetBackupScheduleErrors];
@@ -7127,9 +7305,21 @@ export type UpdateBackupScheduleData = {
 
 export type UpdateBackupScheduleErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type UpdateBackupScheduleError = UpdateBackupScheduleErrors[keyof UpdateBackupScheduleErrors];
@@ -7160,9 +7350,21 @@ export type StartBulkAssetsData = {
 
 export type StartBulkAssetsErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type StartBulkAssetsError = StartBulkAssetsErrors[keyof StartBulkAssetsErrors];
@@ -7193,9 +7395,17 @@ export type ListBulkAssetsSchedulesData = {
 
 export type ListBulkAssetsSchedulesErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type ListBulkAssetsSchedulesError = ListBulkAssetsSchedulesErrors[keyof ListBulkAssetsSchedulesErrors];
@@ -7228,9 +7438,21 @@ export type CreateBulkAssetsScheduleData = {
 
 export type CreateBulkAssetsScheduleErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type CreateBulkAssetsScheduleError = CreateBulkAssetsScheduleErrors[keyof CreateBulkAssetsScheduleErrors];
@@ -7268,9 +7490,21 @@ export type DeleteBulkAssetsScheduleData = {
 
 export type DeleteBulkAssetsScheduleErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type DeleteBulkAssetsScheduleError = DeleteBulkAssetsScheduleErrors[keyof DeleteBulkAssetsScheduleErrors];
@@ -7308,9 +7542,25 @@ export type UpdateBulkAssetsScheduleData = {
 
 export type UpdateBulkAssetsScheduleErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type UpdateBulkAssetsScheduleError = UpdateBulkAssetsScheduleErrors[keyof UpdateBulkAssetsScheduleErrors];
@@ -7348,9 +7598,21 @@ export type RunBulkAssetsScheduleData = {
 
 export type RunBulkAssetsScheduleErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type RunBulkAssetsScheduleError = RunBulkAssetsScheduleErrors[keyof RunBulkAssetsScheduleErrors];
@@ -7384,9 +7646,21 @@ export type StopBulkAssetsData = {
 
 export type StopBulkAssetsErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type StopBulkAssetsError = StopBulkAssetsErrors[keyof StopBulkAssetsErrors];
@@ -7426,9 +7700,21 @@ export type ListCatalogEntriesData = {
 
 export type ListCatalogEntriesErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * OvertureDB is disabled
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type ListCatalogEntriesError = ListCatalogEntriesErrors[keyof ListCatalogEntriesErrors];
@@ -7461,9 +7747,21 @@ export type GetCatalogCountsData = {
 
 export type GetCatalogCountsErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * OvertureDB is disabled
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetCatalogCountsError = GetCatalogCountsErrors[keyof GetCatalogCountsErrors];
@@ -7499,9 +7797,29 @@ export type DiscardCatalogDraftsData = {
 
 export type DiscardCatalogDraftsErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * OvertureDB is disabled
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type DiscardCatalogDraftsError = DiscardCatalogDraftsErrors[keyof DiscardCatalogDraftsErrors];
@@ -7543,9 +7861,25 @@ export type GetCatalogEntryData = {
 
 export type GetCatalogEntryErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * OvertureDB is disabled
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetCatalogEntryError = GetCatalogEntryErrors[keyof GetCatalogEntryErrors];
@@ -7587,9 +7921,25 @@ export type DiscardCatalogDraftData = {
 
 export type DiscardCatalogDraftErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * OvertureDB is disabled
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type DiscardCatalogDraftError = DiscardCatalogDraftErrors[keyof DiscardCatalogDraftErrors];
@@ -7631,9 +7981,29 @@ export type SaveCatalogDraftData = {
 
 export type SaveCatalogDraftErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * OvertureDB is disabled
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type SaveCatalogDraftError = SaveCatalogDraftErrors[keyof SaveCatalogDraftErrors];
@@ -7675,9 +8045,21 @@ export type GetCatalogEntryRecordData = {
 
 export type GetCatalogEntryRecordErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetCatalogEntryRecordError = GetCatalogEntryRecordErrors[keyof GetCatalogEntryRecordErrors];
@@ -7715,9 +8097,21 @@ export type GetCatalogCollectionIssueData = {
 
 export type GetCatalogCollectionIssueErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetCatalogCollectionIssueError = GetCatalogCollectionIssueErrors[keyof GetCatalogCollectionIssueErrors];
@@ -7755,9 +8149,21 @@ export type GetCatalogCollectionRecordData = {
 
 export type GetCatalogCollectionRecordErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetCatalogCollectionRecordError = GetCatalogCollectionRecordErrors[keyof GetCatalogCollectionRecordErrors];
@@ -7788,9 +8194,21 @@ export type SetCatalogEnabledData = {
 
 export type SetCatalogEnabledErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type SetCatalogEnabledError = SetCatalogEnabledErrors[keyof SetCatalogEnabledErrors];
@@ -7821,9 +8239,17 @@ export type ExportCatalogSelectionsData = {
 
 export type ExportCatalogSelectionsErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type ExportCatalogSelectionsError = ExportCatalogSelectionsErrors[keyof ExportCatalogSelectionsErrors];
@@ -7861,9 +8287,21 @@ export type GetCatalogItemIssueData = {
 
 export type GetCatalogItemIssueErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetCatalogItemIssueError = GetCatalogItemIssueErrors[keyof GetCatalogItemIssueErrors];
@@ -7901,9 +8339,21 @@ export type GetCatalogRecordData = {
 
 export type GetCatalogRecordErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetCatalogRecordError = GetCatalogRecordErrors[keyof GetCatalogRecordErrors];
@@ -7941,9 +8391,21 @@ export type GetCatalogSourcesData = {
 
 export type GetCatalogSourcesErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetCatalogSourcesError = GetCatalogSourcesErrors[keyof GetCatalogSourcesErrors];
@@ -7974,9 +8436,17 @@ export type GetCatalogStatusData = {
 
 export type GetCatalogStatusErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetCatalogStatusError = GetCatalogStatusErrors[keyof GetCatalogStatusErrors];
@@ -8007,9 +8477,17 @@ export type SyncCatalogNowData = {
 
 export type SyncCatalogNowErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type SyncCatalogNowError = SyncCatalogNowErrors[keyof SyncCatalogNowErrors];
@@ -8040,9 +8518,29 @@ export type ListCollectionsData = {
 
 export type ListCollectionsErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type ListCollectionsError = ListCollectionsErrors[keyof ListCollectionsErrors];
@@ -8075,9 +8573,33 @@ export type CreateCollectionData = {
 
 export type CreateCollectionErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type CreateCollectionError = CreateCollectionErrors[keyof CreateCollectionErrors];
@@ -8113,9 +8635,29 @@ export type GetCollectionArrOptionsData = {
 
 export type GetCollectionArrOptionsErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * A setting it needs is not set
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type GetCollectionArrOptionsError = GetCollectionArrOptionsErrors[keyof GetCollectionArrOptionsErrors];
@@ -8146,9 +8688,33 @@ export type BulkSetCollectionMonitoredData = {
 
 export type BulkSetCollectionMonitoredErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type BulkSetCollectionMonitoredError = BulkSetCollectionMonitoredErrors[keyof BulkSetCollectionMonitoredErrors];
@@ -8179,9 +8745,33 @@ export type BulkOperateCollectionsData = {
 
 export type BulkOperateCollectionsErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type BulkOperateCollectionsError = BulkOperateCollectionsErrors[keyof BulkOperateCollectionsErrors];
@@ -8223,9 +8813,29 @@ export type GetCollectionCapabilitiesData = {
 
 export type GetCollectionCapabilitiesErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type GetCollectionCapabilitiesError = GetCollectionCapabilitiesErrors[keyof GetCollectionCapabilitiesErrors];
@@ -8261,9 +8871,29 @@ export type GetCollectionDefaultsData = {
 
 export type GetCollectionDefaultsErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type GetCollectionDefaultsError = GetCollectionDefaultsErrors[keyof GetCollectionDefaultsErrors];
@@ -8308,9 +8938,29 @@ export type ListCollectionFieldValuesData = {
 
 export type ListCollectionFieldValuesErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type ListCollectionFieldValuesError = ListCollectionFieldValuesErrors[keyof ListCollectionFieldValuesErrors];
@@ -8348,9 +8998,29 @@ export type GetCollectionGroupPolicyData = {
 
 export type GetCollectionGroupPolicyErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type GetCollectionGroupPolicyError = GetCollectionGroupPolicyErrors[keyof GetCollectionGroupPolicyErrors];
@@ -8392,9 +9062,33 @@ export type SaveCollectionGroupPolicyData = {
 
 export type SaveCollectionGroupPolicyErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type SaveCollectionGroupPolicyError = SaveCollectionGroupPolicyErrors[keyof SaveCollectionGroupPolicyErrors];
@@ -8430,9 +9124,37 @@ export type DeleteCollectionGroupData = {
 
 export type DeleteCollectionGroupErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No collection group has that name
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type DeleteCollectionGroupError = DeleteCollectionGroupErrors[keyof DeleteCollectionGroupErrors];
@@ -8463,9 +9185,29 @@ export type ListCollectionGroupsData = {
 
 export type ListCollectionGroupsErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type ListCollectionGroupsError = ListCollectionGroupsErrors[keyof ListCollectionGroupsErrors];
@@ -8503,9 +9245,37 @@ export type RenameCollectionGroupData = {
 
 export type RenameCollectionGroupErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No collection group has that name
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type RenameCollectionGroupError = RenameCollectionGroupErrors[keyof RenameCollectionGroupErrors];
@@ -8541,9 +9311,29 @@ export type SearchMdblistListsData = {
 
 export type SearchMdblistListsErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * A setting it needs is not set
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type SearchMdblistListsError = SearchMdblistListsErrors[keyof SearchMdblistListsErrors];
@@ -8576,9 +9366,33 @@ export type PreviewCollectionData = {
 
 export type PreviewCollectionErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type PreviewCollectionError = PreviewCollectionErrors[keyof PreviewCollectionErrors];
@@ -8609,9 +9423,33 @@ export type RecommendCollectionKindData = {
 
 export type RecommendCollectionKindErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type RecommendCollectionKindError = RecommendCollectionKindErrors[keyof RecommendCollectionKindErrors];
@@ -8644,9 +9482,29 @@ export type ListCollectionSetsData = {
 
 export type ListCollectionSetsErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type ListCollectionSetsError = ListCollectionSetsErrors[keyof ListCollectionSetsErrors];
@@ -8679,9 +9537,33 @@ export type PreviewCollectionSetData = {
 
 export type PreviewCollectionSetErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type PreviewCollectionSetError = PreviewCollectionSetErrors[keyof PreviewCollectionSetErrors];
@@ -8714,9 +9596,29 @@ export type ListRadarrTagsData = {
 
 export type ListRadarrTagsErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * A setting it needs is not set
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type ListRadarrTagsError = ListRadarrTagsErrors[keyof ListRadarrTagsErrors];
@@ -8749,9 +9651,29 @@ export type ListSonarrTagsData = {
 
 export type ListSonarrTagsErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * A setting it needs is not set
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type ListSonarrTagsError = ListSonarrTagsErrors[keyof ListSonarrTagsErrors];
@@ -8796,9 +9718,33 @@ export type DeleteCollectionData = {
 
 export type DeleteCollectionErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type DeleteCollectionError = DeleteCollectionErrors[keyof DeleteCollectionErrors];
@@ -8836,9 +9782,33 @@ export type GetCollectionData = {
 
 export type GetCollectionErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type GetCollectionError = GetCollectionErrors[keyof GetCollectionErrors];
@@ -8876,9 +9846,37 @@ export type UpdateCollectionData = {
 
 export type UpdateCollectionErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type UpdateCollectionError = UpdateCollectionErrors[keyof UpdateCollectionErrors];
@@ -8916,9 +9914,33 @@ export type PlanCollectionAdoptionData = {
 
 export type PlanCollectionAdoptionErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type PlanCollectionAdoptionError = PlanCollectionAdoptionErrors[keyof PlanCollectionAdoptionErrors];
@@ -8956,9 +9978,37 @@ export type AdoptCollectionData = {
 
 export type AdoptCollectionErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type AdoptCollectionError = AdoptCollectionErrors[keyof AdoptCollectionErrors];
@@ -9009,9 +10059,33 @@ export type RemoveAllCollectionArtData = {
 
 export type RemoveAllCollectionArtErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type RemoveAllCollectionArtError = RemoveAllCollectionArtErrors[keyof RemoveAllCollectionArtErrors];
@@ -9066,9 +10140,33 @@ export type RemoveCollectionArtData = {
 
 export type RemoveCollectionArtErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type RemoveCollectionArtError = RemoveCollectionArtErrors[keyof RemoveCollectionArtErrors];
@@ -9110,9 +10208,37 @@ export type SaveCollectionArtData = {
 
 export type SaveCollectionArtErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The uploaded image is no longer kept
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type SaveCollectionArtError = SaveCollectionArtErrors[keyof SaveCollectionArtErrors];
@@ -9160,9 +10286,33 @@ export type GetGeneratedCollectionArtData = {
 
 export type GetGeneratedCollectionArtErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type GetGeneratedCollectionArtError = GetGeneratedCollectionArtErrors[keyof GetGeneratedCollectionArtErrors];
@@ -9207,9 +10357,33 @@ export type MatchCollectionArtData = {
 
 export type MatchCollectionArtErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type MatchCollectionArtError = MatchCollectionArtErrors[keyof MatchCollectionArtErrors];
@@ -9251,9 +10425,33 @@ export type GetCollectionArtSourcesData = {
 
 export type GetCollectionArtSourcesErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type GetCollectionArtSourcesError = GetCollectionArtSourcesErrors[keyof GetCollectionArtSourcesErrors];
@@ -9308,9 +10506,33 @@ export type ProxyCollectionImageData = {
 
 export type ProxyCollectionImageErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type ProxyCollectionImageError = ProxyCollectionImageErrors[keyof ProxyCollectionImageErrors];
@@ -9363,9 +10585,33 @@ export type ServeCollectionLocalImageData = {
 
 export type ServeCollectionLocalImageErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type ServeCollectionLocalImageError = ServeCollectionLocalImageErrors[keyof ServeCollectionLocalImageErrors];
@@ -9401,9 +10647,37 @@ export type SetCollectionMembersData = {
 
 export type SetCollectionMembersErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type SetCollectionMembersError = SetCollectionMembersErrors[keyof SetCollectionMembersErrors];
@@ -9441,9 +10715,33 @@ export type GetCollectionMissingData = {
 
 export type GetCollectionMissingErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type GetCollectionMissingError = GetCollectionMissingErrors[keyof GetCollectionMissingErrors];
@@ -9481,9 +10779,37 @@ export type RequestCollectionMissingData = {
 
 export type RequestCollectionMissingErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type RequestCollectionMissingError = RequestCollectionMissingErrors[keyof RequestCollectionMissingErrors];
@@ -9521,9 +10847,37 @@ export type SetCollectionMonitoredData = {
 
 export type SetCollectionMonitoredErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type SetCollectionMonitoredError = SetCollectionMonitoredErrors[keyof SetCollectionMonitoredErrors];
@@ -9561,9 +10915,33 @@ export type OrphanCollectionData = {
 
 export type OrphanCollectionErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type OrphanCollectionError = OrphanCollectionErrors[keyof OrphanCollectionErrors];
@@ -9601,9 +10979,33 @@ export type GetCollectionRecordData = {
 
 export type GetCollectionRecordErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type GetCollectionRecordError = GetCollectionRecordErrors[keyof GetCollectionRecordErrors];
@@ -9641,9 +11043,37 @@ export type SaveCollectionRuleData = {
 
 export type SaveCollectionRuleErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type SaveCollectionRuleError = SaveCollectionRuleErrors[keyof SaveCollectionRuleErrors];
@@ -9694,9 +11124,33 @@ export type RemoveCollectionThemeData = {
 
 export type RemoveCollectionThemeErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type RemoveCollectionThemeError = RemoveCollectionThemeErrors[keyof RemoveCollectionThemeErrors];
@@ -9734,9 +11188,33 @@ export type GetCollectionThemeData = {
 
 export type GetCollectionThemeErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type GetCollectionThemeError = GetCollectionThemeErrors[keyof GetCollectionThemeErrors];
@@ -9774,9 +11252,37 @@ export type SetCollectionThemeData = {
 
 export type SetCollectionThemeErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type SetCollectionThemeError = SetCollectionThemeErrors[keyof SetCollectionThemeErrors];
@@ -9849,9 +11355,21 @@ export type GetJobLogData = {
 
 export type GetJobLogErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetJobLogError = GetJobLogErrors[keyof GetJobLogErrors];
@@ -9887,9 +11405,21 @@ export type GetJobResultsData = {
 
 export type GetJobResultsErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetJobResultsError = GetJobResultsErrors[keyof GetJobResultsErrors];
@@ -9930,9 +11460,21 @@ export type ClearJobSnapshotData = {
 
 export type ClearJobSnapshotErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type ClearJobSnapshotError = ClearJobSnapshotErrors[keyof ClearJobSnapshotErrors];
@@ -9968,9 +11510,29 @@ export type GetLibraryFilterCapabilitiesData = {
 
 export type GetLibraryFilterCapabilitiesErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type GetLibraryFilterCapabilitiesError = GetLibraryFilterCapabilitiesErrors[keyof GetLibraryFilterCapabilitiesErrors];
@@ -10001,9 +11563,33 @@ export type MatchLibraryFilterData = {
 
 export type MatchLibraryFilterErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type MatchLibraryFilterError = MatchLibraryFilterErrors[keyof MatchLibraryFilterErrors];
@@ -10034,9 +11620,29 @@ export type ListSavedFiltersData = {
 
 export type ListSavedFiltersErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type ListSavedFiltersError = ListSavedFiltersErrors[keyof ListSavedFiltersErrors];
@@ -10069,9 +11675,33 @@ export type CreateSavedFilterData = {
 
 export type CreateSavedFilterErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type CreateSavedFilterError = CreateSavedFilterErrors[keyof CreateSavedFilterErrors];
@@ -10109,9 +11739,33 @@ export type DeleteSavedFilterData = {
 
 export type DeleteSavedFilterErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type DeleteSavedFilterError = DeleteSavedFilterErrors[keyof DeleteSavedFilterErrors];
@@ -10149,9 +11803,37 @@ export type UpdateSavedFilterData = {
 
 export type UpdateSavedFilterErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type UpdateSavedFilterError = UpdateSavedFilterErrors[keyof UpdateSavedFilterErrors];
@@ -10182,9 +11864,17 @@ export type GetFolderRootsData = {
 
 export type GetFolderRootsErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetFolderRootsError = GetFolderRootsErrors[keyof GetFolderRootsErrors];
@@ -10222,9 +11912,17 @@ export type ListItemsData = {
 
 export type ListItemsErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type ListItemsError = ListItemsErrors[keyof ListItemsErrors];
@@ -10255,9 +11953,25 @@ export type BulkOperateItemsData = {
 
 export type BulkOperateItemsErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * A media server cannot do what it asks
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type BulkOperateItemsError = BulkOperateItemsErrors[keyof BulkOperateItemsErrors];
@@ -10295,9 +12009,21 @@ export type DeleteItemData = {
 
 export type DeleteItemErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type DeleteItemError = DeleteItemErrors[keyof DeleteItemErrors];
@@ -10335,9 +12061,21 @@ export type GetItemData = {
 
 export type GetItemErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetItemError = GetItemErrors[keyof GetItemErrors];
@@ -10388,9 +12126,25 @@ export type RemoveAllArtData = {
 
 export type RemoveAllArtErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * A media server cannot do what it asks
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type RemoveAllArtError = RemoveAllArtErrors[keyof RemoveAllArtErrors];
@@ -10441,8 +12195,6 @@ export type RemoveArtData = {
         delete_from_server?: boolean;
         /**
          * Season Id
-         *
-         * The season; omit to remove every season's poster
          */
         season_id?: number | null;
     };
@@ -10451,9 +12203,25 @@ export type RemoveArtData = {
 
 export type RemoveArtErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * A media server cannot do what it asks
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type RemoveArtError = RemoveArtErrors[keyof RemoveArtErrors];
@@ -10502,9 +12270,29 @@ export type SaveArtData = {
 
 export type SaveArtErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The uploaded image is no longer kept
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type SaveArtError = SaveArtErrors[keyof SaveArtErrors];
@@ -10557,9 +12345,21 @@ export type MatchArtData = {
 
 export type MatchArtErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type MatchArtError = MatchArtErrors[keyof MatchArtErrors];
@@ -10608,9 +12408,21 @@ export type GetArtSourcesData = {
 
 export type GetArtSourcesErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetArtSourcesError = GetArtSourcesErrors[keyof GetArtSourcesErrors];
@@ -10665,9 +12477,21 @@ export type ServeLocalImageData = {
 
 export type ServeLocalImageErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type ServeLocalImageError = ServeLocalImageErrors[keyof ServeLocalImageErrors];
@@ -10703,9 +12527,25 @@ export type SetMonitoredData = {
 
 export type SetMonitoredErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type SetMonitoredError = SetMonitoredErrors[keyof SetMonitoredErrors];
@@ -10760,9 +12600,21 @@ export type ProxyItemProviderArtData = {
 
 export type ProxyItemProviderArtErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type ProxyItemProviderArtError = ProxyItemProviderArtErrors[keyof ProxyItemProviderArtErrors];
@@ -10798,9 +12650,21 @@ export type GetItemRecordData = {
 
 export type GetItemRecordErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetItemRecordError = GetItemRecordErrors[keyof GetItemRecordErrors];
@@ -10838,9 +12702,21 @@ export type GetSeasonsData = {
 
 export type GetSeasonsErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetSeasonsError = GetSeasonsErrors[keyof GetSeasonsErrors];
@@ -10893,9 +12769,21 @@ export type RemoveThemeData = {
 
 export type RemoveThemeErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type RemoveThemeError = RemoveThemeErrors[keyof RemoveThemeErrors];
@@ -10933,9 +12821,25 @@ export type SelectThemeData = {
 
 export type SelectThemeErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type SelectThemeError = SelectThemeErrors[keyof SelectThemeErrors];
@@ -10973,9 +12877,17 @@ export type GetLibrariesData = {
 
 export type GetLibrariesErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetLibrariesError = GetLibrariesErrors[keyof GetLibrariesErrors];
@@ -11028,9 +12940,21 @@ export type ServeLocalSeasonImageData = {
 
 export type ServeLocalSeasonImageErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type ServeLocalSeasonImageError = ServeLocalSeasonImageErrors[keyof ServeLocalSeasonImageErrors];
@@ -11079,9 +13003,21 @@ export type ProxySeasonProviderArtData = {
 
 export type ProxySeasonProviderArtErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type ProxySeasonProviderArtError = ProxySeasonProviderArtErrors[keyof ProxySeasonProviderArtErrors];
@@ -11110,17 +13046,29 @@ export type ListServerLibrariesData = {
 
 export type ListServerLibrariesErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
     /**
-     * Bad Gateway
+     * An API key asked for a change, or the CSRF token is missing
      */
-    502: MediaServerErrorResponse;
+    403: ErrorResponse;
     /**
-     * Service Unavailable
+     * No media server is configured
      */
-    503: MediaServerErrorResponse;
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type ListServerLibrariesError = ListServerLibrariesErrors[keyof ListServerLibrariesErrors];
@@ -11153,17 +13101,29 @@ export type GetServerWebLinksData = {
 
 export type GetServerWebLinksErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
     /**
-     * Bad Gateway
+     * An API key asked for a change, or the CSRF token is missing
      */
-    502: MediaServerErrorResponse;
+    403: ErrorResponse;
     /**
-     * Service Unavailable
+     * No media server is configured
      */
-    503: MediaServerErrorResponse;
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type GetServerWebLinksError = GetServerWebLinksErrors[keyof GetServerWebLinksErrors];
@@ -11196,9 +13156,17 @@ export type GetNotificationsData = {
 
 export type GetNotificationsErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetNotificationsError = GetNotificationsErrors[keyof GetNotificationsErrors];
@@ -11229,9 +13197,21 @@ export type UpdateNotificationsData = {
 
 export type UpdateNotificationsErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type UpdateNotificationsError = UpdateNotificationsErrors[keyof UpdateNotificationsErrors];
@@ -11262,9 +13242,21 @@ export type SendTestNotificationData = {
 
 export type SendTestNotificationErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * A setting it needs is not set
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type SendTestNotificationError = SendTestNotificationErrors[keyof SendTestNotificationErrors];
@@ -11320,9 +13312,17 @@ export type GetRealtimeSnapshotData = {
 
 export type GetRealtimeSnapshotErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetRealtimeSnapshotError = GetRealtimeSnapshotErrors[keyof GetRealtimeSnapshotErrors];
@@ -11353,9 +13353,33 @@ export type FixAuditFindingsData = {
 
 export type FixAuditFindingsErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type FixAuditFindingsError = FixAuditFindingsErrors[keyof FixAuditFindingsErrors];
@@ -11386,9 +13410,29 @@ export type StopAuditFixData = {
 
 export type StopAuditFixErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type StopAuditFixError = StopAuditFixErrors[keyof StopAuditFixErrors];
@@ -11419,9 +13463,33 @@ export type StartServerAuditData = {
 
 export type StartServerAuditErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type StartServerAuditError = StartServerAuditErrors[keyof StartServerAuditErrors];
@@ -11452,9 +13520,29 @@ export type StopServerAuditData = {
 
 export type StopServerAuditErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type StopServerAuditError = StopServerAuditErrors[keyof StopServerAuditErrors];
@@ -11485,9 +13573,17 @@ export type GetSettingsData = {
 
 export type GetSettingsErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetSettingsError = GetSettingsErrors[keyof GetSettingsErrors];
@@ -11518,9 +13614,21 @@ export type UpdateSettingsData = {
 
 export type UpdateSettingsErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type UpdateSettingsError = UpdateSettingsErrors[keyof UpdateSettingsErrors];
@@ -11551,9 +13659,17 @@ export type CheckConnectivityData = {
 
 export type CheckConnectivityErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type CheckConnectivityError = CheckConnectivityErrors[keyof CheckConnectivityErrors];
@@ -11584,9 +13700,17 @@ export type GetStatsData = {
 
 export type GetStatsErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetStatsError = GetStatsErrors[keyof GetStatsErrors];
@@ -11617,9 +13741,33 @@ export type RunSyncData = {
 
 export type RunSyncErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type RunSyncError = RunSyncErrors[keyof RunSyncErrors];
@@ -11650,9 +13798,29 @@ export type ListSyncSchedulesData = {
 
 export type ListSyncSchedulesErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type ListSyncSchedulesError = ListSyncSchedulesErrors[keyof ListSyncSchedulesErrors];
@@ -11685,9 +13853,33 @@ export type CreateSyncScheduleData = {
 
 export type CreateSyncScheduleErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type CreateSyncScheduleError = CreateSyncScheduleErrors[keyof CreateSyncScheduleErrors];
@@ -11725,9 +13917,33 @@ export type DeleteSyncScheduleData = {
 
 export type DeleteSyncScheduleErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type DeleteSyncScheduleError = DeleteSyncScheduleErrors[keyof DeleteSyncScheduleErrors];
@@ -11765,9 +13981,37 @@ export type UpdateSyncScheduleData = {
 
 export type UpdateSyncScheduleErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type UpdateSyncScheduleError = UpdateSyncScheduleErrors[keyof UpdateSyncScheduleErrors];
@@ -11805,9 +14049,33 @@ export type RunSyncScheduleData = {
 
 export type RunSyncScheduleErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type RunSyncScheduleError = RunSyncScheduleErrors[keyof RunSyncScheduleErrors];
@@ -11838,9 +14106,29 @@ export type GetSyncStatusData = {
 
 export type GetSyncStatusErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type GetSyncStatusError = GetSyncStatusErrors[keyof GetSyncStatusErrors];
@@ -11871,9 +14159,29 @@ export type StopSyncData = {
 
 export type StopSyncErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
 };
 
 export type StopSyncError = StopSyncErrors[keyof StopSyncErrors];
@@ -11907,16 +14215,31 @@ export type SearchYoutubeData = {
          * Limit
          */
         limit?: number;
-        video_ids?: UniqueListYouTubeIdMaxLenMaxLength20Writable;
+        /**
+         * Video Ids
+         */
+        video_ids?: Array<YouTubeId>;
     };
     url: '/api/themes/search';
 };
 
 export type SearchYoutubeErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * YouTube did not answer the search
+     */
+    502: ErrorResponse;
 };
 
 export type SearchYoutubeError = SearchYoutubeErrors[keyof SearchYoutubeErrors];
@@ -11961,9 +14284,25 @@ export type GetTmdbCollectionData = {
 
 export type GetTmdbCollectionErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * A setting it needs is not set
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetTmdbCollectionError = GetTmdbCollectionErrors[keyof GetTmdbCollectionErrors];
@@ -11999,9 +14338,21 @@ export type SearchTmdbPeopleData = {
 
 export type SearchTmdbPeopleErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * A setting it needs is not set
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type SearchTmdbPeopleError = SearchTmdbPeopleErrors[keyof SearchTmdbPeopleErrors];
@@ -12042,9 +14393,21 @@ export type SearchTmdbData = {
 
 export type SearchTmdbErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * A setting it needs is not set
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type SearchTmdbError = SearchTmdbErrors[keyof SearchTmdbErrors];
@@ -12086,9 +14449,25 @@ export type GetTmdbItemData = {
 
 export type GetTmdbItemErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * A setting it needs is not set
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetTmdbItemError = GetTmdbItemErrors[keyof GetTmdbItemErrors];
@@ -12141,9 +14520,29 @@ export type SaveTmdbArtData = {
 
 export type SaveTmdbArtErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * The uploaded image is no longer kept
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type SaveTmdbArtError = SaveTmdbArtErrors[keyof SaveTmdbArtErrors];
@@ -12196,9 +14595,25 @@ export type GetTmdbArtSourcesData = {
 
 export type GetTmdbArtSourcesErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * A setting it needs is not set
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetTmdbArtSourcesError = GetTmdbArtSourcesErrors[keyof GetTmdbArtSourcesErrors];
@@ -12240,9 +14655,25 @@ export type GetTmdbCatalogSourcesData = {
 
 export type GetTmdbCatalogSourcesErrors = {
     /**
-     * Validation Error
+     * Not signed in, or the API key is not valid
      */
-    422: HttpValidationError;
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * A setting it needs is not set
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetTmdbCatalogSourcesError = GetTmdbCatalogSourcesErrors[keyof GetTmdbCatalogSourcesErrors];
@@ -12284,9 +14715,29 @@ export type SelectTmdbThemeData = {
 
 export type SelectTmdbThemeErrors = {
     /**
-     * Validation Error
+     * The body is not text in the declared encoding
      */
-    422: HttpValidationError;
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * A setting it needs is not set
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type SelectTmdbThemeError = SelectTmdbThemeErrors[keyof SelectTmdbThemeErrors];

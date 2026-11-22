@@ -1,0 +1,42 @@
+name: Fuzz
+
+# Every commit fuzzes each API operation and media-server reply parser with a
+# few examples; this weekly run asks for many more, so what only a rare input
+# shows is found in time.
+
+on:
+  schedule:
+    # Offset from the CodeQL, Trivy and Renovate schedules.
+    - cron: "11 4 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: fuzz
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: Fuzz the API and media-server replies
+    runs-on: ubuntu-26.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - name: Install dependencies
+        run: uv sync --locked --group dev
+
+      - name: Fuzz
+        env:
+          FUZZ_EXAMPLES: "500"
+        run: >-
+          uv run --locked python -m pytest -n auto -p no:cacheprovider
+          tests/test_contracts/test_schema_fuzz.py tests/test_clients/test_wire_fuzz.py

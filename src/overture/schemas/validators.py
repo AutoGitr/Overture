@@ -1,12 +1,13 @@
 """Shared schema field types."""
 
-lazy from typing import Annotated
+lazy from typing import Annotated, TypeVar
 
 lazy from pydantic import AfterValidator, Field
 
 lazy from ..catalog_contract.contract import YOUTUBE_ID_PATTERN
 lazy from ..domain import UNMANAGED_GROUP
 lazy from ..utils.cron import validate_cron_expression
+lazy from .base import PositiveId
 
 #: The BLAKE3 hash of an image's bytes, which names it in the image cache.
 type ImageHash = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
@@ -20,8 +21,12 @@ def _unique[T](values: list[T]) -> list[T]:
     return list(dict.fromkeys(values))
 
 
-#: A list whose repeated values are dropped, keeping the first of each.
-type UniqueList[T] = Annotated[list[T], AfterValidator(_unique)]
+_T = TypeVar("_T")
+
+#: A list whose repeated values are dropped, keeping the first of each. A
+#: plain alias rather than a ``type`` statement, so FastAPI sees the list in a
+#: query model and reads each repeated parameter into it.
+UniqueList = Annotated[list[_T], AfterValidator(_unique)]
 
 #: Media-server library identifiers, without repeats.
 type LibraryIds = Annotated[
@@ -56,9 +61,9 @@ type GroupNames = Annotated[
     Field(min_length=1),
 ]
 
-#: Collections a run covers, without repeats; at least one when given.
+#: Collections a run or a bulk change names, without repeats; at least one.
 type CollectionIds = Annotated[
-    UniqueList[Annotated[int, Field(gt=0)]], Field(min_length=1, max_length=1000)
+    UniqueList[PositiveId], Field(min_length=1, max_length=1000)
 ]
 
 
@@ -75,4 +80,6 @@ def collapse_name(value: str) -> str:
 
 
 #: A name someone gives a schedule or a saved filter.
-type DisplayName = Annotated[str, Field(max_length=100), AfterValidator(collapse_name)]
+type DisplayName = Annotated[
+    str, Field(max_length=100, pattern=r"\S"), AfterValidator(collapse_name)
+]

@@ -3,9 +3,9 @@
 lazy import asyncio
 lazy import logging
 lazy import time
-lazy from collections.abc import Awaitable, Callable
+lazy from collections.abc import Awaitable, Callable, Mapping
 lazy from dataclasses import dataclass
-lazy from typing import Any, Protocol
+lazy from typing import Any, Protocol, TypedDict, Unpack
 lazy from urllib.parse import urlsplit
 
 lazy import httpx2
@@ -21,18 +21,38 @@ _CONNECT_TIMEOUT = 10.0
 _READ_TIMEOUT = 30.0
 
 
-def create_client(**kwargs: Any) -> httpx2.AsyncClient:
-    """Create an httpx2.AsyncClient with standard timeout config."""
+#: Connections a client keeps unless its caller needs more.
+_LIMITS = httpx2.Limits(max_connections=16, max_keepalive_connections=8)
+
+
+class ClientOptions(TypedDict, total=False):
+    """What a caller sets on a client; the timeouts are always the standard."""
+
+    base_url: str
+    headers: Mapping[str, str]
+    #: Query parameters every request sends, such as a key an API reads there.
+    params: Mapping[str, str]
+    verify: bool
+    follow_redirects: bool
+    limits: httpx2.Limits
+
+
+class ClientFactory(Protocol):
+    """Builds an HTTP client; tests pass one that answers from a fake."""
+
+    def __call__(self, **options: Unpack[ClientOptions]) -> httpx2.AsyncClient: ...
+
+
+def create_client(**options: Unpack[ClientOptions]) -> httpx2.AsyncClient:
+    """Create an httpx2.AsyncClient with the standard timeouts."""
     timeout = httpx2.Timeout(
         connect=_CONNECT_TIMEOUT,
         read=_READ_TIMEOUT,
         write=_READ_TIMEOUT,
         pool=_READ_TIMEOUT,
     )
-    kwargs.setdefault(
-        "limits", httpx2.Limits(max_connections=16, max_keepalive_connections=8)
-    )
-    return httpx2.AsyncClient(timeout=timeout, **kwargs)
+    options.setdefault("limits", _LIMITS)
+    return httpx2.AsyncClient(timeout=timeout, **options)
 
 
 class RequestLimiter:

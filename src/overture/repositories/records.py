@@ -67,11 +67,23 @@ class RecordRepository:
             for _, values in rows
             if isinstance(values.get("library_id"), str)
         }
-        if not ids:
-            return {}
         found = await self.session.exec(
             select(Library.id, Library.title, MediaServer.title)
             .join(MediaServer, col(MediaServer.id) == col(Library.server_id))
             .where(col(Library.id).in_(ids))
         )
         return {library: f"{server} · {title}" for library, title, server in found}
+
+    async def server_names(self, rows: Sequence[StoredValues]) -> dict[int, str]:
+        """Each media server the rows name, by the database's number of it."""
+        ids = {
+            server
+            for _, values in rows
+            if isinstance(server := values.get("server_id"), int)
+        }
+        found = await self.session.exec(
+            select(MediaServer.id, MediaServer.title).where(
+                col(MediaServer.id).in_(ids)
+            )
+        )
+        return {server: title for server, title in found if server is not None}

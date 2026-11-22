@@ -141,7 +141,7 @@ export class CollectionOptions {
 }
 
 /** What two media types' collections both offer. */
-export function commonCapabilities(
+function commonCapabilities(
   a: CollectionCapabilities,
   b: CollectionCapabilities,
 ): CollectionCapabilities {

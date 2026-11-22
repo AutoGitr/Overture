@@ -1,7 +1,8 @@
 /** State for the server audit job. */
+import { ASSET_LABELS, AUDIT_STATUS_LABELS } from "../../generated/settings";
 import type { ServerAuditProgressEvent, ServerAuditResult } from "../../generated/ws";
-import { ASSET_LABELS } from "../utils/artTypes";
-import { AUDIT_STATUS_LABELS, auditRowKey } from "../utils/serverAuditPopup";
+
+import { auditRowKey } from "../utils/serverAuditPopup";
 import { CollectingJobState, type Selectable } from "./collectingJobState.svelte";
 import { settingsState } from "./settingsState.svelte";
 

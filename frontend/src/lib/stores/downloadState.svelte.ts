@@ -1,6 +1,7 @@
+import { ASSET_LABELS } from "../../generated/settings";
 import { SvelteMap } from "svelte/reactivity";
 import type { DownloadJobEvent, ServerAsset } from "../../generated/ws";
-import { ASSET_LABELS } from "../utils/artTypes";
+
 import { jobEventErrorMessage } from "../utils/errors";
 import { notify } from "./notificationState.svelte";
 
@@ -10,7 +11,7 @@ const FAILURE_DISPLAY_MS = 5000;
 /** The worker pool a download runs in: artwork, or themes, of items and collections. */
 export type DownloadLane = "art" | "theme";
 
-export function downloadLane(jobType: string): DownloadLane {
+function downloadLane(jobType: string): DownloadLane {
   return jobType === "art" || jobType === "collection_art" ? "art" : "theme";
 }
 
@@ -38,19 +39,34 @@ export interface DownloadJob {
   slot: number;
 }
 
+/** What a download's target names: its title or collection, and what it fetches. */
+function targetFields(
+  target: DownloadJobEvent["job"]["target"],
+): Pick<DownloadJob, "media_item_id" | "collection_id" | "title" | "job_type" | "season_id"> {
+  if (target.target_type === "item") {
+    return {
+      media_item_id: target.media_item_id,
+      collection_id: null,
+      title: target.title ?? null,
+      job_type: target.job_type ?? target.target_type,
+      season_id: target.season_id ?? null,
+    };
+  }
+  return {
+    media_item_id: null,
+    collection_id: target.collection_id,
+    title: target.title ?? null,
+    job_type: target.job_type,
+    season_id: null,
+  };
+}
+
 function buildJob(data: DownloadJobEvent, status?: DownloadJob["status"]): DownloadJob {
   const target = data.job.target;
-  const itemTarget = target.target_type === "item" ? target : null;
-  const collectionTarget = target.target_type === "collection" ? target : null;
-
   return {
     job_id: data.job.id,
-    media_item_id: itemTarget?.media_item_id ?? null,
-    collection_id: collectionTarget?.collection_id ?? null,
-    title: itemTarget?.title ?? collectionTarget?.title ?? null,
-    job_type: itemTarget?.job_type ?? collectionTarget?.job_type ?? target.target_type,
+    ...targetFields(target),
     art_type: target.art_type ?? null,
-    season_id: itemTarget?.season_id ?? null,
     source: target.source ?? null,
     percent: data.percent ?? 0,
     stage: data.stage ?? "starting",

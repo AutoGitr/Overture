@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { parseArtUrl } from "../../../lib/utils/artUrls";
 
@@ -16,5 +17,25 @@ describe("parseArtUrl", () => {
     expect(parseArtUrl("Alien (1979)")).toBeNull();
     expect(parseArtUrl("javascript:alert(1)")).toBeNull();
     expect(parseArtUrl("file:///etc/passwd")).toBeNull();
+  });
+});
+
+describe("parseArtUrl for any pasted text", () => {
+  it("returns null or the trimmed text, an http(s) URL that parses to itself", () => {
+    fc.assert(
+      fc.property(
+        fc.oneof(
+          fc.string(),
+          fc.webUrl().map((url) => ` ${url}\n`),
+        ),
+        (text) => {
+          const url = parseArtUrl(text);
+          if (url === null) return;
+          expect(url).toBe(text.trim());
+          expect(["http:", "https:"]).toContain(new URL(url).protocol);
+          expect(parseArtUrl(url)).toBe(url);
+        },
+      ),
+    );
   });
 });

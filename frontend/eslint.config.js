@@ -1,5 +1,6 @@
 // @ts-check
 import js from "@eslint/js";
+import sonarjs from "eslint-plugin-sonarjs";
 import svelte from "eslint-plugin-svelte";
 import globals from "globals";
 import tseslint from "typescript-eslint";
@@ -54,6 +55,9 @@ export default [
       "@typescript-eslint/no-explicit-any": "error",
 
       "no-console": ["error", { allow: ["error", "warn"] }],
+
+      // Work left to do belongs in an issue, not in the code.
+      "no-warning-comments": ["error", { terms: ["todo", "fixme", "xxx", "hack"] }],
 
       // Requests go through the generated SDK, so their paths and payloads
       // follow the backend contract; only the REST layer sends raw requests.
@@ -113,6 +117,23 @@ export default [
     },
     rules: {
       "@typescript-eslint/no-floating-promises": "error",
+    },
+  },
+
+  // Complexity limits, and a function or branch written twice in one file,
+  // which the duplication check's token minimum lets through. ESLint counts
+  // `&&`, `||` and `??` as branches, which Ruff's McCabe limit of 12 does
+  // not; this limit only falls, towards that 12, as functions are split.
+  {
+    files: ["src/**/*.ts", "src/**/*.svelte"],
+    ignores: ["src/test/**"],
+    plugins: { sonarjs },
+    rules: {
+      complexity: ["error", 18],
+      "max-depth": ["error", 4],
+      "max-params": ["error", 5],
+      "sonarjs/no-identical-functions": "error",
+      "sonarjs/no-duplicated-branches": "error",
     },
   },
 

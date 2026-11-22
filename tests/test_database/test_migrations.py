@@ -16,7 +16,7 @@ lazy from sqlalchemy import insert
 lazy from sqlalchemy.engine import Connection
 lazy from sqlalchemy.exc import IntegrityError
 lazy from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
-lazy from sqlmodel import CheckConstraint, create_engine, inspect, text
+lazy from sqlmodel import CheckConstraint, String, create_engine, inspect, text
 
 lazy from overture.db import metadata
 lazy from overture.db import session as session_module
@@ -25,6 +25,10 @@ lazy from overture.db.session import Database, alembic_config, run_migrations
 lazy from overture.domain import MediaType
 lazy from overture.migrations import versions_at_head
 lazy from overture.schemas.sync import SyncScheduleConfig
+lazy from overture.utils.collection_formats import (
+    SORT_TITLE_FORMAT_LENGTH,
+    SUMMARY_FORMAT_LENGTH,
+)
 
 
 @cache
@@ -2169,3 +2173,44 @@ def test_task_schedules_move_into_saved_schedules_and_back() -> None:
             ("catalog", 0, "0 0 * * *", "{}"),
         ]
         assert conn.exec_driver_sql("SELECT * FROM saved_schedules").all() == []
+
+
+def test_the_global_collection_formats_widen_to_a_groups_and_back() -> None:
+    def lengths(conn: Connection) -> dict[str, int | None]:
+        return {
+            column["name"]: column["type"].length
+            if isinstance(column["type"], String)
+            else 0
+            for column in inspect(conn).get_columns("app_settings")
+            if column["name"]
+            in {"collection_sort_title_format", "collection_summary_format"}
+        }
+
+    with _at_revision("d4f9a2b6e831") as (conn, config):
+        assert lengths(conn) == {
+            "collection_sort_title_format": 200,
+            "collection_summary_format": 2000,
+        }
+
+        command.upgrade(config, "2d3465b91d26")
+        assert lengths(conn) == {
+            "collection_sort_title_format": SORT_TITLE_FORMAT_LENGTH,
+            "collection_summary_format": SUMMARY_FORMAT_LENGTH,
+        }
+
+        command.downgrade(config, "d4f9a2b6e831")
+        assert lengths(conn) == {
+            "collection_sort_title_format": 200,
+            "collection_summary_format": 2000,
+        }
+
+
+def test_every_revision_has_a_test_here() -> None:
+    """Each migration is exercised on rows as the app stores them, in this file."""
+    tests = Path(__file__).read_text()
+    revisions = [
+        script.revision
+        for script in ScriptDirectory.from_config(alembic_config()).walk_revisions()
+    ]
+    assert revisions
+    assert [revision for revision in revisions if revision not in tests] == []

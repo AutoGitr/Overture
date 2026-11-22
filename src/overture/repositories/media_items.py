@@ -73,19 +73,6 @@ class MediaItemRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def get_many(self, item_ids: Collection[int]) -> list[MediaItem]:
-        """Return the items with these IDs, a chunk at a time, in no order."""
-        found: list[MediaItem] = []
-        for batch in batched(dict.fromkeys(item_ids), CHUNK_SIZE, strict=False):
-            found.extend(
-                (
-                    await self.session.exec(
-                        select(MediaItem).where(col(MediaItem.id).in_(batch))
-                    )
-                ).all()
-            )
-        return found
-
     async def find_by_copy(
         self,
         server_id: int,

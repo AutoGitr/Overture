@@ -15,6 +15,7 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ...domain import (
     DEFAULT_COLLECTION_ORDER,
+    MAX_SAFE_INTEGER,
     ArtStyle,
     AspectRatioTolerance,
     AutoAdvance,
@@ -29,6 +30,8 @@ lazy from ...domain import (
     Workflow,
 )
 lazy from ...utils.collection_formats import (
+    SORT_TITLE_FORMAT_LENGTH,
+    SUMMARY_FORMAT_LENGTH,
     validate_sort_title_format,
     validate_summary_format,
 )
@@ -82,8 +85,11 @@ class AppSettingsBase(SQLModel):
     #: Whether collections need a theme; without one, their themes are complete.
     collection_themes: bool = True
     collection_auto_match_theme: bool = False
-    collection_sort_title_format: str = Field(default="", max_length=200)
-    collection_summary_format: str = Field(default="", max_length=2000)
+    # The defaults a group or collection inherits, so the same length as there.
+    collection_sort_title_format: str = Field(
+        default="", max_length=SORT_TITLE_FORMAT_LENGTH
+    )
+    collection_summary_format: str = Field(default="", max_length=SUMMARY_FORMAT_LENGTH)
     collection_delete_when_inactive: bool = True
     collection_request_missing: bool = False
     collection_import_unmanaged: bool = True
@@ -91,10 +97,14 @@ class AppSettingsBase(SQLModel):
     overturedb_browse: bool = True
     tmdb_region: str = Field(default="US", min_length=2, max_length=2)
     radarr_root_folder: str = Field(default="", max_length=500)
-    radarr_quality_profile_id: int | None = Field(default=None, ge=1)
+    radarr_quality_profile_id: int | None = Field(
+        default=None, ge=1, le=MAX_SAFE_INTEGER
+    )
     radarr_search: bool = False
     sonarr_root_folder: str = Field(default="", max_length=500)
-    sonarr_quality_profile_id: int | None = Field(default=None, ge=1)
+    sonarr_quality_profile_id: int | None = Field(
+        default=None, ge=1, le=MAX_SAFE_INTEGER
+    )
     sonarr_search: bool = False
     auto_match_art: bool = False
     #: Search YouTube for themes as soon as a title's theme panel opens.

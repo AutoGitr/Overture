@@ -79,12 +79,6 @@ class TypeScriptRenderer:
                     if is_object(definition):
                         self.definitions.setdefault(name, definition)
 
-    def add_named_definitions(self, definitions: dict[str, Any]) -> None:
-        """Register named schemas that may be referenced before render order."""
-        for name, definition in definitions.items():
-            if is_object(definition):
-                self.definitions.setdefault(name, definition)
-
     def render_named_schema(self, name: str, schema: dict[str, Any]) -> None:
         self.add_schema_defs(schema)
         if name in self.rendered:

@@ -7,7 +7,7 @@ lazy from pydantic import Field, model_validator
 
 lazy from ..domain import ArtType, ServerAsset
 lazy from ..jobs.progress_log import JobOutcome, LogServer
-lazy from .base import PublicText, StrictBaseModel
+lazy from .base import PositiveId, PublicText, StrictBaseModel
 lazy from .common import JobEnvelope, MediaFolderScope
 lazy from .validators import UniqueList
 
@@ -28,9 +28,9 @@ class ServerAuditRefreshTarget(StrictBaseModel):
     uploaded again from the image Overture kept.
     """
 
-    item_id: int | None = None
-    collection_id: int | None = None
-    season_id: int | None = None
+    item_id: PositiveId | None = None
+    collection_id: PositiveId | None = None
+    season_id: PositiveId | None = None
     art_type: ArtType
     #: The database's number of the server whose copy is fixed.
     server_id: int
@@ -55,8 +55,8 @@ class ServerAuditThemeDeleteTarget(StrictBaseModel):
     ``collection_id`` instead and re-deliver their saved or downloaded theme.
     """
 
-    item_id: int | None = None
-    collection_id: int | None = None
+    item_id: PositiveId | None = None
+    collection_id: PositiveId | None = None
     #: The database's number of the server whose theme it is.
     server_id: int
     server_item_id: str = Field(min_length=1)
@@ -110,6 +110,22 @@ class AuditStatus(StrEnum):
     LOCAL_MISSING = "local_missing"
     UNRESOLVED_SERVER_ID = "unresolved_server_id"
     ERROR = "error"
+
+    @property
+    def label(self) -> str:
+        """Return how the finding is named in the audit's results."""
+        return {
+            "phash_match": "d=0 Match",
+            "phash_mismatch": "Mismatch",
+            "local_missing": "Local missing",
+            "server_missing": "Server missing",
+            "unresolved_server_id": "No Server ID",
+            "theme_match": "Theme match",
+            "theme_mismatch": "Theme mismatch",
+            "theme_server_missing": "Theme missing",
+            "theme_unknown": "Theme unknown",
+            "error": "Error",
+        }[self.value]
 
     @property
     def outcome(self) -> JobOutcome:

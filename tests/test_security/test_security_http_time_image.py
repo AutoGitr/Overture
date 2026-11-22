@@ -16,7 +16,7 @@ lazy from overture.utils.http_security import (
 )
 lazy from overture.utils.image import (
     UnsupportedImageFormatError,
-    encoded_image_extension,
+    inspect_saved_image,
     is_valid_aspect_ratio,
 )
 lazy from overture.utils.image_fetch import (
@@ -163,7 +163,7 @@ class TestSSRFAndImageHelper:
 
     def test_unreadable_image_bytes_are_rejected(self) -> None:
         with pytest.raises(UnsupportedImageFormatError, match="Unreadable image bytes"):
-            encoded_image_extension(b"not-an-image")
+            inspect_saved_image(b"not-an-image")
 
 
 class TestTimeHelper:

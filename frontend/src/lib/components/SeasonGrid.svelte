@@ -6,7 +6,7 @@
     TmdbItemPreview,
     TmdbSeasonPreview,
   } from "../../generated/rest/types.gen";
-  import { createSeasonsQuery } from "../rest/queries";
+  import { createTitleSeasons } from "../rest/queries";
   import { goToCatalogEntry, goToSeason } from "../router/routes";
   import type { CatalogContext } from "../utils/catalogDraft";
   import { remotePosterUrl, seasonPosterUrls } from "../utils/artDisplay";
@@ -26,12 +26,10 @@
   } = $props();
 
   let subject = $derived(item ?? preview);
-  const seasonsQuery = createSeasonsQuery(() => item);
-  // A TMDB title's seasons come with it; a stored show's are loaded.
-  let seasons = $derived<(SeasonRead | TmdbSeasonPreview)[]>(
-    catalog ? catalog.seasons : item ? (seasonsQuery.data ?? []) : (preview?.seasons ?? []),
-  );
-  let seasonsLoaded = $derived(!item || seasonsQuery.isSuccess);
+  const titleSeasons = createTitleSeasons(() => ({ item, preview, catalog }));
+  const seasonsQuery = titleSeasons.query;
+  let seasons = $derived(titleSeasons.seasons);
+  let seasonsLoaded = $derived(titleSeasons.loaded);
 
   function posterUrls(season: SeasonRead | TmdbSeasonPreview) {
     return "id" in season

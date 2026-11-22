@@ -43,24 +43,25 @@ class DatabaseRecord(StrictBaseModel):
         values: Mapping[TermKind, list[str]] | None = None,
         *,
         libraries: Mapping[str, str],
+        servers: Mapping[int, str],
     ) -> DatabaseRecord:
         """The stored rows, and what *read* shows beyond the record's own columns.
 
-        *libraries* names each library a row is in, by its ID.
+        *libraries* and *servers* name the libraries and media servers the
+        rows are about, by their IDs.
         """
         season_nums = {
             values["id"]: values["season_num"]
             for table, values in rows
             if table == Season.__tablename__
         }
-        stored = [
-            StoredRow(
-                table=table,
-                title=_title(table, values, season_nums, libraries),
-                values=values,
-            )
-            for table, values in rows
-        ]
+        assets: dict[JsonValue, str] = {}
+        stored: list[StoredRow] = []
+        for table, row in rows:
+            title = _title(table, row, season_nums, assets, libraries, servers)
+            if table == Asset.__tablename__:
+                assets[row["id"]] = title
+            stored.append(StoredRow(table=table, title=title, values=row))
         shown = set(stored[0].values) if stored else set[str]()
         if any(row.table == Asset.__tablename__ for row in stored):
             shown.add("assets")
@@ -78,10 +79,15 @@ class DatabaseRecord(StrictBaseModel):
 def _title(
     table: str,
     values: dict[str, JsonValue],
-    season_nums: dict[JsonValue, JsonValue],
+    season_nums: Mapping[JsonValue, JsonValue],
+    assets: Mapping[JsonValue, str],
     libraries: Mapping[str, str],
+    servers: Mapping[int, str],
 ) -> str:
-    """Name a stored row by what it holds, or by its table and key."""
+    """Name a stored row by what it holds, or by its table and key.
+
+    *assets* names the asset rows read so far, which precede their deliveries.
+    """
     if table in {MediaItemCopy.__tablename__, CollectionLibrary.__tablename__}:
         library = str(values["library_id"])
         return f"Copy in {libraries.get(library, library)}"
@@ -92,7 +98,11 @@ def _title(
         season = season_nums.get(values["season_id"])
         return label if season is None else f"Season {season} poster"
     if table == AssetDelivery.__tablename__:
+        asset = assets.get(values["asset_id"], "Asset")
         server = values["server_id"]
-        return "Local file" if server is None else f"Copy on server {server}"
+        if not isinstance(server, int):
+            return f"{asset} file in the media folder"
+        return f"{asset} on {servers.get(server, f'server {server}')}"
+    words = table.removesuffix("s").replace("_", " ").capitalize()
     key = values.get("id")
-    return table if key is None else f"{table} {key}"
+    return words if key is None else f"{words} {key}"

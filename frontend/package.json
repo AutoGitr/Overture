@@ -31,8 +31,10 @@
     "verify": "bun run typecheck && bun run test:unit && bun run build",
     "lint:deps": "depcruise src --config .dependency-cruiser.mjs",
     "check:bundle": "bun scripts/check-bundle.ts",
-    "ci": "bun run format:check && bun run lint:deps && bun run lint && bun run typecheck && bun run test:coverage && bun run build && bun run check:bundle",
-    "ci:e2e": "bun run test:e2e"
+    "ci": "bun run format:check && bun run lint:deps && bun run lint && bun run lint:unused && bun run typecheck && bun run test:coverage && bun run build && bun run check:bundle",
+    "ci:e2e": "bun run test:e2e",
+    "lint:duplication": "jscpd --config ../.jscpd.json",
+    "lint:unused": "knip --no-progress"
   },
   "dependencies": {
     "@tanstack/svelte-query": "6.4.1",
@@ -58,9 +60,13 @@
     "@vitest/coverage-v8": "5.1.1",
     "dependency-cruiser": "18.7.2",
     "eslint": "10.15.0",
+    "eslint-plugin-sonarjs": "4.2.2",
     "eslint-plugin-svelte": "3.24.1",
+    "fast-check": "4.10.2",
     "globals": "17.14.0",
+    "jscpd": "5.4.2",
     "jsdom": "31.0.1",
+    "knip": "6.44.1",
     "svelte": "5.57.3",
     "svelte-check": "4.7.8",
     "typescript": "6.0.3",

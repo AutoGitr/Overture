@@ -2,11 +2,13 @@
 
 lazy from typing import Annotated
 
-lazy from fastapi import APIRouter, Depends, Path, Query
+lazy from fastapi import Path, Query
+lazy from pydantic import AfterValidator
 
 lazy from ..dependencies import DatabaseDep, JobSlotsDep
 lazy from ..jobs import results as job_results
 lazy from ..jobs.kinds import JobKind
+lazy from ..jobs.lifecycle import label
 lazy from ..jobs.progress_log import JobOutcome
 lazy from ..schemas.job_snapshots import (
     JobLogPage,
@@ -14,18 +16,31 @@ lazy from ..schemas.job_snapshots import (
     JobSnapshotClearResponse,
 )
 lazy from ..services import job_snapshots
-lazy from .auth import require_auth
+lazy from .auth import authenticated_router
 
-router = APIRouter(
-    prefix="/job-snapshots",
-    tags=["job-snapshots"],
-    dependencies=[Depends(require_auth)],
-)
+router = authenticated_router(prefix="/job-snapshots", tags=["job-snapshots"])
+
+
+def _clearable(kind: JobKind) -> JobKind:
+    if not kind.clearable:
+        raise ValueError(f"{label(kind.label)} results cannot be cleared")
+    return kind
+
+
+#: A kind of job whose last result a client may clear from its view.
+ClearableJobKindPath = Annotated[
+    JobKind,
+    AfterValidator(_clearable),
+    Path(
+        description="Job kind",
+        json_schema_extra={"enum": [kind.value for kind in JobKind if kind.clearable]},
+    ),
+]
 
 
 @router.delete("/{kind}")
 async def clear_job_snapshot(
-    kind: Annotated[JobKind, Path(description="Job kind")],
+    kind: ClearableJobKindPath,
     job_slots: JobSlotsDep,
     finished_at: Annotated[str, Query(min_length=1)],
 ) -> JobSnapshotClearResponse:

@@ -14,6 +14,7 @@
   } from "../../generated/rest/types.gen";
   import { splitList } from "../utils/collectionCriteria";
   import { settingsState } from "../stores/settingsState.svelte";
+  import CheckboxList from "./CheckboxList.svelte";
   import IdListInput from "./IdListInput.svelte";
   import { toggleSelectedValue } from "../utils/popupSelection";
   import SourcePicker from "./SourcePicker.svelte";
@@ -136,20 +137,16 @@
         if (source.type === "tmdb_person") source.person_name = event.currentTarget.value || null;
       }}
     />
-    <div class="checks" role="group" aria-label={`${label} credits`}>
-      {#each ROLES as [role, roleLabel] (role)}
-        <label class="check">
-          <input
-            type="checkbox"
-            checked={(source.roles ?? ["actor"]).includes(role)}
-            onchange={() => {
-              if (source.type === "tmdb_person")
-                source.roles = toggleSelectedValue(source.roles ?? ["actor"], role);
-            }}
-          />
-          {roleLabel}
-        </label>
-      {/each}
+    <div role="group" aria-label={`${label} credits`}>
+      <!-- A person source needs at least one role, so nothing clears them all at once. -->
+      <CheckboxList
+        options={ROLES.map(([value, roleLabel]) => ({ value, label: roleLabel }))}
+        selected={source.roles ?? ["actor"]}
+        ontoggle={(role) => {
+          if (source.type === "tmdb_person")
+            source.roles = toggleSelectedValue(source.roles ?? ["actor"], role);
+        }}
+      />
     </div>
   {:else if source.type === "tmdb_chart"}
     <select
@@ -197,7 +194,7 @@
   {:else}
     {@const selected = source.tags}
     {#if tags?.length}
-      <div class="checks" role="group" aria-label={`${label} tags`}>
+      <div role="group" aria-label={`${label} tags`}>
         {#each tagLabels as tag (tag)}
           <button
             type="button"
@@ -231,18 +228,5 @@
     flex-direction: column;
     gap: var(--space-2);
     min-width: 0;
-  }
-
-  .checks {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2) var(--space-3);
-  }
-
-  .check {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    font-size: var(--text-sm);
   }
 </style>

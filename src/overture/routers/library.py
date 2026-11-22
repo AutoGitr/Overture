@@ -2,7 +2,7 @@
 
 lazy from typing import Annotated
 
-lazy from fastapi import APIRouter, Depends, Query
+lazy from fastapi import Query
 lazy from fastapi.responses import Response
 
 lazy from ..dependencies import LibraryDep
@@ -23,7 +23,7 @@ lazy from ..schemas.library import (
     SeasonRead,
 )
 lazy from ..schemas.records import DatabaseRecord
-lazy from .auth import require_auth
+lazy from .auth import authenticated_router
 lazy from .parameters import (
     ArtTypePath,
     ImageCacheKeyQuery,
@@ -32,14 +32,13 @@ lazy from .parameters import (
     ItemIdPath,
     SeasonIdPath,
 )
+lazy from .responses import SERVER_CANNOT
 
 MediaTypeFilter = Annotated[
     MediaType | None, Query(description="Only items of this media type")
 ]
 
-router = APIRouter(
-    prefix="/library", tags=["library"], dependencies=[Depends(require_auth)]
-)
+router = authenticated_router(prefix="/library", tags=["library"])
 
 
 @router.get("/items/{item_id}/provider-art", response_class=Response)
@@ -116,7 +115,7 @@ async def delete_item(item_id: ItemIdPath, library: LibraryDep) -> StatusRespons
     return StatusResponse(status=Status.DELETED)
 
 
-@router.post("/items/bulk-operation")
+@router.post("/items/bulk-operation", responses=SERVER_CANNOT)
 async def bulk_operate_items(
     body: BulkItemOperation, library: LibraryDep
 ) -> BulkItemOperationResult:

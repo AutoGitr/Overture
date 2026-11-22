@@ -8,12 +8,12 @@ lazy from ...db.models.collection_group import CollectionGroup
 lazy from ...db.models.collection_rule import CollectionRule
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...domain import FilterOperator, MediaType, SetDimension
+lazy from ...jobs.progress_log import JobOutcome, Report
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...schemas.collections import (
     CollectionCreate,
     CollectionGenerator,
     CollectionGeneratorBase,
-    CollectionGroupSyncResult,
     CollectionLibraryCriteria,
     CollectionRuleWrite,
     CollectionSetEntry,
@@ -115,16 +115,17 @@ class CollectionSets:
         self,
         group: CollectionGroup,
         generator: CollectionGenerator,
-        result: CollectionGroupSyncResult,
-    ) -> None:
+        report: Report,
+    ) -> set[int]:
         """Create the set's new collections, update the rest and deselect stale ones.
 
         A value makes one collection across every library that holds it. A
         value no library holds, or the set does not select, is
-        deselected: its collection leaves the server until the set selects it
-        again. Values below the minimum are left to the minimum policy, applied
-        when each collection syncs. Overture keeps every collection until it
-        is deleted explicitly.
+        deselected: its collection leaves the server when it next syncs, until
+        the set selects it again. Returns the deselected collections still on
+        a server, which that sync takes off. Values below the minimum are left
+        to the minimum policy, applied when each collection syncs. Overture
+        keeps every collection until it is deleted explicitly.
         """
         async with self._access.database.read_session() as session:
             policy = await self._access.policy(session, group)
@@ -174,23 +175,19 @@ class CollectionSets:
             # policy's to withhold or keep when it syncs.
             if collection.count >= policy.minimum_items or value in members:
                 await self._apply_value(
-                    group, generator, value, collection, members, titles, rules, result
+                    group, generator, value, collection, members, titles, rules, report
                 )
-        for value in sorted(set(members) - set(selected)):
-            row = members[value]
-            if not row.copies:
-                continue
-            try:
-                await self._editor.withhold(row.id or 0)
-                result.withheld.append(row.id or 0)
-            except Exception as exc:  # noqa: BLE001 -- one collection's failure is reported; the rest go on
-                result.errors[row.title] = str(exc)
         async with self._access.database.write_session() as session:
             saved = await session.get(CollectionGroup, group.id)
             if saved is not None:
                 saved.generated_at = utc_now()
                 session.add(saved)
         await self._access.changed()
+        return {
+            row.id or 0
+            for value, row in members.items()
+            if value not in selected and row.copies
+        }
 
     async def _deselect(
         self, stale: list[MediaCollection], selected: list[MediaCollection]
@@ -342,7 +339,7 @@ class CollectionSets:
         members: Mapping[str, MediaCollection],
         titles: set[tuple[str, str]],
         rules: Mapping[int, CollectionRule],
-        result: CollectionGroupSyncResult,
+        report: Report,
     ) -> None:
         """Create the value's collection, or bring the existing one up to date."""
         rule = CollectionRuleWrite(
@@ -357,16 +354,20 @@ class CollectionSets:
                 return
             if any((library_id, title) in titles for library_id in library_ids):
                 raise PublicServiceError(409, title_taken(collection.title))
-            detail = await self._editor.create(
+            await self._editor.create(
                 CollectionCreate(
                     title=collection.title, collection_group=group.name, rule=rule
                 ),
                 generated_value=value,
             )
-            result.created.append(detail.id)
             titles.update((library_id, title) for library_id in library_ids)
         except Exception as exc:  # noqa: BLE001 -- one collection's failure is reported; the rest go on
-            result.errors[collection.title] = str(exc)
+            await report(
+                JobOutcome.ERROR,
+                collection.title,
+                f"its group's set could not save it: {exc}",
+                finished=False,
+            )
 
     async def _refresh(
         self,

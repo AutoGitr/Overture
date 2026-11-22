@@ -9,8 +9,6 @@ lazy from typing import ClassVar
 lazy from ..config import MediaServerConfig, Settings
 lazy from ..domain import (
     ArtType,
-    CollectionFiltering,
-    CollectionMode,
     CollectionOrder,
     ImageSize,
     MediaType,
@@ -22,8 +20,10 @@ lazy from ..domain import (
 )
 lazy from ..schemas.art import ArtCandidate
 lazy from .adapters import (
+    CollectionDetails,
     CollectionSupport,
     ItemIdentity,
+    MemberWrite,
     ProviderImageRequest,
     ServerCollection,
     ServerItem,
@@ -136,18 +136,8 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
     async def update_collection_details(
         self,
         server_collection_id: str,
-        *,
         library_id: str,
-        title: str,
-        summary: str | None,
-        sort_title: str | None,
-        mode: CollectionMode,
-        order: CollectionOrder,
-        smart: bool,
-        visible_home: bool,
-        visible_shared: bool = False,
-        visible_library: bool = False,
-        filtering: CollectionFiltering | None = None,
+        details: CollectionDetails,
     ) -> None:
         """Update collection metadata and supported display options."""
         raise NotImplementedError
@@ -163,7 +153,7 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
         *,
         order: CollectionOrder,
         append: bool = False,
-    ) -> list[str]:
+    ) -> MemberWrite:
         """Apply a membership diff, then the supported member order."""
         raise NotImplementedError
 

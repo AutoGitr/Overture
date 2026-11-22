@@ -237,6 +237,7 @@ class TestAppSettingsModel:
             assert annotation is not None
             assert update_fields[name].annotation == annotation | None, name
             assert update_fields[name].default is None, name
+            assert update_fields[name].metadata == field.metadata, name
 
     def test_update_schema_accepts_valid_preferences(self) -> None:
         update = AppSettingsUpdate(

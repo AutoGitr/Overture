@@ -3,10 +3,13 @@ import type {
   CollectionRead,
   MediaItemRead,
   MetadataIssue,
-  ThemeIdSource,
   TitleAssets,
 } from "../../generated/rest/types.gen";
-import { METADATA_ISSUES, SELECTED_ART_SOURCE_LABELS } from "../../generated/settings";
+import {
+  METADATA_ISSUES,
+  SELECTED_ART_SOURCE_LABELS,
+  THEME_ID_SOURCE_LABELS,
+} from "../../generated/settings";
 import type { FilterState } from "../stores/uiState.svelte";
 import { alphabetical } from "./alphabetical";
 import { CATALOG_SELECTION_FILTERS, type CatalogSelectionFilter } from "./catalogSelections";
@@ -15,7 +18,6 @@ import {
   inRange,
   isRangeActive,
   matchesTriState,
-  type ArtSource,
   type CatalogPresence,
   type Predicate,
   type Row,
@@ -71,7 +73,7 @@ export function defaultTmdbFilters(): TmdbFilters {
  * has none of its statuses, so only where it is held can be asked; a TMDB
  * collection is looked up only in the list it is searched from.
  */
-export function tmdbFilterKeys(
+export function tmdbFilterKeysFor(
   source: SidebarSource,
   mode: SidebarMode,
   catalogEnabled: boolean,
@@ -80,24 +82,15 @@ export function tmdbFilterKeys(
   return catalogEnabled ? ["library", "overturedb"] : ["library"];
 }
 
-/** Where an item's theme ID came from; the file sources are read from its tags. */
-export const THEME_SOURCE_LABELS: Record<ThemeIdSource, string> = {
-  download: "Downloaded",
-  embedded_id: "File ID tag",
-  source_url: "File source link",
-  metadata_url: "Other file link",
-  selection: "Selected",
-};
 export const THEME_SOURCES = alphabetical(
-  keysOf(THEME_SOURCE_LABELS),
-  (source) => THEME_SOURCE_LABELS[source],
+  keysOf(THEME_ID_SOURCE_LABELS),
+  (source) => THEME_ID_SOURCE_LABELS[source],
 );
 
 /** Where an item's selected artwork comes from; OvertureDB's catalog art counts as its own. */
-export const ART_SOURCE_LABELS: Record<ArtSource, string> = SELECTED_ART_SOURCE_LABELS;
 export const ART_SOURCES = alphabetical(
-  keysOf(ART_SOURCE_LABELS),
-  (source) => ART_SOURCE_LABELS[source],
+  keysOf(SELECTED_ART_SOURCE_LABELS),
+  (source) => SELECTED_ART_SOURCE_LABELS[source],
 );
 
 /** Which of a row's artwork the art source filter looks at. */

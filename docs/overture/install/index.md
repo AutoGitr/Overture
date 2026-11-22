@@ -24,13 +24,26 @@ paths your media server reports. Keep its database on a local disk; media on a
 network share must support locking and atomic renames. Run only one Overture
 instance against a given media or config folder.
 
+Each media server also needs its library, metadata and collection
+[settings](server-settings.mdx) set for Overture.
+
+:::warning[Set up your media server first]
+
+Without the [Media server settings](server-settings.mdx), a server keeps
+showing the images it downloads itself and making its own collections, and
+titles without TMDB or IMDb IDs get no OvertureDB artwork. Apply them before
+the first sync.
+
+:::
+
 Overture can also run [without a media server](media-servers.mdx#no-media-server)
 to curate OvertureDB alone.
 
 ## Steps
 
 1. Install with [Docker](docker.md) or the [Linux service](linux-service.md).
-2. [Connect your media server](media-servers.mdx).
+2. [Connect your media server](media-servers.mdx) and apply its
+   [settings](server-settings.mdx).
 3. Set up [authentication](authentication.md), and a
    [reverse proxy](reverse-proxy.md) if you reach Overture over HTTPS.
 4. Take the [first steps](../features/getting-started.md): sync the library and
@@ -42,13 +55,5 @@ web interface.
 
 ## What is tested
 
-| Area          | Tested                                                                                                 | Not supported                            |
-| ------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
-| Docker        | Linux `amd64` and `arm64` images, started and exercised before each release                            | Kubernetes, Helm and Podman are untested |
-| Native        | x86_64 Linux with systemd, tested on Ubuntu 22.04 and 26.04, and Debian 12 and 13                      | Windows, macOS, ARM, musl or no systemd  |
-| Media servers | Contract tests against pinned Plex, Jellyfin and Emby API specs, plus manual tests of current releases | One media server at a time               |
-| Browsers      | Chromium on desktop and mobile                                                                         | Firefox and Safari are best effort       |
-| Storage       | Database on a local disk; media on disks or shares with locking and atomic renames                     | Two Overture instances on the same files |
-
-TMDB, OvertureDB and YouTube are external services. Overture's handling of a
-supported service is in scope; the service's own availability is not.
+[Support](../support.md#what-is-tested) lists the platforms, media servers,
+browsers and storage each release is tested on.

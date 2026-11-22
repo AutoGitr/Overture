@@ -9,8 +9,6 @@ lazy from typing import ClassVar, Literal, override
 lazy from ...config import MediaServerConfig, Settings
 lazy from ...domain import (
     ArtType,
-    CollectionFiltering,
-    CollectionMode,
     CollectionOrder,
     ImageSize,
     MediaType,
@@ -21,6 +19,8 @@ lazy from ...utils.security import remove_sensitive_url_params
 lazy from ...utils.time import parse_utc_datetime
 lazy from ..adapters import (
     MAX_SEASONS_PER_SHOW,
+    CollectionDetails,
+    MemberWrite,
     ProviderImageRequest,
     ServerCollection,
     ServerItem,
@@ -582,32 +582,11 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
     async def update_collection_details(
         self,
         server_collection_id: str,
-        *,
         library_id: str,
-        title: str,
-        summary: str | None,
-        sort_title: str | None,
-        mode: CollectionMode,
-        order: CollectionOrder,
-        smart: bool,
-        visible_home: bool,
-        visible_shared: bool = False,
-        visible_library: bool = False,
-        filtering: CollectionFiltering | None = None,
+        details: CollectionDetails,
     ) -> None:
         await self.client.update_collection_details(
-            server_collection_id,
-            library_id=self.section_key(library_id),
-            title=title,
-            summary=summary,
-            sort_title=sort_title,
-            mode=mode,
-            order=order,
-            smart=smart,
-            visible_home=visible_home,
-            visible_shared=visible_shared,
-            visible_library=visible_library,
-            filtering=filtering,
+            server_collection_id, self.section_key(library_id), details
         )
 
     @override
@@ -622,7 +601,7 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         *,
         order: CollectionOrder,
         append: bool = False,
-    ) -> list[str]:
+    ) -> MemberWrite:
         return await self.client.set_collection_members(
             server_collection_id, server_item_ids, order, append=append
         )

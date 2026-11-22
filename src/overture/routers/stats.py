@@ -1,16 +1,10 @@
 """Stats router - application metrics and storage statistics."""
 
-lazy from fastapi import APIRouter, Depends
-
 lazy from ..dependencies import StatsDep
 lazy from ..schemas.stats import StatsResponse
-lazy from .auth import require_auth
+lazy from .auth import authenticated_router
 
-router = APIRouter(
-    prefix="/stats",
-    tags=["stats"],
-    dependencies=[Depends(require_auth)],
-)
+router = authenticated_router(prefix="/stats", tags=["stats"])
 
 
 @router.get("")

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { allValuesSelected } from "../utils/popupSelection";
   import LibraryOptions from "./LibraryOptions.svelte";
 
   let {
@@ -22,25 +21,10 @@
     ontoggleall: (checked: boolean) => void;
   } = $props();
 
-  let libraryIds = $derived(libraries.map((library) => library.id));
-  let allSelected = $derived(allValuesSelected(selectedIds, libraryIds));
-  let unavailable = $derived(loading || !!error || libraryIds.length === 0);
 </script>
 
 <div class="checklist">
-  <div class="heading-row">
-    <span class="form-label">Libraries</span>
-    <label class="checkbox-group">
-      <input
-        type="checkbox"
-        checked={allSelected}
-        disabled={unavailable}
-        aria-label="{allSelected ? 'Deselect' : 'Select'} all libraries"
-        onchange={(event) => ontoggleall(event.currentTarget.checked)}
-      />
-      <span aria-hidden="true">{allSelected ? "Deselect all" : "Select all"}</span>
-    </label>
-  </div>
+  <span class="form-label">Libraries</span>
   {#if loading}
     <span class="hint">Loading libraries...</span>
   {:else if error}
@@ -48,10 +32,10 @@
     {#if onretry}
       <button class="btn btn-ghost btn-sm" onclick={onretry}>Retry</button>
     {/if}
-  {:else if libraryIds.length === 0}
+  {:else if libraries.length === 0}
     <span class="hint">{emptyMessage}</span>
   {:else}
-    <LibraryOptions {libraries} selected={selectedIds} {ontoggle} />
+    <LibraryOptions {libraries} selected={selectedIds} {ontoggle} {ontoggleall} />
   {/if}
 </div>
 

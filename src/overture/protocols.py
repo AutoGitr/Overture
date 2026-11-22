@@ -3,8 +3,6 @@
 lazy from collections.abc import Callable
 lazy from typing import Any, Protocol
 
-lazy from .schemas.collections import CollectionGroupSyncResult
-
 
 class ClientConnection(Protocol):
     """The WebSocket surface the event stream sends through.
@@ -45,17 +43,3 @@ class EventPublisher(Protocol):
         self,
         builder: Callable[[], tuple[str, Any] | None],
     ) -> bool: ...
-
-
-class CollectionGroups(Protocol):
-    """The collection groups, and single collections, a full sync can run."""
-
-    async def names(self) -> list[str]: ...
-
-    async def sync(
-        self, name: str, *, library_ids: list[str] | None = None
-    ) -> CollectionGroupSyncResult: ...
-
-    async def sync_collections(
-        self, collection_ids: list[int]
-    ) -> CollectionGroupSyncResult: ...

@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { serverClock } from "../../../lib/realtime/serverClock";
 import { client } from "../../../generated/rest/client.gen";
@@ -130,5 +131,30 @@ describe("realtime stream reconciliation", () => {
       realtimeStream.applySnapshot({ ...snapshot(4), server_time: "2026-06-02T09:00:00Z" }),
     ).toBe(false);
     expect(serverClock.isoNow()).toBe("2026-06-02T10:00:02.000Z");
+  });
+});
+
+describe("realtime stream ordering for any arrival order", () => {
+  it("applies exactly the snapshot epoch's events newer than the last one applied", () => {
+    const arrival = fc.record({
+      epoch: fc.constantFrom("epoch-1", "epoch-0"),
+      sequence: fc.integer({ min: -2, max: 60 }),
+    });
+    fc.assert(
+      fc.property(fc.nat({ max: 40 }), fc.array(arrival, { maxLength: 30 }), (start, arrivals) => {
+        realtimeStream.reset();
+        realtimeStream.applySnapshot(snapshot(start));
+        let watermark = start;
+        for (const { epoch, sequence } of arrivals) {
+          const expected = epoch === "epoch-1" && sequence > watermark;
+          const message = wsMessage("sync.progress", syncEvent(), sequence, epoch);
+          expect(realtimeStream.applyEvent(message)).toBe(expected);
+          if (expected) watermark = sequence;
+        }
+        // A snapshot behind what is applied is refused; one at or past it is adopted.
+        expect(realtimeStream.applySnapshot(snapshot(watermark - 1))).toBe(false);
+        expect(realtimeStream.applySnapshot(snapshot(watermark))).toBe(true);
+      }),
+    );
   });
 });

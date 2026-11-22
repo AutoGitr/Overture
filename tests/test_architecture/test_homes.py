@@ -33,6 +33,27 @@ HOMES: dict[str, tuple[re.Pattern[str], frozenset[str]]] = {
         re.compile(r"\bdatetime\.(now|utcnow|today)\(|\bdate\.today\("),
         frozenset({"utils/time.py"}),
     ),
+    "MediaBrowser membership writes": (
+        # One place batches the IDs a write carries in its URL.
+        re.compile(r"/Collections/\{[^}]*\}/Items"),
+        frozenset({"media_servers/jellyfin/client.py"}),
+    ),
+    "worker threads": (
+        # A thread the event loop owns, so a cancelled caller never leaves it
+        # running unseen.
+        re.compile(r"\bto_thread\("),
+        frozenset({"utils/threads.py"}),
+    ),
+    "HTTP clients": (
+        # One place sets the timeouts every outgoing request has.
+        re.compile(r"\bhttpx2\.AsyncClient\("),
+        frozenset({"integrations/http.py"}),
+    ),
+    "routes that need a media server": (
+        # The factory declares the 409, 502 and 503 such a route answers.
+        re.compile(r"Depends\(require_media_server\)"),
+        frozenset({"routers/auth.py"}),
+    ),
     "SQLite files": (
         re.compile(r"\bsqlite3\.connect\("),
         frozenset(

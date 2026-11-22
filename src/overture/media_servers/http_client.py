@@ -13,6 +13,7 @@ lazy import httpx2
 lazy from ..config import MediaServerConfig
 lazy from ..domain import ArtType, MediaServerState
 lazy from ..integrations.http import (
+    ClientFactory,
     LazyClient,
     create_client,
     request_with_retry,
@@ -99,7 +100,7 @@ class MediaServerHttpClient(ABC):
         self,
         *,
         server: MediaServerConfig,
-        client_factory: Callable[..., httpx2.AsyncClient] = create_client,
+        client_factory: ClientFactory = create_client,
         health: MediaServerHealthTracker | None = None,
     ) -> None:
         """Initialize the lazily created client and its response memoizer."""

@@ -1,0 +1,27 @@
+{
+  "minTokens": 60,
+  "threshold": 0,
+  "reporters": [
+    "console"
+  ],
+  "absolute": false,
+  "gitignore": true,
+  "ignore": [
+    "**/generated/**",
+    "**/migrations/versions/**",
+    "**/test/**",
+    "**/node_modules/**",
+    "**/__pycache__/**",
+    "src/overture/frontend/**"
+  ],
+  "ignorePattern": [
+    "lazy (?:from|import) [^\\n]*",
+    "import [^\\n]* from \"[^\"]*\";?"
+  ],
+  "path": [
+    "src/overture",
+    "frontend/src",
+    "docs/overture",
+    "scripts"
+  ]
+}

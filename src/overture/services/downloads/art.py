@@ -19,7 +19,7 @@ lazy from ...utils.image import UnsupportedImageFormatError
 lazy from ...utils.image_fetch import (
     RATE_LIMIT_RETRIES,
     RemoteImageError,
-    fetch_image_bytes,
+    fetch_image,
 )
 lazy from ...utils.progress import ProgressCallback, StepProgress
 lazy from ...utils.security import remove_sensitive_url_params
@@ -75,7 +75,7 @@ class DownloadArtHandler:
         headers = {} if server is None else server.get_download_headers(target_url)
         await progress.enter("downloading")
         try:
-            return await fetch_image_bytes(
+            fetched = await fetch_image(
                 target_url,
                 await self._image_clients.get_client(target_url),
                 allow_private=trusted_media_server,
@@ -95,6 +95,7 @@ class DownloadArtHandler:
             raise DownloadError(
                 f"Could not reach {urlsplit(target_url).hostname}: {detail}"
             ) from exc
+        return fetched.data
 
     async def _uploaded_image(self, upload_hash: str, progress: StepProgress) -> bytes:
         """Read an uploaded image back from the image cache.

@@ -4,7 +4,14 @@ import {
   getServerWebLinksOptions,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import { matchLibraryFilter } from "../../generated/rest/sdk.gen";
-import type { LibraryFilterMatchRequest, MediaItemRead } from "../../generated/rest/types.gen";
+import type {
+  LibraryFilterMatchRequest,
+  MediaItemRead,
+  SeasonRead,
+  TmdbItemPreview,
+  TmdbSeasonPreview,
+} from "../../generated/rest/types.gen";
+import type { CatalogContext } from "../utils/catalogDraft";
 import { sdkData } from "./sdk";
 
 /**
@@ -18,6 +25,34 @@ export function createSeasonsQuery(item: () => MediaItemRead | null) {
       enabled: current?.media_type === "show",
     };
   });
+}
+
+/** What a title's seasons come from: a stored show, a TMDB title or a catalog entry. */
+export interface SeasonSource {
+  item: MediaItemRead | null;
+  preview: TmdbItemPreview | null;
+  catalog?: CatalogContext | null;
+}
+
+/**
+ * Observe a title's seasons: a catalog entry's or a TMDB title's come with it,
+ * and a stored show's are loaded.
+ */
+export function createTitleSeasons(source: () => SeasonSource) {
+  const query = createSeasonsQuery(() => source().item);
+  return {
+    /** The stored show's seasons, for its load state and season IDs. */
+    query,
+    get seasons(): (SeasonRead | TmdbSeasonPreview)[] {
+      const { item, preview, catalog } = source();
+      if (catalog) return catalog.seasons;
+      return item ? (query.data ?? []) : (preview?.seasons ?? []);
+    },
+    /** Whether every season is known, as a title that is not stored always is. */
+    get loaded(): boolean {
+      return !source().item || query.isSuccess;
+    },
+  };
 }
 
 /** A media server's copy of a title or collection. */

@@ -1,13 +1,8 @@
 """Custom library filters: what they test, what they match, and saved ones."""
 
-lazy from typing import Annotated
-
-lazy from fastapi import APIRouter, Depends, Path
-
 lazy from ..dependencies import (
     LibraryFiltersDep,
     SavedFiltersDep,
-    require_media_server,
 )
 lazy from ..schemas.common import StatusResponse
 lazy from ..schemas.library_filters import (
@@ -17,16 +12,10 @@ lazy from ..schemas.library_filters import (
     SavedFilterRead,
     SavedFilterWrite,
 )
-lazy from .auth import READS_ONLY, require_auth
-lazy from .parameters import MediaTypeQuery
+lazy from .auth import READS_ONLY, media_server_router
+lazy from .parameters import MediaTypeQuery, SavedFilterIdPath
 
-router = APIRouter(
-    prefix="/library/filters",
-    tags=["library-filters"],
-    dependencies=[Depends(require_auth), Depends(require_media_server)],
-)
-
-SavedFilterIdPath = Annotated[int, Path(ge=1, description="Saved filter ID")]
+router = media_server_router(prefix="/library/filters", tags=["library-filters"])
 
 
 @router.get("/capabilities")

@@ -9,7 +9,7 @@
   import CollectionPolicyFields from "./CollectionPolicyFields.svelte";
   import CollectionScheduleFields from "./CollectionScheduleFields.svelte";
   import type { PolicyData, ScheduleData } from "../utils/collectionFormShared.svelte";
-  import { POLICY_SETTINGS } from "../../generated/settings";
+  import { POLICY_SETTINGS, TEXT_LIMITS } from "../../generated/settings";
   import DataStatus from "./DataStatus.svelte";
   import FieldRow from "./FieldRow.svelte";
 
@@ -77,7 +77,7 @@
   >
     <input
       id={`${id}-region`}
-      maxlength="2"
+      maxlength={TEXT_LIMITS.tmdbRegion}
       size="4"
       required
       bind:value={draft.tmdb_region}

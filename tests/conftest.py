@@ -5,6 +5,7 @@ tests never depend on a local .env, real media-server credentials, or /config.
 """
 
 lazy import asyncio
+lazy import errno
 lazy import itertools
 lazy import os
 lazy import shutil
@@ -30,9 +31,12 @@ lazy from collections.abc import AsyncGenerator, Callable, Generator
 lazy from pathlib import Path
 
 lazy import pytest
+lazy from alembic import command
 lazy from fastapi import FastAPI
 lazy from fastapi.testclient import TestClient
 lazy from httpx2 import ASGITransport, AsyncClient
+lazy from hypothesis import settings
+lazy from sqlalchemy import Connection
 lazy from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     async_sessionmaker,
@@ -48,11 +52,17 @@ lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.models.settings import AppSettings
-lazy from overture.db.session import Database, as_writer, configure_sqlite
+lazy from overture.db.session import (
+    Database,
+    alembic_config,
+    as_writer,
+    configure_sqlite,
+)
 lazy from overture.domain import ArtType, MediaType, ServerType
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.main import create_app
 lazy from overture.runtime import build_runtime
+lazy from overture.runtime_paths import database_path
 lazy from overture.services.art.phash import PhashService
 lazy from overture.services.auth import AuthService
 lazy from overture.utils import image_fetch, rate_limit
@@ -72,6 +82,12 @@ lazy from tests.media_servers import attach_servers, seed_test_server, served_it
 lazy from tests.pause_clock import PauseClock
 lazy from tests.runtime_helpers import TEMP_IMAGE_CACHES
 lazy from tests.workload import WRITING
+
+#: Examples each fuzz test generates; the weekly run asks for many more.
+settings.register_profile(
+    "overture", max_examples=int(os.environ.get("FUZZ_EXAMPLES", "20")), deadline=None
+)
+settings.load_profile("overture")
 
 READING: ContextVar[bool] = ContextVar("reading", default=False)
 
@@ -225,8 +241,11 @@ def _offline_dns(monkeypatch: pytest.MonkeyPatch) -> None:
     ``internal.`` names are private, and anything else does not resolve.
     """
 
-    def resolve(host: str, *_args: object, **_kwargs: object) -> list[Any]:
-        name = host.lower()
+    def resolve(
+        host: str | bytes | None, *_args: object, **_kwargs: object
+    ) -> list[Any]:
+        # The standard library passes a name as text, anyio as IDNA bytes.
+        name = (host.decode() if isinstance(host, bytes) else host or "").lower()
         if name.startswith(("private.", "internal.")):
             address = "192.168.1.2"
         elif name in ART_HOSTS or name.endswith(".test"):
@@ -236,6 +255,22 @@ def _offline_dns(monkeypatch: pytest.MonkeyPatch) -> None:
         return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, 0))]
 
     monkeypatch.setattr(socket, "getaddrinfo", resolve)
+
+
+@pytest.fixture(autouse=True)
+def _offline_downloader(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Refuse to start yt-dlp, which reaches YouTube from a process of its own.
+
+    A test of theme searches or downloads replaces the process it runs.
+    """
+    spawn = asyncio.create_subprocess_exec
+
+    async def offline(program: str, *args: str, **kwargs: Any) -> Any:
+        if "yt_dlp" in args:
+            raise OSError(errno.ENETUNREACH, "Tests do not reach YouTube")
+        return await spawn(program, *args, **kwargs)
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", offline)
 
 
 @pytest.fixture
@@ -337,6 +372,12 @@ TEST_LIBRARIES = (
 )
 
 
+def _stamp_head(connection: Connection) -> None:
+    config = alembic_config()
+    config.attributes["connection"] = connection
+    command.stamp(config, "head")
+
+
 @pytest.fixture(scope="session")
 def _seeded_database_template(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """Build the seeded schema once per worker so each test copies it cleanly."""
@@ -353,6 +394,9 @@ def _seeded_database_template(tmp_path_factory: pytest.TempPathFactory) -> Path:
         try:
             async with engine.begin() as conn:
                 await conn.run_sync(metadata.create_all)
+                # At the head revision, as the migrations leave it, so a
+                # runtime that starts finds nothing to migrate.
+                await conn.run_sync(_stamp_head)
                 await seed_test_server(conn, TEST_LIBRARIES)
             # Flush WAL pages into the main file so copying it is self-contained.
             async with engine.connect() as conn:
@@ -369,7 +413,8 @@ async def isolated_engine(
     tmp_path: Path,
     _seeded_database_template: Path,
 ) -> AsyncGenerator[AsyncEngine]:
-    db_path = tmp_path / "overture-test.db"
+    # Where the runtime the tests build keeps it, so backups find it.
+    db_path = database_path(tmp_path)
     shutil.copyfile(_seeded_database_template, db_path)
     # Pooled like production: a fresh aiosqlite connection per session costs a
     # thread, the pragmas and a schema read, which dominates many tests.

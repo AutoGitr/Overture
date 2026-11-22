@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
   extractYouTubeId,
@@ -183,5 +184,40 @@ describe("themeCandidateVideoIds", () => {
       "abc",
       "def",
     ]);
+  });
+});
+
+const ID_CHARACTER = fc.constantFrom(
+  ..."abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-",
+);
+const VIDEO_ID = fc.string({ unit: ID_CHARACTER, minLength: 11, maxLength: 11 });
+
+describe("YouTube links for any video ID", () => {
+  it("reads the ID back from every link form it recognises", () => {
+    fc.assert(
+      fc.property(VIDEO_ID, (id) => {
+        for (const url of [
+          youtubeShortUrl(id),
+          `https://www.youtube.com/watch?v=${id}`,
+          `https://www.youtube.com/shorts/${id}`,
+        ]) {
+          expect(isYouTubeUrl(url)).toBe(true);
+          expect(extractYouTubeId(url)).toBe(id);
+        }
+      }),
+    );
+  });
+
+  it("finds no ID in a link whose ID is not 11 characters", () => {
+    fc.assert(
+      fc.property(
+        fc
+          .string({ unit: ID_CHARACTER, minLength: 1, maxLength: 20 })
+          .filter((id) => id.length !== 11),
+        (id) => {
+          expect(extractYouTubeId(`https://www.youtube.com/watch?v=${id}`)).toBeNull();
+        },
+      ),
+    );
   });
 });

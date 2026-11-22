@@ -607,7 +607,6 @@ def test_registry_builds_each_configured_servers_provider_lead_first(
         EmbyProvider,
     ]
     assert [provider.server_id for provider in registry.providers()] == [1, 2, 3]
-    assert type(registry.for_library("2:movies")) is JellyfinProvider
     assert registry.collection_providers() == registry.providers()
 
 
@@ -619,8 +618,6 @@ def test_registry_refuses_a_server_no_longer_configured(
     with pytest.raises(PublicServiceError) as refused:
         registry.get(9)
     assert refused.value.status_code == 409
-    with pytest.raises(PublicServiceError):
-        registry.for_library("not-a-library")
 
 
 def test_registry_reuses_one_provider_instance_per_media_server(

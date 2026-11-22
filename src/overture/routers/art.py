@@ -7,7 +7,7 @@ line, so a body carries only what is being written.
 
 lazy from typing import Annotated, Any
 
-lazy from fastapi import APIRouter, Depends, Query, Request
+lazy from fastapi import Query, Request
 
 lazy from ..dependencies import ArtDep, ArtUploadsDep, RemoverDep
 lazy from ..domain import MATCH_THRESHOLD_DEFAULT, MATCH_THRESHOLD_MAX
@@ -19,17 +19,23 @@ lazy from ..schemas.art import (
 )
 lazy from ..schemas.common import StatusResponse
 lazy from ..schemas.library import ItemSelectionResponse
-lazy from ..schemas.removal import AssetRemoval, RemovalOptions, RemovalTarget
+lazy from ..schemas.removal import (
+    ArtRemoval,
+    AssetRemoval,
+    RemovalOptions,
+    RemovalTarget,
+)
 lazy from ..utils.errors import PublicServiceError
 lazy from ..utils.image_fetch import MAX_IMAGE_BYTES
-lazy from .auth import require_auth
+lazy from .auth import authenticated_router
 lazy from .parameters import (
     ArtTypePath,
     ItemIdPath,
     SeasonIdQuery,
 )
+lazy from .responses import SERVER_CANNOT, UPLOAD_GONE, errors
 
-router = APIRouter(tags=["art"], dependencies=[Depends(require_auth)])
+router = authenticated_router(tags=["art"])
 
 #: The upload body is the image file itself.
 _IMAGE_BODY: dict[str, Any] = {
@@ -60,7 +66,13 @@ async def _image_body(request: Request) -> bytes:
     return bytes(data)
 
 
-@router.post("/art/uploads", openapi_extra=_IMAGE_BODY)
+@router.post(
+    "/art/uploads",
+    openapi_extra=_IMAGE_BODY,
+    responses=errors(
+        {413: "The image is larger than the limit", 415: "It is not a JPEG or PNG"}
+    ),
+)
 async def upload_art(request: Request, uploads: ArtUploadsDep) -> ArtUploadResponse:
     """Keep an uploaded JPEG or PNG until an art slot selects it.
 
@@ -104,7 +116,7 @@ async def match_art(
     )
 
 
-@router.put("/library/items/{item_id}/art/{art_type}")
+@router.put("/library/items/{item_id}/art/{art_type}", responses=UPLOAD_GONE)
 async def save_art(
     item_id: ItemIdPath,
     art_type: ArtTypePath,
@@ -124,22 +136,18 @@ async def save_art(
     )
 
 
-@router.delete("/library/items/{item_id}/art/{art_type}")
+@router.delete("/library/items/{item_id}/art/{art_type}", responses=SERVER_CANNOT)
 async def remove_art(
     item_id: ItemIdPath,
     art_type: ArtTypePath,
-    removal: Annotated[AssetRemoval, Query()],
+    removal: Annotated[ArtRemoval, Query()],
     art: ArtDep,
-    season_id: Annotated[
-        int | None,
-        Query(description="The season; omit to remove every season's poster"),
-    ] = None,
 ) -> StatusResponse:
     """Forget a slot's art, delete its local file or the server's copy."""
-    return await art.remove(item_id, art_type, removal, season_id)
+    return await art.remove(item_id, art_type, removal, removal.season_id)
 
 
-@router.delete("/library/items/{item_id}/art")
+@router.delete("/library/items/{item_id}/art", responses=SERVER_CANNOT)
 async def remove_all_art(
     item_id: ItemIdPath, removal: Annotated[AssetRemoval, Query()], art: ArtDep
 ) -> StatusResponse:

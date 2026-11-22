@@ -17,7 +17,7 @@ export type Selectable<TItem> = TItem & { selected: boolean };
  * The groups a finding belongs to, as `[key, label]` pairs, with the kind of
  * media server a server's group is about.
  */
-export type ResultGroupsOf<TItem> = (
+type ResultGroupsOf<TItem> = (
   item: TItem,
 ) => (readonly [key: string, label: string, server?: ServerType])[];
 

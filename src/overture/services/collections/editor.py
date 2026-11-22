@@ -40,7 +40,7 @@ lazy from ..downloads.service import DownloadService
 lazy from ..needs import apply_needs
 lazy from . import COLLECTIONS_LOCK
 lazy from .access import CollectionAccess
-lazy from .copies import CopyKey, ServerCopy, copy_keys
+lazy from .copies import CopyKey, ServerCopy, copy_keys, copy_libraries
 lazy from .criteria import order_items
 lazy from .destinations import place_collection
 lazy from .display import DISPLAY_OVERRIDES, CollectionDisplay
@@ -55,6 +55,7 @@ lazy from .rules import (
     rule_row,
     title_taken,
 )
+lazy from .sync_outcome import CopyChange
 lazy from .validation import CollectionValidator
 
 #: What a server copy holds: a title, or ``(server, item)`` for an item no
@@ -269,11 +270,13 @@ class CollectionEditor:
 
     # Removing
 
-    async def delete_copies(self, copies: Iterable[CopyKey]) -> None:
-        """Delete server collections, by server and ID; an absent one is deleted.
+    async def delete_copies(self, copies: Iterable[CopyKey]) -> list[CopyKey]:
+        """Delete server collections, by server and ID; return those deleted.
 
-        A copy on a server no longer configured is left for its return.
+        An absent one counts as deleted. A copy on a server no longer
+        configured is left for its return.
         """
+        deleted: list[CopyKey] = []
         for server_id, server_item_id in dict.fromkeys(copies):
             if not self._access.configured(server_id):
                 continue
@@ -282,10 +285,19 @@ class CollectionEditor:
             except MediaServerError as exc:
                 if exc.upstream_status_code != 404:
                     raise
+            deleted.append((server_id, server_item_id))
+        return deleted
 
-    async def delete_locked(self, row: MediaCollection) -> None:
+    async def delete_locked(
+        self, row: MediaCollection
+    ) -> list[tuple[int, tuple[str, ...]]]:
+        """Delete a collection from the servers and Overture.
+
+        Returns the server collections deleted, by server and libraries.
+        """
         collection_id = row.id or 0
-        await self.delete_copies(copy_keys(row.copies))
+        held = copy_libraries(row.copies)
+        deleted = await self.delete_copies(held)
         async with self._access.database.write_session() as session:
             await self._downloads.cancel_assets(
                 session, AssetScope(collection_id=collection_id)
@@ -296,11 +308,18 @@ class CollectionEditor:
             for part in row.libraries:
                 await self._membership.prune_labels(part.library_id, part.media_type)
         await self._access.changed()
+        return [(key[0], held[key]) for key in deleted]
 
-    async def withhold_locked(self, row: MediaCollection) -> None:
-        """Remove a collection from the server while keeping its Overture rule."""
+    async def withhold_locked(
+        self, row: MediaCollection
+    ) -> list[tuple[int, tuple[str, ...]]]:
+        """Remove a collection from the servers while keeping its Overture rule.
+
+        Returns the server collections deleted, by server and libraries.
+        """
         collection_id = row.id or 0
-        await self.delete_copies(copy_keys(row.copies))
+        held = copy_libraries(row.copies)
+        deleted = await self.delete_copies(held)
         async with self._access.database.write_session() as session:
             saved = await CollectionRepository(session).clear_server_copies(
                 collection_id, utc_now()
@@ -311,16 +330,21 @@ class CollectionEditor:
         for part in row.libraries:
             part.server_item_id = None
         await self._access.changed()
+        return [(key[0], held[key]) for key in deleted]
 
-    async def retire_libraries(self, row: MediaCollection) -> None:
-        """Finish removing libraries a save took out of the collection."""
+    async def retire_libraries(
+        self, row: MediaCollection
+    ) -> list[tuple[int, tuple[str, ...]]]:
+        """Finish removing libraries a save took out of the collection.
+
+        Returns the server collections deleted, by server and libraries.
+        """
         leaving = [part for part in row.libraries if part.criteria is None]
         if not leaving:
-            return
+            return []
         staying = set(copy_keys(row.libraries)) - set(copy_keys(leaving))
-        await self.delete_copies(
-            key for key in copy_keys(leaving) if key not in staying
-        )
+        held = copy_libraries(leaving)
+        deleted = await self.delete_copies(key for key in held if key not in staying)
         ids = {part.library_id for part in leaving}
         async with self._access.database.write_session() as session:
             saved = await self._access.require(session, row.id or 0)
@@ -328,13 +352,7 @@ class CollectionEditor:
             place_collection(saved, self._access.provider_registry)
             session.add(saved)
         row.libraries = [p for p in row.libraries if p.library_id not in ids]
-
-    async def withhold(self, collection_id: int) -> None:
-        """Take a collection off the server, keeping it in Overture."""
-        async with self._access.locked(collection_id):
-            async with self._access.database.read_session() as session:
-                row = await self._access.require_managed(session, collection_id)
-            await self.withhold_locked(row)
+        return [(key[0], held[key]) for key in deleted]
 
     async def delete(
         self, collection_id: int, *, target: CollectionDeleteTarget = "both"
@@ -367,12 +385,16 @@ class CollectionEditor:
         order: CollectionOrder,
         *,
         append: bool = False,
-    ) -> None:
-        """Make the ordered items, by library, the regular collection's members."""
-        held = await self.place_members(
+    ) -> list[CopyChange]:
+        """Make the ordered items, by library, the regular collection's members.
+
+        Returns what that did to each server collection.
+        """
+        held, changes = await self.place_members(
             row, self._access.copies(row), wanted, order, append=append
         )
         await self.store_members(row, held, order, kind=CollectionKind.REGULAR)
+        return changes
 
     async def place_members(
         self,
@@ -382,23 +404,35 @@ class CollectionEditor:
         order: CollectionOrder,
         *,
         append: bool = False,
-    ) -> list[Held]:
+    ) -> tuple[list[Held], list[CopyChange]]:
         """Make the ordered items, by library, the members of *copies* on their servers.
 
         Libraries saved apart on a server that spans them fold into one copy,
         and a library left with nothing to hold loses its own. Returns what
-        the copies hold, each once, in order (see :meth:`held`).
+        the copies hold, each once, in order (see :meth:`held`), and what the
+        sync did to each.
         """
         members: dict[Held, None] = {}
+        changes: list[CopyChange] = []
         for copy in copies:
             provider = self._access.provider(copy.server_id)
+            libraries = tuple(part.library_id for part in copy.libraries)
             ids = _server_ids(wanted, copy.library_ids)
-            await self.delete_copies(
+            if await self.delete_copies(
                 (copy.server_id, identity) for identity in copy.surplus_ids
-            )
+            ):
+                changes.append(
+                    CopyChange(
+                        copy.server_id,
+                        libraries,
+                        deleted="merged into the server's one collection for them",
+                    )
+                )
             target = copy.server_item_id
+            created = target is None
             if target is None:
                 if not ids:
+                    changes.append(CopyChange(copy.server_id, libraries, absent=True))
                     continue
                 server = await provider.create_collection(
                     copy.lead.library_id, row.title, copy.lead.media_type, ids
@@ -408,9 +442,16 @@ class CollectionEditor:
             elif not ids and not append:
                 await self.delete_copies([(copy.server_id, target)])
                 copy.place(None)
+                changes.append(
+                    CopyChange(
+                        copy.server_id,
+                        libraries,
+                        deleted="no title there meets its rule any more",
+                    )
+                )
                 continue
             copy.place(target)
-            held = await provider.set_collection_members(
+            write = await provider.set_collection_members(
                 target,
                 ids,
                 order=kept_order(
@@ -418,8 +459,18 @@ class CollectionEditor:
                 ),
                 append=append,
             )
-            members.update(dict.fromkeys(await self.held(copy.server_id, held)))
-        return list(members)
+            changes.append(
+                CopyChange(
+                    copy.server_id,
+                    libraries,
+                    created=created,
+                    added=0 if created else write.added,
+                    removed=write.removed,
+                    held=len(write.held),
+                )
+            )
+            members.update(dict.fromkeys(await self.held(copy.server_id, write.held)))
+        return list(members), changes
 
     async def held(self, server_id: int, server_item_ids: Sequence[str]) -> list[Held]:
         """What a server's items are, in their order: titles, or items unknown yet.

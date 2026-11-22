@@ -549,7 +549,7 @@ async def test_tmdb_must_be_configured_and_reachable(
             MediaType.MOVIE, 1
         )
 
-    assert (unset.value.status_code, down.value.status_code) == (503, 502)
+    assert (unset.value.status_code, down.value.status_code) == (409, 502)
     assert missing.value.status_code == 404
 
 

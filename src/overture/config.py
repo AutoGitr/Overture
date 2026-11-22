@@ -782,8 +782,8 @@ def load_configuration[T: RuntimeSettings](
     model: type[T], path: Path | None = None
 ) -> T:
     """Load the environment, then the configuration file, then Compose secrets."""
-    # BaseSettings takes source options at runtime; type checkers see only fields.
     return model(
+        # BaseSettings takes source options at runtime; type checkers see only fields.
         _env_file=path or configuration_file(),  # pyright: ignore[reportCallIssue]
         _secrets_dir=SECRETS_DIR if SECRETS_DIR.is_dir() else None,  # pyright: ignore[reportCallIssue]
     )

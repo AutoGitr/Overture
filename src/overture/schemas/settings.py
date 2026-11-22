@@ -67,9 +67,9 @@ class AppSettingsUpdate(StrictBaseModel):
 
     Every field of :class:`AppSettingsBase` is here as optional: only the ones
     a request actually sends are applied, which is what
-    ``model_dump(exclude_unset=True)`` gives the service. Ranges are validated
-    against the persisted model's own declarations, and a test keeps the two
-    field lists equal.
+    ``model_dump(exclude_unset=True)`` gives the service. Each field takes its
+    range from the persisted model below, so the schema states it, and a test
+    keeps the two field lists equal.
     """
 
     collection_sync_mode: SyncMode | None = None
@@ -119,14 +119,19 @@ class AppSettingsUpdate(StrictBaseModel):
 
     @model_validator(mode="after")
     def validate_against_persisted_fields(self) -> Self:
-        """Reject values the persisted model would not accept.
+        """Reject values the persisted model's own validators would not accept.
 
-        Running the supplied fields through :class:`AppSettingsBase` reuses
-        its ranges and lengths instead of restating them here. Rules that
-        span fields need the saved values too, so the service checks those.
+        Rules that span fields need the saved values too, so the service
+        checks those.
 
         Returns:
             The validated update.
         """
         AppSettingsBase.model_validate(self.model_dump(exclude_none=True))
         return self
+
+
+# Each setting's range is declared once, on the persisted model.
+for _name, _field in AppSettingsBase.model_fields.items():
+    AppSettingsUpdate.model_fields[_name].metadata = list(_field.metadata)
+AppSettingsUpdate.model_rebuild(force=True)

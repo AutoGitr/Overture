@@ -6,21 +6,34 @@ lazy from collections.abc import Sequence
 lazy from contextlib import AsyncExitStack
 lazy from functools import partial
 lazy from pathlib import Path
+lazy from typing import Protocol
 
-lazy from ... import protocols
 lazy from ...domain import MediaType, library_parts
-lazy from ...jobs.progress_log import JobOutcome
+lazy from ...jobs.progress_log import JobOutcome, Report
 lazy from ...jobs.runner import JobContext, ManagedJob, run_managed_job
 lazy from ...jobs.tally import JobTally
 lazy from ...media_servers.errors import MediaServerError
 lazy from ...media_servers.registry import Provider, ProviderRegistry, log_server
-lazy from ...schemas.collections import CollectionGroupSyncResult
 lazy from ...utils.temporary import operation_directory
 lazy from .collection_sync import CollectionSync
 lazy from .reconciler import LibraryReconciler, ServerTurn
 lazy from .staging import StagedListing
 lazy from .tmdb_enrichment import TmdbEnrichment
 lazy from .tmdb_seasons import TmdbSeasonSync
+
+
+class CollectionGroups(Protocol):
+    """The collection groups, and single collections, a full sync can run."""
+
+    async def names(self) -> list[str]: ...
+
+    async def sync(
+        self, name: str, report: Report, *, library_ids: list[str] | None = None
+    ) -> None: ...
+
+    async def sync_collections(
+        self, collection_ids: list[int], report: Report
+    ) -> None: ...
 
 
 async def run_sync(
@@ -37,7 +50,7 @@ async def run_sync(
     tmdb_seasons: TmdbSeasonSync,
     enrichment: TmdbEnrichment,
     collections: CollectionSync,
-    groups: protocols.CollectionGroups,
+    groups: CollectionGroups,
 ) -> None:
     """Run a full sync: reconcile the servers, then TMDB seasons, facts and collections.
 
@@ -86,9 +99,7 @@ async def run_sync(
                     library_ids,
                 )
             if collection_ids and not job.stop_requested():
-                await _report(
-                    job, "Collections", await groups.sync_collections(collection_ids)
-                )
+                await groups.sync_collections(collection_ids, job.report)
 
         # A stop must interrupt provider calls and rate-limit waits as well
         # as the loops between them. Each writer rolls back on cancellation.
@@ -110,7 +121,7 @@ async def run_sync(
 
 async def _sync_groups(
     job: ManagedJob[JobTally],
-    groups: protocols.CollectionGroups,
+    groups: CollectionGroups,
     names: list[str] | None,
     library_ids: list[str] | None,
 ) -> None:
@@ -126,28 +137,11 @@ async def _sync_groups(
         if name not in existing:
             continue
         try:
-            result = await groups.sync(name, library_ids=library_ids)
+            await groups.sync(name, job.report, library_ids=library_ids)
         except Exception as exc:  # noqa: BLE001 -- one group's failure is reported; the rest go on
             await job.report(
                 JobOutcome.ERROR, f"Group {name}", str(exc), finished=False
             )
-            continue
-        await _report(job, f"Group {name}", result)
-
-
-async def _report(
-    job: ManagedJob[JobTally], subject: str, result: CollectionGroupSyncResult
-) -> None:
-    """Log what syncing a group or chosen collections did, and each failure."""
-    for title, error in result.errors.items():
-        await job.report(JobOutcome.ERROR, title, error, finished=False)
-    await job.report(
-        JobOutcome.STARTED,
-        subject,
-        f"{result.synced} synced, {len(result.created)} created, "
-        f"{len(result.withheld)} taken off the server",
-        finished=False,
-    )
 
 
 async def _reachable(

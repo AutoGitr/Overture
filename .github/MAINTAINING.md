@@ -2,7 +2,7 @@
 
 The repository owner's runbook: cutting releases, the repository's settings,
 deploying the documentation site and regenerating the brand assets. Contributors
-need none of it; their guide is [CONTRIBUTING.md](CONTRIBUTING.md).
+need none of it; their guide is [Contributing](https://autogitr.github.io/Overture/overture/developer/contributing).
 
 ## Releases
 

@@ -30,7 +30,10 @@ Python is pinned exactly in `requires-python`, `.python-version` and the
 Docker image. Update them together, including `uv.lock`; patch releases go
 through CI before adoption. Renovate's pinning policy is intentional. A
 security update can arrive separately from its tool's Docker update, so check
-both pins even when Renovate normally groups them.
+both pins even when Renovate normally groups them. Rules OvertureDB shares
+live in `.github/renovate-shared.json`, which both repositories extend, so a
+dependency they share updates alike in each; `.github/renovate.json` holds
+only Overture's own.
 
 ```sh
 uv sync --locked --group dev
@@ -75,7 +78,17 @@ staged changes, without tests or builds.
 | Frontend checks, in `frontend/`                | `bun run format:fix`, `typecheck`, `lint`, `test:unit`        |
 | End-to-end tests, in `frontend/`               | `bun run test:e2e`, and `test:oidc` for sign-in               |
 | Import rules and bundle budget, in `frontend/` | `bun run lint:deps`, and `bun run check:bundle` after a build |
+| Duplicated and unused code, in `frontend/`     | `bun run lint:duplication` and `bun run lint:unused`          |
 | Documentation, in `docs/`                      | `bun run ci`; see [Documentation](documentation.md)           |
+
+After changing endpoints, schemas, models, the catalog contract or the brand,
+regenerate what follows from them; [Generated files](generated-files.md) says
+how.
+
+Some checks guard against drift: a rule, mapping or component written a
+second time, or left behind when it was consolidated. Fix what they find by
+reusing the one that exists; each says what it found and where. After an intended layout
+change, refresh the screenshot with `bun run test:e2e -- --update-snapshots`.
 
 ### Checking Overture against real media servers
 
@@ -154,8 +167,13 @@ that its license fits, and add it to `licenses/THIRD_PARTY_NOTICES.md`.
   what it does and how to use it, never how it was built.
 - Describe changes users notice under `## Unreleased` in
   [CHANGELOG.md](https://github.com/AutoGitr/Overture/blob/main/.github/CHANGELOG.md),
-  in the same commit. It follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
-  and becomes the release notes.
+  in the same commit, as `- **Area:** What changed.` under its section:
+  🚨 Breaking Changes, 🫥 Deprecated Changes, 🔒 Security, 🚀 Features,
+  🌟 Enhancements, 🐛 Bug fixes or 📚 Documentation, as
+  [Immich's releases](https://github.com/immich-app/immich/releases) group
+  theirs. `scripts/pre-commit-check.sh --fix` orders the entries, and an
+  incompatible API change needs an `**API:**` line under 🚨 Breaking Changes.
+  The section becomes the release notes.
 - Leave out credentials and private media details. Report vulnerabilities as
   described under [Support](../support.md#security).
 

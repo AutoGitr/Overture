@@ -9,13 +9,13 @@ lazy from ...domain import (
     CollectionOrder,
     MediaType,
 )
+lazy from ...jobs.progress_log import JobOutcome, Report
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.saved_schedules import SavedScheduleRepository
 lazy from ...schemas.collections import (
     BulkCollectionOperationResult,
     CollectionGroupDelete,
     CollectionGroupPolicy,
-    CollectionGroupSyncResult,
     CollectionSetSummary,
 )
 lazy from ...schemas.common import Status, StatusResponse
@@ -252,18 +252,19 @@ class CollectionGroups:
         return body
 
     async def sync(
-        self, name: str, *, library_ids: list[str] | None = None
-    ) -> CollectionGroupSyncResult:
+        self, name: str, report: Report, *, library_ids: list[str] | None = None
+    ) -> None:
         """Run the group's set, if it is one, then sync every collection it holds.
 
         *library_ids* limits both to what touches those libraries; a set runs
-        whole, because a value's collection spans its libraries.
+        whole, because a value's collection spans its libraries. Each
+        collection's outcome on each server goes to *report*.
         """
         name = name.strip()
         async with self._access.database.read_session() as session:
             group = await CollectionRepository(session).group(name)
-        result = CollectionGroupSyncResult()
         set_generator = generator(group)
+        stale: set[int] = set()
         if (
             group is not None
             and set_generator is not None
@@ -271,24 +272,38 @@ class CollectionGroups:
                 library_ids is None or set(library_ids) & set(set_generator.library_ids)
             )
         ):
-            await self._sets.run(group, set_generator, result)
+            stale = await self._sets.run(group, set_generator, report)
         async with self._access.database.read_session() as session:
             rows = [
                 row
                 for row in await CollectionRepository(session).list_listed()
                 if row.group_name == name
-                and (library_ids is None or set(library_ids) & set(row.library_ids))
+                and (
+                    library_ids is None
+                    or set(library_ids) & set(row.library_ids)
+                    or row.id in stale
+                )
             ]
-        await self._sync_rows(rows, result)
+        await report(
+            JobOutcome.STARTED,
+            f"Group {name}",
+            f"syncing its {len(rows)} collection{'' if len(rows) == 1 else 's'}",
+            finished=False,
+        )
+        await self._sync_rows(rows, report)
         try:
-            await self._separators.apply(name)
+            outcome = await self._separators.apply(name)
         except Exception as exc:  # noqa: BLE001 -- a separator's failure is reported; the group's sync stands
-            result.errors[name] = str(exc)
-        return result
+            await report(
+                JobOutcome.ERROR, f"{name} separator", str(exc), finished=False
+            )
+            return
+        if outcome is not None:
+            await outcome.report(
+                report, f"{name} separator", servers=self._access.log_server
+            )
 
-    async def sync_collections(
-        self, collection_ids: list[int]
-    ) -> CollectionGroupSyncResult:
+    async def sync_collections(self, collection_ids: list[int], report: Report) -> None:
         """Sync these collections whole, whatever libraries a run covers."""
         async with self._access.database.read_session() as session:
             repo = CollectionRepository(session)
@@ -297,14 +312,10 @@ class CollectionGroups:
                 for collection_id in collection_ids
                 if (row := await repo.get_listed(collection_id)) is not None
             ]
-        result = CollectionGroupSyncResult()
-        await self._sync_rows(rows, result)
-        return result
+        await self._sync_rows(rows, report)
 
-    async def _sync_rows(
-        self, rows: list[MediaCollection], result: CollectionGroupSyncResult
-    ) -> None:
-        """Make the server match each managed collection, counting what fails.
+    async def _sync_rows(self, rows: list[MediaCollection], report: Report) -> None:
+        """Make the servers match each managed collection, reporting each outcome.
 
         A separator follows its group, which keeps it apart.
         """
@@ -312,7 +323,8 @@ class CollectionGroups:
             if row.rule is None or row.kind is CollectionKind.SEPARATOR:
                 continue
             try:
-                await self._rules.sync(row.id or 0)
-                result.synced += 1
+                outcome = await self._rules.sync(row.id or 0)
             except Exception as exc:  # noqa: BLE001 -- one collection's failure is reported; the rest go on
-                result.errors[row.title] = str(exc)
+                await report(JobOutcome.ERROR, row.title, str(exc), finished=False)
+                continue
+            await outcome.report(report, row.title, servers=self._access.log_server)

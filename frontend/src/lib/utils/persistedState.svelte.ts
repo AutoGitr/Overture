@@ -1,7 +1,7 @@
 import { readJson, writeJson } from "./storage";
 
 /** One persisted field: its default and optional value normalisation. */
-export interface PersistedField<TValue> {
+interface PersistedField<TValue> {
   default: TValue;
   /** Normalises a stored value before it becomes state (clamping, pruning...). */
   revive?: (value: TValue) => TValue;

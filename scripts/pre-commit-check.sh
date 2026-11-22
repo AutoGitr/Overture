@@ -28,6 +28,7 @@ export UV_LOCKED=1
 BACKEND_CHANGED=false
 FRONTEND_CHANGED=false
 CONTRACTS_CHANGED=false
+DUPLICATION_CHANGED=false
 
 if [ "$QUICK" = true ]; then
     CHANGED_FILES="$(git diff --cached --name-only)"
@@ -37,12 +38,14 @@ fi
 
 if echo "$CHANGED_FILES" | grep -Eq '^(src/|tests/|scripts/[^/]+\.py$|packaging/.+\.py$|pyproject\.toml$|uv\.lock$)'; then BACKEND_CHANGED=true; fi
 if echo "$CHANGED_FILES" | grep -q "^frontend/"; then FRONTEND_CHANGED=true; fi
+if echo "$CHANGED_FILES" | grep -Eq '^(src/|frontend/src/|scripts/|docs/overture/|\.jscpd\.json$)'; then DUPLICATION_CHANGED=true; fi
 if echo "$CHANGED_FILES" | grep -Eq "^(src/|frontend/|scripts/(contracts|generate_ws_types|generate_settings_defaults)\.py|openapi/overture.json$|pyproject\.toml$)"; then CONTRACTS_CHANGED=true; fi
 
 if [ "$BACKEND_CHANGED" = false ] && [ "$FRONTEND_CHANGED" = false ] && [ "$CONTRACTS_CHANGED" = false ]; then
     BACKEND_CHANGED=true
     FRONTEND_CHANGED=true
     CONTRACTS_CHANGED=true
+    DUPLICATION_CHANGED=true
 fi
 
 echo "=== Checking the Lockfile and Release Metadata ==="
@@ -84,7 +87,7 @@ if [ "$BACKEND_CHANGED" = true ]; then
     uv run python -m pyright
 fi
 
-if [ "$FRONTEND_CHANGED" = true ] || [ "$CONTRACTS_CHANGED" = true ]; then
+if [ "$FRONTEND_CHANGED" = true ] || [ "$CONTRACTS_CHANGED" = true ] || [ "$DUPLICATION_CHANGED" = true ]; then
     echo "=== Installing Frontend Dependencies ==="
     cd "$ROOT_DIR/frontend"
     if ! bun install --frozen-lockfile; then
@@ -116,8 +119,14 @@ if [ "$FRONTEND_CHANGED" = true ]; then
     bun run format:check
     bun run lint:deps
     bun run lint
+    bun run lint:unused
     bun run typecheck
     cd "$ROOT_DIR"
+fi
+
+if [ "$DUPLICATION_CHANGED" = true ]; then
+    echo "=== Checking for Duplicated Code ==="
+    (cd "$ROOT_DIR/frontend" && bun run lint:duplication)
 fi
 
 if [ "$QUICK" = true ]; then

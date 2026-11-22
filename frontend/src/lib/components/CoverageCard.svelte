@@ -2,6 +2,8 @@
   import type { Component } from "svelte";
   import type { Coverage } from "../../generated/rest/types.gen";
   import { formatBytes } from "../utils/popupFormat";
+  import Metric from "./Metric.svelte";
+  import MetricGrid from "./MetricGrid.svelte";
 
   /** How much of some assets Overture holds locally and has matched. */
   let {
@@ -44,30 +46,20 @@
     <div class="progress-bar-fill" style:width="{localWidth}%"></div>
   </div>
 
-  <div class="metrics-row">
-    <div class="metric-item">
-      <span class="metric-label">Local files</span>
-      <span class="metric-val">
-        {coverage.local_files.toLocaleString()} / {coverage.total.toLocaleString()}
-      </span>
-    </div>
-    <div class="metric-item">
-      <span class="metric-label">DB Matched</span>
-      <span class="metric-val">
-        {coverage.matched_files.toLocaleString()} / {coverage.total.toLocaleString()}
-      </span>
-    </div>
-    <div class="metric-item">
-      <span class="metric-label">Total size</span>
-      <span class="metric-val">{formatBytes(coverage.total_size_bytes)}</span>
-    </div>
+  <MetricGrid>
+    <Metric
+      label="Local files"
+      value="{coverage.local_files.toLocaleString()} / {coverage.total.toLocaleString()}"
+    />
+    <Metric
+      label="DB Matched"
+      value="{coverage.matched_files.toLocaleString()} / {coverage.total.toLocaleString()}"
+    />
+    <Metric label="Total size" value={formatBytes(coverage.total_size_bytes)} />
     {#if showAverage}
-      <div class="metric-item">
-        <span class="metric-label">Average size</span>
-        <span class="metric-val">{formatBytes(coverage.avg_size_bytes)}</span>
-      </div>
+      <Metric label="Average size" value={formatBytes(coverage.avg_size_bytes)} />
     {/if}
-  </div>
+  </MetricGrid>
 
   {#if breakdown.length}
     <div class="sub-breakdown">
@@ -136,29 +128,9 @@
     background: var(--bg-elevated);
   }
 
-  .metrics-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: var(--space-3);
-  }
 
-  .metric-item {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
 
-  .metric-label {
-    font-size: var(--text-xs);
-    color: var(--text-tertiary);
-  }
 
-  .metric-val {
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    font-weight: 600;
-    color: var(--text-primary);
-  }
 
   .sub-breakdown {
     display: flex;

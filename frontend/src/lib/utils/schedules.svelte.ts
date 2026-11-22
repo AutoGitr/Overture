@@ -125,6 +125,11 @@ export class ScheduleController<TConfig, TSchedule extends SavedSchedule<TConfig
     return this.editingId !== null;
   }
 
+  /** Whether a save is on its way. */
+  get saving(): boolean {
+    return this.options.create.isPending || this.options.update.isPending;
+  }
+
   get runPending(): boolean {
     return this.options.run.isPending;
   }

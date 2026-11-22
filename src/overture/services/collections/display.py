@@ -3,6 +3,7 @@
 lazy from ...db.models.collection_rule import CollectionRule
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...domain import CollectionFiltering, CollectionKind
+lazy from ...media_servers.adapters import CollectionDetails
 lazy from ...schemas.collections import CollectionOptions
 lazy from ...utils.collection_fields import kept_order
 lazy from ...utils.collection_formats import format_sort_title, format_summary
@@ -192,21 +193,23 @@ class CollectionDisplay:
             )
             await provider.update_collection_details(
                 copy.server_item_id,
-                library_id=copy.lead.library_id,
-                title=effective.title,
-                summary=effective.summary,
-                sort_title=effective.sort_title,
-                mode=options.collection_mode or policy.collection_mode,
-                order=kept_order(
-                    effective.order_type,
-                    provider.server_type,
-                    copy.lead.media_type,
+                copy.lead.library_id,
+                CollectionDetails(
+                    title=effective.title,
+                    summary=effective.summary,
+                    sort_title=effective.sort_title,
+                    mode=options.collection_mode or policy.collection_mode,
+                    order=kept_order(
+                        effective.order_type,
+                        provider.server_type,
+                        copy.lead.media_type,
+                        smart=smart,
+                    ),
                     smart=smart,
+                    visible_home=effective.visible_home,
+                    visible_shared=effective.visible_shared,
+                    visible_library=effective.visible_library,
+                    filtering=effective.collection_filtering,
                 ),
-                smart=smart,
-                visible_home=effective.visible_home,
-                visible_shared=effective.visible_shared,
-                visible_library=effective.visible_library,
-                filtering=effective.collection_filtering,
             )
         return effective

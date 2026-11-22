@@ -14,6 +14,7 @@ lazy from overture.domain import (
     CollectionOrder,
     MediaType,
 )
+lazy from overture.media_servers.adapters import CollectionDetails
 lazy from overture.media_servers.emby.client import EmbyClient
 lazy from overture.media_servers.jellyfin.client import JellyfinClient
 lazy from overture.media_servers.plex.client import PlexClient, longest_ordered_run
@@ -67,7 +68,16 @@ async def test_boxsets_create_diff_edit_art_and_delete(
         assert await client.create_collection("New", ["keep"]) == "box"
         await client.set_collection_members("box", ["keep", "add"])
         await client.update_collection_details(
-            "box", "After", "Summary", "!After", CollectionOrder.TITLE_ASC
+            "box",
+            CollectionDetails(
+                title="After",
+                summary="Summary",
+                sort_title="!After",
+                mode=CollectionMode.DEFAULT,
+                order=CollectionOrder.TITLE_ASC,
+                smart=False,
+                visible_home=False,
+            ),
         )
         await client.upload_collection_art("box", ArtType.POSTER, b"image", "image/png")
         await client.delete_item("box")
@@ -86,10 +96,11 @@ async def test_boxsets_create_diff_edit_art_and_delete(
         None if emby else "admin"
     }
     assert mutations[0].url.params.get("Name" if emby else "name") == "New"
-    assert mutations[1].url.params.get("Ids" if emby else "ids") == "add"
-    assert mutations[2].method == "DELETE"
-    assert mutations[2].url.params.get("Ids" if emby else "ids") == "remove"
-    metadata = json.loads(mutations[3].content)
+    assert mutations[1].url.params.get("Ids" if emby else "ids") == "keep"
+    assert mutations[2].url.params.get("Ids" if emby else "ids") == "add"
+    assert mutations[3].method == "DELETE"
+    assert mutations[3].url.params.get("Ids" if emby else "ids") == "remove"
+    metadata = json.loads(mutations[4].content)
     assert metadata["Name"] == "After"
     assert metadata["ProviderIds"] == {"Tmdb": "10"}
     # Emby keeps a sort title through refreshes only while SortName is locked.
@@ -98,8 +109,8 @@ async def test_boxsets_create_diff_edit_art_and_delete(
     )
     assert metadata["DisplayOrder"] == "SortName"
     assert metadata["ForcedSortName"] == "!After"
-    assert base64.b64decode(mutations[4].content) == b"image"
-    assert mutations[4].headers["Content-Type"] == "image/png"
+    assert base64.b64decode(mutations[5].content) == b"image"
+    assert mutations[5].headers["Content-Type"] == "image/png"
     assert mutations[-1].method == "DELETE"
 
 
@@ -125,7 +136,16 @@ async def test_emby_clearing_a_sort_title_releases_its_lock(
     client = media_client(EmbyClient, app_config, client_factory=factory)
     try:
         await client.update_collection_details(
-            "box", "Box", None, "", CollectionOrder.TITLE_ASC
+            "box",
+            CollectionDetails(
+                title="Box",
+                summary=None,
+                sort_title="",
+                mode=CollectionMode.DEFAULT,
+                order=CollectionOrder.TITLE_ASC,
+                smart=False,
+                visible_home=False,
+            ),
         )
     finally:
         await client.close()
@@ -184,27 +204,31 @@ async def test_plex_creates_then_diffs_moves_and_uploads_bytes(
         )
         await client.update_collection_details(
             "box",
-            library_id="1",
-            title="Saga",
-            summary=None,
-            sort_title="!Saga",
-            mode=CollectionMode.HIDE_ITEMS,
-            order=CollectionOrder.CRITIC_RATING_DESC,
-            smart=False,
-            visible_home=True,
-            filtering=CollectionFiltering.USER,
+            "1",
+            CollectionDetails(
+                title="Saga",
+                summary=None,
+                sort_title="!Saga",
+                mode=CollectionMode.HIDE_ITEMS,
+                order=CollectionOrder.CRITIC_RATING_DESC,
+                smart=False,
+                visible_home=True,
+                filtering=CollectionFiltering.USER,
+            ),
         )
         await client.update_collection_details(
             "box",
-            library_id="1",
-            title="Saga",
-            summary="",
-            sort_title=None,
-            mode=CollectionMode.DEFAULT,
-            order=CollectionOrder.CRITIC_RATING_DESC,
-            smart=True,
-            visible_home=False,
-            filtering=CollectionFiltering.USER,
+            "1",
+            CollectionDetails(
+                title="Saga",
+                summary="",
+                sort_title=None,
+                mode=CollectionMode.DEFAULT,
+                order=CollectionOrder.CRITIC_RATING_DESC,
+                smart=True,
+                visible_home=False,
+                filtering=CollectionFiltering.USER,
+            ),
         )
         await client.upload_collection_art(
             "box", ArtType.BACKGROUND, b"image", "image/jpeg"
@@ -258,6 +282,48 @@ async def test_plex_creates_then_diffs_moves_and_uploads_bytes(
 
 
 @pytest.mark.parametrize("client_type", [JellyfinClient, EmbyClient])
+async def test_large_boxset_writes_fit_the_servers_request_line(
+    client_type: type[JellyfinClient], app_config: Settings
+) -> None:
+    members = [f"{index:032x}" for index in range(1500)]
+    current = [f"{index:032x}" for index in range(5000, 6000)]
+
+    def handle(request: httpx2.Request) -> httpx2.Response:
+        if request.url.path.endswith("/Users"):
+            return httpx2.Response(200, json=_USERS)
+        if request.method == "GET":
+            return httpx2.Response(
+                200,
+                json={
+                    "Items": [{"Id": identity} for identity in current],
+                    "TotalRecordCount": len(current),
+                },
+            )
+        return httpx2.Response(200, json={"Id": "box"})
+
+    factory, transport = mock_client_factory(handle)
+    client = media_client(client_type, app_config, client_factory=factory)
+    try:
+        await client.create_collection("Large", members)
+        await client.set_collection_members("box", members)
+    finally:
+        await client.close()
+    writes = [request for request in transport.requests if request.method != "GET"]
+    # Kestrel answers 414 to a request line over 8 KiB.
+    assert max(len(request.url.raw_path) for request in writes) < 8192
+    key = "Ids" if client_type is EmbyClient else "ids"
+    sent: dict[str, set[str]] = {
+        request.method: set()
+        for request in writes
+        if request.url.params.get(key) is not None
+    }
+    for request in writes:
+        if ids := request.url.params.get(key):
+            sent[request.method].update(ids.split(","))
+    assert sent == {"POST": set(members), "DELETE": set(current)}
+
+
+@pytest.mark.parametrize("client_type", [JellyfinClient, EmbyClient])
 async def test_boxset_append_never_removes_new_remote_members(
     client_type: type[JellyfinClient], app_config: Settings
 ) -> None:
@@ -274,10 +340,12 @@ async def test_boxset_append_never_removes_new_remote_members(
     factory, transport = mock_client_factory(handle)
     client = media_client(client_type, app_config, client_factory=factory)
     try:
-        assert await client.set_collection_members("box", ["source"], append=True) == [
-            "source",
-            "manual",
-        ]
+        write = await client.set_collection_members("box", ["source"], append=True)
+        assert (write.held, write.added, write.removed) == (
+            ["source", "manual"],
+            1,
+            0,
+        )
         assert all(request.method != "DELETE" for request in transport.requests)
     finally:
         await client.close()
@@ -310,9 +378,14 @@ async def test_plex_append_preserves_manual_remote_members(
     )
     monkeypatch.setattr(PlexClient, "resolve_secure_url", keep_configured_plex_url)
     try:
-        assert await client.set_collection_members(
+        write = await client.set_collection_members(
             "box", ["source"], CollectionOrder.CUSTOM, append=True
-        ) == ["source", "manual"]
+        )
+        assert (write.held, write.added, write.removed) == (
+            ["source", "manual"],
+            1,
+            0,
+        )
         assert all(request.method != "DELETE" for request in transport.requests)
     finally:
         await client.close()
@@ -490,14 +563,16 @@ async def test_plex_leaves_a_collections_hub_alone_when_its_visibility_holds(
         for visible_home in (True, False):
             await client.update_collection_details(
                 "box",
-                library_id="1",
-                title="Saga",
-                summary=None,
-                sort_title=None,
-                mode=CollectionMode.DEFAULT,
-                order=CollectionOrder.TITLE_ASC,
-                smart=False,
-                visible_home=visible_home,
+                "1",
+                CollectionDetails(
+                    title="Saga",
+                    summary=None,
+                    sort_title=None,
+                    mode=CollectionMode.DEFAULT,
+                    order=CollectionOrder.TITLE_ASC,
+                    smart=False,
+                    visible_home=visible_home,
+                ),
             )
     finally:
         await client.close()

@@ -1,4 +1,5 @@
 <script module lang="ts">
+  import { COLLECTION_POSTER_LABELS, ORDER_LABELS, TEXT_LIMITS } from "../../generated/settings";
   import type {
     ArtStyle,
     AutoArtSource,
@@ -8,7 +9,7 @@
     SyncMode,
   } from "../../generated/rest/types.gen";
   import type { PolicyData } from "../utils/collectionFormShared.svelte";
-  import { COLLECTION_POSTER_LABELS } from "../utils/collectionPosters";
+  
 
   /**
    * Where settings are edited. Global defaults always hold a value; groups and
@@ -66,7 +67,7 @@
 
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import { ORDER_LABELS, sortedOrders } from "../utils/collectionCriteria";
+  import { sortedOrders } from "../utils/collectionCriteria";
   import FieldRow from "./FieldRow.svelte";
   import InheritedOrder from "./InheritedOrder.svelte";
   import InheritedSelect from "./InheritedSelect.svelte";
@@ -221,7 +222,7 @@
     >
       <input
         id={`${id}-member-label`}
-        maxlength="200"
+        maxlength={TEXT_LIMITS.memberTagFormat}
         value={policy.member_label ?? ""}
         placeholder={defaults?.member_label || "None"}
         oninput={(event) => (policy.member_label = event.currentTarget.value || null)}
@@ -246,7 +247,7 @@
       >
         <input
           id={`${id}-arr-tag`}
-          maxlength="200"
+          maxlength={TEXT_LIMITS.memberTagFormat}
           value={policy.arr_tag ?? ""}
           placeholder={defaults?.arr_tag || "None"}
           oninput={(event) => (policy.arr_tag = event.currentTarget.value || null)}
@@ -336,7 +337,7 @@
 >
   <input
     id={`${id}-sort-title`}
-    maxlength="400"
+    maxlength={TEXT_LIMITS.sortTitleFormat}
     value={policy.sort_title_format ?? ""}
     placeholder={defaults?.sort_title_format || (inherits ? "Default" : "The server's")}
     oninput={(event) => (policy.sort_title_format = event.currentTarget.value || null)}
@@ -346,7 +347,7 @@
   <label class="summary-label" for={`${id}-summary`}>Summary</label>
   <textarea
     id={`${id}-summary`}
-    maxlength="20000"
+    maxlength={TEXT_LIMITS.summaryFormat}
     rows="3"
     value={policy.summary_format ?? ""}
     placeholder={defaults?.summary_format || (inherits ? "Default" : "The server's")}

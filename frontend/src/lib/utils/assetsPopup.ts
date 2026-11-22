@@ -8,13 +8,14 @@ import type {
   ThemeBulkSource,
 } from "../../generated/rest/types.gen";
 import {
+  ASSET_LABELS,
   CATALOG_SOURCES,
   DEFAULT_ART_SOURCE_ORDER as GENERATED_ART_SOURCE_ORDER,
   DEFAULT_THEME_SOURCE_ORDER as GENERATED_THEME_SOURCE_ORDER,
   MATCH_THRESHOLD_MAX,
   PERFECT_MATCH_ONLY,
 } from "../../generated/settings";
-import { ASSET_LABELS } from "./artTypes";
+
 import { filterAvailableValues, selectedValuesForAll } from "./popupSelection";
 
 export type BulkAssetsRequest = BulkAssetsRequestInput;

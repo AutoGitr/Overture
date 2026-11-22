@@ -11,7 +11,6 @@ lazy from ..db.models.job_result import JobResult
 lazy from ..db.session import PAGE_SIZE, Database
 lazy from ..jobs import results as job_results
 lazy from ..jobs.kinds import JobKind
-lazy from ..jobs.lifecycle import label
 lazy from ..jobs.slot import ManagedBackgroundJob
 lazy from ..schemas.job_snapshots import JobSnapshotClearResponse
 lazy from ..utils.errors import PublicServiceError
@@ -96,13 +95,7 @@ async def clear_snapshot(
     finished_at: str,
     job_slots: Mapping[JobKind, ManagedBackgroundJob],
 ) -> JobSnapshotClearResponse:
-    """Clear one matching terminal result snapshot and notify active clients.
-
-    Raises:
-        PublicServiceError: When results of this kind cannot be cleared.
-    """
-    if not kind.clearable:
-        raise PublicServiceError(400, f"{label(kind.label)} results cannot be cleared")
+    """Clear one matching terminal result snapshot and notify active clients."""
     status = await job_slots[kind].clear_result(finished_at)
     return JobSnapshotClearResponse(
         status=status,

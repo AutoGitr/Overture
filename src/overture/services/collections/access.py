@@ -20,7 +20,12 @@ lazy from ...domain import (
     TermKind,
     library_server,
 )
-lazy from ...media_servers.registry import CollectionProvider, ProviderRegistry
+lazy from ...jobs.progress_log import LogServer
+lazy from ...media_servers.registry import (
+    CollectionProvider,
+    ProviderRegistry,
+    log_server,
+)
 lazy from ...repositories.catalog import CatalogRepository
 lazy from ...repositories.collection_items import (
     CollectionItem,
@@ -119,6 +124,10 @@ class CollectionAccess:
                 400, f"{provider.server.title} does not support collections."
             )
         return provider
+
+    def log_server(self, server_id: int) -> LogServer:
+        """A configured server, as job log entries about it name it."""
+        return log_server(self.provider_registry.get(server_id))
 
     def library_provider(self, library_id: str) -> CollectionProvider:
         """Return the provider of the server holding a library.
@@ -256,6 +265,12 @@ class CollectionAccess:
         if wanted - types.keys():
             raise PublicServiceError(422, "Select one of the servers' libraries")
         return {library_id: types[library_id] for library_id in requested}
+
+    async def library_names(self, library_ids: Iterable[str]) -> dict[str, str]:
+        """The names of the listed libraries among *library_ids*, by ID."""
+        async with self.database.read_session() as session:
+            listed = await LibraryRepository(session).listed(set(library_ids))
+        return {library.id: library.title for library in listed}
 
     async def _require_type(self, library_id: str, media_type: MediaType) -> None:
         if (await self.library_types([library_id]))[library_id] is not media_type:

@@ -4,7 +4,7 @@ lazy import asyncio
 lazy import bisect
 lazy import logging
 lazy import urllib.parse
-lazy from collections.abc import AsyncIterator, Callable, Collection, Mapping, Sequence
+lazy from collections.abc import AsyncIterator, Collection, Mapping, Sequence
 lazy from ipaddress import IPv4Address
 lazy from typing import Any, ClassVar, Literal, override
 
@@ -18,14 +18,14 @@ lazy from ...domain import (
     CollectionOrder,
     MediaType,
 )
-lazy from ...integrations.http import LazyClient, create_client
+lazy from ...integrations.http import ClientFactory, LazyClient, create_client
 lazy from ...schemas.art import ArtCandidate
 lazy from ...utils.art_urls import art_preview_url, art_source_label, public_art_url
 lazy from ...utils.collection_fields import PLEX_COLLECTION_KEY
 lazy from ...utils.image_fetch import sniff_image_size
 lazy from ...utils.ssrf import LOOPBACK_HOSTS
 lazy from ...version import APP_VERSION
-lazy from ..adapters import ItemIdentity, ServerTheme
+lazy from ..adapters import CollectionDetails, ItemIdentity, MemberWrite, ServerTheme
 lazy from ..errors import MediaServerError
 lazy from ..health import MediaServerHealthTracker
 lazy from ..http_client import MediaServerHttpClient
@@ -238,7 +238,7 @@ class PlexClient(MediaServerHttpClient):
         *,
         server: MediaServerConfig,
         app_config: Settings,
-        client_factory: Callable[..., httpx2.AsyncClient] = create_client,
+        client_factory: ClientFactory = create_client,
         health: MediaServerHealthTracker | None = None,
     ) -> None:
         """Initialize instance state."""
@@ -933,7 +933,7 @@ class PlexClient(MediaServerHttpClient):
         order: CollectionOrder,
         *,
         append: bool = False,
-    ) -> list[str]:
+    ) -> MemberWrite:
         """Use Plex's item endpoints; children is a read-only listing."""
         current_ids = await self.get_collection_member_ids(collection_id)
         current = set(current_ids)
@@ -951,7 +951,8 @@ class PlexClient(MediaServerHttpClient):
                 f"/library/collections/{collection_id}/items",
                 params={"uri": await self._collection_uri(additions)},
             )
-        for item in sorted(current - wanted):
+        removals = sorted(current - wanted)
+        for item in removals:
             await self._request(
                 "DELETE", f"/library/collections/{collection_id}/items/{item}"
             )
@@ -969,31 +970,18 @@ class PlexClient(MediaServerHttpClient):
                     params={"after": member_ids[position - 1]} if position else {},
                 )
 
-        return member_ids
+        return MemberWrite(member_ids, len(additions), len(removals))
 
     async def update_collection_details(
-        self,
-        collection_id: str,
-        *,
-        library_id: str,
-        title: str,
-        summary: str | None,
-        sort_title: str | None,
-        mode: CollectionMode,
-        order: CollectionOrder,
-        smart: bool,
-        visible_home: bool,
-        visible_shared: bool = False,
-        visible_library: bool = False,
-        filtering: CollectionFiltering | None = None,
+        self, collection_id: str, section_id: str, details: CollectionDetails
     ) -> None:
         """Edit collection metadata and its library visibility preferences.
 
-        ``None`` leaves the summary or sort title as it is; an empty sort title
-        hands it back to Plex. Plex rejects a smart collection's
-        ``collectionSort`` (its query sorts it) and a regular collection's
-        ``collectionFilterBasedOnUser`` with 400 Bad Request.
+        Plex rejects a smart collection's ``collectionSort`` (its query sorts
+        it) and a regular collection's ``collectionFilterBasedOnUser`` with
+        400 Bad Request.
         """
+        title, summary, sort_title = details.title, details.summary, details.sort_title
         fields: dict[str, str | int] = {"title.value": title, "title.locked": 1}
         if summary is not None:
             fields |= {"summary.value": summary, "summary.locked": int(bool(summary))}
@@ -1003,17 +991,20 @@ class PlexClient(MediaServerHttpClient):
                 "titleSort.locked": int(bool(sort_title)),
             }
         await self._request("PUT", f"/library/metadata/{collection_id}", params=fields)
-        prefs: dict[str, int] = {"collectionMode": PLEX_COLLECTION_MODES[mode]}
-        if not smart:
-            prefs["collectionSort"] = PLEX_COLLECTION_SORTS.get(order, PLEX_CUSTOM_SORT)
-        elif filtering is not None:
-            prefs["collectionFilterBasedOnUser"] = PLEX_COLLECTION_FILTERING[filtering]
+        prefs: dict[str, int] = {"collectionMode": PLEX_COLLECTION_MODES[details.mode]}
+        if not details.smart:
+            prefs["collectionSort"] = PLEX_COLLECTION_SORTS.get(
+                details.order, PLEX_CUSTOM_SORT
+            )
+        elif details.filtering is not None:
+            prefs["collectionFilterBasedOnUser"] = PLEX_COLLECTION_FILTERING[
+                details.filtering
+            ]
         await self._request(
             "PUT",
             f"/library/metadata/{collection_id}/prefs",
             params=prefs,
         )
-        section_id = library_id
         path = f"/hubs/sections/{section_id}/manage"
         data = wire_object(
             await self._get(path, params={"metadataItemId": collection_id})
@@ -1029,16 +1020,18 @@ class PlexClient(MediaServerHttpClient):
             ),
             None,
         )
-        params: dict[str, int | str] = {"promotedToOwnHome": int(visible_home)}
-        if visible_shared or (hub and hub.get("promotedToSharedHome")):
-            params["promotedToSharedHome"] = int(visible_shared)
-        if visible_library or (hub and hub.get("promotedToRecommended")):
-            params["promotedToRecommended"] = int(visible_library)
+        home, shared = details.visible_home, details.visible_shared
+        library = details.visible_library
+        params: dict[str, int | str] = {"promotedToOwnHome": int(home)}
+        if shared or (hub and hub.get("promotedToSharedHome")):
+            params["promotedToSharedHome"] = int(shared)
+        if library or (hub and hub.get("promotedToRecommended")):
+            params["promotedToRecommended"] = int(library)
         if hub:
             # The hub was just read, so a write only follows a change.
             if any(bool(hub.get(key)) != bool(value) for key, value in params.items()):
                 await self._request("PUT", f"{path}/{hub['identifier']}", params=params)
-        elif visible_home or visible_shared or visible_library:
+        elif home or shared or library:
             await self._request(
                 "POST", path, params={**params, "metadataItemId": collection_id}
             )

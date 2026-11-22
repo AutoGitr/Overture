@@ -69,22 +69,20 @@ def test_renderer_indents_nested_object_property_types() -> None:
 
 def test_renderer_resolves_named_component_references_before_render_order() -> None:
     renderer = TypeScriptRenderer()
-    renderer.add_named_definitions(
-        {
-            "Child": {
-                "type": "object",
-                "properties": {"name": {"type": "string"}},
-                "required": ["name"],
-            }
-        }
-    )
 
     renderer.render_named_schema(
         "Parent",
         {
             "type": "object",
-            "properties": {"child": {"$ref": "#/components/schemas/Child"}},
+            "properties": {"child": {"$ref": "#/$defs/Child"}},
             "required": ["child"],
+            "$defs": {
+                "Child": {
+                    "type": "object",
+                    "properties": {"name": {"type": "string"}},
+                    "required": ["name"],
+                }
+            },
         },
     )
 

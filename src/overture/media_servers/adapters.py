@@ -194,6 +194,38 @@ class ServerCollection:
     added_at: datetime | None = None
 
 
+@dataclass(slots=True, frozen=True)
+class CollectionDetails:
+    """What a sync sends a server collection besides its members.
+
+    A server keeps what it can: only Plex has modes, visibility and filtering.
+    """
+
+    title: str
+    #: ``None`` leaves the server's summary or sort title as it is; an empty
+    #: sort title hands it back to the server.
+    summary: str | None
+    sort_title: str | None
+    mode: CollectionMode
+    order: CollectionOrder
+    smart: bool
+    visible_home: bool
+    visible_shared: bool = False
+    visible_library: bool = False
+    filtering: CollectionFiltering | None = None
+
+
+@dataclass(slots=True, frozen=True)
+class MemberWrite:
+    """What a server collection holds after a membership write, and its changes."""
+
+    #: The server's IDs of its members, in the order the write left them.
+    held: list[str]
+    #: How many members the write added and removed.
+    added: int
+    removed: int
+
+
 @dataclass(slots=True)
 class SyncItemResult:
     """Result of syncing one server item."""

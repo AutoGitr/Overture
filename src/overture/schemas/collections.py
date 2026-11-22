@@ -4,7 +4,12 @@ lazy from collections.abc import Sequence
 lazy from datetime import date, datetime
 lazy from typing import Annotated, Literal, Self
 
-lazy from pydantic import Field, TypeAdapter, field_validator, model_validator
+lazy from pydantic import (
+    Field,
+    TypeAdapter,
+    field_validator,
+    model_validator,
+)
 
 lazy from ..db.ledger import Destination, combined_status, delivery, read_asset
 lazy from ..db.models.catalog import CatalogCollection
@@ -50,11 +55,11 @@ lazy from ..utils.collection_formats import (
 )
 lazy from ..utils.hashing import text_digest
 lazy from .assets import AssetRead, TitleAssets, assets_read
-lazy from .base import PublicText, StrictBaseModel
+lazy from .base import PositiveId, PublicText, StrictBaseModel
 lazy from .catalog import CatalogSelections
 lazy from .common import StatusResponse
 lazy from .removal import AssetRemoval
-lazy from .validators import GroupName, UniqueList, YouTubeId
+lazy from .validators import CollectionIds, GroupName, UniqueList, YouTubeId
 
 type LibraryId = Annotated[str, Field(min_length=1, max_length=200)]
 
@@ -136,32 +141,28 @@ class TmdbCollectionSource(StrictBaseModel):
     """Movies in one TMDB franchise collection, in release order."""
 
     type: Literal[SourceType.TMDB_COLLECTION] = SourceType.TMDB_COLLECTION
-    collection_id: Annotated[int, Field(gt=0)]
+    collection_id: PositiveId
 
 
 class TmdbItemSource(StrictBaseModel):
     """Explicit TMDB movie or show IDs, in the order given."""
 
     type: Literal[SourceType.TMDB_ITEM] = SourceType.TMDB_ITEM
-    tmdb_ids: Annotated[
-        list[Annotated[int, Field(gt=0)]], Field(min_length=1, max_length=1000)
-    ]
+    tmdb_ids: Annotated[list[PositiveId], Field(min_length=1, max_length=1000)]
 
 
 class TmdbListSource(StrictBaseModel):
     """Public TMDB lists, in their saved order."""
 
     type: Literal[SourceType.TMDB_LIST] = SourceType.TMDB_LIST
-    list_ids: Annotated[
-        list[Annotated[int, Field(gt=0)]], Field(min_length=1, max_length=50)
-    ]
+    list_ids: Annotated[list[PositiveId], Field(min_length=1, max_length=50)]
 
 
 class TmdbPersonSource(StrictBaseModel):
     """Movies or shows credited to a TMDB person in selected roles."""
 
     type: Literal[SourceType.TMDB_PERSON] = SourceType.TMDB_PERSON
-    person_id: Annotated[int, Field(gt=0)]
+    person_id: PositiveId
     person_name: Annotated[str, Field(max_length=200)] | None = None
     roles: Annotated[list[TmdbPersonRole], Field(min_length=1)] = Field(
         default_factory=lambda: [TmdbPersonRole.ACTOR]
@@ -542,7 +543,7 @@ def collection_read(
 class BulkCollectionMonitorUpdate(StrictBaseModel):
     """Validate bulk collection monitor updates."""
 
-    collection_ids: list[int]
+    collection_ids: CollectionIds
     monitored: bool
 
 
@@ -622,7 +623,7 @@ class CollectionOptions(StrictBaseModel):
     sort_title: Annotated[str, Field(max_length=200)] | None = None
     sort_title_format: SortTitleFormat | None = None
     collection_group: GroupName | None = None
-    tmdb_collection_id: Annotated[int, Field(gt=0)] | None = None
+    tmdb_collection_id: PositiveId | None = None
     collection_mode: CollectionMode | None = None
     order_type: CollectionOrder = CollectionOrder.RELEASE_ASC
     collection_filtering: CollectionFiltering | None = None
@@ -667,7 +668,7 @@ class CollectionCreate(CollectionOptions):
 class CollectionMembersUpdate(StrictBaseModel):
     """Replace membership and optionally set its display order."""
 
-    member_ids: Annotated[list[Annotated[int, Field(gt=0)]], Field(max_length=10000)]
+    member_ids: Annotated[list[PositiveId], Field(max_length=10000)]
     order_type: CollectionOrder
 
 
@@ -709,16 +710,6 @@ class CollectionRuleRead(CollectionRuleWrite):
     last_error: PublicText | None = None
     #: The description of the first list, which {source_summary} shows.
     source_summary: str | None = None
-
-
-class CollectionSyncResponse(StrictBaseModel):
-    """What one rule run changed."""
-
-    added: int = 0
-    removed: int = 0
-    skipped: bool = False
-    #: Taken off the server, below its minimum or out of season; Overture keeps it.
-    withheld: bool = False
 
 
 class CustomSetValue(StrictBaseModel):
@@ -911,7 +902,7 @@ class CollectionMissing(StrictBaseModel):
 class CollectionRequestTitle(StrictBaseModel):
     """One title to request; TMDB numbers movies and shows apart."""
 
-    tmdb_id: Annotated[int, Field(gt=0)]
+    tmdb_id: PositiveId
     media_type: MediaType
 
 
@@ -973,16 +964,7 @@ class CollectionPreviewRequest(StrictBaseModel):
     rule: CollectionRuleWrite
     #: The saved collection being edited, which never counts as another
     #: collection holding a title.
-    collection_id: int | None = None
-
-
-class CollectionGroupSyncResult(StrictBaseModel):
-    """What syncing a group created, took off the server and failed to sync."""
-
-    created: list[int] = Field(default_factory=list[int])
-    withheld: list[int] = Field(default_factory=list[int])
-    synced: int = 0
-    errors: dict[str, PublicText] = Field(default_factory=dict[str, PublicText])
+    collection_id: PositiveId | None = None
 
 
 class FieldChoice(StrictBaseModel):
@@ -1018,6 +1000,8 @@ class CollectionFieldRead(StrictBaseModel):
     free_values: bool = False
     #: Its values are IDs, chosen by the labels the library's values give them.
     by_id: bool = False
+    #: Criteria match its values ignoring case, so "drama" matches "Drama".
+    ignores_case: bool = False
 
     @classmethod
     def of(
@@ -1046,6 +1030,7 @@ class CollectionFieldRead(StrictBaseModel):
             ],
             free_values=spec.free,
             by_id=spec.by_id,
+            ignores_case=spec.kind.ignores_case,
         )
 
 
@@ -1124,9 +1109,7 @@ class CollectionFieldValue(StrictBaseModel):
 class BulkCollectionOperation(StrictBaseModel):
     """One bounded operation over an explicit collection selection."""
 
-    collection_ids: Annotated[
-        list[Annotated[int, Field(gt=0)]], Field(min_length=1, max_length=1000)
-    ]
+    collection_ids: CollectionIds
     operation: Literal[
         "set_visibility",
         "set_order",

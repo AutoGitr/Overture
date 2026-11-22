@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
   conditionFits,
@@ -132,5 +133,38 @@ describe("collection criteria helpers", () => {
       ),
     ).toBe(false);
     expect(groupFits({ mode: "any", conditions: [genre], groups: [] }, shows, "movie")).toBe(true);
+  });
+});
+
+describe("free-text lists for any input", () => {
+  it("splits into trimmed, non-empty parts that split again to themselves", () => {
+    fc.assert(
+      fc.property(fc.string(), (text) => {
+        const parts = splitList(text);
+        for (const part of parts) {
+          expect(part).not.toBe("");
+          expect(part).toBe(part.trim());
+          expect(part).not.toMatch(/[\n,]/);
+        }
+        expect(splitList(parts.join("\n"))).toEqual(parts);
+      }),
+    );
+  });
+
+  it("files every part as a TMDB ID or as invalid, and reads typed IDs back", () => {
+    fc.assert(
+      fc.property(fc.string(), (text) => {
+        const { ids, invalid } = parseIds(text);
+        expect(ids.length + invalid.length).toBe(splitList(text).length);
+        for (const id of ids) expect(Number.isSafeInteger(id) && id > 0).toBe(true);
+      }),
+    );
+    fc.assert(
+      fc.property(fc.array(fc.integer({ min: 1, max: Number.MAX_SAFE_INTEGER })), (typed) => {
+        const urls = typed.map((id) => `https://www.themoviedb.org/list/${id}-a-slug`);
+        expect(parseIds(typed.join(", ")).ids).toEqual(typed);
+        expect(parseIds(urls.join("\n")).ids).toEqual(typed);
+      }),
+    );
   });
 });

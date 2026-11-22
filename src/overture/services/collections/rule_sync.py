@@ -11,7 +11,6 @@ lazy from ...repositories.collection_items import (
     CollectionItemRepository,
 )
 lazy from ...repositories.collections import CollectionRepository
-lazy from ...schemas.collections import CollectionSyncResponse
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
 lazy from .access import CollectionAccess, LibraryScope
@@ -24,6 +23,7 @@ lazy from .policy import CollectionPolicy
 lazy from .post_sync import PostSync
 lazy from .rules import criteria_of, library_criteria
 lazy from .sources import SourceResolver
+lazy from .sync_outcome import CopyChange, SyncOutcome
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +46,11 @@ class RuleSync:
         self._post_sync = post_sync
         self._sources = sources
 
-    async def sync(self, collection_id: int) -> CollectionSyncResponse:
-        """Resolve every source before changing any server membership."""
+    async def sync(self, collection_id: int) -> SyncOutcome:
+        """Resolve every source before changing any server membership.
+
+        Returns what the sync did on each server.
+        """
         async with self._access.locked(collection_id):
             async with self._access.database.read_session() as session:
                 items = CollectionItemRepository(session)
@@ -76,9 +79,12 @@ class RuleSync:
                         collection_id
                     )
             await self._take_over_copies(row)
+            # Read before the sync retires the libraries it leaves.
+            library_names = await self._access.library_names(row.library_ids)
             error = None
             try:
                 result = await self._apply(row, rule, policy, current, scopes)
+                result.library_names = library_names
             except Exception as exc:
                 error = str(exc)
                 raise
@@ -105,50 +111,77 @@ class RuleSync:
         policy: CollectionPolicy,
         current: list[CollectionItem],
         scopes: list[LibraryScope],
-    ) -> CollectionSyncResponse:
+    ) -> SyncOutcome:
         """Withhold a collection its set or season leaves out, else sync it."""
-        inactive = not self._access.active(
-            row.active_start_mmdd or policy.active_start_mmdd,
-            row.active_end_mmdd or policy.active_end_mmdd,
+        start = row.active_start_mmdd or policy.active_start_mmdd
+        end = row.active_end_mmdd or policy.active_end_mmdd
+        inactive = not self._access.active(start, end)
+        if inactive and not policy.delete_when_inactive and not row.deselected:
+            return SyncOutcome(
+                skipped=True,
+                held_back=f"out of season, as it runs {start} to {end}; "
+                "left on the servers as it is",
+            )
+        outcome = SyncOutcome()
+        outcome.deleted(
+            await self._editor.retire_libraries(row),
+            "the collection no longer spans that library",
         )
-        withhold = row.deselected or (inactive and policy.delete_when_inactive)
-        if inactive and not withhold:
-            return CollectionSyncResponse(skipped=True)
-        await self._editor.retire_libraries(row)
-        if withhold:
-            if not row.copies:
-                return CollectionSyncResponse(withheld=True)
-            await self._editor.withhold_locked(row)
-            return CollectionSyncResponse(withheld=True, removed=len(current))
+        if row.deselected or inactive:
+            reason = (
+                "its group's set no longer selects it"
+                if row.deselected
+                else f"out of season, as it runs {start} to {end}"
+            )
+            return await self._withhold(row, outcome, reason)
         if row.kind is CollectionKind.SEPARATOR:
-            return await self._sync_separator(row, rule)
+            return await self._sync_separator(row, rule, outcome)
         if rule.smart:
-            return await self._sync_smart(row, rule, policy, current, scopes)
-        return await self._sync_regular(row, rule, policy, current, scopes)
+            return await self._sync_smart(row, rule, policy, scopes, outcome)
+        return await self._sync_regular(row, rule, policy, current, scopes, outcome)
+
+    async def _withhold(
+        self, row: MediaCollection, outcome: SyncOutcome, reason: str
+    ) -> SyncOutcome:
+        """Take the collection off every server for *reason*, keeping it in Overture."""
+        outcome.withheld = True
+        if row.copies:
+            outcome.deleted(await self._editor.withhold_locked(row), reason)
+        else:
+            outcome.held_back = f"kept off the servers: {reason}"
+        return outcome
 
     async def _sync_separator(
-        self, row: MediaCollection, rule: CollectionRule
-    ) -> CollectionSyncResponse:
+        self, row: MediaCollection, rule: CollectionRule, outcome: SyncOutcome
+    ) -> SyncOutcome:
         """Keep an empty copy in each library, whatever the minimum."""
         for copy in self._access.copies(row):
-            if copy.server_item_id is None:
+            created = copy.server_item_id is None
+            if created:
                 lead = copy.lead
                 server = await self._access.provider(copy.server_id).create_collection(
                     lead.library_id, row.title, lead.media_type, []
                 )
                 copy.place(server.id, server.path)
+            outcome.changes.append(
+                CopyChange(
+                    copy.server_id,
+                    tuple(part.library_id for part in copy.libraries),
+                    created=created,
+                )
+            )
         await self._save_placement(row)
         await self._editor.update_locked(row, saved_options(row, rule), push=True)
-        return CollectionSyncResponse()
+        return outcome
 
     async def _sync_smart(
         self,
         row: MediaCollection,
         rule: CollectionRule,
         policy: CollectionPolicy,
-        current: list[CollectionItem],
         scopes: list[LibraryScope],
-    ) -> CollectionSyncResponse:
+        outcome: SyncOutcome,
+    ) -> SyncOutcome:
         """Have Plex evaluate its copies; Overture evaluates other servers' copies.
 
         Only Plex keeps smart collections, so on another server the collection
@@ -166,19 +199,33 @@ class RuleSync:
             query = await self._membership.smart_query(
                 by_library[lead.library_id], policy.order_type, rule.item_limit
             )
-            if copy.server_item_id is None:
+            before: set[str] = set()
+            target = copy.server_item_id
+            created = target is None
+            if target is None:
                 server = await provider.create_smart_collection(
                     lead.library_id, row.title, lead.media_type, query
                 )
-                copy.place(server.id, server.path)
+                target = server.id
+                copy.place(target, server.path)
             else:
+                before = set(await provider.get_collection_member_ids(target))
                 await provider.update_smart_collection_filter(
-                    copy.server_item_id, lead.library_id, lead.media_type, query
+                    target, lead.library_id, lead.media_type, query
                 )
-            members += await self._editor.held(
-                copy.server_id,
-                await provider.get_collection_member_ids(copy.server_item_id or ""),
+            held = await provider.get_collection_member_ids(target)
+            after = set(held)
+            outcome.changes.append(
+                CopyChange(
+                    copy.server_id,
+                    (lead.library_id,),
+                    created=created,
+                    added=len(after - before),
+                    removed=len(before - after),
+                    held=len(after),
+                )
             )
+            members += await self._editor.held(copy.server_id, held)
         if regular:
             libraries = {library for copy in regular for library in copy.library_ids}
             wanted = await self._membership.wanted_in(
@@ -186,9 +233,11 @@ class RuleSync:
                 order=policy.order_type,
                 limit=rule.item_limit,
             )
-            members += await self._editor.place_members(
+            placed, changes = await self._editor.place_members(
                 row, regular, wanted, policy.order_type
             )
+            members += placed
+            outcome.changes += changes
         kind = CollectionKind.SMART if smart else CollectionKind.REGULAR
         await self._editor.store_members(row, members, policy.order_type, kind=kind)
         await self._editor.update_locked(row, saved_options(row, rule), push=True)
@@ -196,12 +245,7 @@ class RuleSync:
         if rule.last_synced_at is None:
             for scope in scopes:
                 await self._membership.prune_labels(scope.library_id, scope.media_type)
-        old_ids = {item.id for item in current}
-        titles = {member for member in members if isinstance(member, int)}
-        return CollectionSyncResponse(
-            added=len(titles - old_ids),
-            removed=len(old_ids - titles),
-        )
+        return outcome
 
     async def _sync_regular(
         self,
@@ -210,7 +254,8 @@ class RuleSync:
         policy: CollectionPolicy,
         current: list[CollectionItem],
         scopes: list[LibraryScope],
-    ) -> CollectionSyncResponse:
+        outcome: SyncOutcome,
+    ) -> SyncOutcome:
         was_smart = row.kind is CollectionKind.SMART
         wanted = await self._membership.wanted_in(
             scopes, order=policy.order_type, limit=rule.item_limit
@@ -225,25 +270,26 @@ class RuleSync:
             append = False
         member_count = await self._member_count(row, wanted, append=append)
         if member_count < policy.minimum_items:
+            below = (
+                f"{member_count} of the {policy.minimum_items} titles its minimum needs"
+            )
             if policy.delete_below_minimum and row.copies:
-                await self._editor.withhold_locked(row)
-                return CollectionSyncResponse(withheld=True, removed=len(current))
-            return CollectionSyncResponse(skipped=True)
+                return await self._withhold(row, outcome, below)
+            outcome.skipped = True
+            outcome.held_back = f"{below}; " + (
+                "left on the servers as it is" if row.copies else "not created"
+            )
+            return outcome
         await self._editor.replace_kind(row, smart=False)
         await self._save_placement(row)
-        await self._editor.set_members_locked(
+        outcome.changes += await self._editor.set_members_locked(
             row, wanted, policy.order_type, append=append
         )
         await self._editor.update_locked(row, saved_options(row, rule), push=True)
         if was_smart:
             for scope in scopes:
                 await self._membership.prune_labels(scope.library_id, scope.media_type)
-        old = {item.id for item in current}
-        new = {item.id for items in wanted.values() for item in items}
-        return CollectionSyncResponse(
-            added=len(new - old),
-            removed=len(old - new) if not append else 0,
-        )
+        return outcome
 
     async def _member_count(
         self,

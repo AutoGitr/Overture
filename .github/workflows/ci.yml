@@ -30,6 +30,7 @@ jobs:
       dockerfile: ${{ steps.filter.outputs.dockerfile }}
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      duplication: ${{ steps.filter.outputs.duplication }}
       e2e: ${{ steps.filter.outputs.e2e }}
       contracts: ${{ steps.filter.outputs.contracts }}
       container: ${{ steps.filter.outputs.container }}
@@ -53,7 +54,7 @@ jobs:
           set -euo pipefail
 
           all_true() {
-            for output in dockerfile backend frontend e2e contracts container; do
+            for output in dockerfile backend frontend duplication e2e contracts container; do
               echo "$output=true" >> "$GITHUB_OUTPUT"
             done
           }
@@ -100,13 +101,19 @@ jobs:
             echo "frontend=false" >> "$GITHUB_OUTPUT"
           fi
 
+          if has_changed '^(src/|frontend/src/|scripts/|docs/overture/|\.jscpd\.json$|frontend/(package\.json|bun\.lock)$)'; then
+            echo "duplication=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "duplication=false" >> "$GITHUB_OUTPUT"
+          fi
+
           if has_changed '^(frontend/|src/|pyproject\.toml$|uv\.lock$|\.python-version$)'; then
             echo "e2e=true" >> "$GITHUB_OUTPUT"
           else
             echo "e2e=false" >> "$GITHUB_OUTPUT"
           fi
 
-          if has_changed '^(src/|scripts/(contracts|generate_ws_types|generate_settings_defaults|catalog_contract|sync_skills)\.py$|openapi/|frontend/src/generated/|frontend/(package\.json|bun\.lock|openapi-ts\.config\.ts|\.prettierrc)$|pyproject\.toml$|uv\.lock$|\.python-version$|\.agents/|\.claude/)'; then
+          if has_changed '^(src/|scripts/(contracts|generate_ws_types|generate_settings_defaults|catalog_contract|sync_skills)\.py$|openapi/|frontend/src/generated/|frontend/(package\.json|bun\.lock|openapi-ts\.config\.ts|\.prettierrc)$|pyproject\.toml$|uv\.lock$|\.python-version$|\.agents/|\.claude/|\.github/(labels|renovate-shared)\.json$|tests/test_release/test_shared_files\.py$)'; then
             echo "contracts=true" >> "$GITHUB_OUTPUT"
           else
             echo "contracts=false" >> "$GITHUB_OUTPUT"
@@ -241,6 +248,35 @@ jobs:
           path: frontend/coverage
           retention-days: 14
 
+  # One check across the backend, frontend, scripts and docs, so a rule
+  # copied from one into another is caught too.
+  duplication:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    needs: changes
+    if: needs.changes.outputs.duplication == 'true'
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: frontend/package.json
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Check for duplicated code
+        run: bun run lint:duplication
+
   contract-checks:
     runs-on: ubuntu-26.04
     timeout-minutes: 15
@@ -271,6 +307,25 @@ jobs:
       - name: Check generated contracts
         run: uv run --locked python -m scripts.contracts --check
 
+      # A change that breaks API clients must say so in the changelog.
+      - name: Compare the API with the latest release
+        env:
+          # renovate: datasource=docker depName=tufin/oasdiff
+          OASDIFF: tufin/oasdiff:v1.36.0@sha256:85124948d3e59cfb592fd967f34ac1c7025c15ca912c4a29dabf7a3ffff41aa4
+        run: |
+          set -euo pipefail
+          tag="$(git ls-remote --tags --refs origin 'v*' | sed 's#.*refs/tags/##' | sort -V | tail -1)"
+          git fetch --no-tags --depth=1 origin "refs/tags/$tag:refs/tags/$tag"
+          git show "$tag:openapi/overture.json" > "$RUNNER_TEMP/released.json"
+          docker run --rm -v "$RUNNER_TEMP:/released:ro" -v "$PWD/openapi:/current:ro" \
+            "$OASDIFF" breaking /released/released.json /current/overture.json \
+            > "$RUNNER_TEMP/breaking.txt"
+          if [ -s "$RUNNER_TEMP/breaking.txt" ]; then
+            echo "The API changes incompatibly since $tag:"
+            cat "$RUNNER_TEMP/breaking.txt"
+            uv run --locked python -m scripts.release_metadata --require-api-entry
+          fi
+
       # Overture vendors the catalog contract; a change made only in
       # OvertureDB must fail here rather than at the next catalog sync.
       - name: Checkout OvertureDB
@@ -282,6 +337,13 @@ jobs:
 
       - name: Check the vendored OvertureDB contract
         run: uv run --locked python -m scripts.catalog_contract OvertureDB --check
+
+      # What the repositories share must match; here they may not skip.
+      - name: Check the files shared with OvertureDB
+        env:
+          OVERTUREDB_DIR: OvertureDB
+          OVERTURE_REQUIRE_SIBLING: "1"
+        run: uv run --locked python -m pytest tests/test_release/test_shared_files.py -p no:cacheprovider
 
       - name: Check agent skills
         run: uv run --locked python -m scripts.sync_skills --check
@@ -478,6 +540,7 @@ jobs:
       - dockerfile-lint
       - backend-checks
       - frontend-checks
+      - duplication
       - contract-checks
       - frontend-e2e
       - container-smoke
@@ -490,6 +553,7 @@ jobs:
           DOCKERFILE_RESULT: ${{ needs.dockerfile-lint.result }}
           BACKEND_RESULT: ${{ needs.backend-checks.result }}
           FRONTEND_RESULT: ${{ needs.frontend-checks.result }}
+          DUPLICATION_RESULT: ${{ needs.duplication.result }}
           CONTRACT_RESULT: ${{ needs.contract-checks.result }}
           E2E_RESULT: ${{ needs.frontend-e2e.result }}
           CONTAINER_RESULT: ${{ needs.container-smoke.result }}
@@ -502,7 +566,7 @@ jobs:
             exit 1
           fi
 
-          for result in "$DOCKERFILE_RESULT" "$BACKEND_RESULT" "$FRONTEND_RESULT" "$CONTRACT_RESULT" "$E2E_RESULT" "$CONTAINER_RESULT" "$NATIVE_RESULT"; do
+          for result in "$DOCKERFILE_RESULT" "$BACKEND_RESULT" "$FRONTEND_RESULT" "$DUPLICATION_RESULT" "$CONTRACT_RESULT" "$E2E_RESULT" "$CONTAINER_RESULT" "$NATIVE_RESULT"; do
             case "$result" in
               success|skipped)
                 ;;
@@ -511,6 +575,7 @@ jobs:
                 echo "dockerfile-lint=$DOCKERFILE_RESULT"
                 echo "backend-checks=$BACKEND_RESULT"
                 echo "frontend-checks=$FRONTEND_RESULT"
+                echo "duplication=$DUPLICATION_RESULT"
                 echo "contract-checks=$CONTRACT_RESULT"
                 echo "frontend-e2e=$E2E_RESULT"
                 echo "container-smoke=$CONTAINER_RESULT"

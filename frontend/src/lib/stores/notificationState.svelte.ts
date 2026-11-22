@@ -72,7 +72,7 @@ const MAX_TOASTS = 4;
  * toast is re-rendered whenever a modal opens or closes (each modal hosts its
  * own region); a component-owned timer would restart.
  */
-export class ToastClock {
+class ToastClock {
   private remaining = TOAST_DURATION_MS;
   private startedAt = 0;
   private timer: ReturnType<typeof setTimeout> | undefined;

@@ -55,7 +55,9 @@ dev = [
     # The release tests read the GitHub workflow files.
     "pyyaml==6.0.3",
     "ruff==0.17.5",
+    "schemathesis==4.33.1",
     "types-jsonschema==4.26.0.20261006",
+    "vulture==2.16",
 ]
 
 [tool.alembic]
@@ -157,6 +159,7 @@ select = [
     "EXE",    # flake8-executable: validate executable bits and shebang lines
     "F",      # Pyflakes: core undefined symbols, imports, and syntax checks
     "FAST",   # FastAPI: FastAPI-specific route and dependency validation
+    "FIX",    # flake8-fixme: no TODO, FIXME, XXX or HACK left in the code
     "FLY",    # flynt: encourage modern f-strings over string joins
     "FURB",   # refurb: modernise Python idioms for current language standards
     "G",      # flake8-logging-format: validate logging format arguments

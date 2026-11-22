@@ -1,7 +1,6 @@
 """MDBList JSON lists, resolved to TMDB IDs without fetching user URLs."""
 
 lazy import re
-lazy from collections.abc import Callable
 lazy from urllib.parse import urlsplit
 
 lazy import httpx2
@@ -10,7 +9,13 @@ lazy from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationE
 lazy from ..config import Settings
 lazy from ..domain import MediaType
 lazy from ..utils.errors import PublicServiceError
-lazy from .http import LazyClient, RequestLimiter, create_client, request_with_retry
+lazy from .http import (
+    ClientFactory,
+    LazyClient,
+    RequestLimiter,
+    create_client,
+    request_with_retry,
+)
 
 
 def mdblist_identifier(value: str) -> str:
@@ -81,7 +86,7 @@ class MDBListClient:
         self,
         *,
         app_config: Settings,
-        client_factory: Callable[..., httpx2.AsyncClient] = create_client,
+        client_factory: ClientFactory = create_client,
     ) -> None:
         self._config = app_config
         self._limiter = RequestLimiter()
@@ -147,7 +152,7 @@ class MDBListClient:
         """Return a complete list or fail before destructive membership changes."""
         if not self._config.MDBLIST_API_KEY.get_secret_value():
             raise PublicServiceError(
-                400, "Set MDBLIST_API_KEY to sync MDBList collections"
+                409, "Set MDBLIST_API_KEY to sync MDBList collections"
             )
         identifier = mdblist_identifier(identifier)
         ids: dict[int, None] = {}

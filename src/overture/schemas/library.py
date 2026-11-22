@@ -17,10 +17,11 @@ lazy from ..domain import (
     ServerAsset,
 )
 lazy from .assets import AssetRead, TitleAssets, asset_read, assets_read
-lazy from .base import PublicText, StrictBaseModel
+lazy from .base import PositiveId, PublicText, StrictBaseModel
 lazy from .catalog import CatalogSelections
 lazy from .common import SaveSelectionResponse
 lazy from .removal import AssetRemoval
+lazy from .validators import UniqueList
 
 
 class ItemCopyRead(StrictBaseModel):
@@ -216,7 +217,7 @@ def folder_roots_response(roots: Mapping[str, Sequence[str]]) -> FolderRootsResp
 class BulkItemOperation(StrictBaseModel):
     """Apply an operation to item records."""
 
-    item_ids: list[int]
+    item_ids: UniqueList[PositiveId]
     operation: BulkItemOperationKind
     #: What ``artwork`` and ``themes`` remove.
     removal: AssetRemoval = Field(default_factory=AssetRemoval)

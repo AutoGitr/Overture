@@ -1,0 +1,140 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Overture's and OvertureDB's shared Renovate rules: both extend this preset, so a dependency they share updates on the same schedule, under the same group and at the same version in each",
+  "extends": ["config:recommended", "abandonments:recommended", ":configMigration"],
+  "pinDigests": true,
+  "dependencyDashboard": {
+    "enabled": true
+  },
+  "rangeStrategy": "pin",
+  "labels": ["deps"],
+  "prConcurrentLimit": 0,
+  "prHourlyLimit": 0,
+  "minimumReleaseAge": "3 days",
+  "schedule": ["* 5 * * 2"],
+  "internalChecksFilter": "strict",
+  "rebaseWhen": "behind-base-branch",
+  "osvVulnerabilityAlerts": true,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true,
+    "schedule": ["* 5 * * 1"]
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security"],
+    "minimumReleaseAge": null,
+    "schedule": ["at any time"],
+    "vulnerabilityFixStrategy": "lowest"
+  },
+  "packageRules": [
+    {
+      "description": "Action tool-version inputs accept release tags, not Git commit digests",
+      "matchPackageNames": ["aquasecurity/trivy", "sigstore/cosign"],
+      "pinDigests": false
+    },
+    {
+      "description": "Finished rather than abandoned: PyYAML only reads workflow files in tests",
+      "matchPackageNames": ["pyyaml"],
+      "abandonmentThreshold": null
+    },
+    {
+      "matchManagers": ["github-actions", "custom.regex"],
+      "addLabels": ["ci"]
+    },
+    {
+      "matchManagers": ["github-actions", "custom.regex"],
+      "groupName": "GitHub Actions Updates",
+      "matchUpdateTypes": ["minor", "patch"]
+    },
+    {
+      "matchDatasources": ["github-runners"],
+      "enabled": true,
+      "groupName": "GitHub runners",
+      "minimumReleaseAge": null,
+      "automerge": false
+    },
+    {
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pinDigest"],
+      "groupName": "Docker Infrastructure"
+    },
+    {
+      "matchManagers": ["pep621"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pinDigest"],
+      "groupName": "Backend Core"
+    },
+    {
+      "matchFileNames": ["frontend/**"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pinDigest"],
+      "groupName": "Frontend Core"
+    },
+    {
+      "matchFileNames": ["docs/**"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pinDigest"],
+      "groupName": "Docs"
+    },
+    {
+      "description": "The groups below follow the broad ones above, so a tool both repositories share keeps its own group",
+      "matchPackageNames": [
+        "/eslint/",
+        "/prettier/",
+        "/vitest/",
+        "/pytest/",
+        "/ruff/",
+        "/pyright/",
+        "/testing-library/"
+      ],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pinDigest"],
+      "groupName": "Tooling, Linters & Testing Rules"
+    },
+    {
+      "description": "Python must be the same exact version in requires-python, .python-version and any image, in both repositories",
+      "matchPackageNames": ["python"],
+      "groupName": "Python Version"
+    },
+    {
+      "description": "uv must be the same version everywhere: required-version, which CI reads, and any image that runs it",
+      "matchPackageNames": ["uv", "astral/uv"],
+      "groupName": "uv"
+    },
+    {
+      "description": "Both repositories validate catalog entries against the same contract with jsonschema",
+      "matchPackageNames": ["jsonschema", "types-jsonschema"],
+      "groupName": "Catalog contract"
+    },
+    {
+      "matchUpdateTypes": ["pin", "patch", "digest", "pinDigest"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true,
+      "schedule": ["at any time"]
+    },
+    {
+      "matchUpdateTypes": ["pin", "digest", "pinDigest"],
+      "minimumReleaseAge": null
+    },
+    {
+      "matchUpdateTypes": ["major"],
+      "minimumReleaseAge": "7 days"
+    }
+  ],
+  "customManagers": [
+    {
+      "description": "Tool versions passed to workflow actions, marked by a renovate comment",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.yml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?\\s+[\\w-]+: (?:[\\w./-]+:)?(?<currentValue>[^@\\s]+)(?:@(?<currentDigest>sha256:[a-f0-9]{64}))?"
+      ]
+    },
+    {
+      "description": "The uv version every uv command and setup-uv step requires",
+      "customType": "regex",
+      "managerFilePatterns": ["/^pyproject\\.toml$/"],
+      "matchStrings": ["required-version = \"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "uv",
+      "datasourceTemplate": "pypi"
+    }
+  ]
+}

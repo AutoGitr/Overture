@@ -2,7 +2,7 @@
   import { createQuery } from "@tanstack/svelte-query";
   import type { Snippet } from "svelte";
   import { listCollectionGroupsOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
-  import { UNGROUPED_GROUP } from "../../generated/settings";
+  import { TEXT_LIMITS, UNGROUPED_GROUP } from "../../generated/settings";
   import { uiState } from "../stores/uiState.svelte";
   import PopupShell from "../components/PopupShell.svelte";
   import CollectionGroupSettings from "../components/CollectionGroupSettings.svelte";
@@ -56,7 +56,7 @@
   </label>
   {#if !groups.data?.includes(name)}
     <label class="form-label"
-      >Group name<input maxlength="200" bind:value={newName} placeholder="e.g. Franchises" /></label
+      >Group name<input maxlength={TEXT_LIMITS.groupName} bind:value={newName} placeholder="e.g. Franchises" /></label
     >
     <button
       class="btn btn-secondary"

@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { ASSET_LABELS } from "../utils/artTypes";
+  import { ASSET_LABELS } from "../../generated/settings";
+  
   import { createMutation, createQuery } from "@tanstack/svelte-query";
   import { onMount } from "svelte";
   import {
@@ -16,6 +17,7 @@
   import type {
     ArtCandidate,
     ArtType,
+    CatalogDraftUpdate,
     CollectionPosterStyle,
     MediaItemRead,
     SaveArtRequest,
@@ -207,88 +209,111 @@
     if (saving || (slot.kind === "catalog" && slot.catalog.draft.busy)) return false;
     saving = true;
     feedback.clear();
-    if (slot.kind === "collection") {
-      const advanceContext = beginAutoAdvance();
-      try {
-        await saveCollectionRequest.mutateAsync({
-          body:
-            choosesPosterStyle && body.url
-              ? { ...body, poster_style: heldStyle ?? posterStyle }
-              : body,
-          path: { collection_id: slot.collectionId, art_type: artType },
-        });
-        feedback.success(`Saved the ${ASSET_LABELS[artType].toLowerCase()}.`);
-        if (artType === "poster" || artType === "background")
-          handleRecordSelectionAdvance(collectionKey(slot.collectionId), artType, advanceContext);
-        return true;
-      } catch (error) {
-        feedback.error(errorMessage(error, "Artwork upload failed"));
-        return false;
-      } finally {
-        saving = false;
+    try {
+      switch (slot.kind) {
+        case "collection":
+          return await saveCollectionArt(slot, body, heldStyle);
+        case "catalog":
+          return await saveCatalogArt(slot, body);
+        case "tmdb":
+          return await saveTmdbArt(slot, body);
+        case "item":
+          return await saveItemArt(slot, body, previewUrl);
       }
+    } finally {
+      saving = false;
     }
-    if (slot.kind === "catalog") {
-      const catalog = slot.catalog;
-      // OvertureDB stores public links only, so it offers no upload.
-      const url = body.url;
-      if (!url) return false;
-      const advanceContext = beginAutoAdvance();
-      try {
-        let saved: boolean;
-        let current: RecordSlot;
-        if (artType === "season_poster") {
-          const entry = catalog.entry;
-          if (slot.seasonNum === null) return false;
-          const seasonNum = slot.seasonNum;
-          const seasons = [
-            ...(entry.seasons ?? []).filter((season) => season.season_num !== seasonNum),
-            { season_num: seasonNum, poster_url: url },
-          ].sort((a, b) => a.season_num - b.season_num);
-          saved = await catalog.draft.save({ seasons });
-          current = `season:${seasonNum}`;
-        } else {
-          saved = await catalog.draft.save(
-            artType === "background" ? { background_url: url } : { [catalog.posterField]: url },
-          );
-          current = artType === "background" ? "background" : "poster";
-        }
-        if (saved)
-          handleRecordSelectionAdvance(
-            catalogKey(catalog.target),
-            current,
-            advanceContext,
-            catalogPageRecord(catalog),
-          );
-        return saved;
-      } finally {
-        saving = false;
-      }
+  }
+
+  async function saveCollectionArt(
+    target: CollectionArtTarget,
+    body: SaveArtRequest,
+    heldStyle: CollectionPosterStyle | null,
+  ) {
+    const advanceContext = beginAutoAdvance();
+    try {
+      await saveCollectionRequest.mutateAsync({
+        body:
+          choosesPosterStyle && body.url
+            ? { ...body, poster_style: heldStyle ?? posterStyle }
+            : body,
+        path: { collection_id: target.collectionId, art_type: artType },
+      });
+      feedback.success(`Saved the ${ASSET_LABELS[artType].toLowerCase()}.`);
+      if (artType === "poster" || artType === "background")
+        handleRecordSelectionAdvance(collectionKey(target.collectionId), artType, advanceContext);
+      return true;
+    } catch (error) {
+      feedback.error(errorMessage(error, "Artwork upload failed"));
+      return false;
     }
-    if (slot.kind === "tmdb") {
-      const advanceContext = beginAutoAdvance();
-      // The first selection stores the title; the view then follows the item.
-      try {
-        const result = await saveTmdbArtRequest.mutateAsync({
-          body,
-          path: { media_type: slot.mediaType, tmdb_id: slot.tmdbId, art_type: artType },
-          query: { season_num: slot.seasonNum },
-        });
-        await openPersistedItem(
-          result.item,
-          { artType, seasonNum: slot.seasonNum },
-          advanceContext,
-        );
-        feedback.success(`Saved the ${ASSET_LABELS[artType].toLowerCase()} and stored the title.`);
-        return true;
-      } catch (err) {
-        feedback.error(errorMessage(err, "Save failed"));
-        return false;
-      } finally {
-        saving = false;
-      }
+  }
+
+  /** The draft change that holds *url* as the catalog entry's art of this slot. */
+  function catalogChange(
+    target: Extract<ArtSlotTarget, { kind: "catalog" }>,
+    url: string,
+  ): [CatalogDraftUpdate, RecordSlot] | null {
+    const catalog = target.catalog;
+    if (artType === "background") return [{ background_url: url }, "background"];
+    if (artType !== "season_poster") return [{ [catalog.posterField]: url }, "poster"];
+    const seasonNum = target.seasonNum;
+    if (seasonNum === null) return null;
+    const seasons = [
+      ...(catalog.entry.seasons ?? []).filter((season) => season.season_num !== seasonNum),
+      { season_num: seasonNum, poster_url: url },
+    ].sort((a, b) => a.season_num - b.season_num);
+    return [{ seasons }, `season:${seasonNum}`];
+  }
+
+  async function saveCatalogArt(
+    target: Extract<ArtSlotTarget, { kind: "catalog" }>,
+    body: SaveArtRequest,
+  ) {
+    // OvertureDB stores public links only, so it offers no upload.
+    const change = body.url ? catalogChange(target, body.url) : null;
+    if (!change) return false;
+    const [update, current] = change;
+    const advanceContext = beginAutoAdvance();
+    const saved = await target.catalog.draft.save(update);
+    if (saved)
+      handleRecordSelectionAdvance(
+        catalogKey(target.catalog.target),
+        current,
+        advanceContext,
+        catalogPageRecord(target.catalog),
+      );
+    return saved;
+  }
+
+  async function saveTmdbArt(target: Extract<ArtSlotTarget, { kind: "tmdb" }>, body: SaveArtRequest) {
+    const advanceContext = beginAutoAdvance();
+    // The first selection stores the title; the view then follows the item.
+    try {
+      const result = await saveTmdbArtRequest.mutateAsync({
+        body,
+        path: { media_type: target.mediaType, tmdb_id: target.tmdbId, art_type: artType },
+        query: { season_num: target.seasonNum },
+      });
+      await openPersistedItem(
+        result.item,
+        { artType, seasonNum: target.seasonNum },
+        advanceContext,
+      );
+      feedback.success(`Saved the ${ASSET_LABELS[artType].toLowerCase()} and stored the title.`);
+      return true;
+    } catch (err) {
+      feedback.error(errorMessage(err, "Save failed"));
+      return false;
     }
-    const target = { mediaItemId: slot.itemId, artType, seasonId: slot.seasonId };
+  }
+
+  async function saveItemArt(
+    slotTarget: Extract<ArtSlotTarget, { kind: "item" }>,
+    body: SaveArtRequest,
+    previewUrl: string | null,
+  ) {
+    const target = { mediaItemId: slotTarget.itemId, artType, seasonId: slotTarget.seasonId };
     const advanceContext = beginAutoAdvance();
     // A preview stands in for what the detail page shows.
     const shownItem = item;
@@ -330,8 +355,6 @@
     } catch (err) {
       feedback.error(errorMessage(err, "Save failed"));
       return false;
-    } finally {
-      saving = false;
     }
   }
 

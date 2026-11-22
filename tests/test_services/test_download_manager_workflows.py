@@ -44,7 +44,7 @@ lazy from overture.services.themes.youtube_resolver import YouTubeResolver
 lazy from overture.utils.art_urls import PublicArtUrl
 lazy from overture.utils.image import (
     UnsupportedImageFormatError,
-    encoded_image_extension,
+    inspect_saved_image,
 )
 lazy from tests.collection_helpers import stored_collection
 lazy from tests.factories import file_hash_of, theme_file_hash
@@ -210,12 +210,12 @@ async def test_queue_download_job_rejects_a_season_from_another_item(
         )
 
 
-def test_encoded_image_extension_detects_jpeg_png_and_rejects_other_formats() -> None:
-    assert encoded_image_extension(_image_bytes("JPEG")) == ".jpg"
-    assert encoded_image_extension(_image_bytes("PNG")) == ".png"
+def test_saved_image_extension_detects_jpeg_png_and_rejects_other_formats() -> None:
+    assert inspect_saved_image(_image_bytes("JPEG"))[0] == ".jpg"
+    assert inspect_saved_image(_image_bytes("PNG"))[0] == ".png"
 
     with pytest.raises(UnsupportedImageFormatError, match="Unsupported image format"):
-        encoded_image_extension(_image_bytes("GIF"))
+        inspect_saved_image(_image_bytes("GIF"))
 
 
 def test_job_target_has_stable_websocket_payload_shape() -> None:

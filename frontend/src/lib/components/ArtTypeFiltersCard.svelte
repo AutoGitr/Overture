@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { ArtType, ServerAsset } from "../../generated/rest/types.gen";
-  import { ITEM_ART_TYPES, SEASON_ART_TYPES } from "../../generated/settings";
-  import { ASSET_LABELS, SEASON_ONLY } from "../utils/artTypes";
+  import { ASSET_LABELS, ITEM_ART_TYPES, SEASON_ART_TYPES } from "../../generated/settings";
+  import { SEASON_ONLY } from "../utils/artTypes";
 
   let {
     artTypes,

@@ -48,6 +48,7 @@ lazy from ..scheduler import SchedulerService
 lazy from ..server_copies import ServerCopies
 lazy from .collection_sync import CollectionSync
 lazy from .reconciler import LibraryReconciler, ServerTurn
+lazy from .runner import CollectionGroups
 lazy from .runner import run_sync as _run_sync
 lazy from .tmdb_enrichment import TmdbEnrichment
 lazy from .tmdb_seasons import TmdbSeasonSync
@@ -81,7 +82,7 @@ class SyncEngine:
         database: Database,
         config_dir: Path,
         tmdb_client: TMDBClient,
-        groups: protocols.CollectionGroups,
+        groups: CollectionGroups,
         server_copies: ServerCopies,
     ) -> None:
         """Initialize instance state."""

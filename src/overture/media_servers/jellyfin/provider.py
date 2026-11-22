@@ -7,8 +7,6 @@ lazy from typing import ClassVar, override
 lazy from ...config import MediaServerConfig, Settings
 lazy from ...domain import (
     ArtType,
-    CollectionFiltering,
-    CollectionMode,
     CollectionOrder,
     ImageSize,
     MediaType,
@@ -18,7 +16,9 @@ lazy from ...domain import (
 lazy from ...utils.time import parse_utc_datetime
 lazy from ..adapters import (
     MAX_SEASONS_PER_SHOW,
+    CollectionDetails,
     FolderThemes,
+    MemberWrite,
     ProviderImageRequest,
     ServerCollection,
     ServerItem,
@@ -408,22 +408,10 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
     async def update_collection_details(
         self,
         server_collection_id: str,
-        *,
         library_id: str,
-        title: str,
-        summary: str | None,
-        sort_title: str | None,
-        mode: CollectionMode,
-        order: CollectionOrder,
-        smart: bool,
-        visible_home: bool,
-        visible_shared: bool = False,
-        visible_library: bool = False,
-        filtering: CollectionFiltering | None = None,
+        details: CollectionDetails,
     ) -> None:
-        await self.client.update_collection_details(
-            server_collection_id, title, summary, sort_title, order
-        )
+        await self.client.update_collection_details(server_collection_id, details)
 
     @override
     async def get_collection_member_ids(self, server_collection_id: str) -> list[str]:
@@ -437,7 +425,7 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
         *,
         order: CollectionOrder,
         append: bool = False,
-    ) -> list[str]:
+    ) -> MemberWrite:
         return await self.client.set_collection_members(
             server_collection_id, server_item_ids, append=append
         )

@@ -1,4 +1,4 @@
-export type RealtimeConnectionPhase = "disconnected" | "connecting" | "syncing" | "connected";
+type RealtimeConnectionPhase = "disconnected" | "connecting" | "syncing" | "connected";
 
 class RealtimeConnectionState {
   phase = $state<RealtimeConnectionPhase>("disconnected");

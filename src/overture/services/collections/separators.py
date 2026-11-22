@@ -18,6 +18,7 @@ lazy from .access import CollectionAccess
 lazy from .editor import CollectionEditor
 lazy from .rule_sync import RuleSync
 lazy from .rules import apply_libraries, title_taken
+lazy from .sync_outcome import SyncOutcome
 
 #: What a separator selects in each library: nothing, as it holds no members.
 _NOTHING = FilterGroup()
@@ -40,8 +41,10 @@ class CollectionSeparators:
         self._editor = editor
         self._rules = rules
 
-    async def apply(self, name: str) -> None:
+    async def apply(self, name: str) -> SyncOutcome | None:
         """Create, update or remove the separator of the group named *name*.
+
+        Returns what that did on the servers; ``None`` when it has none to keep.
 
         Raises:
             PublicServiceError: 409 when another collection in one of its
@@ -60,12 +63,19 @@ class CollectionSeparators:
             )
             libraries = self._plex_libraries(rows)
             if group is None or not group.separator or not libraries:
-                if separator is not None:
-                    async with self._access.asset_locks.acquire(
-                        f"collection:{separator.id}"
-                    ):
-                        await self._editor.delete_locked(separator)
-                return
+                if separator is None:
+                    return None
+                async with self._access.asset_locks.acquire(
+                    f"collection:{separator.id}"
+                ):
+                    deleted = await self._editor.delete_locked(separator)
+                outcome = SyncOutcome(
+                    library_names=await self._access.library_names(
+                        separator.library_ids
+                    )
+                )
+                outcome.deleted(deleted, "its group has no separator to keep")
+                return outcome
             sort_title_format = (
                 literal_template(
                     format_sort_title(
@@ -86,7 +96,7 @@ class CollectionSeparators:
                     collection_id = await self._save(
                         group, separator, libraries, sort_title_format
                     )
-        await self._rules.sync(collection_id)
+        return await self._rules.sync(collection_id)
 
     def _plex_libraries(self, rows: Sequence[MediaCollection]) -> dict[str, MediaType]:
         """The libraries a group's collections span on Plex, the one with separators."""

@@ -116,6 +116,7 @@ lazy from overture.domain import (
     CollectionOrder,
     MediaType,
 )
+lazy from overture.media_servers.adapters import CollectionDetails
 lazy from overture.media_servers.base import BaseMediaServerProvider
 lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.plex.client import PLEX_CUSTOM_SORT
@@ -150,6 +151,9 @@ ISSUE_SAMPLE = 10
 NAMED = 5
 #: The title every collection the write check makes starts with.
 WRITE_PREFIX = "zz Overture verify"
+#: Members of the large collection the write check makes: enough that their
+#: IDs overflow one request target, so writes must be batched.
+LARGE_COLLECTION = 500
 #: Plex's page size when listing a section's items.
 PLEX_PAGE = 500
 #: Conditions Plex answers by rules of its own, which no evaluator can share.
@@ -377,6 +381,14 @@ def collection_copy(row: dict[str, Any], library_id: str) -> dict[str, Any] | No
     """The server collection holding a collection's members in a library."""
     return next(
         (copy for copy in row["copies"] if library_id in copy["library_ids"]), None
+    )
+
+
+def holds_server_theme(row: dict[str, Any], server_id: int | None) -> bool:
+    """Whether Overture records a theme on *server_id*'s copy of *row*."""
+    return any(
+        delivery["server_id"] == server_id and delivery["present"]
+        for delivery in row["assets"]["theme"]["deliveries"]
     )
 
 
@@ -890,10 +902,12 @@ class Library:
         lost: list[str] = []
         for base, owner in targets:
             for art in ("poster", "background"):
-                if owner.get(f"{art}_source") not in KEPT_SOURCES:
+                asset = owner["assets"][art]
+                if asset["source"] not in KEPT_SOURCES:
                     continue
                 checked += 1
-                digest = owner.get(f"{art}_hash")
+                file = asset.get("file")
+                digest = file["hash"] if file else asset["content_hash"]
                 status, kind = (
                     await self.overture.status(f"{base}/local-image/{art}?t={digest}")
                     if digest
@@ -1018,19 +1032,22 @@ class Library:
         problems: list[str] = []
         notes: list[str] = []
         shown = self.shown.get(server_id)
-        for art, needed in (
-            ("poster", True),
-            ("background", collection["backgrounds"]),
-        ):
-            if not needed or not collection[f"{art}_source"]:
+        for art in ("poster", "background"):
+            asset = collection["assets"][art]
+            if not asset["needed"] or not asset["selected"]:
                 continue
-            if collection[f"{art}_status"] != "complete":
+            if asset["status"] != "complete":
                 problems.append(
                     f"Overture chose a {art} but holds no record of sending it"
                 )
             elif shown is not None and not getattr(shown, art):
                 problems.append(f"the server shows no {art} Overture sent")
-        theme = bool(collection["youtube_id"] or collection["has_theme"])
+        copy = collection_copy(collection, self.id)
+        theme_asset = collection["assets"]["theme"]
+        theme = bool(
+            theme_asset["selected"]
+            or holds_server_theme(collection, copy["server_id"] if copy else None)
+        )
         if shown is not None and shown.theme is not None:
             if theme and not shown.theme:
                 problems.append("the server holds none of the theme Overture holds")
@@ -1051,7 +1068,7 @@ class Library:
                 ),
                 (
                     "Overture uploaded",
-                    (digest := collection[f"{art}_hash"])
+                    (digest := collection["assets"][art]["content_hash"])
                     and f"{base}/local-image/{art}?t={digest}",
                 ),
             ):
@@ -1063,7 +1080,10 @@ class Library:
                     continue
                 # A sync between the listing and the image can change the image.
                 now = await self.overture.get(base, media_type=self.media_type)
-                if (now[f"server_{art}_version"], now[f"{art}_hash"]) != (
+                if (
+                    now[f"server_{art}_version"],
+                    now["assets"][art]["content_hash"],
+                ) != (
                     version,
                     digest,
                 ):
@@ -1121,6 +1141,37 @@ def inventory(
             f"the server lacks {noun} {named([shown.get(key, key) for key in extra])}"
         )
     case.error = "; ".join(problems)
+
+
+def collection_inventory(
+    case: Case,
+    listing: Listing,
+    media_type: str,
+    mine: dict[str, dict[str, Any]],
+    held: dict[str, tuple[str, int | None, str | None]],
+) -> set[str]:
+    """Report the collections one side holds that the other does not.
+
+    *mine* is Overture's collection of each server collection, by its ID;
+    *held* is as :func:`left_out` takes it. Returns the collections Overture
+    leaves out by design.
+    """
+    skipped = left_out(case, listing, media_type, held, set(mine))
+    inventory(
+        case,
+        set(mine),
+        set(held) - skipped,
+        noun="collections",
+        names={
+            **{key: f"{row['title']} ({key})" for key, row in mine.items()},
+            **{
+                key: f"{title} ({key}"
+                + (f", {count} members)" if count is not None else ")")
+                for key, (title, count, _) in held.items()
+            },
+        },
+    )
+    return skipped
 
 
 def left_out(
@@ -1303,28 +1354,14 @@ class PlexServer(Server):
             for row in library.collections
             if (copy := collection_copy(row, library.id))
         }
-        case = library.case("inventory", "collections")
-        skipped = left_out(
-            case,
+        collection_inventory(
+            library.case("inventory", "collections"),
             library.listing,
             library.media_type,
+            mine,
             {
                 key: (row["title"], int(row.get("childCount", 0)), row.get("subtype"))
                 for key, row in listed.items()
-            },
-            set(mine),
-        )
-        inventory(
-            case,
-            set(mine),
-            set(listed) - skipped,
-            noun="collections",
-            names={
-                **{key: f"{row['title']} ({key})" for key, row in mine.items()},
-                **{
-                    key: f"{row['title']} ({key}, {row.get('childCount', 0)} members)"
-                    for key, row in listed.items()
-                },
             },
         )
         for key, row in listed.items():
@@ -1354,7 +1391,11 @@ class PlexServer(Server):
                 )
             if row["title"] != ours["title"]:
                 problems.append(f"Plex names it {row['title']!r}")
-            if bool(row.get("theme")) != ours["has_theme"]:
+            ours_copy = collection_copy(ours, library.id)
+            has_theme = holds_server_theme(
+                ours, ours_copy["server_id"] if ours_copy else None
+            )
+            if bool(row.get("theme")) != has_theme:
                 problems.append(
                     "Plex holds a theme Overture does not know"
                     if row.get("theme")
@@ -1689,6 +1730,18 @@ class MediaBrowserServer(Server):
             if case.mismatch and differs:
                 case.note = differs
 
+    async def seen_by_a_user(self, item_id: str) -> str:
+        """Name the title an administrator sees, beside what the API key lists.
+
+        A difference shows the API key's listing lags a saved edit; the same
+        title shows the server did not save it.
+        """
+        admin = await self.administrator()
+        if admin is None:
+            return "the server has no administrator to ask"
+        row = await self.get(f"/Users/{admin['Id']}/Items/{item_id}")
+        return f"an administrator sees the title {row.get('Name')!r}"
+
     async def administrator(self) -> dict[str, Any] | None:
         """A user who sees every library, fetched once."""
         if self._administrator is None:
@@ -1864,24 +1917,14 @@ async def check_media_browser_collections(
     }
     case = Case(direct.server, "", "inventory", "collections")
     # A BoxSet holds movies and shows alike, so what it holds is not told apart.
-    skipped = left_out(
+    skipped = collection_inventory(
         case,
         listing,
         "",
+        mine,
         {
             key: (row["Name"], row.get("ChildCount"), None)
             for key, row in listed.items()
-        },
-        set(mine),
-    )
-    inventory(
-        case,
-        set(mine),
-        set(listed) - skipped,
-        noun="collections",
-        names={
-            **{key: f"{row['title']} ({key})" for key, row in mine.items()},
-            **{key: f"{row['Name']} ({key})" for key, row in listed.items()},
         },
     )
     # Sync leaves out a collection whose members it cannot place in a library.
@@ -2448,6 +2491,10 @@ class WriteCheck:
                         "keep the images' names through an edit",
                         lambda case: self.steady(case, library, made),
                     )
+                await self.step(
+                    f"create a collection of up to {LARGE_COLLECTION} members",
+                    lambda case: self.large(case, library, items),
+                )
                 if isinstance(self.direct, PlexServer):
                     smart = await self.step(
                         "create a smart collection Plex fills itself",
@@ -2473,7 +2520,9 @@ class WriteCheck:
         return self.cases
 
     async def movies(self) -> tuple[str, list[str]] | None:
-        """A movie library's ID and three of its movies, or ``None`` with why not.
+        """A movie library's ID and up to ``LARGE_COLLECTION`` of its movies.
+
+        ``None``, with why, when the library holds fewer than three.
 
         The server is asked by its own key of the library; Overture's client
         takes Overture's ID of it.
@@ -2490,9 +2539,13 @@ class WriteCheck:
             self.case("find a movie library").error = "the server has no movie library"
             return None
         if isinstance(self.direct, PlexServer):
-            items = sorted(await self.direct.item_ids(section.key, "movie"))[:3]
+            items = sorted(await self.direct.item_ids(section.key, "movie"))[
+                :LARGE_COLLECTION
+            ]
         else:
-            found = await self.direct.items(section.key, "movie", Limit=3)
+            found = await self.direct.items(
+                section.key, "movie", Limit=LARGE_COLLECTION
+            )
             items = [str(row["Id"]) for row in found["Items"]]
         if len(items) < 3:
             self.case("find three movies").error = "the library holds fewer than three"
@@ -2501,7 +2554,7 @@ class WriteCheck:
 
     async def create(self, check: Case, library: str, items: list[str]) -> str:
         """Create a regular collection of the first two movies."""
-        first, second, _ = items
+        first, second, *_ = items
         created = await self.provider.create_collection(
             library, f"{WRITE_PREFIX} regular", MediaType.MOVIE, [first, second]
         )
@@ -2517,7 +2570,7 @@ class WriteCheck:
 
     async def members(self, check: Case, collection_id: str, items: list[str]) -> None:
         """Replace a member; Plex keeps the order given, the others their own."""
-        first, _, third = items
+        first, _, third, *_ = items
         await self.provider.set_collection_members(
             collection_id, [third, first], order=CollectionOrder.CUSTOM
         )
@@ -2529,6 +2582,15 @@ class WriteCheck:
             check.error = (
                 f"the server holds {sorted(held)}, not {sorted([third, first])}"
             )
+
+    async def large(self, check: Case, library: str, items: list[str]) -> None:
+        """Create a collection of every movie found, then hold them all."""
+        created = await self.provider.create_collection(
+            library, f"{WRITE_PREFIX} large", MediaType.MOVIE, items
+        )
+        self.made.append(created.id)
+        held = await self.provider.get_collection_member_ids(created.id)
+        check.count, check.held = len(items), len(set(held) & set(items))
 
     async def details(self, check: Case, library: str, collection_id: str) -> None:
         """Edit what a sync sends, and read the server itself back.
@@ -2545,14 +2607,16 @@ class WriteCheck:
         }
         await self.provider.update_collection_details(
             collection_id,
-            library_id=library,
-            title=wanted["title"],
-            summary=wanted["summary"],
-            sort_title=wanted["sort title"],
-            mode=CollectionMode.DEFAULT,
-            order=order,
-            smart=False,
-            visible_home=True,
+            library,
+            CollectionDetails(
+                title=wanted["title"],
+                summary=wanted["summary"],
+                sort_title=wanted["sort title"],
+                mode=CollectionMode.DEFAULT,
+                order=order,
+                smart=False,
+                visible_home=True,
+            ),
         )
         row = await self.held(collection_id)
         if plex:
@@ -2582,6 +2646,8 @@ class WriteCheck:
                 f"{name} ({kept.get(name)!r})" if name in kept else name
                 for name in wrong
             )
+            if isinstance(self.direct, MediaBrowserServer):
+                check.note = await self.direct.seen_by_a_user(collection_id)
 
     async def on_home(self, library: str, collection_id: str) -> bool:
         """Whether Plex promotes the collection's hub to its owner's Home."""
@@ -2628,14 +2694,16 @@ class WriteCheck:
         before = await self.art(collection_id)
         await self.provider.update_collection_details(
             collection_id,
-            library_id=library,
-            title=f"{WRITE_PREFIX} edited",
-            summary="Made by Overture's verify script",
-            sort_title=f"{WRITE_PREFIX} sort",
-            mode=CollectionMode.DEFAULT,
-            order=CollectionOrder.CUSTOM if plex else CollectionOrder.TITLE_ASC,
-            smart=False,
-            visible_home=True,
+            library,
+            CollectionDetails(
+                title=f"{WRITE_PREFIX} edited",
+                summary="Made by Overture's verify script",
+                sort_title=f"{WRITE_PREFIX} sort",
+                mode=CollectionMode.DEFAULT,
+                order=CollectionOrder.CUSTOM if plex else CollectionOrder.TITLE_ASC,
+                smart=False,
+                visible_home=True,
+            ),
         )
         members = await self.provider.get_collection_member_ids(collection_id)
         await self.provider.set_collection_members(

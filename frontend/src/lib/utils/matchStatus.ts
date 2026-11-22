@@ -10,7 +10,7 @@ import { MATCH_THRESHOLD_DEFAULT, MATCH_THRESHOLD_MAX } from "../../generated/se
  * the REST response. Both read "<Outcome> - <reason>", so the same situation
  * is described the same way wherever the user meets it.
  */
-export const REJECTED_CANDIDATES = "rejected on size or aspect ratio";
+const REJECTED_CANDIDATES = "rejected on size or aspect ratio";
 
 /** What the candidates were compared against, as said in a status line. */
 const REFERENCE_LABELS: Record<NonNullable<ArtMatchResponse["reference"]>, string> = {

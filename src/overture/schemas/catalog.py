@@ -162,11 +162,9 @@ class CatalogSeason(StrictBaseModel):
     poster_url: str
 
 
-class CatalogEntry(StrictBaseModel):
-    """A catalog entry; fields its media type does not carry are ``None``."""
+class _CatalogFields(StrictBaseModel):
+    """The fields a catalog entry holds and a draft of it may change."""
 
-    media_type: CatalogMediaType
-    title: str
     year: int | None = None
     tmdb_id: int | None = None
     tvdb_id: int | None = None
@@ -178,6 +176,13 @@ class CatalogEntry(StrictBaseModel):
     background_url: str | None = None
     seasons: list[CatalogSeason] | None = None
     youtube_id_overturedb: str | None = None
+
+
+class CatalogEntry(_CatalogFields):
+    """A catalog entry; fields its media type does not carry are ``None``."""
+
+    media_type: CatalogMediaType
+    title: str
     youtube_id_themerrdb: str | None = None
     #: OvertureDB says the title has no theme music.
     no_theme: bool = False
@@ -260,20 +265,9 @@ class CatalogDraftsDiscarded(StrictBaseModel):
     discarded: int
 
 
-class CatalogDraftUpdate(StrictBaseModel):
+class CatalogDraftUpdate(_CatalogFields):
     """Changes to a catalog entry; only the fields sent are changed."""
 
     title: str | None = None
-    year: int | None = None
-    tmdb_id: int | None = None
-    tvdb_id: int | None = None
-    imdb_id: str | None = None
-    poster_url: str | None = None
-    poster_url_individual: str | None = None
-    poster_url_matte: str | None = None
-    poster_url_overlay: str | None = None
-    background_url: str | None = None
-    youtube_id_overturedb: str | None = None
     #: True flags the title as having no theme; False clears the flag.
     no_theme: bool | None = None
-    seasons: list[CatalogSeason] | None = None

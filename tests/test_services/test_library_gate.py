@@ -15,7 +15,6 @@ lazy from overture.jobs.kinds import JobKind
 lazy from overture.jobs.lifecycle import ManagedJobLifecycle
 lazy from overture.jobs.runner import JobContext
 lazy from overture.jobs.slot import ManagedBackgroundJob
-lazy from overture.protocols import CollectionGroups
 lazy from overture.schemas.sync import (
     SyncRunRequest,
     SyncScheduleConfig,
@@ -26,6 +25,7 @@ lazy from overture.services.local_assets.service import LocalAssets
 lazy from overture.services.scheduler import SchedulerService
 lazy from overture.services.server_copies import ServerCopies
 lazy from overture.services.sync.engine import SyncEngine
+lazy from overture.services.sync.runner import CollectionGroups
 lazy from overture.utils.errors import PublicServiceError
 lazy from tests.publishers import NullEventPublisher
 lazy from tests.runtime_helpers import (

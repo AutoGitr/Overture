@@ -12,7 +12,7 @@ import { LIBRARY_STATUS_FIELDS } from "../../generated/settings";
  * a status filter follows every download and choice at once.
  */
 
-export type LibraryStatusField = (typeof LIBRARY_STATUS_FIELDS)[number];
+type LibraryStatusField = (typeof LIBRARY_STATUS_FIELDS)[number];
 type StatusValue = string | number | boolean | readonly string[] | null;
 
 const agreement =

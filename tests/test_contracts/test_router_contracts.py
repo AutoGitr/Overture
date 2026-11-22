@@ -85,6 +85,7 @@ lazy from overture.services.server_audit.work import (
 )
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.utils.assets import season_poster_candidates
+lazy from overture.utils.http_security import API_KEY_HEADER
 lazy from overture.utils.path import real_path
 lazy from tests.collection_helpers import shown_on_server, stored_collection
 lazy from tests.factories import MediaItemFactory, SeasonFactory, seed_asset
@@ -146,6 +147,34 @@ class TestRestResponseContracts:
         ]
 
         assert leaked_parameters == []
+
+    def test_a_route_that_needs_signing_in_says_what_it_answers_without(
+        self, *, test_app: FastAPI
+    ) -> None:
+        """Clients and the schema fuzzer read the refusals from the schema.
+
+        A route that needs signing in takes the API key header ``require_auth``
+        reads, so the schema shows which they are.
+        """
+        operations = [
+            (path, method, operation)
+            for path, methods in test_app.openapi()["paths"].items()
+            for method, operation in methods.items()
+        ]
+        guarded = [
+            (path, method, operation)
+            for path, method, operation in operations
+            if any(
+                parameter["in"] == "header" and parameter["name"] == API_KEY_HEADER
+                for parameter in operation.get("parameters", [])
+            )
+        ]
+        assert len(guarded) > len(operations) / 2
+        assert [
+            (path, method)
+            for path, method, operation in guarded
+            if not {"401", "403"} <= set(operation["responses"])
+        ] == []
 
     def test_non_json_routes_are_documented_response_model_exemptions(self) -> None:
         non_json_paths = {

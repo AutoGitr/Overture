@@ -1,17 +1,12 @@
 """Asset Renamer router - scan and rename misnamed art and theme files."""
 
-lazy from fastapi import APIRouter, Depends
-
 lazy from ..dependencies import AssetManagerDep
 lazy from ..schemas.asset_manager import AssetRenameResponse, RenameRequest, ScanRequest
 lazy from ..schemas.common import StatusResponse
-lazy from .auth import require_auth
+lazy from .auth import authenticated_router
+lazy from .responses import errors
 
-router = APIRouter(
-    prefix="/asset-manager",
-    tags=["asset-manager"],
-    dependencies=[Depends(require_auth)],
-)
+router = authenticated_router(prefix="/asset-manager", tags=["asset-manager"])
 
 
 @router.post("/scan")
@@ -29,7 +24,9 @@ async def stop_scan(asset_mgr: AssetManagerDep) -> StatusResponse:
     return asset_mgr.stop_scan()
 
 
-@router.post("/rename")
+@router.post(
+    "/rename", responses=errors({409: "The scan it names is stale; scan again"})
+)
 async def rename_assets(
     body: RenameRequest,
     asset_mgr: AssetManagerDep,

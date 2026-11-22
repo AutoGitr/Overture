@@ -8,6 +8,7 @@
   import { inLibraryOrder, libraryScope } from "../utils/libraries.svelte";
   import DetailForm from "./DetailForm.svelte";
   import FieldRow from "./FieldRow.svelte";
+  import LibraryName from "./LibraryName.svelte";
   import Notice from "./Notice.svelte";
   import PendingButton from "./PendingButton.svelte";
   import SegmentedControl from "./SegmentedControl.svelte";
@@ -100,8 +101,17 @@
     {@const mediaType = editor.typeOf(entry.library_id)}
     {@const result = editor.preview.resultFor(entry.library_id)}
     {@const name = libraryName(entry.library_id)}
-    <fieldset class="criteria" disabled={editor.generated}>
-      <legend class="form-label">{name}</legend>
+    {@const library = libraries.find((each) => each.id === entry.library_id)}
+    <fieldset
+      class="criteria"
+      disabled={editor.generated}
+      data-server={settingsState.multipleServers && library
+        ? settingsState.server(library.server_id)?.type
+        : undefined}
+    >
+      <legend class="form-label">
+        {#if library}<LibraryName {library} />{:else}{name}{/if}
+      </legend>
       <CriteriaEditor
         bind:group={entry.criteria}
         fields={editor.fieldsFor(entry.library_id)}
@@ -159,6 +169,7 @@
     margin: 0;
     padding: var(--space-3);
     border: var(--border-subtle);
+    border-inline-start: 3px solid var(--server-colour, transparent);
     border-radius: var(--radius-md);
   }
 
