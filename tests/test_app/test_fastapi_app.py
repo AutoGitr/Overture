@@ -16,7 +16,12 @@ lazy from overture.config import Settings
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
 lazy from overture.domain import ArtType, MediaType
-lazy from overture.main import APP_VERSION, create_app, websocket_endpoint
+lazy from overture.main import (
+    APP_VERSION,
+    MAX_REQUEST_BODY,
+    create_app,
+    websocket_endpoint,
+)
 lazy from overture.passwords import hash_password
 lazy from overture.schemas.themes import ThemeSearchResult
 lazy from overture.services.themes.youtube_resolver import YouTubeResolver
@@ -98,6 +103,19 @@ def test_theme_search_preserves_model_field_constraints(
 ) -> None:
     response = authenticated_client.get(f"/api/themes/search?{query}")
     assert response.status_code == 422
+
+
+def test_a_body_past_the_limit_is_refused_before_anyone_signs_in(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/auth/login",
+        content=b"{" + b" " * MAX_REQUEST_BODY + b"}",
+        headers={"Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 413
+    assert response.text == "Content Too Large"
 
 
 @pytest.mark.parametrize("content", ["", "null", "{}"])

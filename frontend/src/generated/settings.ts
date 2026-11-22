@@ -86,6 +86,7 @@ export const ASSETS_MATCH_THRESHOLD_DEFAULT = -1;
 export const MATCH_THRESHOLD_MAX = 10;
 export const PERFECT_MATCH_ONLY = -1;
 export const YOUTUBE_ID_PATTERN = "^[A-Za-z0-9_-]{11}$";
+export const MAX_IMAGE_BYTES = 20971520;
 export const CSRF_COOKIE = "overture_csrf";
 export const CSRF_HEADER = "X-CSRF-Token";
 export const MUTATING_METHODS = ["DELETE", "PATCH", "POST", "PUT"] as const;

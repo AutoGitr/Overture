@@ -53,7 +53,7 @@ dev = [
     "pytest-cov==7.1.0",
     "pytest-xdist==3.8.0",
     # The release tests read the GitHub workflow files.
-    "pyyaml==6.0.3",
+    "pyyaml==6.0.4",
     "ruff==0.17.5",
     "schemathesis==4.33.4",
     "types-jsonschema==4.26.0.20261006",
@@ -65,11 +65,6 @@ script_location = "%(here)s/src/overture/migrations"
 
 [tool.uv]
 required-version = "0.13.9"
-
-# PyYAML, which only the tests use, publishes no CPython 3.15 wheels yet; its
-# pure-Python build needs no compiler.
-[tool.uv.extra-build-variables]
-pyyaml = { PYYAML_FORCE_LIBYAML = "0" }
 
 [tool.pytest]
 minversion = "9.1"

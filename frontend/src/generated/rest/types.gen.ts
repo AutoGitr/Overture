@@ -6644,6 +6644,10 @@ export type GetRemovalOptionsErrors = {
      */
     403: ErrorResponse;
     /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
      * The request breaks the schema or a rule
      */
     422: ErrorResponse | ValidationErrorResponse;
@@ -6689,7 +6693,7 @@ export type UploadArtErrors = {
      */
     403: ErrorResponse;
     /**
-     * The image is larger than the limit
+     * The body is larger than the route accepts
      */
     413: ErrorResponse;
     /**
@@ -6746,6 +6750,10 @@ export type RenameAssetsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
      * The request breaks the schema or a rule
      */
     422: ErrorResponse | ValidationErrorResponse;
@@ -6790,6 +6798,10 @@ export type StartScanErrors = {
      * An API key asked for a change, or the CSRF token is missing
      */
     403: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -6924,6 +6936,10 @@ export type CreateApiKeyErrors = {
      */
     409: ErrorResponse;
     /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
      * The request breaks the schema or a rule
      */
     422: ErrorResponse | ValidationErrorResponse;
@@ -7036,6 +7052,10 @@ export type LoginErrors = {
      * Password login is disabled
      */
     404: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -7317,6 +7337,10 @@ export type UpdateBackupScheduleErrors = {
      */
     403: ErrorResponse;
     /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
      * The request breaks the schema or a rule
      */
     422: ErrorResponse | ValidationErrorResponse;
@@ -7361,6 +7385,10 @@ export type StartBulkAssetsErrors = {
      * An API key asked for a change, or the CSRF token is missing
      */
     403: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -7449,6 +7477,10 @@ export type CreateBulkAssetsScheduleErrors = {
      * An API key asked for a change, or the CSRF token is missing
      */
     403: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -7558,6 +7590,10 @@ export type UpdateBulkAssetsScheduleErrors = {
      */
     404: ErrorResponse;
     /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
      * The request breaks the schema or a rule
      */
     422: ErrorResponse | ValidationErrorResponse;
@@ -7657,6 +7693,10 @@ export type StopBulkAssetsErrors = {
      * An API key asked for a change, or the CSRF token is missing
      */
     403: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -7816,6 +7856,10 @@ export type DiscardCatalogDraftsErrors = {
      * OvertureDB is disabled
      */
     409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -8000,6 +8044,10 @@ export type SaveCatalogDraftErrors = {
      * OvertureDB is disabled
      */
     409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -8205,6 +8253,10 @@ export type SetCatalogEnabledErrors = {
      * An API key asked for a change, or the CSRF token is missing
      */
     403: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -8589,6 +8641,10 @@ export type CreateCollectionErrors = {
      */
     409: ErrorResponse;
     /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
      * The request breaks the schema or a rule
      */
     422: ErrorResponse | ValidationErrorResponse;
@@ -8704,6 +8760,10 @@ export type BulkSetCollectionMonitoredErrors = {
      */
     409: ErrorResponse;
     /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
      * The request breaks the schema or a rule
      */
     422: ErrorResponse | ValidationErrorResponse;
@@ -8760,6 +8820,10 @@ export type BulkOperateCollectionsErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -9078,6 +9142,10 @@ export type SaveCollectionGroupPolicyErrors = {
      */
     409: ErrorResponse;
     /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
      * The request breaks the schema or a rule
      */
     422: ErrorResponse | ValidationErrorResponse;
@@ -9143,6 +9211,10 @@ export type DeleteCollectionGroupErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -9265,6 +9337,10 @@ export type RenameCollectionGroupErrors = {
      */
     409: ErrorResponse;
     /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
      * The request breaks the schema or a rule
      */
     422: ErrorResponse | ValidationErrorResponse;
@@ -9382,6 +9458,10 @@ export type PreviewCollectionErrors = {
      */
     409: ErrorResponse;
     /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
      * The request breaks the schema or a rule
      */
     422: ErrorResponse | ValidationErrorResponse;
@@ -9438,6 +9518,10 @@ export type RecommendCollectionKindErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -9552,6 +9636,10 @@ export type PreviewCollectionSetErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -9866,6 +9954,10 @@ export type UpdateCollectionErrors = {
      */
     409: ErrorResponse;
     /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
      * The request breaks the schema or a rule
      */
     422: ErrorResponse | ValidationErrorResponse;
@@ -9997,6 +10089,10 @@ export type AdoptCollectionErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -10227,6 +10323,10 @@ export type SaveCollectionArtErrors = {
      * The uploaded image is no longer kept
      */
     409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -10667,6 +10767,10 @@ export type SetCollectionMembersErrors = {
      */
     409: ErrorResponse;
     /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
      * The request breaks the schema or a rule
      */
     422: ErrorResponse | ValidationErrorResponse;
@@ -10799,6 +10903,10 @@ export type RequestCollectionMissingErrors = {
      */
     409: ErrorResponse;
     /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
      * The request breaks the schema or a rule
      */
     422: ErrorResponse | ValidationErrorResponse;
@@ -10866,6 +10974,10 @@ export type SetCollectionMonitoredErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -11062,6 +11174,10 @@ export type SaveCollectionRuleErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -11271,6 +11387,10 @@ export type SetCollectionThemeErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -11579,6 +11699,10 @@ export type MatchLibraryFilterErrors = {
      */
     409: ErrorResponse;
     /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
      * The request breaks the schema or a rule
      */
     422: ErrorResponse | ValidationErrorResponse;
@@ -11690,6 +11814,10 @@ export type CreateSavedFilterErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -11822,6 +11950,10 @@ export type UpdateSavedFilterErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -11968,6 +12100,10 @@ export type BulkOperateItemsErrors = {
      * A media server cannot do what it asks
      */
     409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -12290,6 +12426,10 @@ export type SaveArtErrors = {
      */
     409: ErrorResponse;
     /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
      * The request breaks the schema or a rule
      */
     422: ErrorResponse | ValidationErrorResponse;
@@ -12542,6 +12682,10 @@ export type SetMonitoredErrors = {
      * Nothing has the ID or key the path names
      */
     404: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -12836,6 +12980,10 @@ export type SelectThemeErrors = {
      * Nothing has the ID or key the path names
      */
     404: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -13209,6 +13357,10 @@ export type UpdateNotificationsErrors = {
      */
     403: ErrorResponse;
     /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
      * The request breaks the schema or a rule
      */
     422: ErrorResponse | ValidationErrorResponse;
@@ -13369,6 +13521,10 @@ export type FixAuditFindingsErrors = {
      */
     409: ErrorResponse;
     /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
      * The request breaks the schema or a rule
      */
     422: ErrorResponse | ValidationErrorResponse;
@@ -13478,6 +13634,10 @@ export type StartServerAuditErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -13626,6 +13786,10 @@ export type UpdateSettingsErrors = {
      */
     403: ErrorResponse;
     /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
      * The request breaks the schema or a rule
      */
     422: ErrorResponse | ValidationErrorResponse;
@@ -13757,6 +13921,10 @@ export type RunSyncErrors = {
      */
     409: ErrorResponse;
     /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
      * The request breaks the schema or a rule
      */
     422: ErrorResponse | ValidationErrorResponse;
@@ -13868,6 +14036,10 @@ export type CreateSyncScheduleErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -14000,6 +14172,10 @@ export type UpdateSyncScheduleErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
@@ -14540,6 +14716,10 @@ export type SaveTmdbArtErrors = {
      */
     409: ErrorResponse;
     /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
      * The request breaks the schema or a rule
      */
     422: ErrorResponse | ValidationErrorResponse;
@@ -14734,6 +14914,10 @@ export type SelectTmdbThemeErrors = {
      * A setting it needs is not set
      */
     409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
     /**
      * The request breaks the schema or a rule
      */
