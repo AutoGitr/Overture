@@ -5,7 +5,7 @@
     "": {
       "name": "overture",
       "dependencies": {
-        "@tanstack/svelte-query": "6.4.3",
+        "@tanstack/svelte-query": "6.4.4",
         "sv-router": "0.19.0",
       },
       "devDependencies": {
@@ -518,9 +518,9 @@
 
     "@sveltejs/vite-plugin-svelte": ["@sveltejs/vite-plugin-svelte@7.3.1", "", { "dependencies": { "deepmerge": "^4.3.1", "magic-string": "^1.0.0", "obug": "^2.1.0", "vitefu": "^1.1.2" }, "peerDependencies": { "svelte": "^5.46.4", "vite": "^8.0.0-beta.7 || ^8.0.0" } }, "sha512-ZPsLN8B1e/En+Ak5s4V7srFDT532oS0qieLsQwu63NGKsS+iAjoO2Js1BochlHlglcU+Pt7WAO3C5Ee+4f6gVA=="],
 
-    "@tanstack/query-core": ["@tanstack/query-core@5.108.0", "", {}, "sha512-X9zJUtEV/0D2q9pmGS/Bza8S4bNovSBhZOtdhtu0fzsHwizC6C+Eh/q5CX3MQBchsRMrirWVQmv7Fp4OStzV9g=="],
+    "@tanstack/query-core": ["@tanstack/query-core@5.108.1", "", {}, "sha512-GBX6Xsc9E+9eVLLxuM7orQNbssQjpruOCbocBYwT78MjxOWT5I+CWdvEo0N+UM6+oCZEKxuSud1oFLvE3OEmIg=="],
 
-    "@tanstack/svelte-query": ["@tanstack/svelte-query@6.4.3", "", { "dependencies": { "@tanstack/query-core": "5.108.0" }, "peerDependencies": { "svelte": "^5.25.0" } }, "sha512-bGQWKr2qYdfcMOsmUJicc3+Po3GIxa92P8gU0oR21UuaMMgWI7AkH57z/hMZV8exTTed/u3r+goxBAz9qM9UYw=="],
+    "@tanstack/svelte-query": ["@tanstack/svelte-query@6.4.4", "", { "dependencies": { "@tanstack/query-core": "5.108.1" }, "peerDependencies": { "svelte": "^5.25.0" } }, "sha512-BqLa+1Bv7jtaB1hXlKeNK12DqbFe6GvXZufMkulHlHYw1QiwxLrauDpNjPmn7AZ0BHkzq7TJ2dPmayzvONTZEg=="],
 
     "@testing-library/dom": ["@testing-library/dom@10.4.2", "", { "dependencies": { "@babel/code-frame": "^7.10.4", "@babel/runtime": "^7.12.5", "@types/aria-query": "^5.0.1", "aria-query": "5.3.0", "dom-accessibility-api": "^0.5.9", "lz-string": "^1.5.0", "picocolors": "1.1.1", "pretty-format": "^27.0.2" } }, "sha512-yzr2S9HyAIdhz2/6qHgbs665Q7PKVcDF05vsOlHPxG1mo36gKVesdYVeDLnXgfjJ03CrKRk08knc6+E/9m8v2Q=="],
 
