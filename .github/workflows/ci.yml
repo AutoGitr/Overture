@@ -311,7 +311,7 @@ jobs:
       - name: Compare the API with the latest release
         env:
           # renovate: datasource=docker depName=tufin/oasdiff
-          OASDIFF: tufin/oasdiff:v1.36.0@sha256:85124948d3e59cfb592fd967f34ac1c7025c15ca912c4a29dabf7a3ffff41aa4
+          OASDIFF: tufin/oasdiff:v1.39.0@sha256:004bef22058ace818b61f0eb2f05efb89fc6a3882f68bf4db0b6a86f40723fe0
         run: |
           set -euo pipefail
           tag="$(git ls-remote --tags --refs origin 'v*' | sed 's#.*refs/tags/##' | sort -V | tail -1)"
