@@ -37,19 +37,19 @@
     "lint:unused": "knip --no-progress"
   },
   "dependencies": {
-    "@tanstack/svelte-query": "6.4.1",
+    "@tanstack/svelte-query": "6.4.3",
     "sv-router": "0.19.0"
   },
   "overrides": {
     "deepmerge": "4.1.2",
     "glob": "14.0.6",
     "js-yaml": "4.3.2",
-    "minimatch": "11.0.8"
+    "minimatch": "11.0.9"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@hey-api/openapi-ts": "0.99.0",
-    "@lucide/svelte": "1.72.0",
+    "@lucide/svelte": "1.76.0",
     "@playwright/test": "1.65.1",
     "@resvg/resvg-js": "2.6.2",
     "@sveltejs/vite-plugin-svelte": "7.3.1",
@@ -58,16 +58,16 @@
     "@tsconfig/svelte": "5.0.9",
     "@types/node": "26.6.6",
     "@vitest/coverage-v8": "5.1.1",
-    "dependency-cruiser": "18.7.2",
+    "dependency-cruiser": "18.8.0",
     "eslint": "10.15.0",
     "eslint-plugin-sonarjs": "4.2.2",
     "eslint-plugin-svelte": "3.24.1",
-    "fast-check": "4.10.2",
+    "fast-check": "4.10.3",
     "globals": "17.14.0",
-    "jscpd": "5.4.2",
+    "jscpd": "5.4.3",
     "jsdom": "31.0.1",
-    "knip": "6.44.1",
-    "svelte": "5.57.3",
+    "knip": "6.46.1",
+    "svelte": "5.58.0",
     "svelte-check": "4.7.8",
     "typescript": "6.0.3",
     "typescript-eslint": "8.73.0",
