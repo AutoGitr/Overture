@@ -54,7 +54,7 @@ dev = [
     "pytest-xdist==3.8.0",
     # The release tests read the GitHub workflow files.
     "pyyaml==6.0.4",
-    "ruff==0.17.5",
+    "ruff==0.17.6",
     "schemathesis==4.33.4",
     "types-jsonschema==4.26.0.20261006",
     "vulture==2.16",
