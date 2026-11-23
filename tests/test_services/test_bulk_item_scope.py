@@ -7,6 +7,7 @@ lazy from sqlmodel.ext.asyncio.session import AsyncSession
 lazy from overture.config import Settings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
+    CURRENT_SELECTION,
     ArtBulkSource,
     ArtType,
     MediaType,
@@ -108,9 +109,11 @@ async def test_both_workflows_use_only_explicit_items_and_their_seasons(
         include_unmonitored=include_unmonitored,
         art=BulkAssetsArtConfig(
             art_types=[ArtType.POSTER, ArtType.SEASON_POSTER],
-            source_order=[ArtBulkSource.LOCAL_ART_MATCHING],
+            source_order=[CURRENT_SELECTION, ArtBulkSource.LOCAL_ART_MATCHING],
         ),
-        themes=BulkAssetsThemeConfig(source_order=[ThemeBulkSource.YOUTUBE_SEARCH]),
+        themes=BulkAssetsThemeConfig(
+            source_order=[CURRENT_SELECTION, ThemeBulkSource.YOUTUBE_SEARCH]
+        ),
     )
     assert request.item_ids == [selected_id, row_id(removed), 999999]
     art_request, theme_request = request.art_request(), request.theme_request()
@@ -181,10 +184,11 @@ async def test_fully_saved_chunk_does_not_hide_later_missing_slots(
     art_params = BulkMatchArtRequest(
         library_ids=["1:movies"],
         art_types=[ArtType.POSTER],
-        source_order=[ArtBulkSource.LOCAL_ART_MATCHING],
+        source_order=[CURRENT_SELECTION, ArtBulkSource.LOCAL_ART_MATCHING],
     )
     theme_params = BulkThemeRequest(
-        library_ids=["1:movies"], source_order=[ThemeBulkSource.YOUTUBE_SEARCH]
+        library_ids=["1:movies"],
+        source_order=[CURRENT_SELECTION, ThemeBulkSource.YOUTUBE_SEARCH],
     )
     art = await plan_run(art_params, database=database, chunk=1)
     themes = await plan_run(theme_params, database=database, chunk=1)
@@ -223,10 +227,11 @@ async def test_both_workflows_visit_movies_then_shows_by_title(
     art_params = BulkMatchArtRequest(
         item_ids=item_ids,
         art_types=[ArtType.BACKGROUND, ArtType.POSTER],
-        source_order=[ArtBulkSource.LOCAL_ART_MATCHING],
+        source_order=[CURRENT_SELECTION, ArtBulkSource.LOCAL_ART_MATCHING],
     )
     theme_params = BulkThemeRequest(
-        item_ids=item_ids, source_order=[ThemeBulkSource.YOUTUBE_SEARCH]
+        item_ids=item_ids,
+        source_order=[CURRENT_SELECTION, ThemeBulkSource.YOUTUBE_SEARCH],
     )
     (art_batch,) = (await plan_run(art_params, database=database)).batches()
     (theme_batch,) = (await plan_run(theme_params, database=database)).batches()
@@ -255,14 +260,14 @@ def test_shared_options_reach_both_workers() -> None:
     request = BulkAssetsRequest(
         library_ids=["1:movies"],
         include_unmonitored=True,
-        overwrite_existing=True,
+        skip_recent_val=2,
         art=BulkAssetsArtConfig(),
         themes=BulkAssetsThemeConfig(),
     )
     for worker in (request.art_request(), request.theme_request()):
         assert worker is not None
         assert worker.include_unmonitored
-        assert worker.overwrite_existing
+        assert worker.skip_recent_val == 2
 
 
 async def test_bulk_targets_skip_items_without_a_folder(

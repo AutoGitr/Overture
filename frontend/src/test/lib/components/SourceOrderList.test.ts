@@ -4,7 +4,7 @@ import SourceOrderList from "../../../lib/components/SourceOrderList.svelte";
 
 const labels = { tmdb: "TMDB", fanart: "Fanart.tv", overturedb: "OvertureDB" };
 
-function renderList(overrides: { disabledSources?: string[] } = {}) {
+function renderList(overrides: { disabledSources?: string[]; required?: string[] } = {}) {
   const ontoggle = vi.fn();
   const onmove = vi.fn();
   render(SourceOrderList, {
@@ -52,6 +52,18 @@ describe("SourceOrderList", () => {
 
     await fireEvent.click(screen.getByRole("checkbox", { name: "Fanart.tv" }));
     expect(ontoggle).toHaveBeenCalledWith("fanart");
+  });
+
+  it("shows a required entry as a place in the order, with no switch, that moves", async () => {
+    const { onmove } = renderList({ required: ["fanart"] });
+    const dataTransfer = { setData: vi.fn(), getData: () => "", effectAllowed: "" };
+
+    expect(screen.queryByRole("checkbox", { name: "Fanart.tv" })).toBeNull();
+    expect(row("Fanart.tv")).toHaveTextContent("Fanart.tv");
+    expect(handle("Fanart.tv")).toBeEnabled();
+    await fireEvent.dragStart(row("Fanart.tv"), { dataTransfer });
+    await fireEvent.drop(row("TMDB"), { dataTransfer });
+    expect(onmove).toHaveBeenCalledWith("fanart", "tmdb");
   });
 
   it("keeps catalog sources off and fixed while OvertureDB is disabled", async () => {

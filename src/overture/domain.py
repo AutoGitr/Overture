@@ -997,10 +997,28 @@ def guid_text(guids: Mapping[str, str], provider: str) -> str | None:
     return guids.get(provider) or None
 
 
-#: Artwork sources an Assets run tries, in their default order.
-DEFAULT_ART_SOURCE_ORDER: tuple[ArtBulkSource, ...] = tuple(ArtBulkSource)
-#: Theme sources an Assets run tries, in their default order.
-DEFAULT_THEME_SOURCE_ORDER: tuple[ThemeBulkSource, ...] = tuple(ThemeBulkSource)
+#: The step of an Assets run's source order that stands for what a slot
+#: already holds: its saved selection, or a theme in place. Sources ranked
+#: above it may replace that; those below it only fill slots that hold none.
+type CurrentSelection = Literal["current_selection"]
+CURRENT_SELECTION: CurrentSelection = "current_selection"
+CURRENT_SELECTION_LABEL = "Current selection"
+#: A source an Assets run can try, for art or themes.
+type BulkSource = ArtBulkSource | ThemeBulkSource
+#: One step of an Assets run's art or theme source order.
+type ArtSourceStep = ArtBulkSource | CurrentSelection
+type ThemeSourceStep = ThemeBulkSource | CurrentSelection
+
+#: An Assets run's art source order by default: what a slot holds is kept.
+DEFAULT_ART_SOURCE_ORDER: tuple[ArtSourceStep, ...] = (
+    CURRENT_SELECTION,
+    *ArtBulkSource,
+)
+#: An Assets run's theme source order by default: what a slot holds is kept.
+DEFAULT_THEME_SOURCE_ORDER: tuple[ThemeSourceStep, ...] = (
+    CURRENT_SELECTION,
+    *ThemeBulkSource,
+)
 
 #: Default and largest pHash distance a local art match accepts.
 MATCH_THRESHOLD_DEFAULT = 3

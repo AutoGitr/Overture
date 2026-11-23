@@ -540,6 +540,8 @@ export type ArtMatchResponse = {
  */
 export type ArtSource = 'overturedb' | 'tmdb' | 'tpdb' | 'fanart' | 'tvdb' | 'plex' | 'upload' | 'generated';
 
+export type ArtSourceStep = ArtBulkSource | CurrentSelection;
+
 /**
  * ArtSourcesResponse
  *
@@ -1033,7 +1035,10 @@ export type BulkAssetsArtConfigInput = {
      * Art Types
      */
     art_types?: Array<ArtType>;
-    source_order?: SourceOrderArtBulkSource;
+    /**
+     * Sources in the order they are tried. Those before `current_selection` may replace what a slot holds, its saved selection or a theme in place; those after it only fill slots that hold nothing. A saved selection missing from disk is downloaded again when no source replaces it.
+     */
+    source_order?: SourceOrderArtSourceStep;
     /**
      * Threshold
      */
@@ -1050,7 +1055,10 @@ export type BulkAssetsArtConfigOutput = {
      * Art Types
      */
     art_types: Array<ArtType>;
-    source_order: SourceOrderArtBulkSource;
+    /**
+     * Sources in the order they are tried. Those before `current_selection` may replace what a slot holds, its saved selection or a theme in place; those after it only fill slots that hold nothing. A saved selection missing from disk is downloaded again when no source replaces it.
+     */
+    source_order: SourceOrderArtSourceStep;
     /**
      * Threshold
      */
@@ -1089,12 +1097,6 @@ export type BulkAssetsRequestInput = {
      */
     item_ids?: Array<number> | null;
     library_ids?: LibraryIds;
-    /**
-     * Overwrite Existing
-     *
-     * Resolve sources again for saved selections and existing themes; files identical to the local one are left untouched. Recent-check filtering still applies. Without it, a saved selection whose file is missing is downloaded again.
-     */
-    overwrite_existing?: boolean;
     skip_recent_unit?: RecentUnit;
     /**
      * Skip Recent Val
@@ -1135,12 +1137,6 @@ export type BulkAssetsRequestOutput = {
      */
     item_ids: Array<number> | null;
     library_ids: LibraryIds;
-    /**
-     * Overwrite Existing
-     *
-     * Resolve sources again for saved selections and existing themes; files identical to the local one are left untouched. Recent-check filtering still applies. Without it, a saved selection whose file is missing is downloaded again.
-     */
-    overwrite_existing: boolean;
     skip_recent_unit: RecentUnit;
     /**
      * Skip Recent Val
@@ -1259,7 +1255,10 @@ export type BulkAssetsStopRequest = {
  * Theme-specific assets workflow configuration.
  */
 export type BulkAssetsThemeConfigInput = {
-    source_order?: SourceOrderThemeBulkSource;
+    /**
+     * Sources in the order they are tried. Those before `current_selection` may replace what a slot holds, its saved selection or a theme in place; those after it only fill slots that hold nothing. A saved selection missing from disk is downloaded again when no source replaces it.
+     */
+    source_order?: SourceOrderThemeSourceStep;
 };
 
 /**
@@ -1268,7 +1267,10 @@ export type BulkAssetsThemeConfigInput = {
  * Theme-specific assets workflow configuration.
  */
 export type BulkAssetsThemeConfigOutput = {
-    source_order: SourceOrderThemeBulkSource;
+    /**
+     * Sources in the order they are tried. Those before `current_selection` may replace what a slot holds, its saved selection or a theme in place; those after it only fill slots that hold nothing. A saved selection missing from disk is downloaded again when no source replaces it.
+     */
+    source_order: SourceOrderThemeSourceStep;
 };
 
 /**
@@ -3782,6 +3784,8 @@ export type Coverage = {
 
 export type CronExpression = string;
 
+export type CurrentSelection = 'current_selection';
+
 /**
  * CustomSetValue
  *
@@ -5654,9 +5658,9 @@ export type SourceConditionOutput = {
     source: CollectionSourceOutput;
 };
 
-export type SourceOrderArtBulkSource = Array<ArtBulkSource>;
+export type SourceOrderArtSourceStep = Array<ArtSourceStep>;
 
-export type SourceOrderThemeBulkSource = Array<ThemeBulkSource>;
+export type SourceOrderThemeSourceStep = Array<ThemeSourceStep>;
 
 /**
  * SourceType
@@ -6026,6 +6030,8 @@ export type ThemeSearchResult = {
      */
     url: string | null;
 };
+
+export type ThemeSourceStep = ThemeBulkSource | CurrentSelection;
 
 /**
  * ThemeStats
@@ -6523,6 +6529,8 @@ export type Workflow = 'art' | 'art_and_themes' | 'themes';
 
 export type YouTubeId = string;
 
+export type ArtSourceStepWritable = ArtBulkSource | CurrentSelection;
+
 /**
  * ArtTypeStats
  *
@@ -6577,9 +6585,9 @@ export type JsonValueWritable = string | number | number | boolean | Array<JsonV
 
 export type RemovableAssetWritable = ItemArtAssetWritable | 'theme';
 
-export type SourceOrderArtBulkSourceWritable = Array<ArtBulkSource>;
+export type SourceOrderArtSourceStepWritable = Array<ArtSourceStepWritable>;
 
-export type SourceOrderThemeBulkSourceWritable = Array<ThemeBulkSource>;
+export type SourceOrderThemeSourceStepWritable = Array<ThemeSourceStepWritable>;
 
 /**
  * StatsResponse
@@ -6599,6 +6607,8 @@ export type StatsResponseWritable = {
     storage: StorageSummary;
     themes: ThemeStatsWritable;
 };
+
+export type ThemeSourceStepWritable = ThemeBulkSource | CurrentSelection;
 
 /**
  * ThemeStats

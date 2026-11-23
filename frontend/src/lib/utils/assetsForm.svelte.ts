@@ -5,7 +5,7 @@ import type {
   LibrarySectionRead,
   RecentUnit,
 } from "../../generated/rest/types.gen";
-import { ASSETS_MATCH_THRESHOLD_DEFAULT } from "../../generated/settings";
+import { ASSETS_MATCH_THRESHOLD_DEFAULT, CURRENT_SELECTION } from "../../generated/settings";
 import { sidebarState } from "../stores/sidebarState.svelte";
 import { assetsInScope } from "./artTypes";
 import {
@@ -53,6 +53,9 @@ export interface AssetsFormSource {
  */
 const STORAGE_PREFIX = "assetsPopup";
 
+/** Sources every run uses: they are always chosen and can only be moved. */
+const REQUIRED_SOURCES = [CURRENT_SELECTION] as const;
+
 /** Keep a renamed group chosen for the next Assets run. */
 export function renameAssetsGroup(name: string, replacement: string): void {
   renameInStoredList(`${STORAGE_PREFIX}_collectionGroups`, name, replacement);
@@ -66,7 +69,6 @@ export class AssetsForm {
     collectionGroups: [] as string[],
     collectionIds: [] as number[],
     includeUnmonitored: false,
-    overwriteExisting: false,
     enableArt: true,
     enableThemes: true,
     artTypes: [] as ArtType[],
@@ -77,7 +79,7 @@ export class AssetsForm {
     selectedArtSources: {
       default: DEFAULT_ART_SOURCE_ORDER,
       revive: (value: ArtAssetSource[]) =>
-        normaliseSelectedSources(value, DEFAULT_ART_SOURCE_ORDER),
+        normaliseSelectedSources(value, DEFAULT_ART_SOURCE_ORDER, REQUIRED_SOURCES),
     },
     themeSourceOrder: {
       default: DEFAULT_THEME_SOURCE_ORDER,
@@ -87,7 +89,7 @@ export class AssetsForm {
     selectedThemeSources: {
       default: DEFAULT_THEME_SOURCE_ORDER,
       revive: (value: ThemeAssetSource[]) =>
-        normaliseSelectedSources(value, DEFAULT_THEME_SOURCE_ORDER),
+        normaliseSelectedSources(value, DEFAULT_THEME_SOURCE_ORDER, REQUIRED_SOURCES),
     },
     threshold: {
       default: ASSETS_MATCH_THRESHOLD_DEFAULT,
@@ -99,6 +101,9 @@ export class AssetsForm {
   });
 
   private readonly source: AssetsFormSource;
+
+  /** Sources every run uses, which the lists keep chosen. */
+  readonly requiredSources: readonly (ArtAssetSource & ThemeAssetSource)[] = REQUIRED_SOURCES;
 
   constructor(source: AssetsFormSource) {
     this.source = source;
@@ -206,8 +211,6 @@ export class AssetsForm {
     if (!this.hasSelectedLibraries) return "Choose a library or collections";
     if (!enableArt && !enableThemes) return "Turn on Art or Themes";
     if (enableArt && !this.artTypesToRun.length) return "Choose an art type";
-    if (enableArt && !this.activeArtSources.length) return "Choose an art source";
-    if (enableThemes && !this.activeThemeSources.length) return "Choose a theme source";
     return null;
   });
 
@@ -229,7 +232,6 @@ export class AssetsForm {
       collectionGroups: this.selectedCollectionGroups,
       allCollections: config.allCollections,
       includeUnmonitored: config.includeUnmonitored,
-      overwriteExisting: config.overwriteExisting,
       skipRecentVal: config.skipRecentVal,
       skipRecentUnit: config.skipRecentUnit,
       enableArt: config.enableArt,
@@ -275,15 +277,23 @@ export class AssetsForm {
   }
 
   toggleArtSource(source: ArtAssetSource): void {
-    if (this.disabledSources.includes(source)) return;
+    if (this.fixed(source)) return;
     this.config.selectedArtSources = toggleSelectedValue(this.config.selectedArtSources, source);
   }
 
   toggleThemeSource(source: ThemeAssetSource): void {
-    if (this.disabledSources.includes(source)) return;
+    if (this.fixed(source)) return;
     this.config.selectedThemeSources = toggleSelectedValue(
       this.config.selectedThemeSources,
       source,
+    );
+  }
+
+  /** Whether a source cannot be turned on or off: OvertureDB's while it is off, or a required one. */
+  private fixed(source: string): boolean {
+    return (
+      this.disabledSources.includes(source) ||
+      this.requiredSources.some((required) => required === source)
     );
   }
 
@@ -304,7 +314,6 @@ export class AssetsForm {
     config.collectionGroups = saved.collection_groups ?? [];
     config.collectionIds = saved.collection_ids ?? [];
     config.includeUnmonitored = saved.include_unmonitored;
-    config.overwriteExisting = saved.overwrite_existing;
     config.scheduleCronExpression = schedule.cron_expression;
     config.selectedLibraries = restoreLibrarySelection(
       this.movieLibraries,
@@ -324,6 +333,7 @@ export class AssetsForm {
       config.selectedArtSources = normaliseSelectedSources(
         saved.art.source_order,
         DEFAULT_ART_SOURCE_ORDER,
+        REQUIRED_SOURCES,
       );
       config.threshold = clampBulkThreshold(saved.art.threshold);
     }
@@ -335,6 +345,7 @@ export class AssetsForm {
       config.selectedThemeSources = normaliseSelectedSources(
         saved.themes.source_order,
         DEFAULT_THEME_SOURCE_ORDER,
+        REQUIRED_SOURCES,
       );
     }
   }

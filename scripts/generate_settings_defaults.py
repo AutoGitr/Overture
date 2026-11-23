@@ -12,6 +12,8 @@ lazy from overture.catalog_contract.contract import (
 lazy from overture.db.models.settings import AppSettingsBase
 lazy from overture.domain import (
     ASSETS_MATCH_THRESHOLD_DEFAULT,
+    CURRENT_SELECTION,
+    CURRENT_SELECTION_LABEL,
     DEFAULT_ART_SOURCE_ORDER,
     DEFAULT_THEME_SOURCE_ORDER,
     ITEM_ART_TYPES,
@@ -124,10 +126,20 @@ def render_settings_defaults() -> str:
                 if source is not ArtSource.OVERTUREDB
             },
         ),
-        ("ART_SOURCE_LABELS", {source.value: source.label for source in ArtBulkSource}),
+        ("CURRENT_SELECTION", CURRENT_SELECTION),
+        (
+            "ART_SOURCE_LABELS",
+            {
+                CURRENT_SELECTION: CURRENT_SELECTION_LABEL,
+                **{source.value: source.label for source in ArtBulkSource},
+            },
+        ),
         (
             "THEME_SOURCE_LABELS",
-            {source.value: source.label for source in ThemeBulkSource},
+            {
+                CURRENT_SELECTION: CURRENT_SELECTION_LABEL,
+                **{source.value: source.label for source in ThemeBulkSource},
+            },
         ),
         (
             "CATALOG_SOURCES",

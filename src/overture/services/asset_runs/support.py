@@ -43,6 +43,7 @@ lazy from ..downloads.service import DownloadService
 lazy from ..downloads.watch import DownloadWatch
 lazy from ..local_assets.service import LocalAssets
 lazy from ..themes.youtube_resolver import DownloadError
+lazy from .plan import holds
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +143,7 @@ async def _refresh_collection_theme_folders(
         if not rows:
             return
         for row in rows:
-            if selection(read_asset(row, ServerAsset.THEME)) is not None:
+            if holds(read_asset(row, ServerAsset.THEME)):
                 try:
                     await refresh_folder_themes(
                         row, downloads=downloads, database=database
@@ -163,17 +164,15 @@ async def refresh_scope(
     downloads: DownloadService,
     database: Database,
 ) -> None:
-    """Record the files of saved selections as they are, before planning.
+    """Record the files of what slots hold as they are, before planning.
 
-    Planning keeps a saved selection on the strength of its recorded file, so
-    a file deleted or replaced since the last refresh has to be seen first.
-    Only titles and collection theme folders keeping one are refreshed, and an
-    unchanged file costs one stat without being read. Every other target is
-    visited, or decided without its files, and a visit refreshes the files it
-    decides on.
+    Planning keeps what a slot holds on the strength of its recorded file: a
+    saved selection, or a theme in place. A file deleted or replaced since the
+    last refresh has to be seen first. Only titles and collection theme
+    folders with such a file are refreshed, and an unchanged file costs one
+    stat without being read. Every other target is visited, or decided without
+    its files, and a visit refreshes the files it decides on.
     """
-    if params.overwrite_existing:
-        return
     art = isinstance(params, BulkMatchArtRequest)
     if not art and params.collection_scope:
         await _refresh_collection_theme_folders(

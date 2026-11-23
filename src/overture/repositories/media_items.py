@@ -271,20 +271,22 @@ class MediaItemRepository:
         after_id: int,
         limit: int,
     ) -> list[int]:
-        """Return the IDs of bulk targets whose saved selection has a recorded file.
+        """Return the IDs of bulk targets whose held content has a recorded file.
 
-        *art* asks about artwork, of the item or its seasons; otherwise about
-        the theme.
+        *art* asks about artwork, of the item or its seasons, whose saved
+        selection is held; otherwise about the theme, any theme in place being
+        held as well.
         """
+        selected = or_(
+            col(Asset.url).is_not(None),
+            col(Asset.upload_hash).is_not(None),
+            col(Asset.youtube_id).is_not(None),
+        )
         kept = (
             col(Asset.kind).in_(
                 [kind for kind in ServerAsset if (kind is ServerAsset.THEME) is not art]
             ),
-            or_(
-                col(Asset.url).is_not(None),
-                col(Asset.upload_hash).is_not(None),
-                col(Asset.youtube_id).is_not(None),
-            ),
+            *((selected,) if art else ()),
             select(AssetDelivery.id)
             .where(
                 col(AssetDelivery.asset_id) == Asset.id,

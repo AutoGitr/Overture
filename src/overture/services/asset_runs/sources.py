@@ -1,11 +1,14 @@
 """What the sources of an Assets run offer one target.
 
-Sources are asked in the run's order until one decides. A decision is a link
+Sources are asked in the run's order until one decides; a target that holds
+something asks only those ranked above Current selection (see
+:class:`~overture.schemas.bulk.SourcePrecedence`). A decision is a link
 or video to download, or one to save as the selection of the content already
 in place (an adoption). A source without one says why: it declined art that
 differs from the local file, it failed, or it had nothing.
 """
 
+lazy from collections.abc import Sequence
 lazy from dataclasses import dataclass, field
 
 lazy import httpx2
@@ -17,6 +20,7 @@ lazy from ...domain import (
     MATCH_THRESHOLD_MAX,
     PERFECT_MATCH_ONLY,
     ArtBulkSource,
+    BulkSource,
     CollectionPosterStyle,
     ThemeBulkSource,
 )
@@ -28,7 +32,7 @@ lazy from ..art.matcher import ArtMatcher
 lazy from ..art.perfect_match import accepted_matches, accepts, comparison_threshold
 lazy from ..catalog.index import CatalogIndex
 lazy from ..themes.youtube_resolver import DownloadError, YouTubeResolver
-lazy from .plan import RunParams, Source, Target, Unusable, catalog_pick, triage
+lazy from .plan import RunParams, Target, Unusable, catalog_pick, triage
 
 #: Why artwork candidates were not compared.
 REJECTED_CANDIDATES = "rejected on size or aspect ratio"
@@ -138,11 +142,11 @@ class Sources:
     youtube_resolver: YouTubeResolver | None = None
 
     async def ask(
-        self, target: Target, facts: BatchFacts
+        self, target: Target, facts: BatchFacts, sources: Sequence[BulkSource]
     ) -> tuple[Decision | None, Notes]:
-        """Ask the sources that can serve *target*, in order, until one decides."""
+        """Ask those of *sources* that serve *target*, in order, until one decides."""
         notes = Notes()
-        for source in triage(target, self.params):
+        for source in triage(target, sources):
             if isinstance(source, Unusable):
                 notes.empty.append(source.reason)
                 continue
@@ -156,7 +160,7 @@ class Sources:
         return None, notes
 
     async def _offer(
-        self, source: Source, target: Target, facts: BatchFacts, notes: Notes
+        self, source: BulkSource, target: Target, facts: BatchFacts, notes: Notes
     ) -> Decision | None:
         if source is ArtBulkSource.LOCAL_ART_MATCHING:
             if target.collection is not None:
@@ -177,7 +181,12 @@ class Sources:
         )
         if source is ArtBulkSource.OVERTUREDB:
             return await self._compare(
-                target, pick.value, pick.label, poster_style, notes
+                target,
+                pick.value,
+                pick.label,
+                poster_style,
+                notes,
+                replaces=self.params.precedence.replaces(source),
             )
         return Decision(
             pick.value, pick.label + _replaces(target), poster_style=poster_style
@@ -205,11 +214,15 @@ class Sources:
         label: str,
         poster_style: CollectionPosterStyle | None,
         notes: Notes,
+        *,
+        replaces: bool,
     ) -> Decision | None:
-        """Take OvertureDB's art unless it differs from the art in place."""
-        in_place = (
-            None if self.params.overwrite_existing else await self._in_place(target)
-        )
+        """Take OvertureDB's art unless it differs from the art in place.
+
+        Ranked above Current selection, OvertureDB *replaces* what is in place
+        without comparing it.
+        """
+        in_place = None if replaces else await self._in_place(target)
         if in_place is None:
             return Decision(url, label + _replaces(target), poster_style=poster_style)
         if self.art_matcher is None:

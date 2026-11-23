@@ -1,20 +1,28 @@
 """Bulk job REST schemas."""
 
+lazy from collections.abc import Sequence
+lazy from dataclasses import dataclass
+lazy from functools import cached_property
 lazy from typing import Annotated, Any, Literal, Self
 
-lazy from pydantic import Field, model_validator
+lazy from pydantic import AfterValidator, Field, model_validator
 
 lazy from ..domain import (
     ASSETS_MATCH_THRESHOLD_DEFAULT,
+    CURRENT_SELECTION,
+    CURRENT_SELECTION_LABEL,
     DEFAULT_ART_SOURCE_ORDER,
     DEFAULT_THEME_SOURCE_ORDER,
     ITEM_ART_TYPES,
     MATCH_THRESHOLD_MAX,
     PERFECT_MATCH_ONLY,
     ArtBulkSource,
+    ArtSourceStep,
     ArtType,
+    BulkSource,
     RecentUnit,
     ThemeBulkSource,
+    ThemeSourceStep,
 )
 lazy from .base import PositiveId, StrictBaseModel
 lazy from .common import JobEnvelope
@@ -23,16 +31,68 @@ lazy from .validators import GroupNames, LibraryIds, UniqueList
 
 AssetRunStatus = Literal["started", "already_running", "not_requested"]
 
-#: Sources in priority order; at least one, each once.
-type SourceOrder[T] = Annotated[UniqueList[T], Field(min_length=1)]
+#: What a source order means, as the API documents it.
+_SOURCE_ORDER = (
+    "Sources in the order they are tried. Those before `current_selection` "
+    "may replace what a slot holds, its saved selection or a theme in place; "
+    "those after it only fill slots that hold nothing. A saved selection "
+    "missing from disk is downloaded again when no source replaces it."
+)
+
+
+def _holds_current_selection[T](order: list[T]) -> list[T]:
+    if CURRENT_SELECTION not in order:
+        raise ValueError(f"The source order must include {CURRENT_SELECTION_LABEL}")
+    return order
+
+
+#: Sources in priority order, each once, with Current selection among them.
+type SourceOrder[T] = Annotated[UniqueList[T], AfterValidator(_holds_current_selection)]
+
+
+@dataclass(frozen=True, slots=True)
+class SourcePrecedence:
+    """What a source order makes of what a slot holds.
+
+    A slot holds its saved selection, or a theme in place. The sources ranked
+    above Current selection may replace that; a slot holding nothing asks
+    every source.
+    """
+
+    #: Every source, in order.
+    sources: tuple[BulkSource, ...]
+    #: The sources ranked above Current selection, in order.
+    replacing: tuple[BulkSource, ...]
+
+    @classmethod
+    def of(cls, order: Sequence[ArtSourceStep | ThemeSourceStep]) -> Self:
+        place = order.index(CURRENT_SELECTION)
+        sources = tuple(
+            step for step in order if isinstance(step, ArtBulkSource | ThemeBulkSource)
+        )
+        return cls(sources, sources[:place])
+
+    def asked(self, *, holding: bool) -> tuple[BulkSource, ...]:
+        """The sources a slot asks: those that may replace what it holds, or all."""
+        return self.replacing if holding else self.sources
+
+    def replaces(self, source: BulkSource) -> bool:
+        """Whether *source* may replace what a slot holds."""
+        return source in self.replacing
+
+    @property
+    def catalogs_only(self) -> bool:
+        """Whether every source is a curated catalog."""
+        return all(source.catalog for source in self.sources)
 
 
 class BulkAssetsArtConfig(StrictBaseModel):
     """Art-specific assets workflow configuration."""
 
     art_types: UniqueList[ArtType] = Field(default_factory=lambda: list(ITEM_ART_TYPES))
-    source_order: SourceOrder[ArtBulkSource] = Field(
-        default_factory=lambda: list(DEFAULT_ART_SOURCE_ORDER)
+    source_order: SourceOrder[ArtSourceStep] = Field(
+        default_factory=lambda: list(DEFAULT_ART_SOURCE_ORDER),
+        description=_SOURCE_ORDER,
     )
     #: Largest pHash distance local art matching accepts; ``-1`` accepts only
     #: byte-identical images.
@@ -40,13 +100,22 @@ class BulkAssetsArtConfig(StrictBaseModel):
         ASSETS_MATCH_THRESHOLD_DEFAULT
     )
 
+    @cached_property
+    def precedence(self) -> SourcePrecedence:
+        return SourcePrecedence.of(self.source_order)
+
 
 class BulkAssetsThemeConfig(StrictBaseModel):
     """Theme-specific assets workflow configuration."""
 
-    source_order: SourceOrder[ThemeBulkSource] = Field(
-        default_factory=lambda: list(DEFAULT_THEME_SOURCE_ORDER)
+    source_order: SourceOrder[ThemeSourceStep] = Field(
+        default_factory=lambda: list(DEFAULT_THEME_SOURCE_ORDER),
+        description=_SOURCE_ORDER,
     )
+
+    @cached_property
+    def precedence(self) -> SourcePrecedence:
+        return SourcePrecedence.of(self.source_order)
 
 
 class _BulkSharedRunFields(StrictBaseModel):
@@ -63,15 +132,6 @@ class _BulkSharedRunFields(StrictBaseModel):
     all_collections: bool = False
     include_unmonitored: bool = Field(
         default=False, description="Include unmonitored items in either target scope."
-    )
-    overwrite_existing: bool = Field(
-        default=False,
-        description=(
-            "Resolve sources again for saved selections and existing themes; "
-            "files identical to the local one are left untouched. Recent-check "
-            "filtering still applies. Without it, a saved selection whose file "
-            "is missing is downloaded again."
-        ),
     )
     skip_recent_val: Annotated[int, Field(ge=0)] = 0
     skip_recent_unit: RecentUnit = RecentUnit.HOURS

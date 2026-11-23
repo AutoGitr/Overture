@@ -11,6 +11,7 @@ lazy from overture.config import Settings
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
 lazy from overture.domain import (
+    CURRENT_SELECTION,
     MediaType,
     RecentUnit,
     ThemeBulkSource,
@@ -22,6 +23,7 @@ lazy from overture.schemas.bulk import (
 )
 lazy from overture.schemas.themes import ThemeSearchResult
 lazy from overture.services.asset_runs import run as asset_run
+lazy from overture.services.asset_runs.plan import KEPT_IN_PLACE, SAVED_SELECTION
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.themes.youtube_resolver import YouTubeResolver
 lazy from overture.utils.time import utc_now
@@ -80,6 +82,7 @@ async def test_source_failure_is_reported_even_when_a_later_source_matches(
         as_job_context(context),
         BulkThemeRequest(
             source_order=[
+                CURRENT_SELECTION,
                 ThemeBulkSource.YOUTUBE_SEARCH,
                 ThemeBulkSource.OVERTUREDB,
             ]
@@ -144,7 +147,11 @@ async def test_bulk_theme_source_order_falls_back_to_youtube_search(
     await asset_run.run_themes(
         as_job_context(context),
         BulkThemeRequest(
-            source_order=[ThemeBulkSource.OVERTUREDB, ThemeBulkSource.YOUTUBE_SEARCH]
+            source_order=[
+                CURRENT_SELECTION,
+                ThemeBulkSource.OVERTUREDB,
+                ThemeBulkSource.YOUTUBE_SEARCH,
+            ]
         ),
         downloads=make_bulk_downloads(app_config=app_config, database=database),
         youtube_resolver=cast("Any", FakeYoutubeResolver()),
@@ -334,7 +341,7 @@ async def test_bulk_theme_items_without_catalog_theme_are_counted_in_one_step(
     context = Context()
     await asset_run.run_themes(
         as_job_context(context),
-        BulkThemeRequest(source_order=[ThemeBulkSource(source)]),
+        BulkThemeRequest(source_order=[CURRENT_SELECTION, ThemeBulkSource(source)]),
         downloads=make_bulk_downloads(app_config=app_config, database=database),
         youtube_resolver=unused(YouTubeResolver),
         app_config=app_config,
@@ -386,12 +393,7 @@ async def test_bulk_theme_says_why_an_item_with_a_theme_was_skipped(
         database=database,
     )
 
-    assert progress_logs(context) == [
-        (
-            "Skipped Movie (theme) - kept the theme in place "
-            "(Replace existing would replace it)"
-        )
-    ]
+    assert progress_logs(context) == [f"Skipped Movie (theme) - {KEPT_IN_PLACE}"]
 
 
 async def test_bulk_theme_says_item_with_saved_youtube_id_was_already_downloaded(
@@ -428,12 +430,7 @@ async def test_bulk_theme_says_item_with_saved_youtube_id_was_already_downloaded
         database=database,
     )
 
-    assert progress_logs(context) == [
-        (
-            "Skipped Movie (theme) - saved selection already set; "
-            "Replace existing searches again"
-        )
-    ]
+    assert progress_logs(context) == [f"Skipped Movie (theme) - {SAVED_SELECTION}"]
 
 
 async def test_bulk_theme_says_item_with_saved_youtube_title_was_already_downloaded(
@@ -470,12 +467,7 @@ async def test_bulk_theme_says_item_with_saved_youtube_title_was_already_downloa
         database=database,
     )
 
-    assert progress_logs(context) == [
-        (
-            "Skipped Movie (theme) - kept the theme in place "
-            "(Replace existing would replace it)"
-        )
-    ]
+    assert progress_logs(context) == [f"Skipped Movie (theme) - {KEPT_IN_PLACE}"]
 
 
 async def test_bulk_theme_single_item_without_catalog_theme_has_singular_plurality(
@@ -491,7 +483,7 @@ async def test_bulk_theme_single_item_without_catalog_theme_has_singular_plurali
     context = Context()
     await asset_run.run_themes(
         as_job_context(context),
-        BulkThemeRequest(source_order=[ThemeBulkSource.OVERTUREDB]),
+        BulkThemeRequest(source_order=[CURRENT_SELECTION, ThemeBulkSource.OVERTUREDB]),
         downloads=make_bulk_downloads(app_config=app_config, database=database),
         youtube_resolver=unused(YouTubeResolver),
         app_config=app_config,
@@ -565,7 +557,9 @@ async def test_bulk_theme_names_the_sources_that_found_nothing(
     context = Context()
     await asset_run.run_themes(
         as_job_context(context),
-        BulkThemeRequest(source_order=cast("list[Any]", source_order)),
+        BulkThemeRequest(
+            source_order=[CURRENT_SELECTION, *map(ThemeBulkSource, source_order)]
+        ),
         downloads=make_bulk_downloads(app_config=app_config, database=database),
         youtube_resolver=cast("Any", EmptyResolver()),
         app_config=app_config,
@@ -603,7 +597,11 @@ async def test_bulk_theme_selects_overturedb_or_themerrdb_by_configured_order(
     await asset_run.run_themes(
         as_job_context(context1),
         BulkThemeRequest(
-            source_order=[ThemeBulkSource.OVERTUREDB, ThemeBulkSource.THEMERRDB]
+            source_order=[
+                CURRENT_SELECTION,
+                ThemeBulkSource.OVERTUREDB,
+                ThemeBulkSource.THEMERRDB,
+            ]
         ),
         downloads=make_bulk_downloads(app_config=app_config, database=database),
         youtube_resolver=unused(YouTubeResolver),
@@ -623,7 +621,11 @@ async def test_bulk_theme_selects_overturedb_or_themerrdb_by_configured_order(
     await asset_run.run_themes(
         as_job_context(context2),
         BulkThemeRequest(
-            source_order=[ThemeBulkSource.THEMERRDB, ThemeBulkSource.OVERTUREDB]
+            source_order=[
+                CURRENT_SELECTION,
+                ThemeBulkSource.THEMERRDB,
+                ThemeBulkSource.OVERTUREDB,
+            ]
         ),
         downloads=make_bulk_downloads(app_config=app_config, database=database),
         youtube_resolver=unused(YouTubeResolver),
@@ -669,7 +671,11 @@ async def test_bulk_theme_falls_back_when_first_source_previously_failed(
     await asset_run.run_themes(
         as_job_context(context),
         BulkThemeRequest(
-            source_order=[ThemeBulkSource.OVERTUREDB, ThemeBulkSource.THEMERRDB]
+            source_order=[
+                CURRENT_SELECTION,
+                ThemeBulkSource.OVERTUREDB,
+                ThemeBulkSource.THEMERRDB,
+            ]
         ),
         downloads=make_bulk_downloads(app_config=app_config, database=database),
         youtube_resolver=unused(YouTubeResolver),
@@ -715,7 +721,9 @@ async def test_theme_searches_overlap_but_items_are_reported_in_plan_order(
 
     await asset_run.run_themes(
         as_job_context(context),
-        BulkThemeRequest(source_order=[ThemeBulkSource.YOUTUBE_SEARCH]),
+        BulkThemeRequest(
+            source_order=[CURRENT_SELECTION, ThemeBulkSource.YOUTUBE_SEARCH]
+        ),
         downloads=make_bulk_downloads(app_config=app_config, database=database),
         youtube_resolver=cast("Any", SlowSearch()),
         app_config=app_config,
@@ -745,7 +753,7 @@ async def test_bulk_themes_persists_job_run(
 
     await asset_run.run_themes(
         as_job_context(context),
-        BulkThemeRequest(source_order=[ThemeBulkSource.OVERTUREDB]),
+        BulkThemeRequest(source_order=[CURRENT_SELECTION, ThemeBulkSource.OVERTUREDB]),
         downloads=downloads,
         youtube_resolver=unused(YouTubeResolver),
         app_config=app_config,

@@ -53,15 +53,31 @@ describe("assetsPopup library helpers", () => {
 describe("source order helpers", () => {
   const defaults = ["local_art_matching", "overturedb"] as const;
 
-  it("normalises a stored order, dropping unknowns and appending missing defaults", () => {
-    expect(normaliseSourceOrder(["overturedb", "bogus"], defaults)).toEqual([
+  it("normalises a stored order, dropping unknowns", () => {
+    expect(normaliseSourceOrder(["overturedb", "bogus", "local_art_matching"], defaults)).toEqual([
       "overturedb",
       "local_art_matching",
     ]);
   });
 
-  it("normalises a stored selection down to known sources", () => {
-    expect(normaliseSelectedSources(["overturedb", "bogus"], defaults)).toEqual(["overturedb"]);
+  it("puts Current selection at its default place in an order stored without it", () => {
+    expect(
+      normaliseSourceOrder(
+        ["overturedb", "local_art_matching"],
+        ["current_selection", "local_art_matching", "overturedb"],
+      ),
+    ).toEqual(["current_selection", "overturedb", "local_art_matching"]);
+  });
+
+  it("normalises a stored selection down to known sources, with every required one", () => {
+    expect(normaliseSelectedSources(["overturedb", "bogus"], defaults, [])).toEqual(["overturedb"]);
+    expect(
+      normaliseSelectedSources(
+        ["overturedb"],
+        ["current_selection", "overturedb"],
+        ["current_selection"],
+      ),
+    ).toEqual(["current_selection", "overturedb"]);
   });
 
   it("filters enabled sources by selection and catalog availability", () => {
@@ -108,7 +124,6 @@ describe("buildBulkAssetsRequest", () => {
     const request = buildBulkAssetsRequest({
       selectedLibraries: ["m1"],
       includeUnmonitored: false,
-      overwriteExisting: false,
       skipRecentVal: 0,
       skipRecentUnit: "hours",
       enableArt: false,
@@ -122,31 +137,28 @@ describe("buildBulkAssetsRequest", () => {
     expect(request.themes).toBeNull();
     expect(request.library_ids).toEqual(["m1"]);
     expect(request.include_unmonitored).toBe(false);
-    expect(request.overwrite_existing).toBe(false);
   });
 
   it("includes art and themes configuration when enabled", () => {
     const request = buildBulkAssetsRequest({
       selectedLibraries: ["m1"],
       includeUnmonitored: true,
-      overwriteExisting: true,
       skipRecentVal: 12,
       skipRecentUnit: "hours",
       enableArt: true,
       artTypes: ["poster"],
-      activeArtSources: ["local_art_matching"],
+      activeArtSources: ["local_art_matching", "current_selection"],
       threshold: 3,
       enableThemes: true,
-      activeThemeSources: ["youtube_search"],
+      activeThemeSources: ["current_selection", "youtube_search"],
     });
     expect(request.art).toEqual({
       art_types: ["poster"],
-      source_order: ["local_art_matching"],
+      source_order: ["local_art_matching", "current_selection"],
       threshold: 3,
     });
-    expect(request.themes).toEqual({ source_order: ["youtube_search"] });
+    expect(request.themes).toEqual({ source_order: ["current_selection", "youtube_search"] });
     expect(request.include_unmonitored).toBe(true);
-    expect(request.overwrite_existing).toBe(true);
   });
 });
 

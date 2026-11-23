@@ -2205,6 +2205,102 @@ def test_the_global_collection_formats_widen_to_a_groups_and_back() -> None:
         }
 
 
+def test_replace_existing_becomes_where_current_selection_stands_and_back() -> None:
+    def payload(**fields: object) -> str:
+        return json.dumps({"library_ids": ["1:movies"], **fields})
+
+    def payloads(conn: Connection) -> list[dict[str, object]]:
+        return [
+            json.loads(stored)
+            for (stored,) in conn.exec_driver_sql(
+                "SELECT payload FROM saved_schedules ORDER BY id"
+            ).all()
+        ]
+
+    art = {"art_types": ["poster"], "threshold": -1}
+    with _at_revision("2d3465b91d26") as (conn, config):
+        for schedule_id, kind, stored in (
+            (
+                1,
+                "assets",
+                payload(
+                    overwrite_existing=False,
+                    art={**art, "source_order": ["overturedb", "local_art_matching"]},
+                    themes={"source_order": ["themerrdb"]},
+                ),
+            ),
+            (
+                2,
+                "assets",
+                payload(
+                    overwrite_existing=True,
+                    art=None,
+                    themes={"source_order": ["overturedb", "youtube_search"]},
+                ),
+            ),
+            (3, "sync", payload(include_collections=True)),
+        ):
+            conn.exec_driver_sql(
+                "INSERT INTO saved_schedules (id, kind, name, cron_expression, "
+                "enabled, payload, state, created_at, updated_at) VALUES "
+                "(?, ?, ?, '0 3 * * *', 1, ?, '{}', '2026-01-01', '2026-01-01')",
+                (schedule_id, kind, f"run {schedule_id}", stored),
+            )
+
+        command.upgrade(config, "c6e2a8f4d913")
+        assert payloads(conn) == [
+            {
+                "library_ids": ["1:movies"],
+                "art": {
+                    **art,
+                    "source_order": [
+                        "current_selection",
+                        "overturedb",
+                        "local_art_matching",
+                    ],
+                },
+                "themes": {"source_order": ["current_selection", "themerrdb"]},
+            },
+            {
+                "library_ids": ["1:movies"],
+                "art": None,
+                "themes": {
+                    "source_order": [
+                        "overturedb",
+                        "youtube_search",
+                        "current_selection",
+                    ]
+                },
+            },
+            {"library_ids": ["1:movies"], "include_collections": True},
+        ]
+        conn.exec_driver_sql(
+            "UPDATE saved_schedules SET payload = ? WHERE id = 1",
+            (
+                payload(
+                    art={**art, "source_order": ["current_selection"]},
+                    themes={"source_order": ["current_selection", "themerrdb"]},
+                ),
+            ),
+        )
+
+        command.downgrade(config, "2d3465b91d26")
+        assert payloads(conn)[:2] == [
+            {
+                "library_ids": ["1:movies"],
+                "art": {**art, "source_order": ["overturedb", "local_art_matching"]},
+                "themes": {"source_order": ["themerrdb"]},
+                "overwrite_existing": False,
+            },
+            {
+                "library_ids": ["1:movies"],
+                "art": None,
+                "themes": {"source_order": ["overturedb", "youtube_search"]},
+                "overwrite_existing": True,
+            },
+        ]
+
+
 def test_every_revision_has_a_test_here() -> None:
     """Each migration is exercised on rows as the app stores them, in this file."""
     tests = Path(__file__).read_text()

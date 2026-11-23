@@ -1,11 +1,11 @@
 import type {
-  ArtBulkSource,
+  ArtSourceStep,
   ArtType,
   BulkAssetsRequestInput,
   BulkAssetsStopRequest,
   LibrarySectionRead,
   RecentUnit,
-  ThemeBulkSource,
+  ThemeSourceStep,
 } from "../../generated/rest/types.gen";
 import {
   ASSET_LABELS,
@@ -19,8 +19,12 @@ import {
 import { filterAvailableValues, selectedValuesForAll } from "./popupSelection";
 
 export type BulkAssetsRequest = BulkAssetsRequestInput;
-export type ArtAssetSource = ArtBulkSource;
-export type ThemeAssetSource = ThemeBulkSource;
+export type ArtAssetSource = ArtSourceStep;
+export type ThemeAssetSource = ThemeSourceStep;
+
+/** How a source order reads: what a slot holds keeps its place among the sources. */
+export const SOURCE_ORDER_NOTE =
+  "Top to bottom: sources above Current selection may replace what a slot holds; those below only fill empty slots.";
 
 /** The persisted assets-workflow configuration shared by the popup's panels. */
 export interface AssetsConfig {
@@ -33,7 +37,6 @@ export interface AssetsConfig {
   /** Collections that join the run one by one, beside the chosen groups. */
   collectionIds: number[];
   includeUnmonitored: boolean;
-  overwriteExisting: boolean;
   enableArt: boolean;
   enableThemes: boolean;
   artTypes: ArtType[];
@@ -91,26 +94,34 @@ export function selectedIncludesShowLibrary(
   return selectedLibraries.some((id) => showIds.has(id));
 }
 
-/** Reorder a stored source order, dropping unknown entries and appending missing defaults. */
+/**
+ * Reorder a stored source order, dropping unknown entries. A missing default
+ * follows the one before it in *defaults*, or leads, so a source an order
+ * leaves out sits below Current selection, which leads the defaults.
+ */
 export function normaliseSourceOrder<T extends string>(
   value: string[],
   defaults: readonly T[],
 ): T[] {
   const valid: ReadonlySet<string> = new Set(defaults);
   const ordered = value.filter((source): source is T => valid.has(source));
-  for (const source of defaults) {
-    if (!ordered.includes(source)) ordered.push(source);
-  }
+  defaults.forEach((source, index) => {
+    if (ordered.includes(source)) return;
+    const previous = index === 0 ? -1 : ordered.indexOf(defaults[index - 1]!);
+    ordered.splice(previous + 1, 0, source);
+  });
   return ordered;
 }
 
-/** Filter a stored source selection down to known sources. */
+/** Filter a stored source selection down to known sources, with every *required* one. */
 export function normaliseSelectedSources<T extends string>(
   value: string[],
   defaults: readonly T[],
+  required: readonly T[],
 ): T[] {
   const valid: ReadonlySet<string> = new Set(defaults);
-  return value.filter((source): source is T => valid.has(source));
+  const chosen = value.filter((source): source is T => valid.has(source));
+  return [...required.filter((source) => !chosen.includes(source)), ...chosen];
 }
 
 /** Whether a source is a curated catalog, which only an enabled OvertureDB provides. */
@@ -160,7 +171,6 @@ export interface BulkAssetsRequestParams {
   collectionGroups?: string[];
   allCollections?: boolean;
   includeUnmonitored: boolean;
-  overwriteExisting: boolean;
   skipRecentVal: number;
   skipRecentUnit: RecentUnit;
   enableArt: boolean;
@@ -189,7 +199,6 @@ export function buildBulkAssetsRequest(params: BulkAssetsRequestParams): BulkAss
     ...(!snapshot && params.allCollections ? { all_collections: true } : {}),
     ...(groups.length ? { collection_groups: [...groups] } : {}),
     include_unmonitored: params.includeUnmonitored,
-    overwrite_existing: params.overwriteExisting,
     skip_recent_val: params.skipRecentVal,
     skip_recent_unit: params.skipRecentUnit,
     art: params.enableArt

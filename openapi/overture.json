@@ -1226,6 +1226,16 @@
         "title": "ArtSource",
         "type": "string"
       },
+      "ArtSourceStep": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ArtBulkSource"
+          },
+          {
+            "$ref": "#/components/schemas/CurrentSelection"
+          }
+        ]
+      },
       "ArtSourcesResponse": {
         "additionalProperties": false,
         "description": "Artwork source response.",
@@ -2149,7 +2159,8 @@
             "type": "array"
           },
           "source_order": {
-            "$ref": "#/components/schemas/SourceOrder_ArtBulkSource_"
+            "$ref": "#/components/schemas/SourceOrder_ArtSourceStep_",
+            "description": "Sources in the order they are tried. Those before `current_selection` may replace what a slot holds, its saved selection or a theme in place; those after it only fill slots that hold nothing. A saved selection missing from disk is downloaded again when no source replaces it."
           },
           "threshold": {
             "default": -1,
@@ -2174,7 +2185,8 @@
             "type": "array"
           },
           "source_order": {
-            "$ref": "#/components/schemas/SourceOrder_ArtBulkSource_"
+            "$ref": "#/components/schemas/SourceOrder_ArtSourceStep_",
+            "description": "Sources in the order they are tried. Those before `current_selection` may replace what a slot holds, its saved selection or a theme in place; those after it only fill slots that hold nothing. A saved selection missing from disk is downloaded again when no source replaces it."
           },
           "threshold": {
             "default": -1,
@@ -2263,12 +2275,6 @@
           },
           "library_ids": {
             "$ref": "#/components/schemas/LibraryIds"
-          },
-          "overwrite_existing": {
-            "default": false,
-            "description": "Resolve sources again for saved selections and existing themes; files identical to the local one are left untouched. Recent-check filtering still applies. Without it, a saved selection whose file is missing is downloaded again.",
-            "title": "Overwrite Existing",
-            "type": "boolean"
           },
           "skip_recent_unit": {
             "$ref": "#/components/schemas/RecentUnit",
@@ -2366,12 +2372,6 @@
           "library_ids": {
             "$ref": "#/components/schemas/LibraryIds"
           },
-          "overwrite_existing": {
-            "default": false,
-            "description": "Resolve sources again for saved selections and existing themes; files identical to the local one are left untouched. Recent-check filtering still applies. Without it, a saved selection whose file is missing is downloaded again.",
-            "title": "Overwrite Existing",
-            "type": "boolean"
-          },
           "skip_recent_unit": {
             "$ref": "#/components/schemas/RecentUnit",
             "default": "hours"
@@ -2400,7 +2400,6 @@
           "collection_groups",
           "all_collections",
           "include_unmonitored",
-          "overwrite_existing",
           "skip_recent_val",
           "skip_recent_unit",
           "art",
@@ -2603,7 +2602,8 @@
         "description": "Theme-specific assets workflow configuration.",
         "properties": {
           "source_order": {
-            "$ref": "#/components/schemas/SourceOrder_ThemeBulkSource_"
+            "$ref": "#/components/schemas/SourceOrder_ThemeSourceStep_",
+            "description": "Sources in the order they are tried. Those before `current_selection` may replace what a slot holds, its saved selection or a theme in place; those after it only fill slots that hold nothing. A saved selection missing from disk is downloaded again when no source replaces it."
           }
         },
         "title": "BulkAssetsThemeConfig",
@@ -2614,7 +2614,8 @@
         "description": "Theme-specific assets workflow configuration.",
         "properties": {
           "source_order": {
-            "$ref": "#/components/schemas/SourceOrder_ThemeBulkSource_"
+            "$ref": "#/components/schemas/SourceOrder_ThemeSourceStep_",
+            "description": "Sources in the order they are tried. Those before `current_selection` may replace what a slot holds, its saved selection or a theme in place; those after it only fill slots that hold nothing. A saved selection missing from disk is downloaded again when no source replaces it."
           }
         },
         "required": [
@@ -8838,6 +8839,10 @@
       "CronExpression": {
         "type": "string"
       },
+      "CurrentSelection": {
+        "const": "current_selection",
+        "type": "string"
+      },
       "CustomSetValue-Input": {
         "additionalProperties": false,
         "description": "One collection of a custom set.",
@@ -12292,18 +12297,16 @@
         "title": "SourceCondition",
         "type": "object"
       },
-      "SourceOrder_ArtBulkSource_": {
+      "SourceOrder_ArtSourceStep_": {
         "items": {
-          "$ref": "#/components/schemas/ArtBulkSource"
+          "$ref": "#/components/schemas/ArtSourceStep"
         },
-        "minItems": 1,
         "type": "array"
       },
-      "SourceOrder_ThemeBulkSource_": {
+      "SourceOrder_ThemeSourceStep_": {
         "items": {
-          "$ref": "#/components/schemas/ThemeBulkSource"
+          "$ref": "#/components/schemas/ThemeSourceStep"
         },
-        "minItems": 1,
         "type": "array"
       },
       "SourceType": {
@@ -12945,6 +12948,16 @@
         ],
         "title": "ThemeSearchResult",
         "type": "object"
+      },
+      "ThemeSourceStep": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ThemeBulkSource"
+          },
+          {
+            "$ref": "#/components/schemas/CurrentSelection"
+          }
+        ]
       },
       "ThemeStats": {
         "additionalProperties": false,

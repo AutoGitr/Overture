@@ -8,7 +8,7 @@ outcome it counts under:
 * ``Adopted`` - a source's art is what is already in place, so it is saved as
   the selection and nothing is downloaded.
 * ``Skipped`` - nothing to do under the run's options, or what is in place was
-  kept because the source differs and Replace existing is off.
+  kept, as no source ranked above Current selection replaced it.
 * ``No match`` - no usable source had a candidate.
 * ``Error`` - no decision could be made.
 
@@ -20,7 +20,7 @@ lazy import dataclasses
 lazy import logging
 lazy from collections.abc import Awaitable, Callable
 lazy from contextlib import aclosing
-lazy from dataclasses import dataclass
+lazy from dataclasses import dataclass, field
 lazy from functools import partial
 
 lazy from ...config import Settings
@@ -29,14 +29,12 @@ lazy from ...db.ledger import (
     local_file,
     missing_deliveries,
     selection,
-    shows_something,
 )
-lazy from ...db.models.asset import Asset
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.season import Season
 lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import Database
-lazy from ...domain import CollectionPosterStyle, ServerAsset
+lazy from ...domain import CURRENT_SELECTION_LABEL, CollectionPosterStyle, ServerAsset
 lazy from ...jobs.progress_log import JobOutcome
 lazy from ...jobs.runner import JobContext, ManagedJob, run_managed_job
 lazy from ...jobs.tally import BulkAssetTally
@@ -58,7 +56,15 @@ lazy from ..downloads.watch import DownloadWatch
 lazy from ..library.items import emit_library_item_upserted
 lazy from ..local_assets.service import LocalAssets
 lazy from ..themes.youtube_resolver import YouTubeResolver
-lazy from .plan import SAVED_SELECTION, Batch, RunParams, Target, plan_run
+lazy from .plan import (
+    Batch,
+    RunParams,
+    Target,
+    checked_recently,
+    holds,
+    kept_reason,
+    plan_run,
+)
 lazy from .sources import SOURCE_ERRORS, BatchFacts, Decision, Notes, Sources
 lazy from .support import (
     DECIDE_CONCURRENCY,
@@ -74,25 +80,28 @@ lazy from .support import (
 
 logger = logging.getLogger(__name__)
 
-#: Why a theme in place that nothing selects is left as it is.
-KEPT_IN_PLACE = "kept the theme in place (Replace existing would replace it)"
 #: Why a run leaves a target that already holds the art or theme a source chose.
 ALREADY_IN_PLACE = "the saved selection is already in place"
 
 
 @dataclass(frozen=True, slots=True)
 class _Keep:
-    """A target settled without asking a source."""
+    """A target settled as it is, no source having replaced what it holds."""
 
     outcome: JobOutcome
     reason: str
+    #: What the sources asked to replace it said.
+    notes: Notes = field(default_factory=Notes)
 
 
 @dataclass(frozen=True, slots=True)
 class _Restore:
-    """A saved selection some required place no longer holds."""
+    """A saved selection a required place no longer holds, and no source replaced."""
 
     saved: Selection
+    reason: str
+    #: What the sources asked to replace it said.
+    notes: Notes = field(default_factory=Notes)
 
 
 #: What deciding a target found: settled as it is, its saved selection to
@@ -142,15 +151,10 @@ def _count(count: int, *, collections: bool) -> str:
     return count_label(count, "collection asset" if collections else "asset")
 
 
-def _in_place(asset: Asset) -> bool:
-    """Whether a required place holds something, Overture's content or not."""
-    return any(seen.required and shows_something(seen) for seen in asset.deliveries)
-
-
 async def _load(run: _Run, batch: Batch) -> tuple[list[Target], BatchFacts]:
     """Read one batch's files, then load its targets and what its sources read."""
     owner_ids = list(batch.visits)
-    catalog = any(source.catalog for source in run.params.source_order)
+    catalog = any(source.catalog for source in run.params.precedence.sources)
     if not batch.collections:
         await run.local_assets.reconcile(
             item_ids=owner_ids,
@@ -222,8 +226,11 @@ async def _decide(
 ) -> tuple[Target, _Outcome]:
     """Decide one target; nothing is reported, and only its files are recorded.
 
+    A target holding a saved selection, or a theme in place, asks only the
+    sources ranked above Current selection, and keeps what it holds when none
+    of them decides; a saved selection missing from disk is downloaded again.
     Planning already skipped it if it was checked recently, unless it is a
-    saved selection to restore.
+    saved selection to restore, which then asks no source.
     """
     try:
         if (row := target.collection) is not None and target.kind is ServerAsset.THEME:
@@ -235,18 +242,36 @@ async def _decide(
                     row, downloads=run.downloads, database=run.database
                 ),
             )
-        asset = target.asset
-        saved = selection(asset)
-        if not run.params.overwrite_existing:
-            if saved is not None:
-                if missing_deliveries(asset):
-                    return target, _Restore(saved)
-                return target, _Keep(JobOutcome.SKIPPED, SAVED_SELECTION)
-            if target.kind is ServerAsset.THEME and _in_place(asset):
-                return target, _Keep(JobOutcome.SKIPPED, KEPT_IN_PLACE)
-        return target, await run.sources.ask(target, facts)
+        holding = holds(target.asset)
+        sources = run.params.precedence.asked(holding=holding)
+        if holding and (
+            not sources or checked_recently(target.last_checked, run.params)
+        ):
+            return target, _kept(target, None)
+        decision, notes = await run.sources.ask(target, facts, sources)
+        if decision is not None or not holding:
+            return target, (decision, notes)
+        return target, _kept(target, notes)
     except SOURCE_ERRORS as exc:
         return target, exc
+
+
+def _kept(target: Target, notes: Notes | None) -> _Keep | _Restore:
+    """Keep what a target holds: its saved selection, restored if missing, or theme.
+
+    *notes* are what the sources asked to replace it said, ``None`` when none
+    was asked.
+    """
+    asset = target.asset
+    saved = selection(asset)
+    said = None if notes is None else "; ".join([*notes.declined, *notes.empty])
+    notes = notes or Notes()
+    if saved is not None and missing_deliveries(asset):
+        reason = _restore_reason(target) + (f"; {said}" if said else "")
+        return _Restore(saved, reason, notes)
+    return _Keep(
+        JobOutcome.SKIPPED, kept_reason(saved=saved is not None, said=said), notes
+    )
 
 
 async def _stamp(run: _Run, target: Target) -> None:
@@ -323,12 +348,16 @@ async def _adopt(run: _Run, target: Target, decision: Decision) -> None:
     await _stamp(run, target)
 
 
+async def _source_errors(run: _Run, target: Target, notes: Notes) -> None:
+    """Report each source that failed before the target was decided, on its own line."""
+    for error in notes.errors:
+        await run.job.report(JobOutcome.ERROR, target.label, error, finished=False)
+
+
 async def _act(run: _Run, target: Target, decision: Decision, notes: Notes) -> None:
     """Adopt or queue what a source decided, and report it."""
     job = run.job
-    # A source that failed before this one decided is its own error line.
-    for error in notes.errors:
-        await job.report(JobOutcome.ERROR, target.label, error, finished=False)
+    await _source_errors(run, target, notes)
     asset = target.asset
     saved = selection(asset)
     if (
@@ -357,7 +386,8 @@ async def _undecided(run: _Run, target: Target, notes: Notes) -> None:
         await run.job.report(
             JobOutcome.SKIPPED,
             target.label,
-            f"kept the local file: {notes.text()} (Replace existing would replace it)",
+            f"kept the local file: {notes.text()} (ranking OvertureDB above "
+            f"{CURRENT_SELECTION_LABEL} would replace it)",
         )
     elif notes.errors:
         await run.job.report(JobOutcome.ERROR, target.label, notes.text())
@@ -373,6 +403,8 @@ async def _visit(run: _Run, target: Target, outcome: _Outcome) -> None:
     try:
         if isinstance(outcome, Exception):
             raise outcome
+        if isinstance(outcome, _Keep | _Restore):
+            await _source_errors(run, target, outcome.notes)
         if isinstance(outcome, _Keep):
             await job.report(outcome.outcome, target.label, outcome.reason)
         elif isinstance(outcome, _Restore):
@@ -380,7 +412,7 @@ async def _visit(run: _Run, target: Target, outcome: _Outcome) -> None:
             await queue_and_report(
                 job,
                 target.label,
-                _restore_reason(target),
+                outcome.reason,
                 run.queue(
                     target,
                     saved.url or saved.youtube_id,

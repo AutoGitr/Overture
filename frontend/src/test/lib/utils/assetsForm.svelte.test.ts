@@ -69,6 +69,17 @@ describe("AssetsForm", () => {
     expect(assets.disabledSources).toContain("overturedb");
   });
 
+  it("always runs Current selection, even from a selection stored without it", () => {
+    localStorage.setItem("assetsPopup_selectedThemeSources", '["youtube_search"]');
+    const assets = form();
+
+    assets.toggleArtSource("current_selection");
+    assets.toggleThemeSource("current_selection");
+
+    expect(assets.activeArtSources).toContain("current_selection");
+    expect(assets.activeThemeSources).toEqual(["current_selection", "youtube_search"]);
+  });
+
   it("selects every library, or the sidebar's items instead", () => {
     const assets = form();
     assets.toggleAll(true);
@@ -95,10 +106,13 @@ describe("AssetsForm", () => {
         collection_groups: null,
         all_collections: false,
         include_unmonitored: true,
-        overwrite_existing: true,
         skip_recent_val: 3,
         skip_recent_unit: "days",
-        art: { art_types: ["background"], source_order: ["local_art_matching"], threshold: 4 },
+        art: {
+          art_types: ["background"],
+          source_order: ["local_art_matching", "current_selection"],
+          threshold: 4,
+        },
         themes: null,
       },
     });
@@ -108,13 +122,14 @@ describe("AssetsForm", () => {
     expect(assets.config).toMatchObject({
       selectedLibraries: ["2"],
       includeUnmonitored: true,
-      overwriteExisting: true,
       skipRecentVal: 3,
       skipRecentUnit: "days",
       enableArt: true,
       enableThemes: false,
       artTypes: ["background"],
-      selectedArtSources: ["local_art_matching"],
+      // A source the schedule leaves out sits below Current selection.
+      artSourceOrder: ["local_art_matching", "current_selection", "overturedb"],
+      selectedArtSources: ["local_art_matching", "current_selection"],
       threshold: 4,
       scheduleCronExpression: "0 4 * * *",
     });

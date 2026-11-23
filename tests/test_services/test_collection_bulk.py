@@ -14,6 +14,7 @@ lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.session import Database
 lazy from overture.domain import (
+    CURRENT_SELECTION,
     DeliveryChannel,
     IncrementalThemeOrder,
     MediaType,
@@ -135,7 +136,9 @@ async def test_bulk_collection_scope_uses_catalog_order_and_never_searches_youtu
     expected: str | None,
 ) -> None:
     await _seed(database)
-    params = BulkThemeRequest(collection_ids=[1], source_order=sources)
+    params = BulkThemeRequest(
+        collection_ids=[1], source_order=[CURRENT_SELECTION, *sources]
+    )
     plan = await plan_run(params, database=database)
     assert plan.total == 1
     downloads = make_bulk_downloads(

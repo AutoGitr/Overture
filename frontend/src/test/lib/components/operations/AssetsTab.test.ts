@@ -180,7 +180,6 @@ describe("AssetsPopup", () => {
           library_ids: [],
           item_ids: [7, 12, 25],
           include_unmonitored: false,
-          overwrite_existing: false,
         }),
       ),
     );
@@ -298,13 +297,12 @@ describe("AssetsPopup", () => {
           skip_recent_val: 2,
           skip_recent_unit: "days",
           include_unmonitored: false,
-          overwrite_existing: false,
           art: expect.objectContaining({
             art_types: ["poster"],
-            source_order: ["overturedb", "local_art_matching"],
+            source_order: ["current_selection", "overturedb", "local_art_matching"],
           }),
           themes: expect.objectContaining({
-            source_order: ["overturedb", "themerrdb", "youtube_search"],
+            source_order: ["current_selection", "overturedb", "themerrdb", "youtube_search"],
           }),
         }),
       );
@@ -315,6 +313,7 @@ describe("AssetsPopup", () => {
     localStorage.setItem("assetsPopup_artTypes", JSON.stringify(["poster"]));
     localStorage.setItem("assetsPopup_selectedLibraries", JSON.stringify(["1"]));
     localStorage.setItem("assetsPopup_selectedArtSources", JSON.stringify(["local_art_matching"]));
+    // Stored before Current selection existed: it leads the order.
     localStorage.setItem(
       "assetsPopup_artSourceOrder",
       JSON.stringify(["local_art_matching", "overturedb"]),
@@ -332,11 +331,11 @@ describe("AssetsPopup", () => {
           library_ids: ["1"],
           art: expect.objectContaining({
             art_types: ["poster"],
-            source_order: ["local_art_matching"],
+            source_order: ["current_selection", "local_art_matching"],
             threshold: 7,
           }),
           themes: expect.objectContaining({
-            source_order: ["overturedb", "themerrdb", "youtube_search"],
+            source_order: ["current_selection", "overturedb", "themerrdb", "youtube_search"],
           }),
         }),
       );
@@ -367,7 +366,6 @@ describe("AssetsPopup", () => {
       target: { value: "Nightly" },
     });
     await fireEvent.click(screen.getByRole("checkbox", { name: "Include unmonitored items" }));
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Replace existing" }));
     await fireEvent.input(assetsPanel().getByPlaceholderText("0 3 * * *"), {
       target: { value: "0 5 * * *" },
     });
@@ -383,7 +381,6 @@ describe("AssetsPopup", () => {
           config: expect.objectContaining({
             library_ids: ["1"],
             include_unmonitored: true,
-            overwrite_existing: true,
           }),
         }),
       );
@@ -422,8 +419,8 @@ describe("AssetsPopup", () => {
     expect(screen.queryByText(/Theme search query/)).not.toBeInTheDocument();
     expect(screen.getByText("Update schedule")).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "Include unmonitored items" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Replace existing" })).toBeChecked();
-    expect(screen.getByText("Replace existing: Yes")).toBeInTheDocument();
+    // OvertureDB ranks above Current selection, so it may replace what slots hold.
+    expect(screen.getByText(/Art sources:\s*OvertureDB, Current selection/)).toBeInTheDocument();
     await fireEvent.click(screen.getByText("Update schedule"));
     await waitFor(() =>
       expect(updateBulkAssetsSchedule).toHaveBeenCalledWith(
@@ -431,7 +428,9 @@ describe("AssetsPopup", () => {
         expect.objectContaining({
           config: expect.objectContaining({
             include_unmonitored: true,
-            overwrite_existing: true,
+            art: expect.objectContaining({
+              source_order: ["overturedb", "current_selection"],
+            }),
           }),
         }),
       ),
@@ -449,14 +448,14 @@ describe("AssetsPopup", () => {
       }),
     );
     await fireEvent.click(screen.getByRole("checkbox", { name: "Include unmonitored items" }));
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Replace existing" }));
-    await waitFor(() => expect(localStorage.getItem("assetsPopup_overwriteExisting")).toBe("true"));
+    await waitFor(() =>
+      expect(localStorage.getItem("assetsPopup_includeUnmonitored")).toBe("true"),
+    );
     popup.unmount();
     renderWithQueryClient(OperationsPopup);
     expect(
       await screen.findByRole("checkbox", { name: "Include unmonitored items" }),
     ).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Replace existing" })).toBeChecked();
     await waitFor(() => expect(screen.getByRole("button", { name: "Run now" })).toBeEnabled());
     await fireEvent.click(screen.getByRole("button", { name: "Run now" }));
     await waitFor(() =>
@@ -464,7 +463,6 @@ describe("AssetsPopup", () => {
         expect.objectContaining({
           item_ids: [7],
           include_unmonitored: true,
-          overwrite_existing: true,
         }),
       ),
     );
@@ -499,7 +497,10 @@ describe("AssetsPopup", () => {
     renderWithQueryClient(OperationsPopup);
     await assetsPanel().findByText("Catalog unavailable");
     await screen.findByRole("checkbox", { name: /Movies/ });
-    expect(localStorage.getItem("assetsPopup_selectedArtSources")).toBe('["overturedb"]');
+    // OvertureDB stays chosen; Current selection always is.
+    expect(localStorage.getItem("assetsPopup_selectedArtSources")).toBe(
+      '["current_selection","overturedb"]',
+    );
   });
 
   it("shows the stop button immediately upon starting without getting stuck on starting", async () => {

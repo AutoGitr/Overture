@@ -4,7 +4,13 @@ lazy from typing import override
 
 lazy from overture.config import Settings
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtBulkSource, ArtType, RecentUnit, ThemeBulkSource
+lazy from overture.domain import (
+    CURRENT_SELECTION,
+    ArtBulkSource,
+    ArtType,
+    RecentUnit,
+    ThemeBulkSource,
+)
 lazy from overture.routers import bulk_assets
 lazy from overture.schemas.bulk import (
     BulkAssetsArtConfig,
@@ -95,9 +101,11 @@ def _assets_body() -> BulkAssetsScheduleWrite:
             skip_recent_unit=RecentUnit.DAYS,
             art=BulkAssetsArtConfig(
                 art_types=[ArtType.POSTER],
-                source_order=[ArtBulkSource.LOCAL_ART_MATCHING],
+                source_order=[CURRENT_SELECTION, ArtBulkSource.LOCAL_ART_MATCHING],
             ),
-            themes=BulkAssetsThemeConfig(source_order=[ThemeBulkSource.YOUTUBE_SEARCH]),
+            themes=BulkAssetsThemeConfig(
+                source_order=[CURRENT_SELECTION, ThemeBulkSource.YOUTUBE_SEARCH]
+            ),
         ),
     )
 

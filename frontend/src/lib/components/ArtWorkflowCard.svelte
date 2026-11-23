@@ -3,6 +3,7 @@
   import { ART_SOURCE_LABELS, ASSET_LABELS, ITEM_ART_TYPES, MATCH_THRESHOLD_MAX, PERFECT_MATCH_ONLY, SEASON_ART_TYPES } from "../../generated/settings";
   import { SEASON_ONLY } from "../utils/artTypes";
   import type { AssetsForm } from "../utils/assetsForm.svelte";
+  import { SOURCE_ORDER_NOTE } from "../utils/assetsPopup";
   import SourceOrderList from "./SourceOrderList.svelte";
   import WorkflowCard from "./WorkflowCard.svelte";
   import WorkflowSection from "./WorkflowSection.svelte";
@@ -41,10 +42,11 @@
     </div>
   </WorkflowSection>
 
-  <WorkflowSection label="Sources" note="First match wins, top to bottom.">
+  <WorkflowSection label="Sources" note={SOURCE_ORDER_NOTE}>
     <SourceOrderList
       sourceOrder={config.artSourceOrder}
       selectedSources={config.selectedArtSources}
+      required={form.requiredSources}
       labels={ART_SOURCE_LABELS}
       disabledSources={form.disabledSources}
       storageKey="art"

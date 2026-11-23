@@ -69,19 +69,33 @@ during a run is **Skipped**.
 Titles and collections follow the same rules. An asset's places are a title's
 folder, or each server copy of a collection.
 
-By default, Assets skips assets that already have a saved choice and keeps
-what it did not put in place. It downloads the saved choice again when a place
-lacks it: the file is missing, or was replaced by another program after
-Overture wrote it, as Radarr's or Sonarr's media upgrades can do, or a server
-copy shows another image or theme. This happens whichever sources the run
-uses, since the saved choice is never looked for again:
+Each art and theme source list holds **Current selection**: what a slot
+already holds, its saved choice or a theme in place. It is a place in the list
+rather than a source, so it has no switch; drag it to decide what may replace
+it. Sources above it may replace what a slot holds;
+sources below it only fill slots that hold nothing. First, the default, keeps
+everything you have; last lets every source replace it. In between, for
+example OvertureDB and ThemerrDB above it and YouTube search below, curated
+themes replace yours while a search only fills the gaps.
 
-| Saved choice | In place                       | Default                   | Replace existing |
-| ------------ | ------------------------------ | ------------------------- | ---------------- |
-| Yes          | What Overture put there for it | Skip                      | Search again     |
-| Yes          | Missing, or replaced since     | Download the saved choice | Search again     |
-| No           | A theme                        | Keep it                   | Search again     |
-| No           | Art, or nothing                | Search                    | Search again     |
+A saved choice is downloaded again when a place lacks it and no source above
+Current selection replaces it: the file is missing, or was replaced by another
+program after Overture wrote it, as Radarr's or Sonarr's media upgrades can
+do, or a server copy shows another image or theme.
+
+| Slot holds                    | A source above Current selection finds | None finds, or none is above it |
+| ----------------------------- | -------------------------------------- | ------------------------------- |
+| A saved choice, in place      | Replaced with what it found            | Kept                            |
+| A saved choice, missing       | Replaced with what it found            | Downloaded again                |
+| A theme Overture did not save | Replaced with what it found            | Kept                            |
+| Art Overture did not save     | Every source is asked                  | Every source is asked           |
+| Nothing                       | Every source is asked                  | Every source is asked           |
+
+Art in place that nothing selects is identified by the sources: local-image
+matching finds where it came from, and OvertureDB's artwork is compared with
+it. Ranked below Current selection, OvertureDB adopts an identical image and
+replaces a similar one only within the matching threshold; ranked above it,
+OvertureDB replaces it outright.
 
 Saved choices include the artwork URLs Sync copies from your media server, so
 a run downloads those to the media folder when no local file exists yet. Before
@@ -90,18 +104,13 @@ unchanged file costs one look at its size and modification time and is not
 read. To keep a file you put there yourself, clear the saved choice, or upload
 the image instead.
 
-**Replace existing** only ever replaces a choice with something different: an
-asset that already holds the art or theme a source picks, such as OvertureDB's,
-is skipped without downloading anything. A downloaded file identical to yours
-is left untouched. A source image identical to your file is adopted in place.
-OvertureDB's artwork is compared with what is in place as local image
-matching compares its candidates: your file, or for a collection the image
-Overture uploaded or its server shows. By default only an identical image is
-taken, and a looser matching threshold also takes the same picture saved
-differently, replacing what is in place with OvertureDB's.
+A source only ever replaces a choice with something different: an asset that
+already holds the art or theme a source picks, such as OvertureDB's, is
+skipped without downloading anything. A downloaded file identical to yours is
+left untouched. A source image identical to your file is adopted in place.
 
-**Skip recently checked** skips searches within the chosen time window, also
-with Replace existing. Restoring a saved choice always runs.
+**Skip recently checked** skips searches within the chosen time window,
+whatever Current selection's place. Restoring a saved choice always runs.
 
 When an image host rate-limits Overture, as ThePosterDB often does, runs pause
 every request to that host for as long as it asks (at least a minute, doubling

@@ -21,8 +21,11 @@ lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
+    CURRENT_SELECTION,
+    CURRENT_SELECTION_LABEL,
     ArtBulkSource,
     ArtType,
+    CurrentSelection,
     JobStatus,
     JobType,
     MediaType,
@@ -36,7 +39,11 @@ lazy from overture.schemas.themes import ThemeSearchResult
 lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.art.matcher import ArtMatchOutcome, ImageComparison
 lazy from overture.services.asset_runs import run as asset_run
-lazy from overture.services.asset_runs.plan import SAVED_SELECTION
+lazy from overture.services.asset_runs.plan import (
+    KEPT_IN_PLACE,
+    NO_SOURCES,
+    SAVED_SELECTION,
+)
 lazy from overture.services.downloads.queue import JobTarget
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.utils.art_urls import PublicArtUrl
@@ -68,17 +75,26 @@ RECENT = "checked within the last 1 hour"
 PLANNED_LINE = re.compile(r"(Skipped|No match) (\d+) (?:items?|assets?) - (.*)")
 
 
-def orders[T](sources: tuple[T, ...]) -> list[tuple[T, ...]]:
-    """Return every non-empty selection of *sources*, in every order."""
+def orders[T](sources: tuple[T, ...]) -> list[tuple[T | CurrentSelection, ...]]:
+    """Every selection of *sources*, none included, in every order, with
+    Current selection at every place in it."""
     return [
-        order
-        for size in range(1, len(sources) + 1)
+        (*order[:place], CURRENT_SELECTION, *order[place:])
+        for size in range(len(sources) + 1)
         for order in permutations(sources, size)
+        for place in range(size + 1)
     ]
 
 
 def order_id(order: tuple[Any, ...]) -> str:
-    return "+".join(source.value for source in order)
+    return "+".join(str(step) for step in order)
+
+
+def split[T](order: tuple[T | CurrentSelection, ...]) -> tuple[list[T], list[T]]:
+    """The sources above Current selection, which may replace, and every source."""
+    place = order.index(CURRENT_SELECTION)
+    above = [step for step in order[:place] if step != CURRENT_SELECTION]
+    return above, [step for step in order if step != CURRENT_SELECTION]
 
 
 class Expected(NamedTuple):
@@ -95,7 +111,8 @@ def planned(
     *,
     saved: str | None,
     recent: bool,
-    overwrite: bool,
+    above: bool,
+    asked: bool,
     catalog_only: bool,
     offer: str | None,
     misses: list[str],
@@ -104,16 +121,45 @@ def planned(
     """Return what planning decides from the database, or ``None`` to visit.
 
     No case stores the facts of a file on disk, so planning takes every saved
-    selection's file as missing and visits it to restore the file.
+    selection's file as missing and visits it to restore the file. *above*
+    says a source ranks above Current selection, *asked* that the target asks
+    any source, and *catalog_only* that every source of the run is a catalog.
     """
-    if saved is not None and not overwrite:
+    if saved is not None and not above:
         return None
+    if not asked:
+        return Expected(JobOutcome.NO_MATCH, NO_SOURCES, planned=True)
     if catalog_only and offer is None:
+        if saved is not None:
+            return None
         outcome = JobOutcome.NO_MATCH if enabled else JobOutcome.SKIPPED
         return Expected(outcome, "; ".join(misses), planned=True)
     if recent:
-        return Expected(JobOutcome.SKIPPED, RECENT, planned=True)
+        return (
+            None
+            if saved is not None
+            else Expected(JobOutcome.SKIPPED, RECENT, planned=True)
+        )
     return None
+
+
+def kept(
+    *, saved: str | None, on_disk: bool, notes: list[str], asked: bool
+) -> Expected:
+    """What keeping a target's saved selection, or its theme in place, logs."""
+    if saved is not None and not on_disk:
+        found = "".join(f"; {note}" for note in notes) if asked else ""
+        return Expected(
+            JobOutcome.QUEUED,
+            f"restores the saved selection; local file missing{found}",
+            queued=saved,
+        )
+    holds = "saved selection kept" if saved is not None else "kept the theme in place"
+    if asked and notes:
+        return Expected(JobOutcome.SKIPPED, f"{holds}: {'; '.join(notes)}")
+    return Expected(
+        JobOutcome.SKIPPED, SAVED_SELECTION if saved is not None else KEPT_IN_PLACE
+    )
 
 
 def assert_run(
@@ -181,11 +227,13 @@ ART_CASES = [
 
 def expected_art(
     case: ArtCase,
-    order: tuple[ArtBulkSource, ...],
+    order: tuple[ArtBulkSource | CurrentSelection, ...],
     *,
     enabled: bool,
-    overwrite: bool,
 ) -> Expected:
+    above, every = split(order)
+    current = case.saved is not None
+    asked = above if current else every
     offer = CATALOG_URL if enabled and case.catalog == "served" else None
     if not enabled:
         miss = "OvertureDB is disabled"
@@ -196,8 +244,9 @@ def expected_art(
     decided = planned(
         saved=case.saved,
         recent=case.recent,
-        overwrite=overwrite,
-        catalog_only=order == (ArtBulkSource.OVERTUREDB,),
+        above=bool(above),
+        asked=bool(asked),
+        catalog_only=every == [ArtBulkSource.OVERTUREDB],
         offer=offer,
         misses=[miss],
         enabled=enabled,
@@ -205,44 +254,55 @@ def expected_art(
     if decided is not None:
         return decided
     on_disk = case.disk != "none"
-    if case.saved is not None and not overwrite:
-        if on_disk:
-            return Expected(JobOutcome.SKIPPED, SAVED_SELECTION)
+    replaces = ArtBulkSource.OVERTUREDB in above
+    if current and (not above or case.recent):
+        return kept(saved=case.saved, on_disk=on_disk, notes=[], asked=False)
+    found = asked_art(case, asked, offer=offer, miss=miss, replaces=replaces)
+    if isinstance(found, Expected):
+        return found
+    declined, empty = found
+    if current:
+        return kept(saved=case.saved, on_disk=on_disk, notes=empty, asked=True)
+    notes = "; ".join([*declined, *empty])
+    if declined:
         return Expected(
-            JobOutcome.QUEUED,
-            "restores the saved selection; local file missing",
-            queued=case.saved,
+            JobOutcome.SKIPPED,
+            f"kept the local file: {notes} (ranking OvertureDB above "
+            f"{CURRENT_SELECTION_LABEL} would replace it)",
         )
-    return visited_art(case, order, offer=offer, miss=miss, overwrite=overwrite)
+    return Expected(JobOutcome.NO_MATCH, notes)
 
 
-def visited_art(
+def asked_art(
     case: ArtCase,
-    order: tuple[ArtBulkSource, ...],
+    sources: list[ArtBulkSource],
     *,
     offer: str | None,
     miss: str,
-    overwrite: bool,
-) -> Expected:
-    """Return what asking the sources in *order* decides for a visited slot."""
+    replaces: bool,
+) -> Expected | tuple[list[str], list[str]]:
+    """Return what asking *sources* decides, or what the declining and empty said.
+
+    OvertureDB compares its art with the file on disk unless it *replaces* it.
+    """
     on_disk = case.disk != "none"
-    replaces = "; replaces the local file" if on_disk else ""
+    replaced = "; replaces the local file" if on_disk else ""
     declined: list[str] = []
     empty: list[str] = []
-    for source in order:
+    for source in sources:
         if source is ArtBulkSource.LOCAL_ART_MATCHING:
             if case.local_match:
                 return Expected(
-                    JobOutcome.QUEUED, f"d=3 from Fake{replaces}", queued=LOCAL_URL
+                    JobOutcome.QUEUED, f"d=3 from Fake{replaced}", queued=LOCAL_URL
                 )
             empty.append("Local art matching: no similar artwork")
         elif offer is None:
             empty.append(miss)
         elif on_disk and case.saved == offer:
             return Expected(JobOutcome.SKIPPED, asset_run.ALREADY_IN_PLACE)
-        elif not on_disk or overwrite:
+        elif not on_disk or replaces:
             return Expected(
-                JobOutcome.QUEUED, f"OvertureDB artwork{replaces}", queued=offer
+                JobOutcome.QUEUED, f"OvertureDB artwork{replaced}", queued=offer
             )
         elif case.disk == "same":
             return Expected(
@@ -252,21 +312,13 @@ def visited_art(
             )
         else:
             declined.append("OvertureDB artwork is a different picture, d=30")
-    notes = "; ".join([*declined, *empty])
-    if declined:
-        return Expected(
-            JobOutcome.SKIPPED,
-            f"kept the local file: {notes} (Replace existing would replace it)",
-        )
-    return Expected(JobOutcome.NO_MATCH, notes)
+    return declined, empty
 
 
 @pytest.mark.parametrize("enabled", [True, False], ids=["enabled", "disabled"])
-@pytest.mark.parametrize("overwrite", [False, True])
 @pytest.mark.parametrize("order", orders(tuple(ArtBulkSource)), ids=order_id)
 async def test_art_source_matrix(
-    order: tuple[ArtBulkSource, ...],
-    overwrite: bool,
+    order: tuple[ArtBulkSource | CurrentSelection, ...],
     enabled: bool,
     tmp_path: Path,
     db_session: AsyncSession,
@@ -281,9 +333,7 @@ async def test_art_source_matrix(
     for number, case in enumerate(ART_CASES, 1):
         title = f"Case {number:03d}"
         cases[number] = case
-        expected[title] = expected_art(
-            case, order, enabled=enabled, overwrite=overwrite
-        )
+        expected[title] = expected_art(case, order, enabled=enabled)
         folder = tmp_path / title
         folder.mkdir()
         item = served_item(
@@ -357,7 +407,6 @@ async def test_art_source_matrix(
             art_types=[ArtType.POSTER],
             threshold=10,
             skip_recent_val=1,
-            overwrite_existing=overwrite,
         ),
         downloads=make_bulk_downloads(app_config=app_config, database=database),
         art_matcher=matcher,
@@ -440,15 +489,17 @@ def theme_miss(
 def expected_theme(
     number: int,
     case: ThemeCase,
-    order: tuple[ThemeBulkSource, ...],
+    order: tuple[ThemeBulkSource | CurrentSelection, ...],
     *,
     enabled: bool,
-    overwrite: bool,
 ) -> Expected:
     ids = theme_ids(number, case)
+    above, every = split(order)
+    # Planning knows a saved selection, not yet a theme in place.
+    asked = above if ids["saved"] is not None else every
     offer: str | None = None
     misses: list[str] = []
-    for source in (source for source in order if source.catalog):
+    for source in (source for source in asked if source.catalog):
         if (miss := theme_miss(source, case, enabled=enabled)) is None:
             offer = ids[source.value]
             break
@@ -456,30 +507,34 @@ def expected_theme(
     decided = planned(
         saved=ids["saved"],
         recent=case.recent,
-        overwrite=overwrite,
-        catalog_only=all(source.catalog for source in order),
+        above=bool(above),
+        asked=bool(asked),
+        catalog_only=all(source.catalog for source in every),
         offer=offer,
         misses=misses,
         enabled=enabled,
     )
     if decided is not None:
         return decided
-    if ids["saved"] is not None and not overwrite:
-        if case.disk:
-            return Expected(JobOutcome.SKIPPED, SAVED_SELECTION)
-        return Expected(
-            JobOutcome.QUEUED,
-            "restores the saved selection; local file missing",
-            queued=ids["saved"],
-        )
-    if case.disk and not overwrite:
-        return Expected(
-            JobOutcome.SKIPPED,
-            "kept the theme in place (Replace existing would replace it)",
-        )
+    current = ids["saved"] is not None or case.disk
+    if current and (not above or case.recent):
+        return kept(saved=ids["saved"], on_disk=case.disk, notes=[], asked=False)
+    found = asked_theme(number, case, above if current else every, enabled=enabled)
+    if isinstance(found, Expected):
+        return found
+    if current:
+        return kept(saved=ids["saved"], on_disk=case.disk, notes=found, asked=True)
+    return Expected(JobOutcome.NO_MATCH, "; ".join(found))
+
+
+def asked_theme(
+    number: int, case: ThemeCase, sources: list[ThemeBulkSource], *, enabled: bool
+) -> Expected | list[str]:
+    """Return what asking *sources* decides, or why none did."""
+    ids = theme_ids(number, case)
     replaces = "; replaces the local file" if case.disk else ""
     notes: list[str] = []
-    for source in order:
+    for source in sources:
         if source is ThemeBulkSource.YOUTUBE_SEARCH:
             if case.youtube:
                 return Expected(
@@ -501,7 +556,7 @@ def expected_theme(
             )
         else:
             notes.append(miss)
-    return Expected(JobOutcome.NO_MATCH, "; ".join(notes))
+    return notes
 
 
 class FakeSearch:
@@ -519,11 +574,9 @@ class FakeSearch:
 
 
 @pytest.mark.parametrize("enabled", [True, False], ids=["enabled", "disabled"])
-@pytest.mark.parametrize("overwrite", [False, True])
 @pytest.mark.parametrize("order", orders(tuple(ThemeBulkSource)), ids=order_id)
 async def test_theme_source_matrix(
-    order: tuple[ThemeBulkSource, ...],
-    overwrite: bool,
+    order: tuple[ThemeBulkSource | CurrentSelection, ...],
     enabled: bool,
     tmp_path: Path,
     db_session: AsyncSession,
@@ -537,9 +590,7 @@ async def test_theme_source_matrix(
     for number, case in enumerate(THEME_CASES, 1):
         title = f"Case {number:03d}"
         cases[number] = case
-        expected[title] = expected_theme(
-            number, case, order, enabled=enabled, overwrite=overwrite
-        )
+        expected[title] = expected_theme(number, case, order, enabled=enabled)
         ids = theme_ids(number, case)
         folder = tmp_path / title
         folder.mkdir()
@@ -606,7 +657,6 @@ async def test_theme_source_matrix(
         BulkThemeRequest(
             source_order=list(order),
             skip_recent_val=1,
-            overwrite_existing=overwrite,
         ),
         downloads=make_bulk_downloads(app_config=app_config, database=database),
         youtube_resolver=cast("Any", FakeSearch(cases)),

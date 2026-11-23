@@ -13,6 +13,7 @@ lazy from overture.config import Settings
 lazy from overture.db.models.download_job import DownloadJob
 lazy from overture.db.session import Database
 lazy from overture.domain import (
+    CURRENT_SELECTION,
     ArtBulkSource,
     ArtType,
     JobStatus,
@@ -77,13 +78,15 @@ def _assets_body(
             art=(
                 BulkAssetsArtConfig(
                     art_types=[ArtType.POSTER],
-                    source_order=[ArtBulkSource.LOCAL_ART_MATCHING],
+                    source_order=[CURRENT_SELECTION, ArtBulkSource.LOCAL_ART_MATCHING],
                 )
                 if art
                 else None
             ),
             themes=(
-                BulkAssetsThemeConfig(source_order=[ThemeBulkSource.YOUTUBE_SEARCH])
+                BulkAssetsThemeConfig(
+                    source_order=[CURRENT_SELECTION, ThemeBulkSource.YOUTUBE_SEARCH]
+                )
                 if themes
                 else None
             ),

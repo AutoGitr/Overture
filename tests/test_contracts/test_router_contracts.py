@@ -19,6 +19,7 @@ lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
 lazy from overture.domain import (
     ASSETS_MATCH_THRESHOLD_DEFAULT,
+    CURRENT_SELECTION,
     DEFAULT_ART_SOURCE_ORDER,
     DEFAULT_THEME_SOURCE_ORDER,
     MATCH_THRESHOLD_DEFAULT,
@@ -508,8 +509,12 @@ class TestBulkRequestContract:
             library_ids=["1", "1", "2"],
             skip_recent_val=2,
             skip_recent_unit=RecentUnit.DAYS,
-            art=BulkAssetsArtConfig(source_order=[ArtBulkSource.OVERTUREDB]),
-            themes=BulkAssetsThemeConfig(source_order=[ThemeBulkSource.YOUTUBE_SEARCH]),
+            art=BulkAssetsArtConfig(
+                source_order=[ArtBulkSource.OVERTUREDB, CURRENT_SELECTION]
+            ),
+            themes=BulkAssetsThemeConfig(
+                source_order=[CURRENT_SELECTION, ThemeBulkSource.YOUTUBE_SEARCH]
+            ),
         )
 
         assert request.library_ids == ["1", "2"]
@@ -518,14 +523,14 @@ class TestBulkRequestContract:
             skip_recent_val=2,
             skip_recent_unit=RecentUnit.DAYS,
             art_types=[ArtType.POSTER, ArtType.BACKGROUND],
-            source_order=[ArtBulkSource.OVERTUREDB],
+            source_order=[ArtBulkSource.OVERTUREDB, CURRENT_SELECTION],
             threshold=ASSETS_MATCH_THRESHOLD_DEFAULT,
         )
         assert request.theme_request() == BulkThemeRequest(
             library_ids=["1", "2"],
             skip_recent_val=2,
             skip_recent_unit=RecentUnit.DAYS,
-            source_order=[ThemeBulkSource.YOUTUBE_SEARCH],
+            source_order=[CURRENT_SELECTION, ThemeBulkSource.YOUTUBE_SEARCH],
         )
 
     def test_bulk_assets_request_requires_a_selected_workflow(self) -> None:
@@ -543,12 +548,18 @@ class TestBulkRequestContract:
         request = BulkMatchArtRequest(
             source_order=[
                 ArtBulkSource.OVERTUREDB,
+                CURRENT_SELECTION,
                 ArtBulkSource.LOCAL_ART_MATCHING,
                 ArtBulkSource.OVERTUREDB,
+                CURRENT_SELECTION,
             ],
         )
 
-        assert request.source_order == ["overturedb", "local_art_matching"]
+        assert request.source_order == [
+            "overturedb",
+            "current_selection",
+            "local_art_matching",
+        ]
 
     def test_bulk_art_request_rejects_invalid_values(self) -> None:
         invalid_cases: list[dict[str, Any]] = [
@@ -560,6 +571,8 @@ class TestBulkRequestContract:
             {"skip_recent_unit": "weeks"},
             {"source_order": []},
             {"source_order": ["remote_first"]},
+            # What a slot holds always has a place in the order.
+            {"source_order": ["overturedb", "local_art_matching"]},
             {"threshold": -2},
             {"threshold": 33},
         ]
@@ -580,13 +593,14 @@ class TestBulkRequestContract:
                 ThemeBulkSource.OVERTUREDB,
                 ThemeBulkSource.YOUTUBE_SEARCH,
                 ThemeBulkSource.OVERTUREDB,
+                CURRENT_SELECTION,
             ],
-        ).source_order == ["overturedb", "youtube_search"]
+        ).source_order == ["overturedb", "youtube_search", "current_selection"]
 
         for library_ids in ([""], ["x" * 129], [str(i) for i in range(201)]):
             with pytest.raises(ValidationError):
                 BulkThemeRequest(library_ids=library_ids)
-        for source_order in ([], ["local_art_matching"]):
+        for source_order in ([], ["local_art_matching"], ["overturedb"]):
             with pytest.raises(ValidationError):
                 BulkThemeRequest.model_validate({"source_order": source_order})
         for payload in ({"skip_recent_val": -1}, {"skip_recent_unit": "weeks"}):

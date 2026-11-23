@@ -12,6 +12,7 @@ lazy from overture.db.ledger import FileFacts
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
 lazy from overture.domain import (
+    CURRENT_SELECTION,
     PERFECT_MATCH_ONLY,
     ArtBulkSource,
     ArtType,
@@ -79,6 +80,7 @@ async def test_source_failure_is_reported_even_when_a_later_source_matches(
         as_job_context(context),
         BulkMatchArtRequest(
             source_order=[
+                CURRENT_SELECTION,
                 ArtBulkSource.LOCAL_ART_MATCHING,
                 ArtBulkSource.OVERTUREDB,
             ]
@@ -137,7 +139,11 @@ async def test_bulk_art_uses_source_order_and_skips_local_when_overturedb_matche
     await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(
-            source_order=[ArtBulkSource.OVERTUREDB, ArtBulkSource.LOCAL_ART_MATCHING]
+            source_order=[
+                CURRENT_SELECTION,
+                ArtBulkSource.OVERTUREDB,
+                ArtBulkSource.LOCAL_ART_MATCHING,
+            ]
         ),
         downloads=make_bulk_downloads(app_config=app_config, database=database),
         art_matcher=art_matcher(app_config=app_config, database=database),
@@ -171,7 +177,7 @@ async def test_bulk_art_overturedb_only_no_matches_when_source_unavailable(
     context = Context()
     await asset_run.run_art(
         as_job_context(context),
-        BulkMatchArtRequest(source_order=[ArtBulkSource.OVERTUREDB]),
+        BulkMatchArtRequest(source_order=[CURRENT_SELECTION, ArtBulkSource.OVERTUREDB]),
         downloads=make_bulk_downloads(app_config=app_config, database=database),
         art_matcher=art_matcher(app_config=app_config, database=database),
         art=unused(CollectionArtService),
@@ -220,7 +226,7 @@ async def test_bulk_art_targets_without_catalog_art_are_counted_in_one_step(
     context = Context()
     await asset_run.run_art(
         as_job_context(context),
-        BulkMatchArtRequest(source_order=[ArtBulkSource.OVERTUREDB]),
+        BulkMatchArtRequest(source_order=[CURRENT_SELECTION, ArtBulkSource.OVERTUREDB]),
         downloads=make_bulk_downloads(app_config=app_config, database=database),
         art_matcher=art_matcher(app_config=app_config, database=database),
         art=unused(CollectionArtService),
@@ -403,7 +409,8 @@ async def test_bulk_art_states_why_local_matching_produced_nothing(
     await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(
-            source_order=[ArtBulkSource.LOCAL_ART_MATCHING], threshold=threshold
+            source_order=[CURRENT_SELECTION, ArtBulkSource.LOCAL_ART_MATCHING],
+            threshold=threshold,
         ),
         downloads=make_bulk_downloads(app_config=app_config, database=database),
         art_matcher=matcher,
@@ -466,7 +473,8 @@ async def test_bulk_art_single_target_without_catalog_art_has_singular_plurality
     await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(
-            source_order=[ArtBulkSource.OVERTUREDB], art_types=[ArtType.POSTER]
+            source_order=[CURRENT_SELECTION, ArtBulkSource.OVERTUREDB],
+            art_types=[ArtType.POSTER],
         ),
         downloads=make_bulk_downloads(app_config=app_config, database=database),
         art_matcher=art_matcher(app_config=app_config, database=database),
@@ -526,7 +534,8 @@ async def test_local_match_queues_best_candidate_and_reports_incomplete_comparis
     await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(
-            source_order=[ArtBulkSource.LOCAL_ART_MATCHING], threshold=10
+            source_order=[CURRENT_SELECTION, ArtBulkSource.LOCAL_ART_MATCHING],
+            threshold=10,
         ),
         downloads=make_bulk_downloads(app_config=app_config, database=database),
         art_matcher=matcher,
@@ -589,7 +598,8 @@ async def test_perfect_match_adoption_rechecks_the_file_before_saving_selection(
     await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(
-            source_order=[ArtBulkSource.LOCAL_ART_MATCHING], threshold=-1
+            source_order=[CURRENT_SELECTION, ArtBulkSource.LOCAL_ART_MATCHING],
+            threshold=-1,
         ),
         downloads=make_bulk_downloads(app_config=app_config, database=database),
         art_matcher=matcher,
@@ -644,7 +654,7 @@ async def test_failed_catalog_comparison_reports_error_without_stamping(
 
     await asset_run.run_art(
         as_job_context(context),
-        BulkMatchArtRequest(source_order=[ArtBulkSource.OVERTUREDB]),
+        BulkMatchArtRequest(source_order=[CURRENT_SELECTION, ArtBulkSource.OVERTUREDB]),
         downloads=make_bulk_downloads(app_config=app_config, database=database),
         art_matcher=matcher,
         art=unused(CollectionArtService),
@@ -668,7 +678,8 @@ async def test_failed_catalog_comparison_reports_error_without_stamping(
             (
                 "Skipped Movie (poster) - kept the local file: OvertureDB artwork "
                 "is d=0 from the local file but not the same file; a match "
-                "threshold of 0 or more takes it (Replace existing would replace it)"
+                "threshold of 0 or more takes it (ranking OvertureDB above "
+                "Current selection would replace it)"
             ),
         ),
         (3, "Queued Movie (poster) - d=0 from OvertureDB; replaces the local file"),
@@ -705,7 +716,8 @@ async def test_overturedb_art_is_compared_with_the_local_file_as_local_matching_
     await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(
-            source_order=[ArtBulkSource.OVERTUREDB], threshold=threshold
+            source_order=[CURRENT_SELECTION, ArtBulkSource.OVERTUREDB],
+            threshold=threshold,
         ),
         downloads=make_bulk_downloads(app_config=app_config, database=database),
         art_matcher=matcher,
@@ -747,7 +759,7 @@ async def test_slot_failure_does_not_abort_later_targets(
 
     await asset_run.run_art(
         as_job_context(context),
-        BulkMatchArtRequest(source_order=[ArtBulkSource.OVERTUREDB]),
+        BulkMatchArtRequest(source_order=[CURRENT_SELECTION, ArtBulkSource.OVERTUREDB]),
         downloads=make_bulk_downloads(app_config=app_config, database=database),
         art_matcher=matcher,
         art=unused(CollectionArtService),

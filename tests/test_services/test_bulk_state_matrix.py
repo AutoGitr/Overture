@@ -19,6 +19,7 @@ lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
 lazy from overture.domain import (
+    CURRENT_SELECTION,
     ArtBulkSource,
     ArtType,
     MediaType,
@@ -57,7 +58,7 @@ ACTION_LINES: frozendict[str, tuple[str, str]] = frozendict(
     {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
         "queued": ("Queued ", "OvertureDB"),
         "restored": ("Queued ", "restores the saved selection"),
-        "kept_saved": ("Skipped ", "saved selection already set"),
+        "kept_saved": ("Skipped ", "saved selection kept"),
         "kept_theme": ("Skipped ", "kept the theme in place"),
         "kept_art": ("Skipped ", "OvertureDB artwork is a different picture, d=30"),
         "adopted": ("Adopted ", "identical to the local file"),
@@ -71,7 +72,7 @@ PLANNED_ACTIONS = frozenset({"set", "no_match", "recent"})
 
 @pytest.mark.parametrize("asset", ["theme", "poster", "background", "season_poster"])
 @pytest.mark.parametrize("server", ["plex", "jellyfin", "emby"])
-@pytest.mark.parametrize("mode", ["default", "overwrite"])
+@pytest.mark.parametrize("mode", ["kept", "replaced"])
 async def test_catalog_only_state_matrix(
     asset: str,
     server: str,
@@ -83,6 +84,8 @@ async def test_catalog_only_state_matrix(
     database: Database,
 ) -> None:
     """Every combination must produce the right action, log, counters and rows.
+
+    *mode* ranks Current selection first (kept) or below OvertureDB (replaced).
 
     Cross product: selection, file on disk (identical to the catalog image or
     not), a stale cached presence flag, recent check, catalog absent/empty/
@@ -119,8 +122,10 @@ async def test_catalog_only_state_matrix(
             saved, disk, same, cached, available, recent, asset, mode
         )
         expected[title] = action
+        # Before planning, a run reads the files of what slots hold: a saved
+        # selection, or a theme in place.
         files_read[number] = action not in PLANNED_ACTIONS or (
-            mode == "default" and saved and cached
+            (saved or asset == "theme") and cached
         )
         if action in {"restored", "queued"}:
             source = "saved" if action == "restored" else "public"
@@ -161,9 +166,8 @@ async def test_catalog_only_state_matrix(
         await asset_run.run_themes(
             as_job_context(context),
             BulkThemeRequest(
-                source_order=[ThemeBulkSource.OVERTUREDB],
+                source_order=order(ThemeBulkSource.OVERTUREDB, mode),
                 skip_recent_val=1,
-                overwrite_existing=mode == "overwrite",
             ),
             downloads=downloads,
             youtube_resolver=unused(YouTubeResolver),
@@ -177,10 +181,9 @@ async def test_catalog_only_state_matrix(
         await asset_run.run_art(
             as_job_context(context),
             BulkMatchArtRequest(
-                source_order=[ArtBulkSource.OVERTUREDB],
+                source_order=order(ArtBulkSource.OVERTUREDB, mode),
                 art_types=[ArtType(asset)],
                 skip_recent_val=1,
-                overwrite_existing=mode == "overwrite",
             ),
             downloads=downloads,
             art_matcher=matcher,
@@ -317,6 +320,13 @@ def seed_case(
     return available
 
 
+def order(source: ArtBulkSource | ThemeBulkSource, mode: str) -> list[Any]:
+    """The run's source order: *source* below Current selection, or above it."""
+    return (
+        [CURRENT_SELECTION, source] if mode == "kept" else [source, CURRENT_SELECTION]
+    )
+
+
 def expected_action(
     saved: bool,
     disk: bool,
@@ -327,25 +337,30 @@ def expected_action(
     asset: str,
     mode: str,
 ) -> str:
-    if mode == "overwrite":
-        if not available:
-            return "no_match"
-        return "recent" if recent else "queued"
-    if saved:
-        # A saved selection's recorded file is read again before planning
-        # trusts it; one without a record is visited, which reads the disk.
-        if cached and disk:
-            return "set" if available else "no_match"
+    # Planning finds a saved selection's recorded file in place; one without
+    # a record is visited, which reads the disk.
+    recorded = saved and cached and disk
+    if saved and (mode == "kept" or not available or recent):
+        # Nothing replaces it: OvertureDB ranks below it, has nothing, or the
+        # target was checked recently, which only a missing file overrides.
+        if recorded:
+            return "recent" if available and mode == "replaced" else "set"
         return "kept_saved" if disk else "restored"
+    if asset == "theme" and cached and disk:
+        # Planning reads the recorded theme in place and holds it like a
+        # saved selection: kept, unless OvertureDB ranks above it and has one.
+        if mode == "kept" or not available:
+            return "set"
+        return "recent" if recent else "queued"
     if not available:
         return "no_match"
     if recent:
         return "recent"
-    if asset == "theme" and disk:
+    if mode == "replaced" or not disk:
+        return "queued"
+    if asset == "theme":
         return "kept_theme"
-    if disk:
-        return "adopted" if same else "kept_art"
-    return "queued"
+    return "adopted" if same else "kept_art"
 
 
 def aggregate(logs: list[str], outcome: str) -> int:

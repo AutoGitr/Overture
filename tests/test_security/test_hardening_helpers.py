@@ -117,9 +117,15 @@ class TestRedaction:
 
 
 class TestRequestValidation:
-    def test_bulk_art_source_order_defaults_to_overturedb_then_local(self) -> None:
+    def test_bulk_art_source_order_keeps_what_is_held_then_tries_overturedb_then_local(
+        self,
+    ) -> None:
         req = BulkMatchArtRequest()
-        assert req.source_order == ["overturedb", "local_art_matching"]
+        assert req.source_order == [
+            "current_selection",
+            "overturedb",
+            "local_art_matching",
+        ]
 
     def test_server_audit_rejects_theme_art_type(self) -> None:
         with pytest.raises(ValidationError):

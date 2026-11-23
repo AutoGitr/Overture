@@ -11,6 +11,7 @@ lazy from overture.db.ledger import select_art
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.session import Database
 lazy from overture.domain import (
+    CURRENT_SELECTION,
     ArtBulkSource,
     ArtType,
     MediaType,
@@ -131,7 +132,7 @@ async def test_a_saved_poster_is_restored_unless_its_file_is_the_one_overture_wr
     await asset_run.run_art(
         as_job_context(context),
         BulkMatchArtRequest(
-            source_order=[ArtBulkSource.LOCAL_ART_MATCHING],
+            source_order=[CURRENT_SELECTION, ArtBulkSource.LOCAL_ART_MATCHING],
             art_types=[ArtType.POSTER],
         ),
         downloads=make_bulk_downloads(app_config=app_config, database=database),
@@ -172,7 +173,9 @@ async def test_a_saved_theme_is_restored_unless_its_file_is_the_one_overture_wro
     context = Context()
     await asset_run.run_themes(
         as_job_context(context),
-        BulkThemeRequest(source_order=[ThemeBulkSource.YOUTUBE_SEARCH]),
+        BulkThemeRequest(
+            source_order=[CURRENT_SELECTION, ThemeBulkSource.YOUTUBE_SEARCH]
+        ),
         downloads=make_bulk_downloads(app_config=app_config, database=database),
         youtube_resolver=unused(YouTubeResolver),
         app_config=app_config,

@@ -12,6 +12,7 @@ lazy from overture.db.models.catalog import CatalogCollection
 lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.session import Database
 lazy from overture.domain import (
+    CURRENT_SELECTION,
     ArtBulkSource,
     ArtType,
     CollectionPosterStyle,
@@ -264,7 +265,8 @@ async def test_collection_art_run_uploads_the_catalog_art_it_finds(
         )
         await enable_catalog(session)
     params = BulkMatchArtRequest(
-        collection_groups=["Sagas"], source_order=[ArtBulkSource.OVERTUREDB]
+        collection_groups=["Sagas"],
+        source_order=[CURRENT_SELECTION, ArtBulkSource.OVERTUREDB],
     )
     plan = await plan_run(params, database=database)
     assert decided(plan) == {
@@ -316,7 +318,7 @@ async def test_catalog_art_keeps_a_collections_image_in_place_as_a_titles_file(
     app_config: Settings,
     database: Database,
 ) -> None:
-    """Without Replace existing, catalog art differing from the image is declined."""
+    """Below Current selection, catalog art differing from the image is declined."""
     await _seed(database)
     async with database.write_session() as session:
         row = await session.get(MediaCollection, 1)
@@ -332,7 +334,7 @@ async def test_catalog_art_keeps_a_collections_image_in_place_as_a_titles_file(
     params = BulkMatchArtRequest(
         collection_ids=[1],
         art_types=[ArtType.POSTER],
-        source_order=[ArtBulkSource.OVERTUREDB],
+        source_order=[CURRENT_SELECTION, ArtBulkSource.OVERTUREDB],
     )
     art = RecordingArt(in_place=("f" * 64, "held"))
     matcher = Comparing(compared)
@@ -364,7 +366,7 @@ async def test_local_matching_compares_the_server_image_overture_did_not_upload(
     params = BulkMatchArtRequest(
         collection_ids=[1],
         art_types=[ArtType.POSTER],
-        source_order=[ArtBulkSource.LOCAL_ART_MATCHING],
+        source_order=[CURRENT_SELECTION, ArtBulkSource.LOCAL_ART_MATCHING],
     )
     # A preview can sit a step away from the original it is identical to.
     art = RecordingArt([ArtCandidate(url=CATALOG_URL, hamming=1, perfect_match=True)])
@@ -399,7 +401,7 @@ async def test_a_saved_collection_image_a_copy_lacks_is_sent_again(
         BulkMatchArtRequest(
             collection_ids=[1],
             art_types=[ArtType.POSTER],
-            source_order=[ArtBulkSource.OVERTUREDB],
+            source_order=[CURRENT_SELECTION, ArtBulkSource.OVERTUREDB],
         ),
         art,
         monkeypatch,
@@ -444,7 +446,7 @@ async def test_collection_art_whose_upload_fails_is_an_error_of_the_run(
         BulkMatchArtRequest(
             collection_ids=[1],
             art_types=[ArtType.POSTER],
-            source_order=[ArtBulkSource.OVERTUREDB],
+            source_order=[CURRENT_SELECTION, ArtBulkSource.OVERTUREDB],
         ),
         FailingArt(),
         monkeypatch,
@@ -480,7 +482,7 @@ async def test_a_run_names_collection_slots_and_skips_those_that_left(
     params = BulkMatchArtRequest(
         collection_ids=[1, 2],
         art_types=[ArtType.POSTER],
-        source_order=[ArtBulkSource.OVERTUREDB],
+        source_order=[CURRENT_SELECTION, ArtBulkSource.OVERTUREDB],
     )
     plan = await plan_run(params, database=database)
     async with database.write_session() as session:

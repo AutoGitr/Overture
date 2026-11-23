@@ -68,7 +68,6 @@
       </div>
     {/if}
     <div>Include unmonitored: {schedule.config.include_unmonitored ? "Yes" : "No"}</div>
-    <div>Replace existing: {schedule.config.overwrite_existing ? "Yes" : "No"}</div>
     <div>
       Skip checked: {schedule.config.skip_recent_val ?? 0}
       {schedule.config.skip_recent_unit ?? "hours"}

@@ -301,7 +301,7 @@ async def test_directors_by_version_keeps_each_movies_order(
     }
 
 
-async def test_bulk_targets_keeping_files_have_a_saved_selection_on_disk(
+async def test_bulk_targets_keeping_files_hold_a_saved_selection_or_theme_on_disk(
     db_session: AsyncSession, tmp_path: Path
 ) -> None:
     def movie(identity: int, **fields: Any) -> MediaItem:
@@ -324,6 +324,8 @@ async def test_bulk_targets_keeping_files_have_a_saved_selection_on_disk(
     season = Season(id=1, media_item_id=4, season_num=1)
     themed = seed_theme(movie(5), "video", file_hash="theme")
     file_without_selection = movie(6)
+    # A theme in place is held whether or not anything selects it; art is not.
+    theme_without_selection = seed_theme(movie(7), file_hash="theme")
     url = PublicArtUrl("https://cdn.test/p.jpg")
     place_local(season, (ServerAsset.SEASON_POSTER,), folder=True)
 
@@ -343,6 +345,7 @@ async def test_bulk_targets_keeping_files_have_a_saved_selection_on_disk(
             season,
             themed,
             file_without_selection,
+            theme_without_selection,
         ]
     )
     await db_session.commit()
@@ -369,4 +372,4 @@ async def test_bulk_targets_keeping_files_have_a_saved_selection_on_disk(
     assert await keeping(include_unmonitored=True) == [1, 3, 4]
     assert await keeping(library_ids=["1:shows"]) == [4]
     assert await keeping(after_id=1, limit=1) == [4]
-    assert await keeping(art=False) == [5]
+    assert await keeping(art=False) == [5, 7]

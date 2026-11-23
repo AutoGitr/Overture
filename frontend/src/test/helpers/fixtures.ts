@@ -760,8 +760,11 @@ export function bulkAssetsSchedule(
       skip_recent_val: 4,
       skip_recent_unit: "days",
       include_unmonitored: true,
-      overwrite_existing: true,
-      art: { art_types: ["background"], source_order: ["overturedb"], threshold: 5 },
+      art: {
+        art_types: ["background"],
+        source_order: ["overturedb", "current_selection"],
+        threshold: 5,
+      },
       themes: null,
     },
     ...overrides,

@@ -4,6 +4,7 @@
   let {
     sourceOrder,
     selectedSources,
+    required = [],
     labels,
     disabledSources = [],
     storageKey,
@@ -12,6 +13,8 @@
   }: {
     sourceOrder: readonly T[];
     selectedSources: readonly T[];
+    /** Always used: each marks a place in the order, which moves but has no switch. */
+    required?: readonly T[];
     labels: Readonly<Record<T, string>>;
     /** Catalog sources, unavailable while OvertureDB is off. */
     disabledSources?: readonly string[];
@@ -86,7 +89,11 @@
     <div
       class={[
         "source-row",
-        { "source-row-disabled": disabled, "source-row-dragging": pointerDragSource === source },
+        {
+          "source-row-disabled": disabled,
+          "source-row-dragging": pointerDragSource === source,
+          "source-row-marker": required.includes(source),
+        },
       ]}
       data-source-order={storageKey + "-" + source}
       role="listitem"
@@ -108,20 +115,24 @@
       >
         <GripVertical size={15} class="source-handle" />
       </button>
-      <label class="checkbox-group source-checkbox">
-        <input
-          type="checkbox"
-          checked={selectedSources.includes(source) && !disabled}
-          {disabled}
-          onchange={() => ontoggle(source)}
-        />
-        <span>
-          {labels[source] ?? source}
-          {#if disabled}
-            <span class="hint">- enable OvertureDB first</span>
-          {/if}
-        </span>
-      </label>
+      {#if required.includes(source)}
+        <span class="source-marker">{labels[source] ?? source}</span>
+      {:else}
+        <label class="checkbox-group source-checkbox">
+          <input
+            type="checkbox"
+            checked={selectedSources.includes(source) && !disabled}
+            {disabled}
+            onchange={() => ontoggle(source)}
+          />
+          <span>
+            {labels[source] ?? source}
+            {#if disabled}
+              <span class="hint">- enable OvertureDB first</span>
+            {/if}
+          </span>
+        </label>
+      {/if}
     </div>
   {/each}
 </div>
@@ -187,5 +198,17 @@
 
   .source-checkbox {
     flex: 1;
+  }
+
+  /* A place in the order rather than a source: it moves, but has no switch. */
+  .source-row-marker {
+    border-style: dashed;
+  }
+
+  .source-marker {
+    flex: 1;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-secondary);
   }
 </style>

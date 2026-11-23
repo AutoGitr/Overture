@@ -11,6 +11,7 @@
 - **API:** a missing TMDB, Radarr, Sonarr or MDBList setting is answered with 409, as a missing media server is, instead of 503 or 400; season artwork asked of a title without a season, and clearing a kind of result that cannot be cleared, are answered with 422.
 - **API:** IDs in paths and bodies are at most 9007199254740991, the largest a JSON client reads exactly.
 - **API:** the `collection.theme.updated` event is removed; `collection.updated` reports a theme change.
+- **Operations:** **Replace existing** is gone from Assets; each art and theme source list holds **Current selection** instead, which you drag to decide which sources may replace what a slot already holds: those above it replace, those below only fill empty slots. Saved schedules keep what they did: Current selection first where Replace existing was off, last where it was on. In the API, `overwrite_existing` is removed and `source_order` must include `current_selection`.
 
 ### 🔒 Security
 
@@ -52,6 +53,7 @@
 - **Interface:** removing one season's poster from a title's record works; it was always refused.
 - **Interface:** an OvertureDB entry's art panel stays usable after a choice it cannot save, such as an upload.
 - **Interface:** a collection offers to remove its theme only when it has one.
+- **Operations:** an Assets run that may replace a saved choice downloads it again when its file is missing and no source finds anything, instead of leaving the slot empty.
 - **Operations:** a run's log offers its media server filters when it is about more than one server; the log covered them.
 - **Operations:** a run's log shows every line it has counted, even while the run is quiet, instead of empty placeholder rows when opened or reconnected mid-run.
 - **Operations:** a running collection download shows its stage instead of `undefined/undefined`.

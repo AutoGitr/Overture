@@ -14,14 +14,22 @@ lazy from itertools import batched
 
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
-lazy from ...db.ledger import Selection, missing_deliveries, read_asset, selection
+lazy from ...db.ledger import (
+    Selection,
+    missing_deliveries,
+    read_asset,
+    selection,
+    shows_something,
+)
 lazy from ...db.models.asset import Asset
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...db.session import CHUNK_SIZE, PAGE_SIZE, Database
 lazy from ...domain import (
+    CURRENT_SELECTION_LABEL,
     ArtBulkSource,
+    BulkSource,
     CollectionPosterStyle,
     MediaSortKey,
     MediaType,
@@ -42,7 +50,6 @@ lazy from ..catalog.index import NO_THEME, THEME_NOT_NEEDED, CatalogIndex, Catal
 lazy from ..downloads.queue import JobTarget
 
 type RunParams = BulkMatchArtRequest | BulkThemeRequest
-type Source = ArtBulkSource | ThemeBulkSource
 
 #: One planned target of an owner: its asset kind and, for a season poster,
 #: the season.
@@ -50,10 +57,43 @@ type Slot = tuple[ServerAsset, int | None]
 
 #: Why collection themes need a catalog source.
 CATALOG_THEMES_ONLY = "Collection themes require an OvertureDB or ThemerrDB source"
+#: Why a target that holds nothing has no source to ask.
+NO_SOURCES = f"no source besides {CURRENT_SELECTION_LABEL} is chosen"
+
+#: Why a saved selection on disk was kept without asking a source.
+SAVED_SELECTION = (
+    f"saved selection kept; sources above {CURRENT_SELECTION_LABEL} would search again"
+)
+#: Why a theme in place that nothing selects was kept without asking a source.
+KEPT_IN_PLACE = (
+    f"kept the theme in place; sources above {CURRENT_SELECTION_LABEL} would "
+    "search again"
+)
 
 
-#: Why targets whose saved selection is on disk were not visited.
-SAVED_SELECTION = "saved selection already set; Replace existing searches again"
+def holds(asset: Asset) -> bool:
+    """Whether a slot holds what Current selection stands for.
+
+    That is its saved selection, or a theme in place, Overture's or not. Art
+    in place that nothing selects is not held: the sources identify it.
+    """
+    return selection(asset) is not None or (
+        asset.kind is ServerAsset.THEME
+        and any(seen.required and shows_something(seen) for seen in asset.deliveries)
+    )
+
+
+def kept_reason(*, saved: bool, said: str | None) -> str:
+    """Why a slot keeps what it holds.
+
+    *said* is what the sources asked to replace it found, ``None`` when none
+    was asked.
+    """
+    if said is None:
+        return SAVED_SELECTION if saved else KEPT_IN_PLACE
+    held = "saved selection kept" if saved else "kept the theme in place"
+    return f"{held}: {said}" if said else held
+
 
 #: What one target came to without being visited: its outcome and the reason.
 type PlannedOutcome = tuple[JobOutcome, str]
@@ -63,6 +103,7 @@ def planned_outcome(
     params: RunParams,
     *,
     saved: Selection | None,
+    holding: bool,
     selection_missing: bool,
     last_checked: datetime | None,
     catalog: CatalogPick | None,
@@ -71,50 +112,59 @@ def planned_outcome(
 
     This is the planning half of an Assets decision; a visit makes the half
     that needs the files on disk or a source. *saved* is the slot's saved
-    selection, and *selection_missing* says the file on disk is not it: the
-    file is missing, or was replaced outside Overture. *catalog* is ``None``
-    unless the run's sole sources are catalogs, and then is what they offer
-    the target.
+    selection, *holding* says the slot holds something (see :func:`holds`),
+    and *selection_missing* says the file on disk is not the saved selection:
+    the file is missing, or was replaced outside Overture. *catalog* is
+    ``None`` unless the sources the target asks are all catalogs, and then is
+    what they offer it.
     The rules apply in order:
 
-    1. A saved selection missing from disk is visited, whenever last
-       checked, since the visit downloads the saved choice rather than asking
-       a source.
-    2. On a catalog-only run, a target no catalog serves is no match, or
-       skipped when OvertureDB is disabled: no option would find it anything.
+    1. What a slot holds that no source may replace is kept: skipped, or
+       visited to download a missing saved selection again.
+    2. On a catalog-only run, a target no catalog serves keeps what it holds
+       the same way; holding nothing, it is no match, or skipped when
+       OvertureDB is disabled: no option would find it anything.
     3. A saved selection on disk that already is the catalog's offer is
-       skipped, Overwrite or not: replacing it would fetch the same art.
-    4. A saved selection is skipped unless Overwrite is on.
-    5. A target checked within the Skip recently checked window is skipped.
-    6. Everything else is visited.
+       skipped: replacing it would fetch the same art.
+    4. A target checked within the Skip recently checked window is skipped,
+       unless its saved selection is missing, which a visit downloads again.
+    5. Everything else is visited.
     """
-    kept = bool(saved) and not params.overwrite_existing
-    if kept and selection_missing:
-        return None
+    restore = saved is not None and selection_missing
+    if holding and not params.precedence.replacing:
+        return (
+            None
+            if restore
+            else (
+                JobOutcome.SKIPPED,
+                kept_reason(saved=saved is not None, said=None),
+            )
+        )
     if catalog is not None and catalog.value is None:
+        if holding:
+            return (
+                None
+                if restore
+                else (
+                    JobOutcome.SKIPPED,
+                    kept_reason(saved=saved is not None, said=catalog.reason),
+                )
+            )
         outcome = JobOutcome.NO_MATCH if catalog.enabled else JobOutcome.SKIPPED
         return outcome, catalog.reason
     saved_url = saved and (saved.url or saved.youtube_id)
     if catalog is not None and not selection_missing and saved_url == catalog.value:
         return JobOutcome.SKIPPED, f"saved selection is already the {catalog.label}"
-    if kept:
-        return JobOutcome.SKIPPED, _saved_reason(catalog)
     if checked_recently(last_checked, params):
         return (
-            JobOutcome.SKIPPED,
-            f"checked within the last {recent_window_label(params)}",
+            None
+            if restore
+            else (
+                JobOutcome.SKIPPED,
+                f"checked within the last {recent_window_label(params)}",
+            )
         )
     return None
-
-
-def _saved_reason(catalog: CatalogPick | None) -> str:
-    """Say why a saved selection that is not the catalog's offer is kept."""
-    if catalog is None:
-        return SAVED_SELECTION
-    return (
-        f"saved selection differs from the {catalog.label}; "
-        "Replace existing would replace it"
-    )
 
 
 def recent_window_label(params: RunParams) -> str:
@@ -231,15 +281,17 @@ class Unusable:
     reason: str
 
 
-def triage(target: Target, params: RunParams) -> list[Source | Unusable]:
-    """The run's sources in order: each that can serve *target*, or why it cannot.
+def triage(
+    target: Target, sources: Sequence[BulkSource]
+) -> list[BulkSource | Unusable]:
+    """*sources* in order: each that can serve *target*, or why it cannot.
 
     Local art matching compares a collection's TMDB art with the image in
     place, and YouTube search looks for titles only.
     """
-    entries: list[Source | Unusable] = []
+    entries: list[BulkSource | Unusable] = []
     row = target.collection
-    for source in params.source_order:
+    for source in sources:
         if row is not None and source is ThemeBulkSource.YOUTUBE_SEARCH:
             continue
         reason = (
@@ -250,10 +302,12 @@ def triage(target: Target, params: RunParams) -> list[Source | Unusable]:
         entries.append(source if reason is None else Unusable(reason))
     if row is not None and target.kind is ServerAsset.THEME and not entries:
         entries.append(Unusable(CATALOG_THEMES_ONLY))
+    elif not sources:
+        entries.append(Unusable(NO_SOURCES))
     return entries
 
 
-def usable(entries: Sequence[Source | Unusable]) -> list[Source]:
+def usable(entries: Sequence[BulkSource | Unusable]) -> list[BulkSource]:
     """The sources among *entries* that can serve their target."""
     return [entry for entry in entries if not isinstance(entry, Unusable)]
 
@@ -272,7 +326,7 @@ def unmatchable(row: MediaCollection, kind: ServerAsset) -> str | None:
 
 def catalog_pick(
     target: Target,
-    sources: Sequence[Source],
+    sources: Sequence[BulkSource],
     index: CatalogIndex,
     *,
     failed: set[str],
@@ -301,26 +355,26 @@ def catalog_pick(
 
 def planning_pick(
     target: Target,
-    params: RunParams,
+    sources: Sequence[BulkSource],
     index: CatalogIndex | None,
     *,
     failed: set[str],
 ) -> CatalogPick | None:
-    """What decides *target* while planning: the catalogs' offer, or nothing.
+    """What decides *target* while planning: what the catalogs among *sources* offer.
 
     ``None`` leaves a target some source other than a catalog can try to its
     visit. A target no usable source can serve is decided as no match.
     """
-    entries = triage(target, params)
-    sources = usable(entries)
-    if not sources:
+    entries = triage(target, sources)
+    serving = usable(entries)
+    if not serving:
         reasons = tuple(
             entry.reason for entry in entries if isinstance(entry, Unusable)
         )
         return CatalogPick(None, notes=reasons, enabled=True)
-    if index is None or not all(source.catalog for source in sources):
+    if index is None or not all(source.catalog for source in serving):
         return None
-    pick = catalog_pick(target, sources, index, failed=failed)
+    pick = catalog_pick(target, serving, index, failed=failed)
     if pick.value is not None:
         return pick
     # Each source's notes stand where it does in the run's order.
@@ -328,12 +382,12 @@ def planning_pick(
     for entry in entries:
         if isinstance(entry, Unusable):
             notes.append(entry.reason)
-        elif entry is sources[0]:
+        elif entry is serving[0]:
             notes.extend(pick.notes)
     return CatalogPick(
         None,
         notes=tuple(notes),
-        enabled=pick.enabled or len(sources) < len(entries),
+        enabled=pick.enabled or len(serving) < len(entries),
     )
 
 
@@ -494,14 +548,16 @@ def _plan_targets(
             plan.decide(target, (JobOutcome.SKIPPED, reason))
             continue
         asset = target.asset
+        holding = holds(asset)
         decided = planned_outcome(
             params,
             saved=selection(asset),
+            holding=holding,
             selection_missing=bool(missing_deliveries(asset)),
             last_checked=target.last_checked,
             catalog=planning_pick(
                 target,
-                params,
+                params.precedence.asked(holding=holding),
                 index if catalog else None,
                 failed=failed.get(owner.id, set[str]()),
             ),
@@ -525,7 +581,7 @@ async def plan_run(
     wanted = kinds(params)
     themes = ServerAsset.THEME in wanted
     # Catalog picks decide a target only when every usable source is a catalog.
-    catalog = all(source.catalog for source in params.source_order)
+    catalog = params.precedence.catalogs_only
     if not params.collection_scope or params.library_ids:
         async for session, items in _title_chunks(
             params, database=database, chunk=chunk

@@ -3,6 +3,7 @@
   import { settingsState } from "../stores/settingsState.svelte";
   import { sidebarState } from "../stores/sidebarState.svelte";
   import type { AssetsForm } from "../utils/assetsForm.svelte";
+  import { SOURCE_ORDER_NOTE } from "../utils/assetsPopup";
   import ArtWorkflowCard from "./ArtWorkflowCard.svelte";
   import CollectionChecklist from "./CollectionChecklist.svelte";
   import LibraryChecklist from "./LibraryChecklist.svelte";
@@ -70,13 +71,6 @@
       <input type="checkbox" bind:checked={config.includeUnmonitored} />
       <span>Include unmonitored items</span>
     </label>
-    <label
-      class="checkbox-group"
-      title="Search sources again and replace files; identical files are left untouched"
-    >
-      <input type="checkbox" bind:checked={config.overwriteExisting} />
-      <span>Replace existing</span>
-    </label>
   </div>
   <div class="form-row skip-row" title="0 checks every item">
     <span>Skip items checked within</span>
@@ -104,10 +98,11 @@
   {#if form.collectionScope}
     <p class="hint">Collection themes use OvertureDB and ThemerrDB, never a YouTube search.</p>
   {/if}
-  <WorkflowSection label="Sources" note="First match wins, top to bottom.">
+  <WorkflowSection label="Sources" note={SOURCE_ORDER_NOTE}>
     <SourceOrderList
       sourceOrder={config.themeSourceOrder}
       selectedSources={config.selectedThemeSources}
+      required={form.requiredSources}
       labels={THEME_SOURCE_LABELS}
       disabledSources={form.disabledSources}
       storageKey="theme"
