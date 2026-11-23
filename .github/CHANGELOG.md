@@ -22,10 +22,11 @@
 - **API:** the schema documents every answer a route can give: 404 for a path that names nothing, 400 for a body that is not text, 409, 502 and 503 from a route that needs a media server, and a 422 that either lists each issue or says which rule was broken.
 - **Collections:** each library's criteria are headed by its server's badge and edged in its colour when several servers are configured.
 - **Interface:** hovering a title's or collection's **Poster** or **Background** tab names the servers, or the folder, that do not yet show Overture's image.
-- **Interface:** every list of libraries, art sources, theme sources and metadata issues offers **Select all** and **Deselect all**, partly ticked while only some are chosen.
+- **Interface:** every list of libraries, art sources, theme sources and metadata issues offers **Select all** and **Deselect all** beside the list's name, partly ticked while only some are chosen.
 
 ### 🌟 Enhancements
 
+- **Artwork:** an image offered by several sources is listed and loaded once: under OvertureDB when it is its choice, else TMDB, else the first server.
 - **Collections:** a sync checks the art and theme of every server copy, not just the first, and a collection is complete only once every copy shows them.
 - **Collections:** a chosen theme stays chosen when a server plays another; the collection's next sync or an Assets run sends it again.
 - **Interface:** an image larger than 20 MB is refused before it uploads, saying so.
@@ -43,13 +44,16 @@
 - **API:** a refused method's answer names the allowed ones in `Allow`.
 - **API:** an ID too large for the database is refused with 422 instead of failing with 500.
 - **Collections:** the bulk sort title template takes as many characters as the sort title format.
-- **Collections:** Jellyfin and Emby collections of more than about 200 titles sync instead of failing with HTTP 414.
+- **Collections:** Emby makes new collections again instead of failing with HTTP 500, and Jellyfin and Emby collections of more than about 200 titles sync instead of failing with HTTP 414.
+- **Collections:** Jellyfin and Emby keep the name of a collection Overture makes: it is locked, so the server no longer renames it after the TMDB collection its name resembles (such as `Foreign` becoming `The Foreign Exchange Student Collection`). Delete collections renamed this way on the server; the next sync makes them again.
+- **Collections:** one server refusing a collection no longer stops the others: its error is logged for that server, the others sync, and a collection made on another server before the refusal is kept instead of made again by every sync.
 - **Collections:** a criteria value spelt in another case, such as `united kingdom`, shows as the library's value it matches instead of "no title has it".
 - **Collections:** a sync keeps the art Overture uploaded while the server still shows it. Plex changes a collection's image link whenever the collection is edited, which a sync took for a replaced image, so collections lost their complete art and the next Assets run uploaded it again.
 - **Interface:** removing one season's poster from a title's record works; it was always refused.
 - **Interface:** an OvertureDB entry's art panel stays usable after a choice it cannot save, such as an upload.
 - **Interface:** a collection offers to remove its theme only when it has one.
 - **Operations:** a run's log offers its media server filters when it is about more than one server; the log covered them.
+- **Operations:** a run's log shows every line it has counted, even while the run is quiet, instead of empty placeholder rows when opened or reconnected mid-run.
 - **Operations:** a running collection download shows its stage instead of `undefined/undefined`.
 - **Operations:** a run's log filters and its notifications count the targets each line names, so `94 collections` counts 94, as the run's totals do.
 - **Operations:** log lines name a collection's asset as one, such as `Alien (collection poster)`, so it never reads as the title of the same name; theme lines name the theme.

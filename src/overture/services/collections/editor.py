@@ -214,11 +214,12 @@ class CollectionEditor:
 
     async def update_locked(
         self, row: MediaCollection, body: CollectionOptions, *, push: bool
-    ) -> None:
+    ) -> list[CopyChange]:
         """Save display choices, and with *push* send them to the server copies.
 
         Without *push* the collection is marked as holding changes the server
-        lacks, which the next sync sends.
+        lacks, which the next sync sends. Returns the copies whose server
+        refused them.
         """
         overrides: dict[str, object] = {}
         if body.sort_title is not None and body.sort_title_format is None:
@@ -240,11 +241,11 @@ class CollectionEditor:
         if rule is not None:
             body = body.model_copy(update={"collection_group": group})
             rule.sqlmodel_update(display)
-        effective = (
-            await self._display.push(row, body, rule)
-            if push
-            else await self._display.effective(row, body, rule)
-        )
+        refused: list[CopyChange] = []
+        if push:
+            effective, refused = await self._display.push(row, body, rule)
+        else:
+            effective = await self._display.effective(row, body, rule)
         summary_source = row.summary_source
         async with self._access.database.write_session() as session:
             saved = await self._access.require(session, row.id or 0)
@@ -267,6 +268,7 @@ class CollectionEditor:
             if not push:
                 await apply_needs(session, collections=[saved])
             session.add(saved)
+        return refused
 
     # Removing
 
@@ -410,67 +412,104 @@ class CollectionEditor:
         Libraries saved apart on a server that spans them fold into one copy,
         and a library left with nothing to hold loses its own. Returns what
         the copies hold, each once, in order (see :meth:`held`), and what the
-        sync did to each.
+        sync did to each. A server that refuses its copy's sync is reported
+        and leaves the others to go on; what it made before refusing stays
+        placed, so the next sync finds it rather than making another, and
+        its libraries keep the members Overture holds for them.
         """
         members: dict[Held, None] = {}
         changes: list[CopyChange] = []
         for copy in copies:
-            provider = self._access.provider(copy.server_id)
-            libraries = tuple(part.library_id for part in copy.libraries)
-            ids = _server_ids(wanted, copy.library_ids)
-            if await self.delete_copies(
-                (copy.server_id, identity) for identity in copy.surplus_ids
-            ):
-                changes.append(
-                    CopyChange(
-                        copy.server_id,
-                        libraries,
-                        deleted="merged into the server's one collection for them",
-                    )
+            try:
+                held = await self._place_copy(
+                    row, copy, wanted, order, changes, append=append
                 )
-            target = copy.server_item_id
-            created = target is None
-            if target is None:
-                if not ids:
-                    changes.append(CopyChange(copy.server_id, libraries, absent=True))
-                    continue
-                server = await provider.create_collection(
-                    copy.lead.library_id, row.title, copy.lead.media_type, ids
-                )
-                target = server.id
-                copy.place(target, server.path)
-            elif not ids and not append:
-                await self.delete_copies([(copy.server_id, target)])
-                copy.place(None)
-                changes.append(
-                    CopyChange(
-                        copy.server_id,
-                        libraries,
-                        deleted="no title there meets its rule any more",
-                    )
-                )
-                continue
-            copy.place(target)
-            write = await provider.set_collection_members(
-                target,
-                ids,
-                order=kept_order(
-                    order, provider.server_type, copy.lead.media_type, smart=False
-                ),
-                append=append,
-            )
+            except MediaServerError as exc:
+                changes.append(CopyChange.failed(copy, exc))
+                held = await self.stored_members(row, copy)
+            members.update(dict.fromkeys(held))
+        return list(members), changes
+
+    async def stored_members(
+        self, row: MediaCollection, copy: ServerCopy
+    ) -> list[Held]:
+        """The members Overture holds for *copy*'s libraries since its last sync.
+
+        They stand for a copy whose server refused this sync.
+        """
+        async with self._access.database.read_session() as session:
+            stored = await CollectionItemRepository(session).members(row.id or 0)
+        return [item.id for item in stored if item.library_id in copy.library_ids]
+
+    async def _place_copy(
+        self,
+        row: MediaCollection,
+        copy: ServerCopy,
+        wanted: Mapping[str, list[CollectionItem]],
+        order: CollectionOrder,
+        changes: list[CopyChange],
+        *,
+        append: bool,
+    ) -> list[Held]:
+        """Make *copy* hold its libraries' wanted items; return what it holds.
+
+        What it did goes to *changes*.
+        """
+        provider = self._access.provider(copy.server_id)
+        libraries = copy.library_order
+        ids = _server_ids(wanted, copy.library_ids)
+        if await self.delete_copies(
+            (copy.server_id, identity) for identity in copy.surplus_ids
+        ):
             changes.append(
                 CopyChange(
                     copy.server_id,
                     libraries,
-                    created=created,
-                    added=0 if created else write.added,
-                    removed=write.removed,
-                    held=len(write.held),
+                    deleted="merged into the server's one collection for them",
                 )
             )
-            members.update(dict.fromkeys(await self.held(copy.server_id, write.held)))
-        return list(members), changes
+        target = copy.server_item_id
+        created = target is None
+        if target is None:
+            if not ids:
+                changes.append(CopyChange(copy.server_id, libraries, absent=True))
+                return []
+            server = await provider.create_collection(
+                copy.lead.library_id, row.title, copy.lead.media_type, ids
+            )
+            target = server.id
+            copy.place(target, server.path)
+        elif not ids and not append:
+            await self.delete_copies([(copy.server_id, target)])
+            copy.place(None)
+            changes.append(
+                CopyChange(
+                    copy.server_id,
+                    libraries,
+                    deleted="no title there meets its rule any more",
+                )
+            )
+            return []
+        copy.place(target)
+        write = await provider.set_collection_members(
+            target,
+            ids,
+            order=kept_order(
+                order, provider.server_type, copy.lead.media_type, smart=False
+            ),
+            append=append,
+        )
+        changes.append(
+            CopyChange(
+                copy.server_id,
+                libraries,
+                created=created,
+                added=0 if created else write.added,
+                removed=write.removed,
+                held=len(write.held),
+            )
+        )
+        return await self.held(copy.server_id, write.held)
 
     async def held(self, server_id: int, server_item_ids: Sequence[str]) -> list[Held]:
         """What a server's items are, in their order: titles, or items unknown yet.

@@ -176,6 +176,8 @@ class Provider(PlexProvider):
         #: of the field's values can leave out.
         self.item_choices: dict[tuple[str, str], list[tuple[str, str]]] = {}
         self.fail = False
+        #: Libraries the server refuses to make a collection in.
+        self.refused_libraries: set[str] = set()
         #: Collections someone deleted on the server behind Overture's back.
         self.gone: set[str] = set()
         self.rejected_updates: set[str] = set()
@@ -196,7 +198,7 @@ class Provider(PlexProvider):
     async def create_collection(
         self, library_id: str, title: str, media_type: MediaType, member_ids: list[str]
     ) -> ServerCollection:
-        if self.fail:
+        if self.fail or library_id in self.refused_libraries:
             raise MediaServerError("Create failed")
         self.created.append(title)
         identity = str(len(self.created))
@@ -1278,10 +1280,12 @@ async def test_a_failed_sync_keeps_the_saved_members(manager: Manager) -> None:
         ),
     )
     manager.provider.fail = True
-    with pytest.raises(MediaServerError):
-        await manager.service.rules.sync(identity)
+    outcome = await manager.service.rules.sync(identity)
+    assert outcome.errors == "Write failed"
     detail = await manager.service.reader.get(identity)
     assert (detail.member_ids, detail.unsynced) == ([manager.ids[0]], True)
+    assert detail.rule is not None
+    assert detail.rule.last_error == "Write failed"
 
 
 @pytest.mark.parametrize(
@@ -3620,6 +3624,36 @@ async def test_a_collection_spans_a_plex_library_of_each_type_as_one_collection_
 
     await manager.service.editor.delete(detail.id)
     assert sorted(manager.provider.deleted) == ["1", "2"]
+
+
+async def test_a_refused_copy_leaves_the_others_synced_and_placed(
+    manager: Manager, database: Database
+) -> None:
+    manager.provider.refused_libraries = {"1:shows"}
+    detail = await manager.service.editor.create(
+        CollectionCreate(title="Everything", rule=spanning(manager))
+    )
+
+    outcome = await manager.service.rules.sync(detail.id)
+
+    assert [(c.library_ids, c.created, c.error) for c in outcome.changes] == [
+        (("1:movies",), True, None),
+        (("1:shows",), False, "Create failed"),
+    ]
+    async with database.read_session() as session:
+        row = await CollectionRepository(session).get(detail.id)
+    assert row is not None
+    # The copy made before the other server refused stays known, so the next
+    # sync updates it instead of making a second.
+    assert [part.server_item_id for part in row.libraries] == ["1", None]
+    assert (await manager.service.reader.get(detail.id)).unsynced
+
+    manager.provider.refused_libraries = set()
+    outcome = await manager.service.rules.sync(detail.id)
+
+    assert outcome.errors is None
+    assert manager.provider.created == ["Everything", "Everything"]
+    assert manager.provider.members == {"1": ["m0"], "2": ["s1"]}
 
 
 async def test_one_boxset_holds_every_library_on_jellyfin(

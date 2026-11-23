@@ -36,6 +36,15 @@ const HOMES: Record<string, Home> = {
     pattern: /\b(Select|Deselect) (all|every)\b/,
     homes: { "lib/components/SelectAll.svelte": "the control" },
   },
+  // Choosing everything sits on the row that names the list, never on a
+  // line of its own.
+  "where choosing every option sits": {
+    pattern: /<SelectAll\b/,
+    homes: {
+      "lib/components/Checklist.svelte": "beside the list's label",
+      "lib/components/JobResultsList.svelte": "beside the count of the findings it chooses",
+    },
+  },
   "lists of checkboxes": {
     pattern: /\{#each[^}]*\}(?:(?!\{\/each\})[\s\S])*?type="checkbox"/,
     homes: {

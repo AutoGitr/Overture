@@ -492,10 +492,16 @@ export function isServerWebSocketMessage(value: unknown): value is ServerWebSock
   );
 }
 
+/**
+ * Call the handler *handlers* holds for the message's event, if any.
+ * Only the map's own entries are looked up, so an event name never
+ * reaches a member every object inherits, such as `constructor`.
+ */
 export function routeServerWebSocketMessage(
   message: ServerWebSocketDataMessage,
-  handlers: WebSocketHandlerMap,
+  handlers: Partial<WebSocketHandlerMap>,
 ): void {
+  if (!Object.hasOwn(handlers, message.event)) return;
   const handler = handlers[message.event] as (
     data: WebSocketPayloadMap[WebSocketDataEventName],
     message: ServerWebSocketDataMessage,

@@ -2,6 +2,7 @@
 
 lazy from datetime import datetime
 lazy from typing import Any
+lazy from weakref import WeakValueDictionary
 
 lazy from pydantic_core import to_jsonable_python
 lazy from sqlalchemy import ColumnElement
@@ -16,6 +17,32 @@ lazy from ..utils.errors import PublicServiceError
 lazy from ..utils.time import utc_now
 lazy from .kinds import INTERRUPTED_MESSAGE, JobKind
 lazy from .progress_log import JobLogEntry, JobOutcome, log_entry
+
+
+class UnwrittenLog:
+    """The log lines a live run has announced but not yet written.
+
+    A run writes its log in batches, and a batch waits for the run's next
+    event, which can come minutes later when the run goes quiet. Its events
+    already counted those lines, so :func:`log_page` reads them from here
+    meanwhile: every line a browser is told of can be read at once.
+    """
+
+    def __init__(self, run_id: str) -> None:
+        self.run_id = run_id
+        #: Lines already written, which number the first one waiting.
+        self.written = 0
+        self.lines: list[dict[str, Any]] = []
+        _LIVE_LOGS[run_id] = self
+
+    def wrote(self, count: int) -> None:
+        """Note that the first *count* waiting lines are written."""
+        self.written += count
+        self.lines = self.lines[count:]
+
+
+#: Each live run's unwritten lines, by run ID; a finished run's goes with it.
+_LIVE_LOGS: WeakValueDictionary[str, UnwrittenLog] = WeakValueDictionary()
 
 
 async def persist(
@@ -112,8 +139,13 @@ async def log_page(
 
     Only lines of *outcomes* are listed when given, and none about a media
     server in *hidden_servers*. A filtered page counts *offset* and ``total``
-    among the matching lines.
+    among the matching lines. A live run's lines not yet written follow the
+    written ones.
     """
+    # Taken before the read, so a batch written during it is in one or both;
+    # those the read already holds are left out by their number.
+    live = _LIVE_LOGS.get(run_id)
+    first_waiting, waiting = (live.written, list(live.lines)) if live else (0, [])
     async with database.read_session() as session:
         run = await _visible_run(session, run_id)
         query = select(JobLogLine).where(JobLogLine.run_id == run_id)
@@ -125,23 +157,31 @@ async def log_page(
             filters.append(server.is_(None) | server.not_in(hidden_servers))
         if filters:
             query = query.where(*filters).offset(offset)
-            total = (
+            written = (
                 await session.exec(
                     select(func.count()).where(JobLogLine.run_id == run_id, *filters)
                 )
             ).one()
         else:
             query = query.where(JobLogLine.ordinal >= offset)
-            total = run.log_total
+            written = run.log_total
         rows = (
             await session.exec(query.order_by(col(JobLogLine.ordinal)).limit(limit))
         ).all()
-        return JobLogPage(
-            run_id=run_id,
-            total=total,
-            offset=offset,
-            items=[JobLogEntry.model_validate(row.entry) for row in rows],
-        )
+        unwritten = waiting[max(0, run.log_total - first_waiting) :]
+    tail = [
+        entry
+        for entry in map(JobLogEntry.model_validate, unwritten)
+        if (not outcomes or entry.outcome in outcomes)
+        and (entry.server_id is None or entry.server_id not in hidden_servers)
+    ]
+    items = [JobLogEntry.model_validate(row.entry) for row in rows]
+    if len(items) < limit:
+        start = max(0, offset - written)
+        items += tail[start : start + limit - len(items)]
+    return JobLogPage(
+        run_id=run_id, total=written + len(tail), offset=offset, items=items
+    )
 
 
 async def latest_runs(database: Database) -> dict[str, JobRun]:

@@ -117,6 +117,10 @@ managed collection deleted on the server is recreated by its next sync. Only
 unmanaged collections disappear from Overture, when the server no longer lists
 them.
 
+A server that refuses a collection's sync, or cannot be reached, is logged as
+an error for that collection on that server; the other servers' copies sync
+as usual, and the next sync tries the refused one again.
+
 ## Pages in this section
 
 - [Criteria](criteria.md): conditions, lists, TMDB facts and Plex smart

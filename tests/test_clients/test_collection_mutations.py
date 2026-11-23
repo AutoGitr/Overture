@@ -95,13 +95,17 @@ async def test_boxsets_create_diff_edit_art_and_delete(
     assert {r.url.params.get("UserId" if emby else "userId") for r in listings} == {
         None if emby else "admin"
     }
+    # Emby refuses a BoxSet made without items; a locked one keeps its name
+    # when the server's refresh matches it to a TMDB collection.
     assert mutations[0].url.params.get("Name" if emby else "name") == "New"
-    assert mutations[1].url.params.get("Ids" if emby else "ids") == "keep"
-    assert mutations[2].url.params.get("Ids" if emby else "ids") == "add"
-    assert mutations[3].method == "DELETE"
-    assert mutations[3].url.params.get("Ids" if emby else "ids") == "remove"
-    metadata = json.loads(mutations[4].content)
+    assert mutations[0].url.params.get("Ids" if emby else "ids") == "keep"
+    assert mutations[0].url.params.get("IsLocked" if emby else "isLocked") == "true"
+    assert mutations[1].url.params.get("Ids" if emby else "ids") == "add"
+    assert mutations[2].method == "DELETE"
+    assert mutations[2].url.params.get("Ids" if emby else "ids") == "remove"
+    metadata = json.loads(mutations[3].content)
     assert metadata["Name"] == "After"
+    assert metadata["LockData"] is True
     assert metadata["ProviderIds"] == {"Tmdb": "10"}
     # Emby keeps a sort title through refreshes only while SortName is locked.
     assert metadata["LockedFields"] == (
@@ -109,8 +113,8 @@ async def test_boxsets_create_diff_edit_art_and_delete(
     )
     assert metadata["DisplayOrder"] == "SortName"
     assert metadata["ForcedSortName"] == "!After"
-    assert base64.b64decode(mutations[5].content) == b"image"
-    assert mutations[5].headers["Content-Type"] == "image/png"
+    assert base64.b64decode(mutations[4].content) == b"image"
+    assert mutations[4].headers["Content-Type"] == "image/png"
     assert mutations[-1].method == "DELETE"
 
 

@@ -72,9 +72,10 @@ class JellyfinClient(MediaServerHttpClient):
     _PAGE_SIZE: ClassVar[int] = 5000
     # Ids per People lookup; the batch size did not change the time measured.
     _PEOPLE_BATCH: ClassVar[int] = 100
-    # Ids per collection membership write, which carries them in the query
-    # string. A 32-character ID spells 35 with its encoded comma, so 200 fit
-    # the 8 KiB request line Kestrel accepts by default; more fail with 414.
+    # Ids per collection creation or membership write, which carries them in
+    # the query string. A 32-character ID spells 35 with its encoded comma, so
+    # 200 fit the 8 KiB request line Kestrel accepts by default; more fail
+    # with 414.
     _MEMBER_BATCH: ClassVar[int] = 200
     #: Item fields a library listing asks for. People is resolved per credit on
     #: the server, so listings carry only the movie Etag (its DateLastSaved) and
@@ -497,15 +498,28 @@ class JellyfinClient(MediaServerHttpClient):
             return False
 
     async def create_collection(self, title: str, member_ids: list[str]) -> str:
-        """Create a BoxSet holding ``member_ids``."""
+        """Create a locked BoxSet holding ``member_ids``, which are never empty.
+
+        Emby refuses a BoxSet made without items, and the request line holds
+        one batch, so the first goes with it and the rest after. The BoxSet is
+        locked from birth: the server refreshes a new one at once, and an
+        unlocked one takes the name, overview and art of the TMDB collection
+        its name matches best, so "Foreign" would become "The Foreign
+        Exchange Student Collection".
+        """
+        first = member_ids[: self._MEMBER_BATCH]
         response = await self._request(
-            "POST", "/Collections", params=self.query_params(name=title)
+            "POST",
+            "/Collections",
+            params=self.query_params(name=title, ids=",".join(first), isLocked="true"),
         )
         value = wire_object(self._json(response))
         if not isinstance(value.get("Id"), str) or not value["Id"]:
             raise MediaServerError("Media server did not return the new collection ID")
         collection_id = str(value["Id"])
-        await self._change_members("POST", collection_id, member_ids)
+        await self._change_members(
+            "POST", collection_id, member_ids[self._MEMBER_BATCH :]
+        )
         return collection_id
 
     async def set_collection_members(
@@ -542,10 +556,13 @@ class JellyfinClient(MediaServerHttpClient):
     ) -> None:
         """Send the details a BoxSet keeps, in the complete DTO the server requires.
 
-        A BoxSet keeps no mode, visibility or filtering.
+        A BoxSet keeps no mode, visibility or filtering. It stays locked, so
+        a metadata refresh leaves Overture's details and art in place and
+        reads only the files beside it.
         """
         item = await self.collection_metadata(collection_id)
         item.update(
+            LockData=True,
             Name=details.title,
             DisplayOrder="PremiereDate"
             if details.order is CollectionOrder.RELEASE_ASC

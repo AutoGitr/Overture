@@ -205,15 +205,16 @@ reports a server as down.
 Overture evens out most differences, but some follow from the servers
 themselves:
 
-| Behaviour                                  | Plex                                                                                      | Jellyfin and Emby                                  |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| Sort title of a collection                 | Saved and locked                                                                          | Saved; Emby also locks it, so a refresh keeps it   |
-| Season poster file name                    | `Season01.jpg` in the season folder                                                       | `poster.jpg` in the season folder                  |
-| Deleting artwork through the API           | Not possible; delete the local file and Plex shows its agent's art after the next refresh | Supported                                          |
-| Smart collections                          | Supported, evaluated by Plex, with labels for conditions Plex has no filter for           | Not available; Overture evaluates every collection |
-| A collection across several libraries      | One collection in each library, kept alike by Overture                                    | One collection holding every library's members     |
-| Separators (empty heading collections)     | Offered                                                                                   | Not offered                                        |
-| Visibility, collection mode and Home order | Supported                                                                                 | Not available                                      |
+| Behaviour                                  | Plex                                                                                      | Jellyfin and Emby                                             |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Sort title of a collection                 | Saved and locked                                                                          | Saved; Emby also locks it, so a refresh keeps it              |
+| Metadata of a collection Overture makes    | Kept by Plex                                                                              | Locked, so a refresh never renames it after a TMDB collection |
+| Season poster file name                    | `Season01.jpg` in the season folder                                                       | `poster.jpg` in the season folder                             |
+| Deleting artwork through the API           | Not possible; delete the local file and Plex shows its agent's art after the next refresh | Supported                                                     |
+| Smart collections                          | Supported, evaluated by Plex, with labels for conditions Plex has no filter for           | Not available; Overture evaluates every collection            |
+| A collection across several libraries      | One collection in each library, kept alike by Overture                                    | One collection holding every library's members                |
+| Separators (empty heading collections)     | Offered                                                                                   | Not offered                                                   |
+| Visibility, collection mode and Home order | Supported                                                                                 | Not available                                                 |
 
 See [Files](../features/files.md) for every file name and
 [Collections across libraries](../features/collections/across-libraries.md).

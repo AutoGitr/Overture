@@ -29,9 +29,9 @@ lazy from .progress_log import (
 lazy from .tally import JobTally
 
 #: Seconds between persisted summaries of progress that brings no new results.
-#: Results are written as they arrive, so only the counters and log lines a
-#: restart would report can lag by this much; a write per visited target would
-#: cost more than the visit itself.
+#: Results are written as they arrive; the counters and log lines wait for the
+#: first event after this, as a write per visited target would cost more than
+#: the visit itself. The log reads its waiting lines meanwhile.
 _PROGRESS_SUMMARY_INTERVAL = 1.0
 
 #: Exceptions a background job body is expected to survive. Runners that also
@@ -58,12 +58,12 @@ class JobPersistence:
         self.lifecycle = lifecycle
         self.started_at = started_at
         self.run_id = uuid4().hex
-        self._log: list[dict[str, Any]] = []
+        self._log = job_results.UnwrittenLog(self.run_id)
         self._summarised_at: float | None = None
 
     def add_log(self, entry: JobLogEntry) -> None:
-        """Keep one log line for the next write."""
-        self._log.append(entry.model_dump(mode="json"))
+        """Keep one log line for the next write; the log can be read meanwhile."""
+        self._log.lines.append(entry.model_dump(mode="json"))
 
     async def record(
         self,
@@ -77,13 +77,14 @@ class JobPersistence:
         if (
             is_progress
             and not results
-            and len(self._log) < CHUNK_SIZE
+            and len(self._log.lines) < CHUNK_SIZE
             and self._summarised_at is not None
             and now - self._summarised_at < _PROGRESS_SUMMARY_INTERVAL
         ):
             return
         # Stored as its event schema serialises it, as the browser receives it.
         published = validate_event_payload(event, canonical) or {}
+        batch = list(self._log.lines)
         await job_results.persist(
             self.database,
             run_id=self.run_id,
@@ -96,9 +97,9 @@ class JobPersistence:
                 if key not in JOB_STREAMED_KEYS
             },
             results=results,
-            log=self._log,
+            log=batch,
         )
-        self._log = []
+        self._log.wrote(len(batch))
         self._summarised_at = now
 
 

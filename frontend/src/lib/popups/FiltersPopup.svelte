@@ -23,7 +23,7 @@
   import CardColumn from "../components/CardColumn.svelte";
   import CatalogDraftsCard from "../components/CatalogDraftsCard.svelte";
   import CustomFilterCard from "../components/CustomFilterCard.svelte";
-  import CheckboxList from "../components/CheckboxList.svelte";
+  import Checklist from "../components/Checklist.svelte";
   import LibraryOptions from "../components/LibraryOptions.svelte";
   import FieldRow from "../components/FieldRow.svelte";
   import PopupSection from "../components/PopupSection.svelte";
@@ -296,19 +296,23 @@
         bind:value={draft.artSource.artType}
       />
     </FieldRow>
-    <CheckboxList
-      options={ART_SOURCES.map((source) => ({
-        value: source,
-        label: SELECTED_ART_SOURCE_LABELS[source],
-      }))}
-      selected={draft.artSource.sources}
-      ontoggle={(source) =>
+    <Checklist
+      label="Sources"
+      groups={[
+        {
+          key,
+          label: "",
+          options: ART_SOURCES.map((source) => ({
+            id: source,
+            label: SELECTED_ART_SOURCE_LABELS[source],
+            checked: draft.artSource.sources.includes(source),
+          })),
+        },
+      ]}
+      ontoggle={(_key, source) =>
         (draft.artSource.sources = toggleSelectedValue(draft.artSource.sources, source))}
-      selectAll={{
-        noun: "art sources",
-        ontoggle: (checked) =>
-          (draft.artSource.sources = selectedValuesForAll(checked, ART_SOURCES)),
-      }}
+      ontoggleall={(checked) =>
+        (draft.artSource.sources = selectedValuesForAll(checked, ART_SOURCES))}
     />
   {:else if key === "collection"}
     <FieldRow {label} for={`${id}-collection`}>
@@ -339,19 +343,22 @@
     />
     <p class="hint">Themes without a known length are hidden while a limit is set.</p>
   {:else if key === "themeSources"}
-    <FieldRow {label} />
-    <CheckboxList
-      options={THEME_SOURCES.map((source) => ({
-        value: source,
-        label: THEME_ID_SOURCE_LABELS[source],
-      }))}
-      selected={draft.themeSources}
-      ontoggle={(source) => (draft.themeSources = toggleSelectedValue(draft.themeSources, source))}
-      selectAll={{
-        noun: "theme sources",
-        ontoggle: (checked) =>
-          (draft.themeSources = selectedValuesForAll(checked, THEME_SOURCES)),
-      }}
+    <Checklist
+      {label}
+      groups={[
+        {
+          key,
+          label: "",
+          options: THEME_SOURCES.map((source) => ({
+            id: source,
+            label: THEME_ID_SOURCE_LABELS[source],
+            checked: draft.themeSources.includes(source),
+          })),
+        },
+      ]}
+      ontoggle={(_key, source) =>
+        (draft.themeSources = toggleSelectedValue(draft.themeSources, source))}
+      ontoggleall={(checked) => (draft.themeSources = selectedValuesForAll(checked, THEME_SOURCES))}
     />
   {:else if key === "metadataIssues"}
     <FieldRow label="Match">
@@ -361,19 +368,23 @@
         bind:value={draft.metadataIssues.mode}
       />
     </FieldRow>
-    <CheckboxList
-      options={metadataIssueOptions.map((flag) => ({
-        value: flag,
-        label: METADATA_ISSUES[flag].label,
-      }))}
-      selected={draft.metadataIssues.flags}
-      ontoggle={(flag) =>
+    <Checklist
+      label="Issues"
+      groups={[
+        {
+          key,
+          label: "",
+          options: metadataIssueOptions.map((flag) => ({
+            id: flag,
+            label: METADATA_ISSUES[flag].label,
+            checked: draft.metadataIssues.flags.includes(flag),
+          })),
+        },
+      ]}
+      ontoggle={(_key, flag) =>
         (draft.metadataIssues.flags = toggleSelectedValue(draft.metadataIssues.flags, flag))}
-      selectAll={{
-        noun: "metadata issues",
-        ontoggle: (checked) =>
-          (draft.metadataIssues.flags = selectedValuesForAll(checked, metadataIssueOptions)),
-      }}
+      ontoggleall={(checked) =>
+        (draft.metadataIssues.flags = selectedValuesForAll(checked, metadataIssueOptions))}
     />
   {:else if key !== "libraries"}
     <FieldRow {label}>

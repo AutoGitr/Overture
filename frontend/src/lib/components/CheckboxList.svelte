@@ -1,11 +1,8 @@
 <script lang="ts" generics="T extends string">
-  import SelectAll from "./SelectAll.svelte";
-
   let {
     options,
     selected,
     ontoggle,
-    selectAll,
   }: {
     /** A `disabled` option shows its state but cannot be toggled; `title` says why. */
     options: readonly {
@@ -17,23 +14,9 @@
     }[];
     selected: readonly T[];
     ontoggle: (value: T) => void;
-    /** Offers to choose every option, or none, naming them by `noun`. */
-    selectAll?: { noun: string; ontoggle: (checked: boolean) => void };
   } = $props();
   let selectedSet = $derived<ReadonlySet<T>>(new Set(selected));
-  let allSelected = $derived(
-    options.length > 0 && options.every((option) => selectedSet.has(option.value)),
-  );
 </script>
-
-{#if selectAll}
-  <SelectAll
-    checked={allSelected}
-    indeterminate={!allSelected && options.some((option) => selectedSet.has(option.value))}
-    noun={selectAll.noun}
-    ontoggle={selectAll.ontoggle}
-  />
-{/if}
 
 <div class="list">
   {#each options as option (option.value)}

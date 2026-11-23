@@ -127,6 +127,46 @@ async def test_log_lines_are_written_in_batches(
     assert len(page.items) == 10
 
 
+async def test_a_quiet_run_pages_every_line_it_announced_before_writing_it(
+    monkeypatch: pytest.MonkeyPatch, database: Database
+) -> None:
+    # The batch waits for an event that a quiet run does not send.
+    monkeypatch.setattr(runner, "_PROGRESS_SUMMARY_INTERVAL", float("inf"))
+    probe = JobProbe(lifecycle=ManagedJobLifecycle(JobKind.BULK_ART))
+
+    async with run_managed_job(
+        probe.context, BulkAssetTally(), database=database
+    ) as job:
+        await job.started()
+        await job.planned(3)
+        for index, outcome in enumerate(
+            (JobOutcome.QUEUED, JobOutcome.ERROR, JobOutcome.QUEUED)
+        ):
+            await job.report(outcome, f"Movie {index}", "reason")
+        run_id = probe.publisher.payloads("match.progress")[-1]["run_id"]
+        async with database.read_session() as session:
+            run = await session.get(JobRun, run_id)
+        assert run is not None
+        assert run.log_total == 0
+
+        live = await job_results.log_page(database, run_id, 1, 10)
+        errors = await job_results.log_page(
+            database, run_id, 0, 10, frozenset({JobOutcome.ERROR})
+        )
+
+    assert (live.total, [entry.target for entry in live.items]) == (
+        3,
+        ["Movie 1", "Movie 2"],
+    )
+    assert (errors.total, [entry.target for entry in errors.items]) == (1, ["Movie 1"])
+    written = await job_results.log_page(database, run_id, 0, 10)
+    assert [entry.target for entry in written.items] == [
+        "Movie 0",
+        "Movie 1",
+        "Movie 2",
+    ]
+
+
 async def test_a_new_run_replaces_the_earlier_runs_of_its_kind(
     database: Database,
 ) -> None:

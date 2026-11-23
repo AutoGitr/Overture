@@ -20,11 +20,9 @@
     ontoggle: (id: string) => void;
     ontoggleall: (checked: boolean) => void;
   } = $props();
-
 </script>
 
-<div class="checklist">
-  <span class="form-label">Libraries</span>
+{#snippet notice()}
   {#if loading}
     <span class="hint">Loading libraries...</span>
   {:else if error}
@@ -32,17 +30,15 @@
     {#if onretry}
       <button class="btn btn-ghost btn-sm" onclick={onretry}>Retry</button>
     {/if}
-  {:else if libraries.length === 0}
-    <span class="hint">{emptyMessage}</span>
   {:else}
-    <LibraryOptions {libraries} selected={selectedIds} {ontoggle} {ontoggleall} />
+    <span class="hint">{emptyMessage}</span>
   {/if}
-</div>
+{/snippet}
 
-<style>
-  .checklist {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-</style>
+<LibraryOptions
+  {libraries}
+  selected={selectedIds}
+  {ontoggle}
+  {ontoggleall}
+  notice={loading || error || libraries.length === 0 ? notice : undefined}
+/>

@@ -6,6 +6,7 @@ lazy from collections.abc import Mapping
 lazy from ...db.models.collection_rule import CollectionRule
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...domain import UNMANAGED_REFUSAL, CollectionKind, SyncMode
+lazy from ...media_servers.errors import MediaServerError
 lazy from ...repositories.collection_items import (
     CollectionItem,
     CollectionItemRepository,
@@ -14,7 +15,7 @@ lazy from ...repositories.collections import CollectionRepository
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
 lazy from .access import CollectionAccess, LibraryScope
-lazy from .copies import copy_keys
+lazy from .copies import CopyKey, ServerCopy, copy_keys
 lazy from .destinations import place_collection
 lazy from .display import saved_options
 lazy from .editor import CollectionEditor, Held, save_placement
@@ -85,6 +86,7 @@ class RuleSync:
             try:
                 result = await self._apply(row, rule, policy, current, scopes)
                 result.library_names = library_names
+                error = result.errors
             except Exception as exc:
                 error = str(exc)
                 raise
@@ -96,9 +98,10 @@ class RuleSync:
                         saved.last_error = error
                         session.add(saved)
                 await self._access.updated(collection_id)
-            # A skipped server copy still lacks the changes; a collection
-            # without one is withheld until it is active or large enough.
-            if not result.skipped or not row.copies:
+            # A skipped or refused server copy still lacks the changes; a
+            # collection without one is withheld until it is active or large
+            # enough.
+            if (not result.skipped or not row.copies) and error is None:
                 await self._mark_synced(collection_id)
         if not result.skipped and not result.withheld:
             await self._post_sync.run(collection_id)
@@ -159,19 +162,21 @@ class RuleSync:
             created = copy.server_item_id is None
             if created:
                 lead = copy.lead
-                server = await self._access.provider(copy.server_id).create_collection(
-                    lead.library_id, row.title, lead.media_type, []
-                )
+                try:
+                    server = await self._access.provider(
+                        copy.server_id
+                    ).create_collection(lead.library_id, row.title, lead.media_type, [])
+                except MediaServerError as exc:
+                    outcome.changes.append(CopyChange.failed(copy, exc))
+                    continue
                 copy.place(server.id, server.path)
             outcome.changes.append(
-                CopyChange(
-                    copy.server_id,
-                    tuple(part.library_id for part in copy.libraries),
-                    created=created,
-                )
+                CopyChange(copy.server_id, copy.library_order, created=created)
             )
         await self._save_placement(row)
-        await self._editor.update_locked(row, saved_options(row, rule), push=True)
+        outcome.record(
+            await self._editor.update_locked(row, saved_options(row, rule), push=True)
+        )
         return outcome
 
     async def _sync_smart(
@@ -194,38 +199,14 @@ class RuleSync:
         regular = [copy for copy in copies if copy not in smart]
         members: list[Held] = []
         for copy in smart:
-            provider = self._access.provider(copy.server_id)
-            lead = copy.lead
-            query = await self._membership.smart_query(
-                by_library[lead.library_id], policy.order_type, rule.item_limit
-            )
-            before: set[str] = set()
-            target = copy.server_item_id
-            created = target is None
-            if target is None:
-                server = await provider.create_smart_collection(
-                    lead.library_id, row.title, lead.media_type, query
+            try:
+                query = await self._membership.smart_query(
+                    by_library[copy.lead.library_id], policy.order_type, rule.item_limit
                 )
-                target = server.id
-                copy.place(target, server.path)
-            else:
-                before = set(await provider.get_collection_member_ids(target))
-                await provider.update_smart_collection_filter(
-                    target, lead.library_id, lead.media_type, query
-                )
-            held = await provider.get_collection_member_ids(target)
-            after = set(held)
-            outcome.changes.append(
-                CopyChange(
-                    copy.server_id,
-                    (lead.library_id,),
-                    created=created,
-                    added=len(after - before),
-                    removed=len(before - after),
-                    held=len(after),
-                )
-            )
-            members += await self._editor.held(copy.server_id, held)
+                members += await self._place_smart(row, copy, query, outcome)
+            except MediaServerError as exc:
+                outcome.changes.append(CopyChange.failed(copy, exc))
+                members += await self._editor.stored_members(row, copy)
         if regular:
             libraries = {library for copy in regular for library in copy.library_ids}
             wanted = await self._membership.wanted_in(
@@ -240,12 +221,52 @@ class RuleSync:
             outcome.changes += changes
         kind = CollectionKind.SMART if smart else CollectionKind.REGULAR
         await self._editor.store_members(row, members, policy.order_type, kind=kind)
-        await self._editor.update_locked(row, saved_options(row, rule), push=True)
+        outcome.record(
+            await self._editor.update_locked(row, saved_options(row, rule), push=True)
+        )
         # Labels go unused only when criteria change, which clears the last sync.
         if rule.last_synced_at is None:
             for scope in scopes:
                 await self._membership.prune_labels(scope.library_id, scope.media_type)
         return outcome
+
+    async def _place_smart(
+        self,
+        row: MediaCollection,
+        copy: ServerCopy,
+        query: str,
+        outcome: SyncOutcome,
+    ) -> list[Held]:
+        """Make Plex's smart *copy* select by *query*; return what it holds."""
+        provider = self._access.provider(copy.server_id)
+        lead = copy.lead
+        before: set[str] = set()
+        target = copy.server_item_id
+        created = target is None
+        if target is None:
+            server = await provider.create_smart_collection(
+                lead.library_id, row.title, lead.media_type, query
+            )
+            target = server.id
+            copy.place(target, server.path)
+        else:
+            before = set(await provider.get_collection_member_ids(target))
+            await provider.update_smart_collection_filter(
+                target, lead.library_id, lead.media_type, query
+            )
+        held = await provider.get_collection_member_ids(target)
+        after = set(held)
+        outcome.changes.append(
+            CopyChange(
+                copy.server_id,
+                copy.library_order,
+                created=created,
+                added=len(after - before),
+                removed=len(before - after),
+                held=len(after),
+            )
+        )
+        return await self._editor.held(copy.server_id, held)
 
     async def _sync_regular(
         self,
@@ -285,7 +306,9 @@ class RuleSync:
         outcome.changes += await self._editor.set_members_locked(
             row, wanted, policy.order_type, append=append
         )
-        await self._editor.update_locked(row, saved_options(row, rule), push=True)
+        outcome.record(
+            await self._editor.update_locked(row, saved_options(row, rule), push=True)
+        )
         if was_smart:
             for scope in scopes:
                 await self._membership.prune_labels(scope.library_id, scope.media_type)
@@ -344,16 +367,23 @@ class RuleSync:
         """Forget the copies deleted on their server, so this sync makes them anew.
 
         A server sync forgets them too, but a collection's own sync may come
-        first. Returns whether any were gone.
+        first. Only a server's answer forgets a copy: one that cannot answer
+        keeps it, and the sync's write to it reports why. Returns whether any
+        were gone.
         """
-        gone = {
-            (server_id, server_item_id)
-            for server_id, server_item_id in copy_keys(row.copies)
-            if self._access.configured(server_id)
-            and not await self._access.provider(server_id).has_collection(
-                server_item_id
-            )
-        }
+        gone: set[CopyKey] = set()
+        for key in copy_keys(row.copies):
+            server_id, server_item_id = key
+            if not self._access.configured(server_id):
+                continue
+            try:
+                held = await self._access.provider(server_id).has_collection(
+                    server_item_id
+                )
+            except MediaServerError:
+                continue
+            if not held:
+                gone.add(key)
         if not gone:
             return False
         async with self._access.database.write_session() as session:

@@ -39,7 +39,6 @@ lazy from ...utils.image_fetch import is_valid_image_format
 lazy from ..catalog.entries import (
     catalog_collection_entry,
     collection_poster_field,
-    held_poster_style,
 )
 lazy from ..catalog.lookup import build_candidate, get_art_candidates
 lazy from ..collections.policy import resolve_policy
@@ -101,24 +100,33 @@ class CandidateSources:
     errors: list[str] = field(default_factory=list[str])
 
     def flat(self) -> list[ArtCandidate]:
-        """Return every candidate once, the first source offering a URL keeping it.
+        """Return every candidate, each once, as :func:`in_source_order` lists them.
 
-        Sources are in :func:`in_source_order`, so TMDB's art sorts higher when
-        match scores tie.
+        TMDB's art comes first, so it sorts higher when match scores tie.
         """
-        unique: dict[str, ArtCandidate] = {}
-        for candidates in self.by_source.values():
-            for candidate in candidates:
-                unique.setdefault(candidate.url, candidate)
-        return list(unique.values())
+        return [c for candidates in self.by_source.values() for c in candidates]
 
 
 def in_source_order(
     by_source: dict[str, list[ArtCandidate]],
 ) -> dict[str, list[ArtCandidate]]:
-    """*by_source* as the art panel lists it: TMDB first, OvertureDB last."""
+    """*by_source* as the art panel lists it, each image once, TMDB first.
+
+    Every candidate's link is canonical, so one image offered by several
+    sources has one link, and is kept by the one that says most about it:
+    OvertureDB, which chose it, then TMDB, which servers relay it from, then
+    the servers and members in order.
+    """
+    keeper: dict[str, int] = {ArtSource.OVERTUREDB: 0, ArtSource.TMDB: 1}
+    held: set[str] = set()
+    unique: dict[str, list[ArtCandidate]] = {}
+    for name, candidates in sorted(
+        by_source.items(), key=lambda pair: keeper.get(pair[0], 2)
+    ):
+        unique[name] = [c for c in candidates if c.url not in held]
+        held.update(c.url for c in unique[name])
     rank: dict[str, int] = {ArtSource.TMDB: 0, ArtSource.OVERTUREDB: 2}
-    return dict(sorted(by_source.items(), key=lambda pair: rank.get(pair[0], 1)))
+    return dict(sorted(unique.items(), key=lambda pair: rank.get(pair[0], 1)))
 
 
 class ArtCandidates:
@@ -247,8 +255,8 @@ class ArtCandidates:
     ) -> CandidateSources:
         """Use the same source policy, ordering and error handling for collections.
 
-        OvertureDB offers each of its posters, the collection's own style
-        first; any link OvertureDB holds as a poster is marked with its style.
+        OvertureDB offers each of its posters, marked with its style, the
+        collection's own first.
         """
         person = (
             self._collection_person(collection)
@@ -276,21 +284,6 @@ class ArtCandidates:
                         provider, part.server_item_id or "", art_type, policy
                     )
         found = await self._resolve(collection.title, lookups)
-        if art_type is ArtType.POSTER:
-            found = CandidateSources(
-                {
-                    name: [
-                        candidate.model_copy(
-                            update={
-                                "poster_style": held_poster_style(entry, candidate.url)
-                            }
-                        )
-                        for candidate in candidates
-                    ]
-                    for name, candidates in found.by_source.items()
-                },
-                found.errors,
-            )
         catalog = _catalog_collection_candidates(entry, art_type, posters)
         return CandidateSources(
             in_source_order({ArtSource.OVERTUREDB: catalog, **found.by_source}),

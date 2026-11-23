@@ -14,7 +14,7 @@ lazy from overture.config import Settings
 lazy from overture.db.ledger import read_asset
 lazy from overture.db.models.media_item_copy import SeasonCopy
 lazy from overture.db.session import Database
-lazy from overture.domain import ArtType, MediaType, ServerAsset, ServerType
+lazy from overture.domain import ArtSource, ArtType, MediaType, ServerAsset, ServerType
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.integrations.tmdb import TMDBClient
 lazy from overture.media_servers.registry import ProviderRegistry
@@ -23,7 +23,7 @@ lazy from overture.schemas.art import ArtCandidate, ArtMatchResponse, SaveArtReq
 lazy from overture.schemas.removal import AssetRemoval
 lazy from overture.services.art import choice
 lazy from overture.services.art import service as module
-lazy from overture.services.art.candidates import ArtCandidates
+lazy from overture.services.art.candidates import ArtCandidates, in_source_order
 lazy from overture.services.art.matcher import ArtMatcher, ArtMatchOutcome
 lazy from overture.services.art.phash import PhashService
 lazy from overture.services.downloads.service import DownloadService
@@ -801,3 +801,31 @@ async def test_clear_season_posters_without_a_season_forgets_every_season(
         assert file_hash_of(read_asset(season, ServerAsset.SEASON_POSTER)) == "h"
     await db_session.refresh(item)
     assert read_asset(item, ServerAsset.POSTER).url == "https://x/p.jpg"
+
+
+def test_each_image_is_offered_once_by_the_source_that_says_most_about_it() -> None:
+    def offered(*names: str) -> list[ArtCandidate]:
+        return [
+            ArtCandidate(url=f"https://image.tmdb.org/t/p/original/{n}.jpg")
+            for n in names
+        ]
+
+    sources = in_source_order(
+        {
+            "Jellyfin": offered("relayed", "chosen", "jellyfin"),
+            "Emby": offered("relayed", "emby"),
+            ArtSource.OVERTUREDB: offered("chosen"),
+            ArtSource.TMDB: offered("relayed", "chosen", "tmdb"),
+        }
+    )
+
+    assert {
+        name: [c.url.rsplit("/", 1)[1] for c in found]
+        for name, found in sources.items()
+    } == {
+        ArtSource.TMDB: ["relayed.jpg", "tmdb.jpg"],
+        "Jellyfin": ["jellyfin.jpg"],
+        "Emby": ["emby.jpg"],
+        ArtSource.OVERTUREDB: ["chosen.jpg"],
+    }
+    assert list(sources) == [ArtSource.TMDB, "Jellyfin", "Emby", ArtSource.OVERTUREDB]

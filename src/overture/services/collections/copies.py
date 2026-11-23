@@ -30,6 +30,11 @@ class ServerCopy:
         return {part.library_id for part in self.libraries}
 
     @property
+    def library_order(self) -> tuple[str, ...]:
+        """Its libraries' IDs, the lead's first."""
+        return tuple(part.library_id for part in self.libraries)
+
+    @property
     def surplus_ids(self) -> list[str]:
         """Server collections this copy replaces, from libraries saved apart."""
         return [

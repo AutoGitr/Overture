@@ -1,9 +1,10 @@
 import { getCatalogStatusOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type { CatalogStatus } from "../../generated/rest/types.gen";
-import type {
-  DownloadJobEvent,
-  ServerWebSocketDataMessage,
-  WebSocketHandlerMap,
+import {
+  routeServerWebSocketMessage,
+  type DownloadJobEvent,
+  type ServerWebSocketDataMessage,
+  type WebSocketHandlerMap,
 } from "../../generated/ws";
 import {
   applyBulkItemOperation,
@@ -120,7 +121,5 @@ const CACHE_POLICY: Partial<WebSocketHandlerMap> = {
 
 /** Keep the REST caches consistent with one applied realtime event. */
 export function applyRestCachePolicy(message: ServerWebSocketDataMessage): void {
-  const handler = CACHE_POLICY[message.event] as
-    ((data: unknown, message: ServerWebSocketDataMessage) => void) | undefined;
-  handler?.(message.data, message);
+  routeServerWebSocketMessage(message, CACHE_POLICY);
 }

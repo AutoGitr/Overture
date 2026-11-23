@@ -164,19 +164,16 @@
     </label>
     {#if form.generator}
       {@const generator = form.generator}
-      <fieldset class="libraries">
-        <legend class="form-label">Libraries</legend>
-        <LibraryOptions
-          {libraries}
-          selected={generator.library_ids}
-          ontoggle={(id) => (generator.library_ids = toggleSelectedValue(generator.library_ids, id))}
-          ontoggleall={(checked) =>
-            (generator.library_ids = selectedValuesForAll(
-              checked,
-              libraries.map((library) => library.id),
-            ))}
-        />
-      </fieldset>
+      <LibraryOptions
+        {libraries}
+        selected={generator.library_ids}
+        ontoggle={(id) => (generator.library_ids = toggleSelectedValue(generator.library_ids, id))}
+        ontoggleall={(checked) =>
+          (generator.library_ids = selectedValuesForAll(
+            checked,
+            libraries.map((library) => library.id),
+          ))}
+      />
       <CollectionSetEditor
         bind:generator={draft.generator!}
         libraryIds={generator.library_ids}
@@ -245,18 +242,3 @@
   {/if}
 {/snippet}
 
-<style>
-  .libraries {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    min-width: 0;
-    margin: 0;
-    padding: 0;
-    border: 0;
-  }
-
-  .libraries legend {
-    padding: 0;
-  }
-</style>

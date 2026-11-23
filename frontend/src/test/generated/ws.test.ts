@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   isServerWebSocketMessage,
   isWebSocketEventName,
+  routeServerWebSocketMessage,
   WEBSOCKET_EVENTS,
+  type ServerWebSocketDataMessage,
 } from "../../generated/ws";
 
 describe("WebSocket event validation", () => {
@@ -43,5 +45,30 @@ describe("isServerWebSocketMessage for any frame", () => {
         expect(typeof frame.sequence).toBe("number");
       }),
     );
+  });
+});
+
+describe("routeServerWebSocketMessage", () => {
+  it.each(["constructor", "toString", "__proto__", "hasOwnProperty"])(
+    "calls nothing for an event named like an inherited member: %s",
+    (event) => {
+      // The transport refuses such a name; the router must not rely on it.
+      const message = {
+        epoch: "e",
+        sequence: 1,
+        event,
+        data: {},
+      } as unknown as ServerWebSocketDataMessage;
+      expect(() => routeServerWebSocketMessage(message, {})).not.toThrow();
+    },
+  );
+
+  it("calls the handler a map holds for the event", () => {
+    const seen: unknown[] = [];
+    const message = { epoch: "e", sequence: 1, event: "schedules.changed", data: { kind: "sync" } };
+    routeServerWebSocketMessage(message as ServerWebSocketDataMessage, {
+      "schedules.changed": (data) => seen.push(data),
+    });
+    expect(seen).toEqual([{ kind: "sync" }]);
   });
 });

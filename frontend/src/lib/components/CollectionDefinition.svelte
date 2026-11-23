@@ -59,7 +59,6 @@
     {/if}
   {/if}
   <fieldset class="libraries" disabled={editor.generated}>
-    <legend class="form-label">Libraries</legend>
     <LibraryOptions
       {libraries}
       selected={editor.libraryIds}
@@ -181,9 +180,5 @@
     margin: 0;
     padding: 0;
     border: 0;
-  }
-
-  .libraries legend {
-    padding: 0;
   }
 </style>
