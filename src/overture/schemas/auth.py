@@ -45,8 +45,12 @@ class MeResponse(StrictBaseModel):
 class ApiKeyCreate(StrictBaseModel):
     """Name a new read-only API key."""
 
+    #: Not blank: the schema states it, as stripping the spaces leaves nothing.
     name: Annotated[
-        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
+        str,
+        StringConstraints(
+            strip_whitespace=True, min_length=1, max_length=100, pattern=r"\S"
+        ),
     ]
 
 
