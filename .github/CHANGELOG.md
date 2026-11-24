@@ -63,6 +63,7 @@
 - **Operations:** log lines name a collection's asset as one, such as `Alien (collection poster)`, so it never reads as the title of the same name; theme lines name the theme.
 - **Operations:** a title or collection that leaves the library during an Assets run is skipped, not an error, in every kind of run.
 - **Settings:** the global sort title and summary formats take as many characters as a group's or collection's.
+- **Sync:** a season the media server could not number, such as Jellyfin's "Season Unknown", is left out instead of being taken for Specials, so a show holding both syncs instead of failing with `UNIQUE constraint failed: seasons.media_item_id, seasons.season_num`.
 - **Themes:** searching by YouTube link or video ID finds the video; the IDs were always refused. A link whose ID is longer than 11 characters names no video, instead of the first 11 characters of it.
 
 ### 📚 Documentation
