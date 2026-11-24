@@ -97,13 +97,14 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
 
     collections_span_libraries: ClassVar[bool] = True
 
-    def _server_season(self, season: MediaBrowserItem, file_count: int) -> ServerSeason:
-        """Normalize one season row with its counted episodes."""
+    def _server_season(
+        self, season: MediaBrowserItem, season_num: int, file_count: int
+    ) -> ServerSeason:
+        """Normalize one numbered season row with its counted episodes."""
         season_id = season["Id"]
-        season_num = int(season.get("IndexNumber", 0) or 0)
         return ServerSeason(
             num=season_num,
-            title=season.get("Name") or f"Season {season_num}",
+            title=season.get("Name") or None,
             file_count=file_count,
             server_item_id=season_id,
             poster_url=_media_browser_image_url(
@@ -137,10 +138,13 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
         if not rows:
             return {}
         counts = await self.client.count_episodes_by_season(parent_id)
+        # A season the server could not number, such as "Season Unknown" for
+        # episodes it could not place, has no number to key it by: 0 is Specials.
         return {
             show_id: [
-                self._server_season(season, counts[season["Id"]])
+                self._server_season(season, season_num, counts[season["Id"]])
                 for season in show_seasons
+                if (season_num := season.get("IndexNumber")) is not None
             ]
             for show_id, show_seasons in rows.items()
         }

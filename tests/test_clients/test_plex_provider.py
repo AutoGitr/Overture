@@ -168,14 +168,8 @@ async def test_a_show_gets_its_folder_and_ordered_seasons(app_config: Settings) 
 
     assert show.folder_path == "/shows/Firefly"
     assert show.seasons == [
-        ServerSeason(
-            num=0,
-            title="Specials",
-            file_count=3,
-            poster_url=f"{BASE}/s0",
-            server_item_id="21",
-        ),
-        ServerSeason(num=1, title="Season 1", file_count=14, server_item_id="22"),
+        ServerSeason(num=0, file_count=3, poster_url=f"{BASE}/s0", server_item_id="21"),
+        ServerSeason(num=1, file_count=14, server_item_id="22"),
     ]
 
 

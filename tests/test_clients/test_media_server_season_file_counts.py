@@ -44,23 +44,28 @@ def _complete_listing(response: httpx2.Response) -> httpx2.Response:
     return httpx2.Response(response.status_code, json=payload, headers=response.headers)
 
 
+_PLEX_SEASONS = (
+    {"ratingKey": "200", "index": 2, "title": "Season 2", "leafCount": 1},
+    {"ratingKey": "201", "index": 1, "title": "Season 1", "leafCount": 3},
+)
+
+
 def _plex_handler(
-    *, show_updated_at: int | None = None, child_count: int = 2
+    *,
+    show_updated_at: int | None = None,
+    child_count: int = 2,
+    seasons: tuple[dict[str, Any], ...] = _PLEX_SEASONS,
 ) -> Callable[[httpx2.Request], httpx2.Response]:
     """Serve one movie section and one show section; details come in batch."""
 
     def show_details(key: str) -> dict[str, Any]:
-        seasons = [
-            {"ratingKey": "200", "index": 2, "title": "Season 2", "leafCount": 1},
-            {"ratingKey": "201", "index": 1, "title": "Season 1", "leafCount": 3},
-        ]
         if key == "101":
             return {"ratingKey": "101", "childCount": 0}
         return {
             "ratingKey": "100",
             "childCount": child_count,
             "Location": [{"path": "/media/shows/Show"}],
-            "Children": {"size": 2, "Metadata": seasons},
+            "Children": {"size": len(seasons), "Metadata": list(seasons)},
         }
 
     movie = {
@@ -181,6 +186,27 @@ async def test_plex_rejects_a_shortened_season_list(
     with pytest.raises(MediaServerError, match="incomplete season list"):
         async for _ in provider.iter_items(["1:1"]):
             pass
+
+
+async def test_plex_leaves_out_seasons_without_a_number(
+    *,
+    app_config: Settings,
+) -> None:
+    seasons = (
+        {"ratingKey": "200", "index": 1, "leafCount": 3},
+        {"ratingKey": "201", "index": 0, "title": "Specials", "leafCount": 2},
+        {"ratingKey": "202", "title": "Unnumbered", "leafCount": 1},
+    )
+    provider, _ = _plex_provider(
+        app_config, _plex_handler(child_count=3, seasons=seasons)
+    )
+    items = [item async for page in provider.iter_items(["1:1"]) for item in page]
+
+    show = next(item for item in items if item.id == "100")
+    assert [(s.num, s.title, s.server_item_id) for s in show.seasons] == [
+        (0, "Specials", "201"),
+        (1, None, "200"),
+    ]
 
 
 async def test_plex_poll_reads_details_of_changed_shows_only(
@@ -419,6 +445,48 @@ async def test_jellyfin_poll_reads_seasons_of_changed_shows_only(
     assert [item.id for item in result] == ["new"]
     assert [season.file_count for season in result[0].seasons] == [5]
     assert season_parents == count_parents == ["new"]
+
+
+async def test_jellyfin_leaves_out_seasons_without_a_number(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    app_config: Settings,
+) -> None:
+    provider = JellyfinProvider(
+        server=server_of(app_config, ServerType.JELLYFIN),
+        server_id=TEST_SERVER_ID,
+        app_config=app_config,
+    )
+
+    async def sections() -> list[dict[str, Any]]:
+        return [{"ItemId": "lib1", "CollectionType": "tvshows"}]
+
+    async def seasons(_parent_id: str) -> AsyncIterator[list[dict[str, Any]]]:
+        yield [
+            {"Id": "s1", "SeriesId": "show1", "IndexNumber": 1},
+            {"Id": "s0", "SeriesId": "show1", "IndexNumber": 0, "Name": "Specials"},
+            {"Id": "unknown", "SeriesId": "show1", "Name": "Season Unknown"},
+        ]
+
+    async def episode_counts(_parent_id: str) -> Counter[str]:
+        return Counter({"s1": 3, "s0": 6, "unknown": 1})
+
+    async def items(
+        _section_id: str, _item_type: str
+    ) -> AsyncIterator[list[dict[str, Any]]]:
+        yield [{"Id": "show1", "Name": "Show"}]
+
+    monkeypatch.setattr(provider.client, "get_sections", sections)
+    monkeypatch.setattr(provider.client, "iter_seasons", seasons)
+    monkeypatch.setattr(provider.client, "count_episodes_by_season", episode_counts)
+    monkeypatch.setattr(provider.client, "iter_section_items", items)
+
+    result = [item async for page in provider.iter_items(["1:lib1"]) for item in page]
+
+    assert [(s.num, s.title, s.file_count) for s in result[0].seasons] == [
+        (1, None, 3),
+        (0, "Specials", 6),
+    ]
 
 
 async def test_emby_uses_prefixed_api_and_real_episode_counts(

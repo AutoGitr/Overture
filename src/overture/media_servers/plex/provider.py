@@ -130,17 +130,14 @@ def _plex_tags(tags: list[PlexDirector] | None) -> tuple[str, ...]:
     return tuple(tag for entry in tags or [] if (tag := entry.get("tag")))
 
 
-def _plex_season(season: PlexMetadata, plex_base: str) -> ServerSeason:
-    """Normalize one season row; ``leafCount`` is its episode count."""
-    season_num = season.get("index", 0)
+def _plex_season(season: PlexMetadata, season_num: int, plex_base: str) -> ServerSeason:
+    """Normalize one numbered season row; ``leafCount`` is its episode count."""
     file_count = season.get("leafCount")
     if file_count is None:
         raise MediaServerError("Plex returned a season without its episode count")
     return ServerSeason(
         num=season_num,
-        title=season.get(
-            "title", f"Season {season_num}" if season_num > 0 else "Specials"
-        ),
+        title=season.get("title"),
         file_count=file_count,
         server_item_id=str(season["ratingKey"]),
         poster_url=_plex_absolute_url(season.get("thumb"), plex_base),
@@ -198,10 +195,15 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         if len(seasons) > MAX_SEASONS_PER_SHOW:
             raise MediaServerError("Media server returned too many seasons")
         show.folder_path = _plex_location_path(row)
-        show.seasons = [
-            _plex_season(season, plex_base)
-            for season in sorted(seasons, key=lambda season: season.get("index", 0))
-        ]
+        # A season without a number has none to key it by: 0 is Specials.
+        show.seasons = sorted(
+            (
+                _plex_season(season, season_num, plex_base)
+                for season in seasons
+                if (season_num := season.get("index")) is not None
+            ),
+            key=lambda season: season.num,
+        )
 
     def _to_server_item(
         self,
