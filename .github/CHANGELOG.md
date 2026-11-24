@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.0 - 2026-11-24
+
 ### 🚨 Breaking Changes
 
 - **API:** titles and collections carry their poster, background and theme under `assets`, and seasons their poster under `poster`: each with its selection, the content Overture holds, its status and where it is delivered, per server and folder. This replaces the flat `poster_*`, `background_*`, `theme_*` and `youtube_*` fields; existing choices and files are converted.

@@ -40,15 +40,25 @@ async def apply_needs(
     collections: Sequence[MediaCollection] = (),
 ) -> None:
     """Record what is wanted for each of *items* and *collections*."""
-    settings = await get_app_settings(session)
-    trusted = await _trusts_no_theme(session, settings)
     catalog = CatalogRepository(session)
+    settings: AppSettings | None = None
+    trusted: bool | None = None
     if items:
-        matched = await catalog.match_items(items) if trusted else [None] * len(items)
+        matched = await catalog.match_items(items)
+        if any(entry and entry.no_theme for entry in matched):
+            settings = await get_app_settings(session)
+            trusted = await _trusts_no_theme(session, settings)
         for item, entry in zip(items, matched, strict=True):
-            set_needed(item, ServerAsset.THEME, not (entry and entry.no_theme))
+            set_needed(
+                item,
+                ServerAsset.THEME,
+                not (trusted and entry and entry.no_theme),
+            )
             session.add(item)
     if collections:
+        settings = settings or await get_app_settings(session)
+        if trusted is None:
+            trusted = await _trusts_no_theme(session, settings)
         entries = (
             await catalog.collections_by_tmdb_id(
                 {

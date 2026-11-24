@@ -350,6 +350,8 @@ def set_needed(owner: Owner, kind: ServerAsset, needed: bool) -> Asset:
 
     An asset nothing is wanted for (``needed`` false) is complete as it is.
     """
+    if needed and find_asset(owner, kind) is None:
+        return read_asset(owner, kind)
     asset = _owned(owner, kind)
     asset.needed = needed
     return _settle(asset)

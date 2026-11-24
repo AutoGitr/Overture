@@ -327,13 +327,16 @@ jobs:
           tag="$(git ls-remote --tags --refs origin 'v*' | sed 's#.*refs/tags/##' | sort -V | tail -1)"
           git fetch --no-tags --depth=1 origin "refs/tags/$tag:refs/tags/$tag"
           git show "$tag:openapi/overture.json" > "$RUNNER_TEMP/released.json"
+          status=0
           docker run --rm -v "$RUNNER_TEMP:/released:ro" -v "$PWD/openapi:/current:ro" \
-            "$OASDIFF" breaking /released/released.json /current/overture.json \
-            > "$RUNNER_TEMP/breaking.txt"
-          if [ -s "$RUNNER_TEMP/breaking.txt" ]; then
+            "$OASDIFF" breaking --fail-on ERR /released/released.json /current/overture.json \
+            > "$RUNNER_TEMP/breaking.txt" || status=$?
+          if [ "$status" -eq 1 ]; then
             echo "The API changes incompatibly since $tag:"
             cat "$RUNNER_TEMP/breaking.txt"
             uv run --locked python -m scripts.release_metadata --require-api-entry
+          elif [ "$status" -ne 0 ]; then
+            exit "$status"
           fi
 
       # Overture vendors the catalog contract; a change made only in
