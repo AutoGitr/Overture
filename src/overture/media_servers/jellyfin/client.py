@@ -88,8 +88,6 @@ class JellyfinClient(MediaServerHttpClient):
     #: collections on, Jellyfin lists a collection in place of its titles,
     #: as if it were one of them.
     _UNGROUPED: ClassVar[dict[str, str]] = {"collapseBoxSetItems": "false"}
-    #: Item fields an update sends back beside a listing's, so it keeps them.
-    _DETAIL_FIELDS: ClassVar[str] = "Overview,Taglines"
 
     @property
     def web_base_url(self) -> str:
@@ -403,7 +401,7 @@ class JellyfinClient(MediaServerHttpClient):
         return parse_wire(_ITEM, await self._item_details(item_id))
 
     async def _item_details(self, item_id: str) -> dict[str, Any]:
-        """One item with every field a metadata update sends back.
+        """One item with the fields a listing reads.
 
         Asked as a query by ID: Jellyfin 12 refuses ``/Items/{id}`` without a
         user, which an API key has none of.
@@ -411,9 +409,7 @@ class JellyfinClient(MediaServerHttpClient):
         data = wire_object(
             await self._get(
                 "/Items",
-                params=self.query_params(
-                    ids=item_id, fields=f"{self._ITEM_FIELDS},{self._DETAIL_FIELDS}"
-                ),
+                params=self.query_params(ids=item_id, fields=self._ITEM_FIELDS),
             )
         )
         rows: list[dict[str, Any]] = data.get("Items") or []
@@ -497,15 +493,21 @@ class JellyfinClient(MediaServerHttpClient):
         except MediaServerError:
             return False
 
-    async def create_collection(self, title: str, member_ids: list[str]) -> str:
-        """Create a locked BoxSet holding ``member_ids``, which are never empty.
+    async def create_collection(
+        self, title: str, member_ids: list[str]
+    ) -> tuple[str, list[str]]:
+        """Create a locked BoxSet holding the first batch of ``member_ids``.
 
-        Emby refuses a BoxSet made without items, and the request line holds
-        one batch, so the first goes with it and the rest after. The BoxSet is
-        locked from birth: the server refreshes a new one at once, and an
-        unlocked one takes the name, overview and art of the TMDB collection
-        its name matches best, so "Foreign" would become "The Foreign
-        Exchange Student Collection".
+        Returns its ID and the members it holds.
+
+        It is one request, so the server makes the BoxSet or not; the members
+        past the batch the request line holds are for the membership write
+        that follows. Emby refuses a BoxSet made without items, so
+        ``member_ids`` are never empty. The BoxSet is locked from birth: the
+        server refreshes a new one at once, and an unlocked one takes the name,
+        overview and art of the TMDB collection its name matches best, so
+        "Foreign" would become "The Foreign Exchange Student Collection".
+        Locking it as it is made locks no member.
         """
         first = member_ids[: self._MEMBER_BATCH]
         response = await self._request(
@@ -516,11 +518,7 @@ class JellyfinClient(MediaServerHttpClient):
         value = wire_object(self._json(response))
         if not isinstance(value.get("Id"), str) or not value["Id"]:
             raise MediaServerError("Media server did not return the new collection ID")
-        collection_id = str(value["Id"])
-        await self._change_members(
-            "POST", collection_id, member_ids[self._MEMBER_BATCH :]
-        )
-        return collection_id
+        return str(value["Id"]), first
 
     async def set_collection_members(
         self, collection_id: str, member_ids: list[str], *, append: bool = False
@@ -543,12 +541,17 @@ class JellyfinClient(MediaServerHttpClient):
     async def _change_members(
         self, method: str, collection_id: str, member_ids: list[str]
     ) -> None:
-        """Add (``POST``) or remove (``DELETE``) BoxSet members in batches."""
+        """Add (``POST``) or remove (``DELETE``) BoxSet members in batches.
+
+        Each batch is retried like a read, as a member already added or
+        removed is left as it is.
+        """
         for batch in batched(member_ids, self._MEMBER_BATCH, strict=False):
             await self._request(
                 method,
                 f"/Collections/{collection_id}/Items",
                 params=self.query_params(ids=",".join(batch)),
+                idempotent=True,
             )
 
     async def update_collection_details(
@@ -556,23 +559,30 @@ class JellyfinClient(MediaServerHttpClient):
     ) -> None:
         """Send the details a BoxSet keeps, in the complete DTO the server requires.
 
-        A BoxSet keeps no mode, visibility or filtering. It stays locked, so
-        a metadata refresh leaves Overture's details and art in place and
-        reads only the files beside it.
+        A BoxSet keeps no mode, visibility or filtering. The fields Overture
+        writes are locked, so a metadata refresh never takes the name or
+        overview of the TMDB collection the title resembles. Only fields are
+        locked: changing the item's own lock locks or unlocks every item the
+        BoxSet holds as well.
         """
         item = await self.collection_metadata(collection_id)
+        written = ["Name", *(["Overview"] if details.summary is not None else [])]
+        held: list[str] = item.get("LockedFields") or []
         item.update(
-            LockData=True,
             Name=details.title,
             DisplayOrder="PremiereDate"
             if details.order is CollectionOrder.RELEASE_ASC
             else "SortName",
+            LockedFields=[*held, *(field for field in written if field not in held)],
         )
         if details.summary is not None:
             item["Overview"] = details.summary
         if details.sort_title is not None:
             self._set_sort_title(item, details.sort_title)
-        await self._request("POST", f"/Items/{collection_id}", json=item)
+        # The whole item is sent, so sending it again changes nothing more.
+        await self._request(
+            "POST", f"/Items/{collection_id}", json=item, idempotent=True
+        )
 
     @staticmethod
     def _set_sort_title(details: dict[str, Any], sort_title: str) -> None:
@@ -595,5 +605,22 @@ class JellyfinClient(MediaServerHttpClient):
         )
 
     async def collection_metadata(self, collection_id: str) -> dict[str, Any]:
-        """Read the complete DTO so metadata edits preserve unrelated fields."""
-        return await self._item_details(collection_id)
+        """Read the collection as the server's metadata editor does, every field kept.
+
+        An update replaces the item with what it sends, so it starts from this:
+        its locks among it. An update without ``LockData`` would unlock the
+        collection and, with it, every item it holds.
+        """
+        item = wire_object(await self._editor_item(collection_id))
+        if item.get("Id") != collection_id or "LockData" not in item:
+            raise MediaServerError(
+                f"{self.server.title} did not return collection {collection_id} "
+                "whole, so it is left as it is"
+            )
+        return item
+
+    async def _editor_item(self, item_id: str) -> object:
+        """One item with every field, as a user who sees every library reads it."""
+        return await self._get(
+            f"/Items/{item_id}", params={"userId": await self._administrator()}
+        )

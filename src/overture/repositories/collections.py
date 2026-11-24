@@ -5,7 +5,7 @@ lazy from datetime import datetime
 lazy from itertools import batched
 
 lazy from sqlalchemy.sql.elements import ColumnElement
-lazy from sqlmodel import col, delete, or_, select, update
+lazy from sqlmodel import col, delete, or_, select, tuple_, update
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from ..db.models.collection_group import CollectionGroup
@@ -66,6 +66,32 @@ class CollectionRepository:
                     select(MediaCollection)
                     .where(col(MediaCollection.group_id) == group.id)
                     .order_by(col(MediaCollection.id))
+                )
+            ).all()
+        )
+
+    async def holding(
+        self, copies: Collection[tuple[int, str]], *, besides: int
+    ) -> list[MediaCollection]:
+        """The collections besides *besides* that hold any of these server copies."""
+        if not copies:
+            return []
+        return list(
+            (
+                await self.session.exec(
+                    select(MediaCollection)
+                    .join(
+                        CollectionLibrary,
+                        col(CollectionLibrary.collection_id) == col(MediaCollection.id),
+                    )
+                    .where(
+                        col(MediaCollection.id) != besides,
+                        tuple_(
+                            col(CollectionLibrary.server_id),
+                            col(CollectionLibrary.server_item_id),
+                        ).in_(list(copies)),
+                    )
+                    .distinct()
                 )
             ).all()
         )

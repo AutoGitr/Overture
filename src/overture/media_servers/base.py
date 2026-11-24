@@ -62,7 +62,17 @@ class BaseMediaServerProvider[C: MediaServerHttpClient](ABC):
     async def create_collection(
         self, library_id: str, title: str, media_type: MediaType, member_ids: list[str]
     ) -> ServerCollection:
-        """Create a collection with initial membership."""
+        """Create a collection holding *member_ids*, or the first of them.
+
+        A server whose request holds only some makes it with those; the
+        membership write that follows a creation adds the rest.
+        """
+        raise NotImplementedError
+
+    async def find_collection(
+        self, library_id: str, title: str, media_type: MediaType
+    ) -> ServerCollection | None:
+        """The server's first collection titled *title* in the library, any case."""
         raise NotImplementedError
 
     async def create_smart_collection(

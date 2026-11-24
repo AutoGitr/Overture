@@ -18,7 +18,7 @@ lazy from .access import CollectionAccess, LibraryScope
 lazy from .copies import CopyKey, ServerCopy, copy_keys
 lazy from .destinations import place_collection
 lazy from .display import saved_options
-lazy from .editor import CollectionEditor, Held, save_placement
+lazy from .editor import CollectionEditor, Held, save_placement, store_placement
 lazy from .membership import Membership
 lazy from .policy import CollectionPolicy
 lazy from .post_sync import PostSync
@@ -163,13 +163,17 @@ class RuleSync:
             if created:
                 lead = copy.lead
                 try:
-                    server = await self._access.provider(
-                        copy.server_id
-                    ).create_collection(lead.library_id, row.title, lead.media_type, [])
+                    created = not await self._editor.existing(row, copy, smart=False)
+                    if created:
+                        server = await self._access.provider(
+                            copy.server_id
+                        ).create_collection(
+                            lead.library_id, row.title, lead.media_type, []
+                        )
+                        copy.place(server.id, server.path)
                 except MediaServerError as exc:
                     outcome.changes.append(CopyChange.failed(copy, exc))
                     continue
-                copy.place(server.id, server.path)
             outcome.changes.append(
                 CopyChange(copy.server_id, copy.library_order, created=created)
             )
@@ -241,7 +245,9 @@ class RuleSync:
         provider = self._access.provider(copy.server_id)
         lead = copy.lead
         before: set[str] = set()
-        target = copy.server_item_id
+        target = copy.server_item_id or await self._editor.existing(
+            row, copy, smart=True
+        )
         created = target is None
         if target is None:
             server = await provider.create_smart_collection(
@@ -338,9 +344,7 @@ class RuleSync:
     async def _save_placement(self, row: MediaCollection) -> None:
         async with self._access.database.write_session() as session:
             saved = await self._access.require(session, row.id or 0)
-            save_placement(saved, row)
-            place_collection(saved, self._access.provider_registry)
-            session.add(saved)
+            await store_placement(session, saved, row, self._access.provider_registry)
 
     async def _refresh_source_summary(
         self, rule: CollectionRule, row: MediaCollection

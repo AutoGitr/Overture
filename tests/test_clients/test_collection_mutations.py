@@ -16,6 +16,7 @@ lazy from overture.domain import (
 )
 lazy from overture.media_servers.adapters import CollectionDetails
 lazy from overture.media_servers.emby.client import EmbyClient
+lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.jellyfin.client import JellyfinClient
 lazy from overture.media_servers.plex.client import PlexClient, longest_ordered_run
 lazy from tests.http_mock import keep_configured_plex_url, mock_client_factory
@@ -38,7 +39,8 @@ async def test_boxsets_create_diff_edit_art_and_delete(
         "Id": "box",
         "Name": "Before",
         "ProviderIds": {"Tmdb": "10"},
-        "LockedFields": ["Overview"],
+        "LockData": False,
+        "LockedFields": ["Tags"],
     }
 
     def handle(request: httpx2.Request) -> httpx2.Response:
@@ -47,7 +49,8 @@ async def test_boxsets_create_diff_edit_art_and_delete(
         if path == "/Users":
             return httpx2.Response(200, json=_USERS)
         if request.method == "GET":
-            if path == "/Items/box":
+            # The metadata editor's read, as a user who sees every library.
+            if path == ("/Users/admin/Items/box" if emby else "/Items/box"):
                 return httpx2.Response(200, json=item)
             if request.url.params.get("Ids" if emby else "ids"):
                 return httpx2.Response(
@@ -65,7 +68,7 @@ async def test_boxsets_create_diff_edit_art_and_delete(
     factory, _transport = mock_client_factory(handle)
     client = media_client(client_type, app_config, client_factory=factory)
     try:
-        assert await client.create_collection("New", ["keep"]) == "box"
+        assert await client.create_collection("New", ["keep"]) == ("box", ["keep"])
         await client.set_collection_members("box", ["keep", "add"])
         await client.update_collection_details(
             "box",
@@ -105,11 +108,15 @@ async def test_boxsets_create_diff_edit_art_and_delete(
     assert mutations[2].url.params.get("Ids" if emby else "ids") == "remove"
     metadata = json.loads(mutations[3].content)
     assert metadata["Name"] == "After"
-    assert metadata["LockData"] is True
+    # Changing the item's own lock would change every member's too.
+    assert metadata["LockData"] is False
     assert metadata["ProviderIds"] == {"Tmdb": "10"}
-    # Emby keeps a sort title through refreshes only while SortName is locked.
+    # The fields Overture writes are locked; Emby keeps a sort title through
+    # refreshes only while SortName is locked as well.
     assert metadata["LockedFields"] == (
-        ["Overview", "SortName"] if emby else ["Overview"]
+        ["Tags", "Name", "Overview", "SortName"]
+        if emby
+        else ["Tags", "Name", "Overview"]
     )
     assert metadata["DisplayOrder"] == "SortName"
     assert metadata["ForcedSortName"] == "!After"
@@ -126,7 +133,8 @@ async def test_emby_clearing_a_sort_title_releases_its_lock(
         "Name": "Box",
         "SortName": "!Box",
         "ForcedSortName": "!Box",
-        "LockedFields": ["Overview", "SortName"],
+        "LockData": True,
+        "LockedFields": ["Name", "SortName"],
     }
     updates: list[dict[str, object]] = []
 
@@ -134,7 +142,9 @@ async def test_emby_clearing_a_sort_title_releases_its_lock(
         if request.method == "POST":
             updates.append(json.loads(request.content))
             return httpx2.Response(204)
-        return httpx2.Response(200, json={"Items": [item], "TotalRecordCount": 1})
+        if request.url.path.endswith("/Users"):
+            return httpx2.Response(200, json=_USERS)
+        return httpx2.Response(200, json=item)
 
     factory, _transport = mock_client_factory(handle)
     client = media_client(EmbyClient, app_config, client_factory=factory)
@@ -153,8 +163,44 @@ async def test_emby_clearing_a_sort_title_releases_its_lock(
         )
     finally:
         await client.close()
-    assert updates[0]["LockedFields"] == ["Overview"]
+    assert updates[0]["LockedFields"] == ["Name"]
     assert updates[0]["ForcedSortName"] is None
+    assert updates[0]["LockData"] is True
+
+
+@pytest.mark.parametrize("client_type", [JellyfinClient, EmbyClient])
+async def test_a_collection_the_server_does_not_return_whole_is_left_as_it_is(
+    client_type: type[JellyfinClient], app_config: Settings
+) -> None:
+    posted: list[httpx2.Request] = []
+
+    def handle(request: httpx2.Request) -> httpx2.Response:
+        if request.method == "POST":
+            posted.append(request)
+            return httpx2.Response(204)
+        if request.url.path.endswith("/Users"):
+            return httpx2.Response(200, json=_USERS)
+        return httpx2.Response(200, json={"Id": "box", "Name": "Box"})
+
+    factory, _transport = mock_client_factory(handle)
+    client = media_client(client_type, app_config, client_factory=factory)
+    try:
+        with pytest.raises(MediaServerError, match="left as it is"):
+            await client.update_collection_details(
+                "box",
+                CollectionDetails(
+                    title="Box",
+                    summary=None,
+                    sort_title=None,
+                    mode=CollectionMode.DEFAULT,
+                    order=CollectionOrder.TITLE_ASC,
+                    smart=False,
+                    visible_home=False,
+                ),
+            )
+    finally:
+        await client.close()
+    assert posted == []
 
 
 async def test_plex_creates_then_diffs_moves_and_uploads_bytes(

@@ -470,6 +470,27 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         )
 
     @override
+    async def find_collection(
+        self, library_id: str, title: str, media_type: MediaType
+    ) -> ServerCollection | None:
+        wanted = title.casefold()
+        item = next(
+            (
+                item
+                for item in await self.client.get_collections(
+                    self.section_key(library_id)
+                )
+                if (item.get("title") or "").casefold() == wanted
+            ),
+            None,
+        )
+        if item is None:
+            return None
+        return await self._server_collection(
+            item, self._section(library_id, media_type)
+        )
+
+    @override
     async def create_smart_collection(
         self,
         library_id: str,

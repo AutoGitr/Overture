@@ -1742,6 +1742,15 @@ class MediaBrowserServer(Server):
         row = await self.get(f"/Users/{admin['Id']}/Items/{item_id}")
         return f"an administrator sees the title {row.get('Name')!r}"
 
+    async def editor_item(self, item_id: str) -> dict[str, Any]:
+        """One item with every field, as the server's metadata editor reads it."""
+        admin = await self.administrator()
+        if admin is None:
+            return {}
+        if self.server == "jellyfin":
+            return await self.get(f"/Items/{item_id}", userId=admin["Id"])
+        return await self.get(f"/Users/{admin['Id']}/Items/{item_id}")
+
     async def administrator(self) -> dict[str, Any] | None:
         """A user who sees every library, fetched once."""
         if self._administrator is None:
@@ -2441,7 +2450,7 @@ class WriteCheck:
                 await self.direct.container(f"/library/metadata/{collection_id}")
             ).get("Metadata", [{}])
             return rows[0]
-        return await self.direct.item(collection_id)
+        return await self.direct.editor_item(collection_id)
 
     async def art(self, collection_id: str) -> tuple[Any, Any]:
         """What the server names the collection's poster and background by."""
@@ -2584,11 +2593,18 @@ class WriteCheck:
             )
 
     async def large(self, check: Case, library: str, items: list[str]) -> None:
-        """Create a collection of every movie found, then hold them all."""
+        """Create a collection of every movie found, then hold them all.
+
+        As a sync does, the membership write that follows the creation adds
+        the members its request could not hold.
+        """
         created = await self.provider.create_collection(
             library, f"{WRITE_PREFIX} large", MediaType.MOVIE, items
         )
         self.made.append(created.id)
+        await self.provider.set_collection_members(
+            created.id, items, order=CollectionOrder.CUSTOM
+        )
         held = await self.provider.get_collection_member_ids(created.id)
         check.count, check.held = len(items), len(set(held) & set(items))
 
@@ -2600,6 +2616,7 @@ class WriteCheck:
         """
         plex = isinstance(self.direct, PlexServer)
         order = CollectionOrder.CUSTOM if plex else CollectionOrder.TITLE_ASC
+        locks = await self.locks(collection_id)
         wanted = {
             "title": f"{WRITE_PREFIX} edited",
             "sort title": f"{WRITE_PREFIX} sort",
@@ -2641,6 +2658,9 @@ class WriteCheck:
         wrong = [name for name, value in kept.items() if value != wanted[name]]
         if plex and not await self.on_home(library, collection_id):
             wrong.append("Home visibility")
+        # Changing a BoxSet's own lock changes every member's: an edit keeps both.
+        if await self.locks(collection_id) != locks:
+            wrong.append("lock of the collection or its members")
         if wrong:
             check.error = "the server holds another " + ", ".join(
                 f"{name} ({kept.get(name)!r})" if name in kept else name
@@ -2648,6 +2668,19 @@ class WriteCheck:
             )
             if isinstance(self.direct, MediaBrowserServer):
                 check.note = await self.direct.seen_by_a_user(collection_id)
+
+    async def locks(self, collection_id: str) -> dict[str, object]:
+        """Whether Jellyfin or Emby locks the collection and each member, by ID."""
+        if not isinstance(self.direct, MediaBrowserServer):
+            return {}
+        ids = [
+            collection_id,
+            *await self.provider.get_collection_member_ids(collection_id),
+        ]
+        return {
+            item_id: (await self.direct.editor_item(item_id)).get("LockData")
+            for item_id in ids
+        }
 
     async def on_home(self, library: str, collection_id: str) -> bool:
         """Whether Plex promotes the collection's hub to its owner's Home."""

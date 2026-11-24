@@ -26,8 +26,6 @@ class EmbyClient(JellyfinClient):
         "ProviderIds,Path,Studios,Genres,DateCreated,ProductionYear,Tags,SortName"
     )
     _UNGROUPED: ClassVar[dict[str, str]] = {"groupItemsIntoCollections": "false"}
-    #: Emby lists an item's locked fields only when asked.
-    _DETAIL_FIELDS: ClassVar[str] = "Overview,Taglines,LockedFields"
 
     @staticmethod
     @override
@@ -42,6 +40,10 @@ class EmbyClient(JellyfinClient):
         details["ForcedSortName"] = sort_title or None
         details["SortName"] = sort_title or None
         details["LockedFields"] = [*locked, "SortName"] if sort_title else locked
+
+    @override
+    async def _editor_item(self, item_id: str) -> object:
+        return await self._get(f"/Users/{await self._administrator()}/Items/{item_id}")
 
     @override
     async def _member_reader(self) -> dict[str, str]:

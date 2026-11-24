@@ -2,6 +2,8 @@
 
 lazy from collections.abc import Collection, Iterable, Mapping, Sequence
 
+lazy from sqlmodel.ext.asyncio.session import AsyncSession
+
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...domain import (
     AssetScope,
@@ -11,6 +13,7 @@ lazy from ...domain import (
     ServerType,
 )
 lazy from ...media_servers.errors import MediaServerError
+lazy from ...media_servers.registry import ProviderRegistry
 lazy from ...repositories.collection_items import (
     CollectionItem,
     CollectionItemRepository,
@@ -81,6 +84,38 @@ def _server_ids(
         for item in items
         if item.server_item_id
     ]
+
+
+async def store_placement(
+    session: AsyncSession,
+    saved: MediaCollection,
+    row: MediaCollection,
+    registry: ProviderRegistry,
+) -> None:
+    """Store where *row*'s copies are as *saved*'s, held by no other collection.
+
+    A server can give a collection it makes the ID of one it deleted:
+    Jellyfin derives a BoxSet's from its folder, named after the title it
+    was made with. Another collection still holding that ID holds a copy
+    the server no longer has, so it lets go: an unmanaged one goes, as when
+    a library sync finds its collection gone, and a managed one forgets the
+    copy, which its next sync makes again.
+    """
+    placed = set(copy_keys(row.libraries)) - set(copy_keys(saved.libraries))
+    save_placement(saved, row)
+    place_collection(saved, registry)
+    session.add(saved)
+    repository = CollectionRepository(session)
+    for other in await repository.holding(placed, besides=saved.id or 0):
+        if other.rule is None:
+            await repository.delete_ids([other.id or 0])
+            continue
+        released = await repository.clear_server_copies(
+            other.id or 0, utc_now(), placed
+        )
+        if released is not None:
+            place_collection(released, registry)
+            session.add(released)
 
 
 def save_placement(saved: MediaCollection, row: MediaCollection) -> None:
@@ -430,6 +465,30 @@ class CollectionEditor:
             members.update(dict.fromkeys(held))
         return list(members), changes
 
+    async def existing(
+        self, row: MediaCollection, copy: ServerCopy, *, smart: bool
+    ) -> str | None:
+        """Place *copy* in the server's collection of the title, if it holds one.
+
+        Making a collection is one request a server can carry out and still
+        fail, as on a timeout, so the collection made then is found here by
+        its title before another is made. Only one of the same kind (*smart*
+        or regular) that no Overture collection holds is taken. Returns the ID
+        of the one taken.
+        """
+        found = await self._access.provider(copy.server_id).find_collection(
+            copy.lead.library_id, row.title, copy.lead.media_type
+        )
+        if found is None or found.smart is not smart:
+            return None
+        async with self._access.database.read_session() as session:
+            if await CollectionRepository(session).find_server(
+                copy.server_id, found.id
+            ):
+                return None
+        copy.place(found.id, found.path)
+        return found.id
+
     async def stored_members(
         self, row: MediaCollection, copy: ServerCopy
     ) -> list[Held]:
@@ -469,6 +528,8 @@ class CollectionEditor:
                 )
             )
         target = copy.server_item_id
+        if target is None and ids:
+            target = await self.existing(row, copy, smart=False)
         created = target is None
         if target is None:
             if not ids:
@@ -544,8 +605,7 @@ class CollectionEditor:
                     if isinstance(member, int)
                 ],
             )
-            save_placement(current, row)
-            place_collection(current, self._access.provider_registry)
+            await store_placement(session, current, row, self._access.provider_registry)
             current.kind = kind
             current.child_count = len(set(members))
             current.order_type = order

@@ -144,11 +144,21 @@ class TmdbCollectionSource(StrictBaseModel):
     collection_id: PositiveId
 
 
+#: TMDB IDs one TMDB titles source names.
+TMDB_ITEM_IDS_MAX = 1000
+#: Conditions one criteria group holds.
+GROUP_CONDITIONS_MAX = 100
+#: Groups one criteria group nests.
+GROUP_GROUPS_MAX = 20
+
+
 class TmdbItemSource(StrictBaseModel):
     """Explicit TMDB movie or show IDs, in the order given."""
 
     type: Literal[SourceType.TMDB_ITEM] = SourceType.TMDB_ITEM
-    tmdb_ids: Annotated[list[PositiveId], Field(min_length=1, max_length=1000)]
+    tmdb_ids: Annotated[
+        list[PositiveId], Field(min_length=1, max_length=TMDB_ITEM_IDS_MAX)
+    ]
 
 
 class TmdbListSource(StrictBaseModel):
@@ -254,10 +264,10 @@ class FilterGroup(StrictBaseModel):
     """Conditions and nested groups, matched together or individually."""
 
     mode: Literal["all", "any"] = "all"
-    conditions: Annotated[list[Condition], Field(max_length=100)] = Field(
-        default_factory=list[Condition]
+    conditions: Annotated[list[Condition], Field(max_length=GROUP_CONDITIONS_MAX)] = (
+        Field(default_factory=list[Condition])
     )
-    groups: Annotated[list[FilterGroup], Field(max_length=20)] = Field(
+    groups: Annotated[list[FilterGroup], Field(max_length=GROUP_GROUPS_MAX)] = Field(
         default_factory=list["FilterGroup"]
     )
 

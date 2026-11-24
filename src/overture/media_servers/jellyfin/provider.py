@@ -348,49 +348,64 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
     @override
     async def list_collections(self) -> list[ServerCollection]:
         """Return every BoxSet; Jellyfin keeps them outside the libraries."""
-        results: list[ServerCollection] = []
-        for boxset in await self.client.get_boxsets():
-            boxset_id = boxset["Id"]
-            tmdb_id = provider_ids(boxset).get("tmdb", "")
-            results.append(
-                ServerCollection(
-                    id=boxset_id,
-                    title=boxset.get("Name") or "",
-                    member_ids=tuple(
-                        await self.client.get_boxset_member_ids(boxset_id)
-                    ),
-                    summary=boxset.get("Overview") or None,
-                    thumb_url=_media_browser_image_url(
-                        self.client,
-                        boxset_id,
-                        "Primary",
-                        (boxset.get("ImageTags") or {}).get("Primary"),
-                    ),
-                    art_url=_media_browser_image_url(
-                        self.client,
-                        boxset_id,
-                        "Backdrop",
-                        next(iter(boxset.get("BackdropImageTags") or []), None),
-                    ),
-                    tmdb_id=int(tmdb_id) if tmdb_id.isdigit() else None,
-                    path=boxset.get("Path"),
-                    added_at=parse_utc_datetime(
-                        boxset.get("DateCreated"), naive_tz=self._app_config.tzinfo
-                    ),
-                )
-            )
-        return results
+        return [
+            await self._server_collection(boxset)
+            for boxset in await self.client.get_boxsets()
+        ]
+
+    @override
+    async def find_collection(
+        self, library_id: str, title: str, media_type: MediaType
+    ) -> ServerCollection | None:
+        """BoxSets are outside the libraries, so any of the title is the one."""
+        wanted = title.casefold()
+        boxset = next(
+            (
+                boxset
+                for boxset in await self.client.get_boxsets()
+                if (boxset.get("Name") or "").casefold() == wanted
+            ),
+            None,
+        )
+        return None if boxset is None else await self._server_collection(boxset)
+
+    async def _server_collection(self, boxset: MediaBrowserItem) -> ServerCollection:
+        boxset_id = boxset["Id"]
+        tmdb_id = provider_ids(boxset).get("tmdb", "")
+        return ServerCollection(
+            id=boxset_id,
+            title=boxset.get("Name") or "",
+            member_ids=tuple(await self.client.get_boxset_member_ids(boxset_id)),
+            summary=boxset.get("Overview") or None,
+            thumb_url=_media_browser_image_url(
+                self.client,
+                boxset_id,
+                "Primary",
+                (boxset.get("ImageTags") or {}).get("Primary"),
+            ),
+            art_url=_media_browser_image_url(
+                self.client,
+                boxset_id,
+                "Backdrop",
+                next(iter(boxset.get("BackdropImageTags") or []), None),
+            ),
+            tmdb_id=int(tmdb_id) if tmdb_id.isdigit() else None,
+            path=boxset.get("Path"),
+            added_at=parse_utc_datetime(
+                boxset.get("DateCreated"), naive_tz=self._app_config.tzinfo
+            ),
+        )
 
     @override
     async def create_collection(
         self, library_id: str, title: str, media_type: MediaType, member_ids: list[str]
     ) -> ServerCollection:
-        collection_id = await self.client.create_collection(title, member_ids)
+        collection_id, held = await self.client.create_collection(title, member_ids)
         metadata = await self.client.get_item(collection_id)
         return ServerCollection(
             id=collection_id,
             title=title,
-            member_ids=tuple(member_ids),
+            member_ids=tuple(held),
             library_id=library_id,
             media_type=media_type,
             path=metadata.get("Path"),

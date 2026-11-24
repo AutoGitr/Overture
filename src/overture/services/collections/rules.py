@@ -1,6 +1,7 @@
 """Conversions between stored collection rules and the criteria they hold."""
 
 lazy from collections.abc import Mapping, Sequence
+lazy from itertools import batched
 
 lazy from ...db.models.collection_group import CollectionGroup
 lazy from ...db.models.collection_rule import CollectionRule
@@ -14,6 +15,9 @@ lazy from ...domain import (
 )
 lazy from ...repositories.collection_items import CollectionItem
 lazy from ...schemas.collections import (
+    GROUP_CONDITIONS_MAX,
+    GROUP_GROUPS_MAX,
+    TMDB_ITEM_IDS_MAX,
     CollectionGenerator,
     CollectionLibraryCriteria,
     CollectionRuleRead,
@@ -122,7 +126,13 @@ def member_criteria(
 
     Members that all belong to *franchise* are kept as that TMDB collection,
     so later films join it; otherwise each is named by the first ID it has of
-    TMDB, TVDB and IMDb, else by title.
+    TMDB, TVDB and IMDb, else by title. TMDB IDs share sources as large as a
+    source holds, and conditions past what one group holds go in nested
+    groups of their own.
+
+    Raises:
+        PublicServiceError: 422 when it has no members, or more than criteria
+            can name.
     """
     if franchise is not None:
         return FilterGroup(
@@ -133,13 +143,27 @@ def member_criteria(
         )
     tmdb_ids = [item.tmdb_id for item in members if item.tmdb_id is not None]
     conditions: list[Condition] = [
-        _member_condition(item) for item in members if item.tmdb_id is None
+        *(
+            SourceCondition(source=TmdbItemSource(tmdb_ids=list(ids)))
+            for ids in batched(tmdb_ids, TMDB_ITEM_IDS_MAX, strict=False)
+        ),
+        *(_member_condition(item) for item in members if item.tmdb_id is None),
     ]
-    if tmdb_ids:
-        conditions.insert(0, SourceCondition(source=TmdbItemSource(tmdb_ids=tmdb_ids)))
     if not conditions:
         raise PublicServiceError(422, f"{row.title} has no members to keep")
-    return FilterGroup(mode="any", conditions=conditions)
+    if len(conditions) <= GROUP_CONDITIONS_MAX:
+        return FilterGroup(mode="any", conditions=conditions)
+    groups = [
+        FilterGroup(mode="any", conditions=list(part))
+        for part in batched(conditions, GROUP_CONDITIONS_MAX, strict=False)
+    ]
+    if len(groups) > GROUP_GROUPS_MAX:
+        raise PublicServiceError(
+            422,
+            f"{row.title} holds more titles without a TMDB ID than criteria "
+            "can name one by one",
+        )
+    return FilterGroup(mode="any", groups=groups)
 
 
 def _member_condition(item: CollectionItem) -> FieldCondition:

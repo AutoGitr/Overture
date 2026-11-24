@@ -3,7 +3,7 @@
 lazy from collections import Counter
 lazy from collections.abc import Mapping, Sequence
 lazy from dataclasses import dataclass, field
-lazy from typing import ClassVar, override
+lazy from typing import Any, ClassVar, override
 lazy from unittest.mock import AsyncMock
 
 lazy import pytest
@@ -73,6 +73,7 @@ lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.media_servers.plex.provider import PlexProvider
 lazy from overture.media_servers.registry import ProviderRegistry
 lazy from overture.repositories.collection_items import (
+    CollectionItem,
     CollectionItemRepository,
     TermSelection,
 )
@@ -165,6 +166,8 @@ class Provider(PlexProvider):
         )
         self.created: list[str] = []
         self.deleted: list[str] = []
+        #: Collections someone made on the server, by title, as Overture finds them.
+        self.titled: dict[str, ServerCollection] = {}
         self.members: dict[str, list[str]] = {}
         self.options: dict[str, tuple[str, CollectionMode, CollectionOrder, bool]] = {}
         self.sort_titles: dict[str, str | None] = {}
@@ -210,6 +213,12 @@ class Provider(PlexProvider):
             media_type=media_type,
             library_id=library_id,
         )
+
+    @override
+    async def find_collection(
+        self, library_id: str, title: str, media_type: MediaType
+    ) -> ServerCollection | None:
+        return self.titled.get(title.casefold())
 
     @override
     async def create_smart_collection(
@@ -3197,6 +3206,39 @@ def test_adoption_names_members_by_tmdb_then_tvdb_then_imdb_then_title() -> None
     assert evaluate(members, by_ids, context) == members[1:]
 
 
+def test_adoption_criteria_name_a_collection_larger_than_one_source_holds() -> None:
+    def holding_movie(identity: int, **ids: Any) -> CollectionItem:
+        return holding(
+            MediaItem(
+                id=identity, media_type=MediaType.MOVIE, title=f"M{identity}", **ids
+            )
+        )
+
+    row = MediaCollection(title="Large")
+    tagged = [holding_movie(n, tmdb_id=n) for n in range(1, 1253)]
+    untagged = [holding_movie(n, imdb_id=f"tt{n}") for n in range(2000, 2150)]
+
+    criteria = member_criteria(row, [*tagged, *untagged], franchise=None)
+
+    sources = criteria.source_conditions()
+    named = [
+        tmdb_id
+        for condition in sources
+        if isinstance(condition.source, TmdbItemSource)
+        for tmdb_id in condition.source.tmdb_ids
+    ]
+    assert named == list(range(1, 1253))
+    assert len(criteria.field_conditions()) == len(untagged)
+    # The criteria are a valid rule as saved.
+    CollectionRuleWrite.model_validate(
+        {"libraries": [{"library_id": "1:movies", "criteria": criteria.model_dump()}]}
+    )
+
+    too_many = [holding_movie(n, imdb_id=f"tt{n}") for n in range(1, 2002)]
+    with pytest.raises(PublicServiceError, match="more titles without a TMDB ID"):
+        member_criteria(row, too_many, franchise=None)
+
+
 async def test_orphan_reverses_adoption_keeping_the_server_copy(
     manager: Manager,
 ) -> None:
@@ -3654,6 +3696,54 @@ async def test_a_refused_copy_leaves_the_others_synced_and_placed(
     assert outcome.errors is None
     assert manager.provider.created == ["Everything", "Everything"]
     assert manager.provider.members == {"1": ["m0"], "2": ["s1"]}
+
+
+@pytest.mark.parametrize("smart", [False, True], ids=["regular", "smart"])
+async def test_a_collection_a_failed_creation_left_is_found_not_made_again(
+    manager: Manager, database: Database, *, smart: bool
+) -> None:
+    """A server can make a collection and still fail the request that asked."""
+    manager.provider.titled["saga"] = ServerCollection(
+        "77", "Saga", ("m9",), media_type=MediaType.MOVIE, smart=smart
+    )
+    manager.provider.members["77"] = ["m9"]
+
+    detail = await created(
+        manager.service,
+        CollectionCreate(title="Saga", rule=chosen(manager, [manager.ids[0]])),
+    )
+
+    async with database.read_session() as session:
+        row = await CollectionRepository(session).get(detail.id)
+    assert row is not None
+    if smart:
+        # A smart collection is not what a regular one needs: Overture makes its own.
+        assert manager.provider.created == ["Saga"]
+        assert [part.server_item_id for part in row.libraries] == ["1"]
+    else:
+        assert manager.provider.created == []
+        assert [part.server_item_id for part in row.libraries] == ["77"]
+        assert manager.provider.members["77"] == ["m0"]
+
+
+async def test_a_server_collection_reusing_a_deleted_ones_id_has_one_owner(
+    manager: Manager, database: Database
+) -> None:
+    """Jellyfin gives a BoxSet made again the ID of the one it deleted."""
+    stale = await create_unmanaged(manager, database)
+    manager.provider.created = []
+
+    detail = await created(
+        manager.service,
+        CollectionCreate(title="Again", rule=chosen(manager, [manager.ids[0]])),
+    )
+
+    async with database.read_session() as session:
+        repository = CollectionRepository(session)
+        assert await repository.get(stale) is None
+        owner = await repository.find_server(TEST_SERVER_ID, "1")
+    assert owner is not None
+    assert owner.id == detail.id
 
 
 async def test_one_boxset_holds_every_library_on_jellyfin(

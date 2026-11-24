@@ -46,8 +46,10 @@
 - **API:** an ID too large for the database is refused with 422 instead of failing with 500.
 - **Collections:** the bulk sort title template takes as many characters as the sort title format.
 - **Collections:** Emby makes new collections again instead of failing with HTTP 500, and Jellyfin and Emby collections of more than about 200 titles sync instead of failing with HTTP 414.
-- **Collections:** Jellyfin and Emby keep the name of a collection Overture makes: it is locked, so the server no longer renames it after the TMDB collection its name resembles (such as `Foreign` becoming `The Foreign Exchange Student Collection`). Delete collections renamed this way on the server; the next sync makes them again.
-- **Collections:** one server refusing a collection no longer stops the others: its error is logged for that server, the others sync, and a collection made on another server before the refusal is kept instead of made again by every sync.
+- **Collections:** a sync never locks the titles in a Jellyfin or Emby collection. Jellyfin and Emby keep a collection's name, and its summary when Overture sets one, through metadata refreshes, by locking those fields alone, so the server no longer renames it after the TMDB collection its name resembles (such as `Foreign` becoming `The Foreign Exchange Student Collection`).
+- **Collections:** a collection a server made while failing the request is found by its title at the next sync instead of made again, and a server collection belongs to one Overture collection only, even when Jellyfin gives one made again the ID of one it deleted.
+- **Collections:** one server refusing a collection no longer stops the others: its error is logged for that server, the others sync, and a collection made on another server before the refusal is kept instead of made again by every sync. A timed-out membership or details write to Jellyfin or Emby is retried.
+- **Collections:** adopting a collection of more than 1,000 titles works; it failed with an internal server error.
 - **Collections:** a criteria value spelt in another case, such as `united kingdom`, shows as the library's value it matches instead of "no title has it".
 - **Collections:** a sync keeps the art Overture uploaded while the server still shows it. Plex changes a collection's image link whenever the collection is edited, which a sync took for a replaced image, so collections lost their complete art and the next Assets run uploaded it again.
 - **Interface:** removing one season's poster from a title's record works; it was always refused.

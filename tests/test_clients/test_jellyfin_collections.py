@@ -62,8 +62,10 @@ async def test_created_boxset_immediately_has_its_theme_folder(
 ) -> None:
     class CreatingClient(Client):
         @override
-        async def create_collection(self, title: str, member_ids: list[str]) -> str:
-            return "new-boxset"
+        async def create_collection(
+            self, title: str, member_ids: list[str]
+        ) -> tuple[str, list[str]]:
+            return "new-boxset", member_ids
 
         @override
         async def get_item(self, item_id: str) -> MediaBrowserItem:

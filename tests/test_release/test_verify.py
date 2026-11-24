@@ -753,6 +753,10 @@ class _Jellyfin(module.MediaBrowserServer):
             return [{"Id": "admin", "Policy": {"IsAdministrator": True}}]
         if path.startswith("/Users/admin/Items/"):
             return self.server_state.items[path.rsplit("/", 1)[1]]
+        if path.startswith("/Items/"):
+            # The metadata editor's read, which Jellyfin makes as a user.
+            assert params == {"userId": "admin"}
+            return self.server_state.items.get(path.removeprefix("/Items/"), {})
         assert path == "/Items"
         return {"Items": [self.server_state.items[params["Ids"]]]}
 
@@ -790,6 +794,10 @@ async def test_writes_touch_only_their_own_collections_and_delete_them_whatever_
             {
                 "replace a member": refused,
                 "keep the images' names through an edit": refused,
+                # Filling a large collection is a membership write too.
+                f"create a collection of up to {module.LARGE_COLLECTION} members": (
+                    refused.replace("verify regular", "verify large")
+                ),
             }
             if fail_at
             else {}
