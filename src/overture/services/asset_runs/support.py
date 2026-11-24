@@ -112,7 +112,7 @@ async def refresh_folder_themes(
                 session.add(current)
     if changed:
         await downloads.publisher.broadcast(
-            "collection.updated", {"collection_id": current.id}
+            "collection.updated", {"collection_id": current.id, "titles": False}
         )
     return current
 

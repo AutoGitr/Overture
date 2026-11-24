@@ -557,7 +557,9 @@ async def test_plex_collection_theme_audit_checks_served_audio_and_updates_deliv
         assert asset.status is expected_asset_status
         assert asset.deliveries[0].observed_ref == expected_ref
     if expected_asset_status is AssetStatus.PARTIAL:
-        assert publisher.events == [("collection.updated", {"collection_id": 1})]
+        assert publisher.events == [
+            ("collection.updated", {"collection_id": 1, "titles": False})
+        ]
     else:
         assert publisher.events == []
 
@@ -652,7 +654,9 @@ async def test_jellyfin_collection_theme_audit_inspects_folder_and_updates_deliv
         asset = read_asset(stored, ServerAsset.THEME)
         assert asset.status is expected_asset_status
     if expected_asset_status is AssetStatus.PARTIAL:
-        assert publisher.events == [("collection.updated", {"collection_id": 1})]
+        assert publisher.events == [
+            ("collection.updated", {"collection_id": 1, "titles": False})
+        ]
     else:
         assert publisher.events == []
 

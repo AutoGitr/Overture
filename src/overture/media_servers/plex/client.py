@@ -70,6 +70,8 @@ _PLEX_TYPES = frozendict(
 )
 #: Plex's metadata type number for episodes, whose fields show sections test.
 _EPISODE_TYPE = 4
+#: Plex's metadata type number for collections.
+_COLLECTION_TYPE = 18
 #: The member orders Plex keeps itself; others are stored as a custom order.
 PLEX_COLLECTION_SORTS: frozendict[CollectionOrder, int] = frozendict(
     {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
@@ -977,12 +979,24 @@ class PlexClient(MediaServerHttpClient):
     ) -> None:
         """Edit collection metadata and its library visibility preferences.
 
+        The title is edited through the section, as Plex's own editor does:
+        that renames the collection tag its members carry as well, where an
+        edit of the metadata item renames the collection alone, and deleting
+        it would then leave the members tagged with the old title, from which
+        Plex makes the collection again.
+
         Plex rejects a smart collection's ``collectionSort`` (its query sorts
         it) and a regular collection's ``collectionFilterBasedOnUser`` with
         400 Bad Request.
         """
         title, summary, sort_title = details.title, details.summary, details.sort_title
-        fields: dict[str, str | int] = {"title.value": title, "title.locked": 1}
+        fields: dict[str, str | int] = {
+            "type": _COLLECTION_TYPE,
+            "id": collection_id,
+            "includeExternalMedia": 1,
+            "title.value": title,
+            "title.locked": 1,
+        }
         if summary is not None:
             fields |= {"summary.value": summary, "summary.locked": int(bool(summary))}
         if sort_title is not None:
@@ -990,7 +1004,7 @@ class PlexClient(MediaServerHttpClient):
                 "titleSort.value": sort_title,
                 "titleSort.locked": int(bool(sort_title)),
             }
-        await self._request("PUT", f"/library/metadata/{collection_id}", params=fields)
+        await self._request("PUT", f"/library/sections/{section_id}/all", params=fields)
         prefs: dict[str, int] = {"collectionMode": PLEX_COLLECTION_MODES[details.mode]}
         if not details.smart:
             prefs["collectionSort"] = PLEX_COLLECTION_SORTS.get(

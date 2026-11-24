@@ -89,8 +89,13 @@ const AFTER_BACKUP = invalidating(["backups"]);
 /** What each event changes in the REST cache; events left out change nothing there. */
 const CACHE_POLICY: Partial<WebSocketHandlerMap> = {
   "collections.changed": invalidating(["collections", "catalog", "library"]),
-  "collection.updated": () => {
-    if (!syncState.running) void invalidateTags(["collections", "catalog", "library"]);
+  "collection.updated": (data) => {
+    // The library lists hold every title, so they are read again only for a
+    // change to the titles a collection links.
+    if (!syncState.running)
+      void invalidateTags(
+        data.titles ? ["collections", "catalog", "library"] : ["collections", "catalog"],
+      );
   },
   "collection.monitored": (data) =>
     patchCollection(data.collection_id, { monitored: data.monitored }),

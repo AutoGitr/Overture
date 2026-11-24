@@ -255,7 +255,10 @@ async def test_collection_art_upload_records_validated_bytes_and_shared_slot(
                 server_ref(row, ServerAsset.POSTER)
                 == "https://plex.test/library/metadata/box/thumb/1"
             )
-        assert publisher.broadcasts[-1] == ("collection.updated", {"collection_id": 1})
+        assert publisher.broadcasts[-1] == (
+            "collection.updated",
+            {"collection_id": 1, "titles": False},
+        )
         with pytest.raises(PublicServiceError, match="poster style"):
             await service.collections.save(
                 1, ArtType.POSTER, SaveCollectionArtRequest(url=URL)

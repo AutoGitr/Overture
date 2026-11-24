@@ -416,7 +416,10 @@ async def test_delete_collection_theme_clears_row_and_broadcasts(
         None,
         None,
     )
-    assert publisher.broadcasts[0] == ("collection.updated", {"collection_id": 1})
+    assert publisher.broadcasts[0] == (
+        "collection.updated",
+        {"collection_id": 1, "titles": False},
+    )
 
 
 async def test_delete_collection_theme_keeps_the_row_when_the_server_fails(

@@ -1248,6 +1248,32 @@ async def test_create_edit_order_and_delete_preserve_media(
     assert manager.publisher.broadcasts[-1][0] == "collections.changed"
 
 
+async def test_edits_say_whether_the_titles_a_collection_links_changed(
+    manager: Manager,
+) -> None:
+    identity = await create(manager)
+
+    def titles() -> bool:
+        event, payload = manager.publisher.broadcasts[-1]
+        assert event == "collection.updated"
+        return payload["titles"]
+
+    await manager.service.editor.update(identity, CollectionOptions(title="Renamed"))
+    assert not titles()
+    await manager.service.editor.set_members(
+        identity,
+        CollectionMembersUpdate(
+            member_ids=list(reversed(manager.ids)), order_type=CollectionOrder.CUSTOM
+        ),
+    )
+    assert titles()
+    franchise = library_rule(criteria=sources(TmdbCollectionSource(collection_id=10)))
+    await manager.service.editor.save_rule(identity, franchise)
+    assert titles()
+    await manager.service.editor.save_rule(identity, franchise)
+    assert not titles()
+
+
 @pytest.mark.parametrize("ids", [[999], [1, 1]])
 async def test_invalid_members_never_reach_the_server(
     manager: Manager, ids: list[int]

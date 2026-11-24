@@ -18,7 +18,7 @@ lazy from ..art.collection_art import CollectionArtService
 lazy from .access import CollectionAccess
 lazy from .adoption import CollectionAdoption
 lazy from .display import saved_options
-lazy from .editor import CollectionEditor
+lazy from .editor import CollectionEditor, relinks
 lazy from .themes import CollectionThemes
 
 type BulkHandler = Callable[[int, BulkCollectionOperation], Awaitable[object]]
@@ -130,7 +130,6 @@ class CollectionBulk:
         async with self._access.locked(collection_id):
             async with self._access.database.read_session() as session:
                 row = await self._access.require(session, collection_id)
-            await self._editor.update_locked(
-                row, bulk_options(row, body, row.rule), push=False
-            )
-        await self._access.updated(collection_id)
+            options = bulk_options(row, body, row.rule)
+            await self._editor.update_locked(row, options, push=False)
+        await self._access.updated(collection_id, titles=relinks(row, options))

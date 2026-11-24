@@ -71,6 +71,10 @@ minversion = "9.1"
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = ["-q", "-ra", "--tb=short"]
+# A subtest follows the run's verbosity, which -q lowers below the level that
+# keeps a passing one quiet: each would print a "u" and count towards the
+# progress past 100%. A failing one is reported whatever the level.
+verbosity_subtests = 0
 strict = true
 markers = [
     "real_process_pool: exercise PhashService with a real spawned ProcessPoolExecutor",
@@ -189,6 +193,7 @@ select = [
 ignore = [
     "TID252",  # relative-parent-imports: allowed because the package uses modular relative imports across domain packages
     "PLR0911", # too-many-return-statements: complex validation and decision trees use multiple return guards
+    "PLR0912", # too-many-branches: covered by McCabe cyclomatic complexity limit (max-complexity = 12), which counts paths rather than each else
     "PLR0913", # too-many-arguments: FastAPI route handlers and service dependencies routinely require >5 injected parameters
     "PLR0915", # too-many-statements: covered by McCabe cyclomatic complexity limit (max-complexity = 12)
     "PLR0917", # too-many-positional-arguments: redundant duplicate of PLR0913 for modern Python functions

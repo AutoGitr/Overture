@@ -381,7 +381,7 @@ class CollectionSync:
                 ):
                     newly_identified.append(row.id)
                 await self._publisher.broadcast(
-                    "collection.updated", {"collection_id": row.id}
+                    "collection.updated", {"collection_id": row.id, "titles": True}
                 )
             await self._reconcile_missing(job, by_server, seen, library_ids)
             await self._publisher.broadcast("collections.changed")

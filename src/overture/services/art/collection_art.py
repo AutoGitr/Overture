@@ -491,7 +491,7 @@ class CollectionArtService:
                 row.updated_at = now
                 db.add(row)
         await self._publisher.broadcast(
-            "collection.updated", {"collection_id": collection_id}
+            "collection.updated", {"collection_id": collection_id, "titles": False}
         )
 
     async def _fetch(
@@ -638,7 +638,7 @@ class CollectionArtService:
                     confirm_delivery(row, kind, destination, ref=ref, at=utc_now())
                 db.add(row)
         await self._publisher.broadcast(
-            "collection.updated", {"collection_id": collection_id}
+            "collection.updated", {"collection_id": collection_id, "titles": False}
         )
 
     async def remove(
@@ -688,7 +688,7 @@ class CollectionArtService:
                 row.updated_at = now
                 db.add(row)
         await self._publisher.broadcast(
-            "collection.updated", {"collection_id": collection_id}
+            "collection.updated", {"collection_id": collection_id, "titles": False}
         )
         return StatusResponse(status=Status.OK)
 

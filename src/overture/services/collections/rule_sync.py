@@ -97,7 +97,7 @@ class RuleSync:
                         saved.last_synced_at = utc_now()
                         saved.last_error = error
                         session.add(saved)
-                await self._access.updated(collection_id)
+                await self._access.updated(collection_id, titles=True)
             # A skipped or refused server copy still lacks the changes; a
             # collection without one is withheld until it is active or large
             # enough.

@@ -558,9 +558,13 @@ class BulkCollectionMonitorUpdate(StrictBaseModel):
 
 
 class CollectionUpdatedEvent(StrictBaseModel):
-    """A collection's match or membership changed."""
+    """A collection changed."""
 
     collection_id: int
+    #: Whether the titles it links changed too: its members or its TMDB
+    #: collection, which the library lists show. Only then are those lists,
+    #: every title of the library, read again.
+    titles: bool
 
 
 class CollectionMonitoredEvent(StrictBaseModel):

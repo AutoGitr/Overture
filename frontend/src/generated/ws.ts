@@ -211,6 +211,7 @@ export interface ServerAuditFixEvent {
 
 export interface CollectionUpdatedEvent {
   collection_id: number;
+  titles: boolean;
 }
 
 export interface CollectionMonitoredEvent {

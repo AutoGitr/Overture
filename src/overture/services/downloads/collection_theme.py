@@ -278,7 +278,9 @@ async def reupload_collection_theme(
             _record_delivered(current, delivered, now=now)
             current.updated_at = now
             session.add(current)
-    await publisher.broadcast("collection.updated", {"collection_id": collection_id})
+    await publisher.broadcast(
+        "collection.updated", {"collection_id": collection_id, "titles": False}
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -357,5 +359,5 @@ async def record_collection_theme(
 
     if await complete_running_job(database, job, _record):
         await publisher.broadcast(
-            "collection.updated", {"collection_id": job.collection_id}
+            "collection.updated", {"collection_id": job.collection_id, "titles": False}
         )

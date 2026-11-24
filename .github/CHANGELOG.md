@@ -30,6 +30,7 @@
 - **Artwork:** an image offered by several sources is listed and loaded once: under OvertureDB when it is its choice, else TMDB, else the first server.
 - **Collections:** a sync checks the art and theme of every server copy, not just the first, and a collection is complete only once every copy shows them.
 - **Collections:** a chosen theme stays chosen when a server plays another; the collection's next sync or an Assets run sends it again.
+- **Interface:** saving a collection reads the library's titles again only when its members or TMDB collection change, so editing collections one after another stays quick instead of slowing every page.
 - **Interface:** an image larger than 20 MB is refused before it uploads, saying so.
 - **Interface:** a database record names an asset's copy by its server and file, such as `Background on Jellyfin`, and other rows by what they are, such as `Collection rule 19`.
 - **Library:** auto-unmonitor counts a title's theme as complete when OvertureDB says it has none and Overture trusts that flag.
@@ -46,6 +47,7 @@
 - **API:** an ID too large for the database is refused with 422 instead of failing with 500.
 - **Collections:** the bulk sort title template takes as many characters as the sort title format.
 - **Collections:** Emby makes new collections again instead of failing with HTTP 500, and Jellyfin and Emby collections of more than about 200 titles sync instead of failing with HTTP 414.
+- **Collections:** renaming a Plex collection renames the collection tag its titles carry too, so deleting it later no longer makes Plex create it again under its old title.
 - **Collections:** a sync never locks the titles in a Jellyfin or Emby collection. Jellyfin and Emby keep a collection's name, and its summary when Overture sets one, through metadata refreshes, by locking those fields alone, so the server no longer renames it after the TMDB collection its name resembles (such as `Foreign` becoming `The Foreign Exchange Student Collection`).
 - **Collections:** a collection a server made while failing the request is found by its title at the next sync instead of made again, and a server collection belongs to one Overture collection only, even when Jellyfin gives one made again the ID of one it deleted.
 - **Collections:** one server refusing a collection no longer stops the others: its error is logged for that server, the others sync, and a collection made on another server before the refusal is kept instead of made again by every sync. A timed-out membership or details write to Jellyfin or Emby is retried.

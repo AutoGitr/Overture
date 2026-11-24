@@ -63,8 +63,10 @@ sent.
   background, change the smart one's filter and delete them, reading the
   server itself back after each step. Each step is reported on its own, with
   the request the server refused. Everything they make is titled "zz Overture
-  verify" and deleted at the end, whatever fails; one left by a run that was
-  killed is deleted first. No item, library or other collection is changed.
+  verify" and deleted at the end, whatever fails, once Jellyfin and Emby have
+  finished saving it; one left by a run that was killed is deleted first, and
+  one the server makes again by itself is reported. No item, library or other
+  collection is changed.
 
 Create an Overture key under API keys in the menu, and give each media
 server's address and its token or API key. For Overture with Plex, Jellyfin
@@ -151,6 +153,10 @@ ISSUE_SAMPLE = 10
 NAMED = 5
 #: The title every collection the write check makes starts with.
 WRITE_PREFIX = "zz Overture verify"
+#: Seconds Jellyfin or Emby must leave a collection unsaved for its own
+#: refreshes to count as done, and how many such waits a deletion is given.
+SETTLE_SECONDS = 5
+SETTLE_ROUNDS = 24
 #: Members of the large collection the write check makes: enough that their
 #: IDs overflow one request target, so writes must be batched.
 LARGE_COLLECTION = 500
@@ -1488,64 +1494,71 @@ class PlexServer(Server):
             if not entry.get("key"):
                 continue
             listed = await self.directory(entry["key"])
-            # A keyed field's values are Plex's keys (``1080``), not its names.
-            held = (
-                {key.casefold(): key for key in listed.values()}
-                if plex.keyed
-                else listed
+            held = await self.criteria_values(
+                library, spec["field"], listed, keyed=plex.keyed
             )
+            names = {key: name for name, key in listed.items()}
             try:
-                await library.values(spec["field"])
+                values = await library.values(spec["field"])
             except ApiError:
                 continue
             offered = library.offered_values(spec["field"])
+            labels = {str(row["value"]).casefold(): row["label"] for row in values}
             case = library.case("plex values", spec["label"])
             notes = [f"Overture offers {len(offered)}, Plex lists {len(held)}"]
             missing = {name: key for name, key in held.items() if name not in offered}
             if unheld := await self.unheld(library, entry["filter"], missing):
-                notes.append(f"no title holds {named(unheld)}")
+                notes.append(
+                    f"no title holds {named([names[held[value]] for value in unheld])}"
+                )
             real = set(missing) - unheld
             # Plex lists the titles without a rating under "None".
             if spec["field"] == "content_rating" and "none" in real:
                 real.discard("none")
                 notes.append("Plex lists the titles without a rating as None")
-            if spec["field"] == "collection" and real:
-                renamed = await self.renamed(
-                    library, {name: held[name] for name in real}
-                )
-                real -= set(renamed)
-                notes.extend(
-                    f"Plex's list names {new!r} by its old title {old!r}"
-                    for old, new in renamed.items()
-                )
             if real:
-                problem = f"Overture does not offer {named(real)}"
+                problem = (
+                    "Overture does not offer "
+                    f"{named([names[held[value]] for value in real])}"
+                )
                 if FIELDS[spec["field"]].tmdb:
                     notes.append(f"{problem}: Overture offers TMDB's, Plex its own")
                 else:
                     case.error = problem
             if unlisted := offered - set(held):
                 notes.append(
-                    f"Plex's list leaves out {named(unlisted)}; Overture finds "
-                    "them through the titles holding them"
+                    "Plex's list leaves out "
+                    f"{named([labels[value] for value in unlisted])}; Overture "
+                    "finds them through the titles holding them"
                 )
             case.note = "; ".join(notes)
 
-    async def renamed(self, library: Library, listed: dict[str, str]) -> dict[str, str]:
-        """The collections Plex's list still names by an old title, by that title.
+    async def criteria_values(
+        self, library: Library, field_name: str, listed: dict[str, str], *, keyed: bool
+    ) -> dict[str, str]:
+        """Plex's listed values, by name, as the values criteria hold, folded.
 
-        Plex keeps a collection's filter value under the title it was made
-        with; the collection's ``index`` is that value's key.
+        A keyed field's are Plex's keys (``1080``), not its names. A
+        collection's is Overture's ID of it: Plex lists a collection by its
+        ``index``, under the title its tag holds, and one Overture does not
+        list is left out, as the editor leaves it out.
         """
-        titles = {
-            str(row["index"]): row["title"]
-            for row in (await self.collections(library.key)).values()
+        if field_name != "collection":
+            return {key.casefold(): key for key in listed.values()} if keyed else listed
+        ours = {
+            str(copy["server_item_id"]): str(row["id"])
+            for row in library.collections
+            if (copy := collection_copy(row, library.id))
+        }
+        by_index = {
+            str(row["index"]): key
+            for key, row in (await self.collections(library.key)).items()
             if row.get("index") is not None
         }
         return {
-            name: titles[key]
-            for name, key in listed.items()
-            if key in titles and titles[key].casefold() != name
+            ours[rating_key]: index
+            for index in listed.values()
+            if (rating_key := by_index.get(index, "")) in ours
         }
 
     async def explain(
@@ -2518,9 +2531,9 @@ class WriteCheck:
         except (MediaServerError, httpx2.HTTPError) as exc:
             self.case("write to the media server").error = failure(exc)
         finally:
-            for collection_id in self.made:
+            for collection_id in list(self.made):
                 try:
-                    await self.provider.delete_collection(collection_id)
+                    await self.discard(collection_id)
                 except (MediaServerError, httpx2.HTTPError) as exc:
                     self.case(
                         f"delete {collection_id}"
@@ -2658,6 +2671,12 @@ class WriteCheck:
         wrong = [name for name, value in kept.items() if value != wanted[name]]
         if plex and not await self.on_home(library, collection_id):
             wrong.append("Home visibility")
+        if plex and (tags := await self.member_tags(collection_id)) != {
+            wanted["title"]
+        }:
+            # Deleting the collection would leave its members tagged, and Plex
+            # makes a collection again from the tag.
+            wrong.append(f"collection tag of its members ({sorted(tags)!r})")
         # Changing a BoxSet's own lock changes every member's: an edit keeps both.
         if await self.locks(collection_id) != locks:
             wrong.append("lock of the collection or its members")
@@ -2668,6 +2687,14 @@ class WriteCheck:
             )
             if isinstance(self.direct, MediaBrowserServer):
                 check.note = await self.direct.seen_by_a_user(collection_id)
+
+    async def member_tags(self, collection_id: str) -> set[str]:
+        """The verify collection tags the collection's first member carries."""
+        first, *_ = await self.provider.get_collection_member_ids(collection_id)
+        tags: list[dict[str, Any]] = (await self.held(first)).get("Collection", [])
+        return {
+            str(tag["tag"]) for tag in tags if str(tag["tag"]).startswith(WRITE_PREFIX)
+        }
 
     async def locks(self, collection_id: str) -> dict[str, object]:
         """Whether Jellyfin or Emby locks the collection and each member, by ID."""
@@ -2802,6 +2829,42 @@ class WriteCheck:
         )
         await self.filled(check, library, collection_id, query)
 
+    async def settled(self, collection_id: str) -> None:
+        """Wait until Jellyfin or Emby has stopped saving the collection.
+
+        Each membership write queues a refresh of the BoxSet, which saves its
+        folder and its row again. One still running when the BoxSet is
+        deleted puts them back: a folder the server no longer lists, or on
+        Jellyfin a collection it lists again.
+
+        Raises:
+            MediaServerError: The server kept saving it.
+        """
+        if not isinstance(self.direct, MediaBrowserServer):
+            return
+        saved: object = None
+        for _ in range(SETTLE_ROUNDS):
+            found = await self.direct.get(
+                "/Items", Ids=collection_id, Fields="DateLastSaved"
+            )
+            rows: list[dict[str, Any]] = found["Items"]
+            now = rows[0].get("DateLastSaved") if rows else None
+            if now is None or now == saved:
+                return
+            saved = now
+            await asyncio.sleep(SETTLE_SECONDS)
+        raise MediaServerError(
+            f"{self.direct.server} kept saving collection {collection_id} for "
+            f"{SETTLE_SECONDS * SETTLE_ROUNDS} seconds"
+        )
+
+    async def discard(self, collection_id: str) -> None:
+        """Delete a collection a step made, once its server is done with it."""
+        await self.settled(collection_id)
+        await self.provider.delete_collection(collection_id)
+        if collection_id in self.made:
+            self.made.remove(collection_id)
+
     async def sweep(self) -> list[str]:
         """Delete every collection a run made, recorded or not; name each one.
 
@@ -2812,21 +2875,28 @@ class WriteCheck:
         for row in await self.provider.list_collections():
             if row.title.startswith(WRITE_PREFIX):
                 swept.append(f"{row.title!r} ({row.id}, {len(row.member_ids)} members)")
-                await self.provider.delete_collection(row.id)
-                if row.id in self.made:
-                    self.made.remove(row.id)
+                await self.discard(row.id)
         return swept
 
     async def delete(self, check: Case) -> None:
+        """Delete what the steps made; nothing titled as theirs may be left.
+
+        A collection found after them is one the server made, or made again,
+        itself, and is deleted too.
+        """
         deleted: list[str] = []
         for collection_id in list(self.made):
             row = await self.held(collection_id)
             title = row.get("title") or row.get("Name")
             deleted.append(f"{title!r} ({collection_id})")
-            await self.provider.delete_collection(collection_id)
-            self.made.remove(collection_id)
-        deleted.extend(await self.sweep())
+            await self.discard(collection_id)
         check.note = f"deleted {named(deleted)}"
+        # A refresh the server ran on its own would bring a collection back
+        # within this time.
+        await asyncio.sleep(SETTLE_SECONDS)
+        problems: list[str] = []
+        if made := await self.sweep():
+            problems.append(f"the server made {named(made)} itself")
         if isinstance(self.direct, PlexServer):
             for section, key in self.filed.values():
                 page = await self.direct.container(
@@ -2835,9 +2905,9 @@ class WriteCheck:
                     collection=key,
                     **{"X-Plex-Container-Start": 0, "X-Plex-Container-Size": 0},
                 )
-                if left := int(page.get("totalSize", page.get("size", 0))):
-                    check.note += (
-                        f"; Plex still files {left} titles under the deleted "
+                if filed := int(page.get("totalSize", page.get("size", 0))):
+                    problems.append(
+                        f"Plex still files {filed} titles under the deleted "
                         f"collection's filter key {key}"
                     )
         left = [
@@ -2846,7 +2916,8 @@ class WriteCheck:
             if row.title.startswith(WRITE_PREFIX)
         ]
         if left:
-            check.error = f"the server still lists {named(left)}"
+            problems.append(f"the server still lists {named(left)}")
+        check.error = "; ".join(problems)
 
 
 def cell(value: object) -> str:

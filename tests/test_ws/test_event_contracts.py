@@ -169,7 +169,7 @@ _EXACT_SAMPLE_PAYLOADS: frozendict[str, dict[str, Any]] = frozendict(
             "app_version": "1.0.0",
         },
         "collections.changed": {},
-        "collection.updated": {"collection_id": 1},
+        "collection.updated": {"collection_id": 1, "titles": False},
         "collection.monitored": {"collection_id": 1, "monitored": True},
         "library.item.upserted": {
             "item": media_item_read_from_model(

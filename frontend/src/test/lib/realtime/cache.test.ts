@@ -72,7 +72,7 @@ describe("realtime REST cache policy", () => {
   });
 
   it("refreshes individual collection changes while coalescing full sync updates", () => {
-    applyRestCachePolicy(message("collection.updated", { collection_id: 1 }));
+    applyRestCachePolicy(message("collection.updated", { collection_id: 1, titles: true }));
     expect(rest.invalidateTags).toHaveBeenCalledExactlyOnceWith([
       "collections",
       "catalog",
@@ -80,10 +80,15 @@ describe("realtime REST cache policy", () => {
     ]);
     rest.invalidateTags.mockClear();
     syncState.handleStarted(syncEvent({}));
-    applyRestCachePolicy(message("collection.updated", { collection_id: 2 }));
+    applyRestCachePolicy(message("collection.updated", { collection_id: 2, titles: true }));
     expect(rest.invalidateTags).not.toHaveBeenCalled();
     applyRestCachePolicy(message("collections.changed", null));
     expect(rest.invalidateTags).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads the library lists again only when a collection's linked titles change", () => {
+    applyRestCachePolicy(message("collection.updated", { collection_id: 1, titles: false }));
+    expect(rest.invalidateTags).toHaveBeenCalledExactlyOnceWith(["collections", "catalog"]);
   });
 
   it("stores an item a user action changed, but leaves sync's items to the sync refresh", () => {

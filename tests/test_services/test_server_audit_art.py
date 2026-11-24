@@ -579,7 +579,9 @@ async def test_collection_audit_broadcasts_status_change_and_keeps_concurrent_up
         CollectionAuditTarget(1, ServerAsset.POSTER), context=context
     )
     assert mismatch.status is AuditStatus.PHASH_MISMATCH
-    assert publisher.events == [("collection.updated", {"collection_id": 1})]
+    assert publisher.events == [
+        ("collection.updated", {"collection_id": 1, "titles": False})
+    ]
     async with database.read_session() as session:
         row = await CollectionRepository(session).get(1)
         assert row is not None

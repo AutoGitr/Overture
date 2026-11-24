@@ -73,6 +73,14 @@ def _require_movies(
         raise PublicServiceError(422, "TMDB collections hold movies only")
 
 
+def relinks(row: MediaCollection, body: CollectionOptions) -> bool:
+    """Whether saving *body* changes the TMDB collection *row* links titles by."""
+    return (
+        "tmdb_collection_id" in body.model_fields_set
+        and body.tmdb_collection_id != row.tmdb_collection_id
+    )
+
+
 def _server_ids(
     wanted: Mapping[str, list[CollectionItem]], library_ids: Collection[str]
 ) -> list[str]:
@@ -244,7 +252,7 @@ class CollectionEditor:
                     422, "Its group keeps the separator; change the group instead"
                 )
             await self.update_locked(row, body, push=False)
-        await self._access.updated(collection_id)
+        await self._access.updated(collection_id, titles=relinks(row, body))
         return await self._reader.get(collection_id)
 
     async def update_locked(
@@ -612,7 +620,7 @@ class CollectionEditor:
             current.updated_at = utc_now()
             session.add(current)
         row.kind = kind
-        await self._access.updated(row.id)
+        await self._access.updated(row.id, titles=True)
 
     async def _chosen_members(
         self, row: MediaCollection, body: CollectionMembersUpdate
@@ -671,7 +679,7 @@ class CollectionEditor:
             current.unsynced = outdates_server(current)
             current.updated_at = utc_now()
             session.add(current)
-        await self._access.updated(row.id)
+        await self._access.updated(row.id, titles=True)
 
     # Rules
 
@@ -747,7 +755,10 @@ class CollectionEditor:
             session.add(saved_row)
             await session.flush()
             result = rule_read(rule, saved_row)
-        await self._access.updated(collection_id)
+        await self._access.updated(
+            collection_id,
+            titles=franchise is not None and franchise != row.tmdb_collection_id,
+        )
         if result is None:
             raise RuntimeError("A saved rule must exist")
         return result

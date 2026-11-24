@@ -394,7 +394,7 @@ async def _record_collection(
             session.add(row)
     if changed:
         await context.publisher.broadcast(
-            "collection.updated", {"collection_id": collection_id}
+            "collection.updated", {"collection_id": collection_id, "titles": False}
         )
 
 

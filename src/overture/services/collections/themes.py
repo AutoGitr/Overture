@@ -117,7 +117,7 @@ class CollectionThemes:
             db.add(row)
             await self._downloads.cancel_assets(db, scope)
         await self._downloads.committed(db)
-        await self._access.updated(collection_id)
+        await self._access.updated(collection_id, titles=False)
         return SetCollectionThemeResponse(job_id=None, theme=theme)
 
     async def remove(
@@ -167,7 +167,7 @@ class CollectionThemes:
             await self._downloads.committed(db)
             for _, provider, part, _ in deleted:
                 await provider.refresh_item(part.server_item_id or "", unlock=())
-        await self._access.updated(collection_id)
+        await self._access.updated(collection_id, titles=False)
         return DeleteCollectionThemeResponse(status=Status.OK, theme=theme)
 
     async def _delete_files(

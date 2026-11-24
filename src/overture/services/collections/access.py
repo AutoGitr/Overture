@@ -404,10 +404,10 @@ class CollectionAccess:
         today = local_now(self.app_config.tzinfo).date()
         return is_within_active_window(start, end, today)
 
-    async def updated(self, collection_id: int | None) -> None:
-        """Tell clients one collection changed."""
+    async def updated(self, collection_id: int | None, *, titles: bool) -> None:
+        """Tell clients a collection changed; *titles* when the titles it links did."""
         await self._publisher.broadcast(
-            "collection.updated", {"collection_id": collection_id}
+            "collection.updated", {"collection_id": collection_id, "titles": titles}
         )
 
     async def changed(self) -> None:

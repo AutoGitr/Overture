@@ -230,7 +230,10 @@ async def test_process_job_persists_complete_collection_theme_provenance(
     assert theme_of(row).youtube_duration == 123
     assert server_ref(row, ServerAsset.THEME) == "/themes/uploaded"
     assert theme_of(row).status is AssetStatus.COMPLETE
-    assert publisher.events[-2] == ("collection.updated", {"collection_id": 1})
+    assert publisher.events[-2] == (
+        "collection.updated",
+        {"collection_id": 1, "titles": False},
+    )
 
 
 async def test_jellyfin_collection_theme_is_written_to_the_boxset_folder(
@@ -372,4 +375,6 @@ async def test_a_jellyfin_folder_without_its_theme_file_is_found(
     (folder / "theme.mp3").unlink()
     refreshed = await refresh_folder_themes(row, downloads=service, database=database)
     assert missing_deliveries(theme_of(refreshed))
-    assert publisher.events == [("collection.updated", {"collection_id": 1})]
+    assert publisher.events == [
+        ("collection.updated", {"collection_id": 1, "titles": False})
+    ]

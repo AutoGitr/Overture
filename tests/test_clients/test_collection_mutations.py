@@ -302,17 +302,23 @@ async def test_plex_creates_then_diffs_moves_and_uploads_bytes(
         r.method == "GET" and r.url.path == "/library/metadata/box" for r in requests
     )
     edits = [
-        entry[2] for entry in mutations if entry[:2] == ("PUT", "/library/metadata/box")
+        entry[2]
+        for entry in mutations
+        if entry[:2] == ("PUT", "/library/sections/1/all")
     ]
+    # The section edits the collection, which renames its members' tag too.
     # An unset summary or sort title stays as it is; an empty one is cleared.
+    edited = {"type": "18", "id": "box", "includeExternalMedia": "1"}
     assert edits == [
         {
+            **edited,
             "title.value": "Saga",
             "title.locked": "1",
             "titleSort.value": "!Saga",
             "titleSort.locked": "1",
         },
         {
+            **edited,
             "title.value": "Saga",
             "title.locked": "1",
             "summary.value": "",

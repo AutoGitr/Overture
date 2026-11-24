@@ -441,5 +441,5 @@ class PostSync:
             if saved is not None:
                 saved.last_error = message
                 session.add(saved)
-        await self._access.updated(collection_id)
+        await self._access.updated(collection_id, titles=False)
         raise PublicServiceError(502, message)

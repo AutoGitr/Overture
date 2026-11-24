@@ -146,7 +146,9 @@ clients, to show how each server takes them: members and their order, title,
 sort title, summary, display order and Home visibility, poster and
 background, whether the server keeps the images' names through an edit as a
 sync makes it, and on Plex a smart collection's filter, each read back from the
-server itself and reported on its own with the request a server refused. Run it before each release and
+server itself and reported on its own with the request a server refused. It
+deletes them once Jellyfin and Emby have finished saving them, and reports any
+the server makes again by itself. Run it before each release and
 after changing `src/overture/services/collections/` or
 `src/overture/media_servers/`, and turn each problem it reports into a test.
 

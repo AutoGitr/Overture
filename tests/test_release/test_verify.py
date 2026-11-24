@@ -134,7 +134,9 @@ type Requests = list[tuple[str, str, str, dict[str, Any]]]
 #: What each instance answers for its movies, where the answer never varies.
 _MOVIES: dict[str, Any] = {
     "/api/library/libraries": [{"id": "1:1", "title": "Movies", "server_id": 1}],
-    "/api/collections/field-values": [{"value": "Horror", "count": 1}],
+    "/api/collections/field-values": [
+        {"value": "Horror", "label": "Horror", "count": 1}
+    ],
     "/api/collections/sets/preview": [{"title": "Horror", "member_count": 1}],
     "/api/collections": [
         _collection(5, "Scary", managed=True),
@@ -667,6 +669,10 @@ class _Collections:
         self.items: dict[str, dict[str, Any]] = {}
         self.fail_at = fail_at
         self.closed = False
+        #: How many more times the server saves each collection, as the
+        #: refreshes its membership writes queue do.
+        self.saving: dict[str, int] = {}
+        self.refreshes = 0
 
     async def list_collections(self) -> list[ServerCollection]:
         return list(self.held.values())
@@ -679,7 +685,8 @@ class _Collections:
     ) -> ServerCollection:
         made = ServerCollection(id=title, title=title, member_ids=tuple(members))
         self.held[made.id] = made
-        self.items[made.id] = {"Name": title, "ImageTags": {}}
+        self.items[made.id] = {"Name": title, "ImageTags": {}, "DateLastSaved": 0}
+        self.saving[made.id] = self.refreshes
         return made
 
     async def get_collection_member_ids(self, collection_id: str) -> list[str]:
@@ -732,6 +739,11 @@ class _Collections:
             self.items[collection_id]["ImageTags"] = {"Primary": "new"}
 
     async def delete_collection(self, collection_id: str) -> None:
+        if self.saving.get(collection_id):
+            # The refresh still saving it puts it back, as Jellyfin's does.
+            self.held[f"{collection_id} again"] = replace(
+                self.held[collection_id], id=f"{collection_id} again"
+            )
         del self.held[collection_id]
 
     async def close(self) -> None:
@@ -758,7 +770,11 @@ class _Jellyfin(module.MediaBrowserServer):
             assert params == {"userId": "admin"}
             return self.server_state.items.get(path.removeprefix("/Items/"), {})
         assert path == "/Items"
-        return {"Items": [self.server_state.items[params["Ids"]]]}
+        found = self.server_state.items.get(params["Ids"])
+        if found and self.server_state.saving.get(params["Ids"]):
+            self.server_state.saving[params["Ids"]] -= 1
+            found["DateLastSaved"] += 1
+        return {"Items": [found] if found else []}
 
 
 @pytest.mark.parametrize("fail_at", [None, "members"])
@@ -771,6 +787,7 @@ async def test_writes_touch_only_their_own_collections_and_delete_them_whatever_
         return server, server
 
     monkeypatch.setattr(module, "write_provider", provider)
+    monkeypatch.setattr(module, "SETTLE_SECONDS", 0)
     direct = _Jellyfin(server)
     try:
         cases = await module.WriteCheck(
@@ -806,6 +823,44 @@ async def test_writes_touch_only_their_own_collections_and_delete_them_whatever_
     }
 
 
+@pytest.mark.parametrize("settle", [True, False])
+async def test_a_collection_is_deleted_once_its_server_stops_saving_it(
+    monkeypatch: pytest.MonkeyPatch, *, settle: bool
+) -> None:
+    server = _Collections()
+    server.refreshes = 2
+
+    def provider(*_args: object, **_kwargs: object) -> tuple[Any, Any]:
+        return server, server
+
+    async def unsettled(*_args: object) -> None:
+        return None
+
+    monkeypatch.setattr(module, "write_provider", provider)
+    monkeypatch.setattr(module, "SETTLE_SECONDS", 0)
+    if not settle:
+        monkeypatch.setattr(module.WriteCheck, "settled", unsettled)
+    direct = _Jellyfin(server)
+    try:
+        cases = await module.WriteCheck(
+            direct, "http://jellyfin.test", "key", verify=True
+        ).run()
+    finally:
+        await direct.client.aclose()
+
+    deleted = next(case for case in cases if case.label.startswith("delete the"))
+    # Deleted while a refresh saves it, the server makes it again; it is
+    # reported, and deleted too.
+    assert deleted.problem == (
+        ""
+        if settle
+        else f"the server made '{module.WRITE_PREFIX} edited' (zz Overture verify "
+        f"regular again, 2 members), '{module.WRITE_PREFIX} large' (zz Overture "
+        "verify large again, 3 members) itself"
+    )
+    assert list(server.held) == ["kept"]
+
+
 async def test_writes_fill_a_large_collection_and_explain_an_unsaved_edit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -815,6 +870,7 @@ async def test_writes_fill_a_large_collection_and_explain_an_unsaved_edit(
         return server, server
 
     monkeypatch.setattr(module, "write_provider", provider)
+    monkeypatch.setattr(module, "SETTLE_SECONDS", 0)
     direct = _Jellyfin(server)
     try:
         cases = {
@@ -976,7 +1032,7 @@ class _Offers:
 
     async def get(self, path: str, **params: Any) -> Any:
         assert path == "/api/collections/field-values"
-        return [{"value": "Drama", "count": 1}]
+        return [{"value": "Drama", "label": "Drama", "count": 1}]
 
     async def preview(
         self, rule: dict[str, Any], _collection_id: int | None = None
@@ -1086,13 +1142,35 @@ async def test_servers_are_asked_what_overture_cannot_see_for_itself(
     monkeypatch.setattr(module.httpx2, "AsyncClient", client)
     jellyfin = module.MediaBrowserServer("jellyfin", "http://jellyfin.test", "key")
     plex = module.PlexServer("http://plex-server.test", "token")
-    library = cast("Any", type("L", (), {"key": "1"}))
+    library = cast(
+        "Any",
+        type(
+            "L",
+            (),
+            {
+                "key": "1",
+                "id": "1:1",
+                "collections": [
+                    {
+                        "id": 3,
+                        "copies": [{"server_item_id": "c1", "library_ids": ["1:1"]}],
+                    }
+                ],
+            },
+        ),
+    )
     try:
         members = await jellyfin.members_to_a_user("box")
         counted = await jellyfin.member_count("box")
         hidden = await jellyfin.unlisted("hidden")
-        # Plex lists collection 7 under the title it was made with.
-        renamed = await plex.renamed(library, {"greats": "7", "kept": "8", "gone": "9"})
+        # Plex lists collection 7 under the title its tag holds; criteria name
+        # it by Overture's ID, and one Overture does not list is left out.
+        values = await plex.criteria_values(
+            library,
+            "collection",
+            {"greats": "7", "kept": "8", "gone": "9"},
+            keyed=False,
+        )
     finally:
         await jellyfin.client.aclose()
         await plex.client.aclose()
@@ -1103,7 +1181,7 @@ async def test_servers_are_asked_what_overture_cannot_see_for_itself(
     assert hidden == (
         "jellyfin answers hidden as Dune (Movie) at /m/Dune.mkv, to a user only"
     )
-    assert renamed == {"greats": "BFI Greats"}
+    assert values == {"3": "7"}
 
 
 async def test_collection_assets_and_plex_themes_are_read_from_asset_deliveries(
