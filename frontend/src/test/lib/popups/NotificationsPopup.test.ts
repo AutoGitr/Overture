@@ -5,7 +5,7 @@ import NotificationsPopup from "../../../lib/popups/NotificationsPopup.svelte";
 import { queryClient } from "../../../lib/rest/queryClient";
 import { notificationState } from "../../../lib/stores/notificationState.svelte";
 import { mockFetchRoutes } from "../../helpers/fetch";
-import { renderWithQueryClient } from "../../helpers/render";
+import { chooseOption, renderWithQueryClient } from "../../helpers/render";
 
 const RULE = { failed: true, stopped: false, completed: "never", scheduled_only: false } as const;
 
@@ -32,9 +32,7 @@ it("saves each kind's rule and says so", async () => {
 
   const sync = await screen.findByRole("region", { name: "Library sync" });
   await fireEvent.click(within(sync).getByLabelText("Stopped"));
-  await fireEvent.change(within(sync).getByLabelText("Completed"), {
-    target: { value: "changes" },
-  });
+  await chooseOption(within(sync).getByLabelText("Completed"), "With changes");
   await fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
   await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));

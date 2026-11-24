@@ -597,6 +597,7 @@ def build_runtime(
         collection_art=art.collections,
         server_copies=server_copies,
         theme_handler=downloads.theme_handler,
+        app_config=app_config,
     )
     needs = AssetNeeds(database=database, provider_registry=provider_registry)
     collections = CollectionsService(

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   collectionArtDisplayUrl,
+  collectionDetailImageUrls,
   itemArtDisplayUrl,
   itemPosterOriginalUrl,
   seasonPosterUrls,
@@ -141,6 +142,13 @@ describe("art display URLs", () => {
     expect(collectionArtDisplayUrl(uploaded, "background")).toBe(
       "/api/collections/7/image/background?t=v2&size=display",
     );
+    expect(collectionDetailImageUrls(uploaded, true)).toEqual([
+      `/api/collections/7/local-image/poster?t=${"a".repeat(64)}&size=display`,
+      "/api/collections/7/image/background?t=v2&size=display",
+    ]);
+    expect(collectionDetailImageUrls(uploaded, false)).toEqual([
+      `/api/collections/7/local-image/poster?t=${"a".repeat(64)}&size=display`,
+    ]);
     expect(
       collectionArtDisplayUrl(collection({ server_poster_version: null }), "poster"),
     ).toBeNull();

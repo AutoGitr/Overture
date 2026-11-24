@@ -20,6 +20,9 @@ finished.
 While a run reads what it will work on, its progress counts what it has read
 so far; the total follows once it knows everything.
 
+When a run cannot start, its button is greyed out and the reason is shown
+beside it, such as another operation running or nothing chosen yet.
+
 A run you start keeps its results on screen until you choose **Clear results**
 or the next run starts. A scheduled run, including an incremental poll, never
 leaves results to clear, whatever its outcome: the schedule's **Last run** sums
@@ -134,7 +137,10 @@ plays, and optionally the images and themes Overture holds for collections with 
 server's copies. Each server holding a file is compared on its own, with a
 line and a result per server. Images and themes are compared the way a sync
 compares them, and what an audit finds on a collection's copies is recorded
-as a sync records it, so the collection's status shows it at once. Fix the
+as a sync records it, so the collection's status shows it at once. A
+collection out of its active dates that no server holds is left out: its sync
+took it off the servers, and the sync that puts it back sends its art and
+theme. Fix the
 selected differences, and Server audit checks whether the changes took effect. If a server still shows other artwork,
 check its [settings](../install/media-servers.mdx) and the competing file
 names in [Files](files.md#where-each-asset-goes-and-how-each-server-takes-it).

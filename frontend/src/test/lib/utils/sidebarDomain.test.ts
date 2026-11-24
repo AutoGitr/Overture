@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CollectionRead, MediaItemRead } from "../../../generated/rest/types.gen";
-import { defaultFilters, type FilterState } from "../../../lib/stores/uiState.svelte";
+
 import {
   arrangeTmdbResults,
   filterCatalogEntries,
@@ -24,6 +24,7 @@ import {
   type SidebarSortField,
 } from "../../../lib/utils/sidebarSorts";
 import { catalogRow, collection, mediaItem } from "../../helpers/fixtures";
+import { defaultFilters, type FilterState } from "../../../lib/stores/filterState.svelte";
 
 function withFilters(patch: Partial<FilterState>): FilterState {
   return { ...defaultFilters(), ...patch };
@@ -152,6 +153,10 @@ describe("sidebar item filters", () => {
     expect(
       filterItems(items, { filters: resolution({ artType: "background", min: 1920 }) }),
     ).toEqual(["Medium"]);
+    expect(filterItems(items, { filters: resolution({ artType: "any", min: 1920 }) })).toEqual([
+      "Large",
+      "Medium",
+    ]);
   });
 
   it("filters items and collections by an inclusive theme length range", () => {
@@ -270,6 +275,7 @@ describe("sidebar item filters", () => {
     expect(filtered({ artSource: { artType: "any", sources: sources(["upload"]) } })).toEqual([
       "Blurry",
     ]);
+    expect(filtered({ resolution: { artType: "any", min: null, max: 500 } })).toEqual(["Blurry"]);
     expect(filtered({ resolution: { artType: "season_posters", min: null, max: 500 } })).toEqual([
       "Blurry",
     ]);

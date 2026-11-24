@@ -3,6 +3,7 @@
 lazy from collections.abc import Mapping, Sequence
 
 lazy from ... import protocols
+lazy from ...config import Settings
 lazy from ...db.session import Database
 lazy from ...jobs.registry import BackgroundJobRegistry
 lazy from ...media_servers.registry import ProviderRegistry
@@ -13,6 +14,7 @@ lazy from ...schemas.server_audit import (
     ServerAuditRequest,
     ServerAuditThemeDeleteTarget,
 )
+lazy from ...utils.time import local_now
 lazy from ..art.collection_art import CollectionArtService
 lazy from ..art.phash import PhashService
 lazy from ..downloads.theme import DownloadThemeHandler
@@ -20,7 +22,8 @@ lazy from ..job_snapshots import patch_snapshot, require_snapshot_keys
 lazy from ..local_assets.service import LocalAssets
 lazy from ..server_copies import ServerCopies
 lazy from ..storage.trusted_roots import validate_folders_under_trusted_roots
-lazy from .compare import AuditContext, run_server_audit
+lazy from .compare import run_server_audit
+lazy from .context import AuditContext
 lazy from .fix import (
     AuditRowKey,
     RowFix,
@@ -45,6 +48,7 @@ class ServerAuditService:
         collection_art: CollectionArtService,
         server_copies: ServerCopies,
         theme_handler: DownloadThemeHandler,
+        app_config: Settings,
     ) -> None:
         self._jobs = background_jobs
         self._provider_registry = provider_registry
@@ -55,6 +59,7 @@ class ServerAuditService:
         self._collection_art = collection_art
         self._server_copies = server_copies
         self._theme_handler = theme_handler
+        self._app_config = app_config
 
     def _audit_context(self) -> AuditContext:
         return AuditContext(
@@ -84,7 +89,10 @@ class ServerAuditService:
                 "audit",
                 self._jobs.server_audit,
                 lambda context: run_server_audit(
-                    body, context, audit_context=audit_context
+                    body,
+                    context,
+                    audit_context=audit_context,
+                    today=local_now(self._app_config.tzinfo).date(),
                 ),
             )
         )

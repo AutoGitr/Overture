@@ -26,28 +26,37 @@
   } = $props();
 </script>
 
-<label class={["issue", { dimmed, flagged, actionable: !disabled }]} {style}>
-  <span class="checkbox">
-    <input type="checkbox" {checked} {disabled} onclick={(event) => ontoggle(event.shiftKey)} />
+<!-- The label fills the list's slot; the gap below the row is its padding. -->
+<label class="slot" {style}>
+  <span class={["issue", { dimmed, flagged, actionable: !disabled }]}>
+    <span class="checkbox">
+      <input type="checkbox" {checked} {disabled} onclick={(event) => ontoggle(event.shiftKey)} />
+    </span>
+    <span class="details">
+      <span class="line">{@render title()}</span>
+      <span class="line">{@render meta()}</span>
+    </span>
+    <span class="status">{@render status?.()}</span>
   </span>
-  <span class="details">
-    <span class="line">{@render title()}</span>
-    <span class="line">{@render meta()}</span>
-  </span>
-  <span class="status">{@render status?.()}</span>
 </label>
 
 <style>
+  .slot {
+    display: block;
+    padding-bottom: var(--space-1);
+    box-sizing: border-box;
+  }
+
   .issue {
     display: grid;
     grid-template-columns: 20px 1fr 24px;
     align-items: center;
     gap: var(--space-2);
-    padding: var(--space-2) var(--space-2);
+    height: 100%;
+    padding: var(--space-2);
     border-radius: var(--radius-sm);
     background: var(--bg-secondary);
     font-size: var(--text-xs);
-    border-bottom: var(--space-1) solid var(--bg-primary);
     box-sizing: border-box;
   }
 

@@ -239,6 +239,11 @@ function ongoingWalk(): AdvanceWalk | null {
   return walk?.key === routedKey() && walk.view === sidebarState.view ? walk : null;
 }
 
+/** The records the ongoing walk or current sidebar view visits. */
+export function walkRecords(): AdvanceWalk["records"] {
+  return ongoingWalk()?.records ?? advanceRecords();
+}
+
 /**
  * The rows the sidebar showed when the walk reached the open row. A selection
  * can change what the list sorts or filters by, such as a poster's shape, and

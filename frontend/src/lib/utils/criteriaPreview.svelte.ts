@@ -25,8 +25,7 @@ export class CriteriaPreview {
           !!form().capabilities.data?.smart &&
           libraries.length > 0 &&
           libraries.every(
-            ({ criteria }) =>
-              (criteria.conditions?.length ?? 0) + (criteria.groups?.length ?? 0) > 0,
+            ({ criteria }) => criteria.conditions.length + criteria.groups.length > 0,
           ),
         // An unfinished condition is refused; the last advice stands until it is complete.
         placeholderData: keepPreviousData,

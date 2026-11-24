@@ -2,6 +2,7 @@
   import type { CollectionDimensionRead, SetDimension } from "../../generated/rest/types.gen";
   import { DIMENSION_LABELS } from "../../generated/settings";
   import FieldRow from "./FieldRow.svelte";
+  import Select from "./Select.svelte";
 
   /** What a set makes one collection per value of. */
   let {
@@ -16,6 +17,12 @@
 
   const id = $props.id();
   let current = $derived(dimensions.find((entry) => entry.dimension === value));
+  let options = $derived(
+    dimensions.map((entry) => ({
+      value: entry.dimension,
+      label: `${entry.label}${entry.smart_only ? " (Plex smart)" : ""}`,
+    })),
+  );
 </script>
 
 <FieldRow
@@ -23,20 +30,16 @@
   for={`${id}-dimension`}
   hint={current?.smart_only ? "Only Plex knows these values." : undefined}
 >
-  <select
+  <Select
     id={`${id}-dimension`}
-    {value}
-    onchange={(event) => {
-      const chosen = dimensions.find((entry) => entry.dimension === event.currentTarget.value);
-      if (chosen) onchoose(chosen);
-    }}
-  >
-    {#if !current}
-      <option {value} disabled>{DIMENSION_LABELS[value]} (not offered for these libraries)</option>
-    {/if}
-    {#each dimensions as entry (entry.dimension)}
-      <option value={entry.dimension}>{entry.label}{entry.smart_only ? " (Plex smart)" : ""}</option
-      >
-    {/each}
-  </select>
+    {options}
+    placeholder={`${DIMENSION_LABELS[value]} (not offered for these libraries)`}
+    bind:value={
+      () => value,
+      (dimension) => {
+        const chosen = dimensions.find((entry) => entry.dimension === dimension);
+        if (chosen) onchoose(chosen);
+      }
+    }
+  />
 </FieldRow>

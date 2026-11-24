@@ -123,12 +123,12 @@
   </button>
 
   <div id={menuId} class={["menu-dropdown-container", { open: menuOpen }]} inert={!menuOpen}>
-    <div class="menu-dropdown">
+    <div class="menu-dropdown menu-surface">
       {#each ["renamer", "audit"] as const as tab (tab)}
         {@const operation = OPERATIONS[tab]}
         <button
           type="button"
-          class={["menu-item", { active: operation.running }]}
+          class={["menu-option", { running: operation.running }]}
           onclick={() => openOperations(tab)}
           title={operation.label}
         >
@@ -142,7 +142,7 @@
       {/each}
       <button
         type="button"
-        class="menu-item"
+        class="menu-option"
         onpointerenter={prefetchBackup}
         onfocus={prefetchBackup}
         onclick={() => openPopup("backup")}
@@ -151,14 +151,14 @@
         <span class="menu-label">Backup</span>
       </button>
       {#if catalog.enabled}
-        <button type="button" class="menu-item" onclick={() => openPopup("overturedb")}>
+        <button type="button" class="menu-option" onclick={() => openPopup("overturedb")}>
           <img src="/brand/overturedb-tab.svg" width="16" height="16" alt="" />
           <span class="menu-label">OvertureDB</span>
         </button>
       {/if}
       <button
         type="button"
-        class="menu-item"
+        class="menu-option"
         onpointerenter={prefetchStats}
         onfocus={prefetchStats}
         onclick={() => openPopup("stats")}
@@ -168,7 +168,7 @@
       </button>
       <button
         type="button"
-        class="menu-item"
+        class="menu-option"
         onpointerenter={prefetchApiKeys}
         onfocus={prefetchApiKeys}
         onclick={() => openPopup("api-keys")}
@@ -176,17 +176,17 @@
         <KeyRound size={16} />
         <span class="menu-label">API keys</span>
       </button>
-      <button type="button" class="menu-item" onclick={() => openPopup("notifications")}>
+      <button type="button" class="menu-option" onclick={() => openPopup("notifications")}>
         <Bell size={16} />
         <span class="menu-label">Notifications</span>
       </button>
-      <button type="button" class="menu-item" onclick={() => openPopup("settings")}>
+      <button type="button" class="menu-option" onclick={() => openPopup("settings")}>
         <Settings size={16} />
         <span class="menu-label">Settings</span>
       </button>
       {#if session.config.auth_mode !== "none"}
         <div class="menu-divider"></div>
-        <button type="button" class="menu-item menu-item-danger" onclick={onLogout}>
+        <button type="button" class="menu-option danger" onclick={onLogout}>
           <LogOut size={16} />
           <span class="menu-label">Logout</span>
         </button>
@@ -214,41 +214,24 @@
   }
 
   .menu-dropdown {
-    background: var(--bg-elevated);
-    border: var(--border-accent);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-lg);
     min-width: 180px;
-    padding: var(--space-1);
     /* Running operations are highlighted; a gap keeps two of them apart. */
     display: flex;
     flex-direction: column;
     gap: 2px;
   }
 
-  .menu-item {
-    display: flex;
+  .menu-option {
     flex: none;
-    align-items: center;
     gap: var(--space-3);
-    width: 100%;
-    padding: var(--space-2) var(--space-3);
-    border-radius: var(--radius-sm);
-    font-size: var(--text-sm);
-    color: var(--text-secondary);
   }
 
-  .menu-item:hover {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-  }
-
-  .menu-item.active {
+  .menu-option.running {
     color: var(--accent);
     background: var(--accent-muted);
   }
 
-  .menu-item-danger:hover {
+  .menu-option.danger:hover {
     color: var(--danger);
     background: var(--danger-muted);
   }

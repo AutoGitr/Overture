@@ -20,7 +20,7 @@ lazy from .destinations import place_collection
 lazy from .display import saved_options
 lazy from .editor import CollectionEditor, Held, save_placement, store_placement
 lazy from .membership import Membership
-lazy from .policy import CollectionPolicy
+lazy from .policy import CollectionPolicy, active_window
 lazy from .post_sync import PostSync
 lazy from .rules import criteria_of, library_criteria
 lazy from .sources import SourceResolver
@@ -116,8 +116,7 @@ class RuleSync:
         scopes: list[LibraryScope],
     ) -> SyncOutcome:
         """Withhold a collection its set or season leaves out, else sync it."""
-        start = row.active_start_mmdd or policy.active_start_mmdd
-        end = row.active_end_mmdd or policy.active_end_mmdd
+        start, end = active_window(row, policy)
         inactive = not self._access.active(start, end)
         if inactive and not policy.delete_when_inactive and not row.deselected:
             return SyncOutcome(

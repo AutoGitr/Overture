@@ -11,7 +11,7 @@ import { queryClient } from "../../../lib/rest/queryClient";
 import { ApiError } from "../../../lib/rest/transport";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
 import { uiState } from "../../../lib/stores/uiState.svelte";
-import { renderWithQueryClient } from "../../helpers/render";
+import { chooseOption, renderWithQueryClient } from "../../helpers/render";
 
 const updateSettings = vi.hoisted(() => vi.fn());
 const getSettings = vi.hoisted(() => vi.fn());
@@ -62,9 +62,7 @@ describe("SettingsPopup", () => {
     updateSettings.mockResolvedValue({ data: storedSettings() });
     renderWithQueryClient(SettingsPopup);
 
-    await fireEvent.change(screen.getByRole("combobox", { name: "Workflow" }), {
-      target: { value: "themes" },
-    });
+    await chooseOption(screen.getByRole("combobox", { name: "Workflow" }), "Themes");
     await fireEvent.click(screen.getByText("Cancel"));
 
     expect(settingsState.current.workflow).toBe("art");
@@ -110,12 +108,8 @@ describe("SettingsPopup", () => {
       },
     });
     renderWithQueryClient(SettingsPopup);
-    await fireEvent.change(screen.getByRole("combobox", { name: "Workflow" }), {
-      target: { value: "art_and_themes" },
-    });
-    await fireEvent.change(screen.getByLabelText("Auto-unmonitor"), {
-      target: { value: "art_and_theme" },
-    });
+    await chooseOption(screen.getByRole("combobox", { name: "Workflow" }), "Art & Themes");
+    await chooseOption(screen.getByLabelText("Auto-unmonitor"), "Art and theme complete");
     expect(screen.getByLabelText("Skip completed slots and items")).toBeDisabled();
     expect(screen.queryByLabelText("Default Tab")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Auto-advance delay")).not.toBeInTheDocument();
@@ -159,10 +153,7 @@ describe("SettingsPopup", () => {
     renderWithQueryClient(SettingsPopup);
 
     const defaultTabSelect = screen.getByRole("combobox", { name: "Workflow" });
-    expect(defaultTabSelect).toBeInstanceOf(HTMLSelectElement);
-    await fireEvent.change(defaultTabSelect, {
-      target: { value: "themes" },
-    });
+    await chooseOption(defaultTabSelect, "Themes");
     await fireEvent.click(screen.getByText("Save"));
 
     await waitFor(() => {
@@ -212,9 +203,10 @@ describe("SettingsPopup", () => {
       });
       renderWithQueryClient(SettingsPopup);
 
-      await fireEvent.change(screen.getByLabelText("Aspect ratio control"), {
-        target: { value: tolerance },
-      });
+      await chooseOption(
+        screen.getByLabelText("Aspect ratio control"),
+        tolerance === "lenient" ? /^Lenient/ : /^Strict/,
+      );
       await fireEvent.click(screen.getByText("Save"));
 
       await waitFor(() => expect(uiState.openPopup).toBeNull());
@@ -281,7 +273,7 @@ describe("SettingsPopup", () => {
     });
     await fireEvent.click(screen.getByRole("button", { name: "Retry settings" }));
     await waitFor(() =>
-      expect(screen.getByRole("combobox", { name: "Workflow" })).toHaveValue("themes"),
+      expect(screen.getByRole("combobox", { name: "Workflow" })).toHaveTextContent("Themes"),
     );
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
     expect(updateSettings).not.toHaveBeenCalled();
@@ -289,15 +281,13 @@ describe("SettingsPopup", () => {
 
   it("keeps an in-progress settings draft when a background refresh arrives", async () => {
     renderWithQueryClient(SettingsPopup);
-    await fireEvent.change(screen.getByRole("combobox", { name: "Workflow" }), {
-      target: { value: "themes" },
-    });
+    await chooseOption(screen.getByRole("combobox", { name: "Workflow" }), "Themes");
     queryClient.setQueryData(getSettingsOptions().queryKey, {
       ...storedSettings(),
       min_duration_seconds: 45,
     });
     await waitFor(() =>
-      expect(screen.getByRole("combobox", { name: "Workflow" })).toHaveValue("themes"),
+      expect(screen.getByRole("combobox", { name: "Workflow" })).toHaveTextContent("Themes"),
     );
     expect(screen.getByLabelText("Shortest theme (seconds)")).toHaveValue(30);
   });

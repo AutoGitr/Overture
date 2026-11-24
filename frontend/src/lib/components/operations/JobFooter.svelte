@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import type { OperationRun } from "../../utils/operationRun.svelte";
   import PendingButton from "../PendingButton.svelte";
 
   /**
@@ -8,49 +9,40 @@
    * buttons that differ.
    */
   let {
-    hasResults,
-    running,
-    blocked,
-    stopping,
+    run,
     onstop,
-    clear,
     runningNote,
     start,
     finished,
   }: {
-    /** A run exists, so its results show instead of the configuration. */
-    hasResults: boolean;
-    running: boolean;
-    /** Why a run cannot start now, or `null`. */
-    blocked: string | null;
-    stopping: boolean;
+    run: OperationRun;
+    /** Stop the running jobs, through `run.stop`. */
     onstop: () => unknown;
-    clear: { mutate: () => void; isPending: boolean };
     /** Said beside Stop while the run works. */
     runningNote?: Snippet;
-    /** The buttons that save or start a run. */
+    /** The buttons that save or start a run; `run.blocked` is said beside them. */
     start: Snippet;
     /** Actions on the finished run's results. */
     finished?: Snippet;
   } = $props();
 </script>
 
-{#if !hasResults}
-  {#if blocked}
-    <span class="popup-footer-note" role="status">{blocked}</span>
+{#if !run.hasResults}
+  {#if run.blocked}
+    <span class="popup-footer-note" role="status">{run.blocked}</span>
   {/if}
   {@render start()}
-{:else if running}
+{:else if run.running}
   {@render runningNote?.()}
-  <PendingButton class="btn btn-danger" onclick={onstop} pending={stopping}>
-    {stopping ? "Stopping..." : "Stop"}
+  <PendingButton class="btn btn-danger" onclick={onstop} pending={run.stopping}>
+    {run.stopping ? "Stopping..." : "Stop"}
   </PendingButton>
 {:else}
   {@render finished?.()}
   <PendingButton
     class="btn btn-ghost"
-    onclick={() => clear.mutate()}
-    pending={clear.isPending}
+    onclick={() => run.clearResults.mutate()}
+    pending={run.clearResults.isPending}
     pendingLabel="Clearing..."
   >
     Clear results

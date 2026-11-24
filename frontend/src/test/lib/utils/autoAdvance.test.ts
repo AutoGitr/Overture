@@ -18,6 +18,7 @@ import {
   type AutoAdvanceSettings,
 } from "../../../lib/utils/autoAdvance";
 import { mediaItem, season, withAsset } from "../../helpers/fixtures";
+import { showInSidebar } from "../../helpers/sidebar";
 
 const { preloadImages } = vi.hoisted(() => ({ preloadImages: vi.fn() }));
 vi.mock("../../../lib/utils/imagePreload", () => ({ preloadImages }));
@@ -59,14 +60,16 @@ const completedSeason = season({ ...s2, poster: { status: "complete" } });
 
 function setLibrary(items: ReturnType<typeof mediaItem>[]) {
   queryClient.setQueryData(listItemsOptions().queryKey, { items, total: items.length });
-  sidebarState.current = { type: "movie", itemIds: [current.id, ...items.map((item) => item.id)] };
+  showInSidebar({
+    current: { type: "movie", itemIds: [current.id, ...items.map((item) => item.id)] },
+  });
 }
 
 beforeEach(() => {
   queryClient.clear();
-  sidebarState.current = null;
+  showInSidebar({ current: null });
   sidebarState.walk = null;
-  sidebarState.view = null;
+  sidebarState.listed = null;
   settingsState.load(appSettings(baseSettings));
   route.pathname = "/movies/100-current/art/poster";
 });
@@ -228,7 +231,7 @@ describe("next item navigation", () => {
   });
 
   it("stops at the end without wrapping", () => {
-    sidebarState.current = { type: "movie", itemIds: [current.id] };
+    showInSidebar({ current: { type: "movie", itemIds: [current.id] } });
     expect(advanceToNextItem(current, baseSettings)).toBe(false);
     expect(goToItemArt).not.toHaveBeenCalled();
   });
@@ -269,7 +272,7 @@ describe("next item navigation", () => {
     route.pathname = "/movies/100-current/themes";
     const next = mediaItem({ id: 200 });
     if (cache === "cached") setLibrary([next]);
-    else sidebarState.current = { type: "movie", itemIds: [100, 200] };
+    else showInSidebar({ current: { type: "movie", itemIds: [100, 200] } });
     advanceToNextItem(current, { ...baseSettings, workflow: "themes" });
     expect(goToItemThemes).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ id: 200, media_type: "movie" }),
@@ -281,7 +284,7 @@ describe("next item navigation", () => {
     route.pathname = "/movies/100-current/themes";
     setLibrary([mediaItem({ id: 200 })]);
     const context = beginAutoAdvance();
-    sidebarState.current = { type: "movie", itemIds: [200] };
+    showInSidebar({ current: { type: "movie", itemIds: [200] } });
     settingsState.load(
       appSettings({
         ...baseSettings,
@@ -301,7 +304,7 @@ describe("the walk through the sidebar", () => {
     vi.useFakeTimers();
     setLibrary([mediaItem({ id: 200 }), mediaItem({ id: 300 })]);
     beginAutoAdvance();
-    sidebarState.current = { type: "movie", itemIds: [200, 300, 100] };
+    showInSidebar({ current: { type: "movie", itemIds: [200, 300, 100] } });
 
     handleThemeSelectionAdvance(current, beginAutoAdvance());
     vi.advanceTimersByTime(300);
@@ -317,7 +320,7 @@ describe("the walk through the sidebar", () => {
     const first = beginAutoAdvance();
     expect(advanceToNextItem(current, baseSettings, first.order)).toBe(true);
     route.pathname = "/movies/200-next/art/poster";
-    sidebarState.current = { type: "movie", itemIds: [300, 100, 200] };
+    showInSidebar({ current: { type: "movie", itemIds: [300, 100, 200] } });
 
     expect(beginAutoAdvance().order).toEqual(first.order);
   });
@@ -326,7 +329,7 @@ describe("the walk through the sidebar", () => {
     setLibrary([mediaItem({ id: 200 }), mediaItem({ id: 300 })]);
     beginAutoAdvance();
     route.pathname = "/movies/300-other/art/poster";
-    sidebarState.current = { type: "movie", itemIds: [300, 200] };
+    showInSidebar({ current: { type: "movie", itemIds: [300, 200] } });
 
     expect(beginAutoAdvance().order).toEqual([
       { kind: "item", id: 300 },
@@ -337,8 +340,8 @@ describe("the walk through the sidebar", () => {
   it("starts again when the sidebar's sort or filters change", () => {
     setLibrary([mediaItem({ id: 200 })]);
     beginAutoAdvance();
-    sidebarState.view = "another sort";
-    sidebarState.current = { type: "movie", itemIds: [200, 100] };
+    showInSidebar({ view: "another sort" });
+    showInSidebar({ current: { type: "movie", itemIds: [200, 100] } });
 
     expect(beginAutoAdvance().order).toEqual([
       { kind: "item", id: 200 },
@@ -470,7 +473,7 @@ describe("next item preloading", () => {
   it("fetches nothing when auto-advance is off or there is no next item", () => {
     setLibrary([mediaItem({ id: 300 })]);
     preloadNextItem(current, { ...baseSettings, auto_advance: "off" });
-    sidebarState.current = { type: "movie", itemIds: [current.id] };
+    showInSidebar({ current: { type: "movie", itemIds: [current.id] } });
     preloadNextItem(current, baseSettings);
 
     expect(preloadImages).not.toHaveBeenCalled();

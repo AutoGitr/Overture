@@ -19,13 +19,11 @@
   import PendingButton from "../PendingButton.svelte";
   import JobFooter from "./JobFooter.svelte";
   import { assetManagerState } from "../../stores/assetManagerState.svelte";
-  import { libraryGate } from "../../stores/libraryGate.svelte";
-  import { createNotifier } from "../../stores/notificationState.svelte";
   import { assetRenameRequests } from "../../utils/assetRenamerPopup";
   import { assetsInScope } from "../../utils/artTypes";
   import { errorMessage } from "../../utils/errors";
   import { createFolderScope } from "../../utils/folderScope.svelte";
-  import { createClearResults } from "../../utils/jobSnapshots";
+  import { OperationRun } from "../../utils/operationRun.svelte";
   import { persistedState } from "../../utils/persistedState.svelte";
   import { toggleSelectedValue } from "../../utils/popupSelection";
 
@@ -45,16 +43,22 @@
   let artTypes = $derived(
     assetsInScope(config.artTypes, { hasSelection: scope.hasSelection, hasShows: scope.hasShows }),
   );
-  let canScan = $derived(artTypes.length > 0 && scope.hasSelection && scope.ready);
-
-  const feedback = createNotifier();
+  const run = new OperationRun("renamer", {
+    blocker: () =>
+      !scope.ready
+        ? "Loading the folders..."
+        : !scope.hasSelection
+          ? "Choose a folder or the sidebar's titles"
+          : !artTypes.length
+            ? "Choose an asset type"
+            : null,
+    results: () => ["asset_scan"],
+    stopping: () => assetManagerState.stopping,
+  });
+  const { feedback } = run;
   const startScanRequest = createMutation(() => startScanMutation());
   const stopScanRequest = createMutation(() => stopScanMutation());
   const renameRequest = createMutation(() => renameAssetsMutation());
-  const clearResults = createClearResults(() => ["asset_scan"], feedback);
-  /** Results show exactly while a run exists, never ahead of the server's answer. */
-  let hasResults = $derived(assetManagerState.hasRun);
-  let stopping = $derived(stopScanRequest.isPending || assetManagerState.stopping);
   let selectedIssues = $derived(assetManagerState.running ? [] : assetManagerState.selectedItems);
 
   onMount(() => {
@@ -65,26 +69,19 @@
     config.artTypes = toggleSelectedValue(config.artTypes, type);
   }
 
-  async function startScan() {
-    if (!canScan || libraryGate.blocked("renamer")) return;
-    config.save();
-    feedback.clear();
-    try {
+  function startScan() {
+    return run.start(async () => {
+      config.save();
       await startScanRequest.mutateAsync({ body: { art_types: artTypes, ...scope.request() } });
       assetManagerState.markStartAccepted();
-    } catch (err) {
-      feedback.error(errorMessage(err, "Asset scan failed"));
-    }
+    }, "Asset scan failed");
   }
 
-  async function stopScan() {
-    feedback.clear();
-    try {
+  function stopScan() {
+    return run.stop(async () => {
       await stopScanRequest.mutateAsync({});
       assetManagerState.markStopRequested();
-    } catch (error) {
-      feedback.error(errorMessage(error, "Could not stop the scan. Please retry."));
-    }
+    }, "Could not stop the scan. Please retry.");
   }
 
   async function renameSelected() {
@@ -108,7 +105,7 @@
   }
 </script>
 
-{#if !hasResults}
+{#if !run.hasResults}
   <CardColumn>
     <FolderScopeCard {scope} />
     <ArtTypeFiltersCard
@@ -125,20 +122,14 @@
 {/if}
 
 {#snippet renamerFooter()}
-  <JobFooter
-    {hasResults}
-    running={assetManagerState.running}
-    blocked={libraryGate.blocked("renamer")}
-    {stopping}
-    onstop={stopScan}
-    clear={clearResults}
-  >
+  <JobFooter {run} onstop={stopScan}>
     {#snippet start()}
       <PendingButton
         class="btn btn-primary"
         onclick={startScan}
-        disabled={!canScan || !!libraryGate.blocked("renamer")}
-        pending={startScanRequest.isPending}
+        title={run.blocked ?? undefined}
+        disabled={!!run.blocked}
+        pending={run.starting}
         pendingLabel="Starting..."
       >
         <FolderPen size={15} />
@@ -150,6 +141,7 @@
         <PendingButton
           class="btn btn-primary"
           onclick={renameSelected}
+          title={selectedIssues.length ? undefined : "Select the files to rename"}
           disabled={selectedIssues.length === 0}
           pending={renameRequest.isPending}
         >

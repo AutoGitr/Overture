@@ -730,6 +730,7 @@ def make_runtime(
                 phash=phash,
             ),
             theme_handler=downloads.theme_handler,
+            app_config=app_config,
         )
         if server_audit is None
         else server_audit

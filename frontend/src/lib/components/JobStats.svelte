@@ -38,27 +38,19 @@
     stats: JobStat[];
   } = $props();
 
-  // The shown time never runs backwards: a clock resync or a finished_at a
-  // little behind the live clock keeps what was already counted.
-  let maxSeconds = $state(0);
-  let activeStart = $state<string | null>(null);
-
   let currentSeconds = $derived(
     job.started_at ? elapsedSeconds(job.started_at, job.finished_at || serverClock.now) : 0,
   );
-
-  $effect(() => {
-    if (job.started_at !== activeStart) {
-      activeStart = job.started_at;
-      maxSeconds = currentSeconds;
-    } else if (currentSeconds > maxSeconds) {
-      maxSeconds = currentSeconds;
-    }
+  // The shown time never runs backwards: a clock resync or a finished_at a
+  // little behind the live clock keeps what was already counted. Not state:
+  // only the derived below reads and raises it, once per run.
+  let counted = { run: null as string | null, seconds: 0 };
+  let shownSeconds = $derived.by(() => {
+    if (counted.run !== job.started_at) counted = { run: job.started_at, seconds: 0 };
+    counted.seconds = Math.max(counted.seconds, currentSeconds);
+    return counted.seconds;
   });
-
-  let elapsed = $derived(
-    job.started_at ? formatDuration(Math.max(currentSeconds, maxSeconds)) : "",
-  );
+  let elapsed = $derived(job.started_at ? formatDuration(shownSeconds) : "");
 </script>
 
 <!-- Each figure sits under its label and keeps room for as many digits as
@@ -70,7 +62,7 @@
     <dt>{unit}</dt>
     <dd class="stat-value progress">
       {#if job.planning && job.read}
-        {job.read}<span class="stat-total"> read</span>
+        {job.read} <span class="stat-total">read</span>
       {:else if job.planning}
         Planning...
       {:else}

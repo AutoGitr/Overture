@@ -83,6 +83,9 @@ async def test_boxsets_create_diff_edit_art_and_delete(
             ),
         )
         await client.upload_collection_art("box", ArtType.POSTER, b"image", "image/png")
+        await client.upload_collection_art(
+            "box", ArtType.BACKGROUND, b"backdrop", "image/jpeg"
+        )
         await client.delete_item("box")
     finally:
         await client.close()
@@ -122,6 +125,9 @@ async def test_boxsets_create_diff_edit_art_and_delete(
     assert metadata["ForcedSortName"] == "!After"
     assert base64.b64decode(mutations[4].content) == b"image"
     assert mutations[4].headers["Content-Type"] == "image/png"
+    assert mutations[4].url.path.endswith("/Items/box/Images/Primary")
+    assert base64.b64decode(mutations[5].content) == b"backdrop"
+    assert mutations[5].url.path.endswith("/Items/box/Images/Backdrop/0")
     assert mutations[-1].method == "DELETE"
 
 
@@ -638,3 +644,53 @@ async def test_plex_leaves_a_collections_hub_alone_when_its_visibility_holds(
         if request.url.path == "/hubs/sections/1/manage/custom.collection.1.box"
     ]
     assert hub_writes == [{"promotedToOwnHome": "0"}]
+
+
+async def test_plex_collection_rename_clears_orphaned_tag_when_no_collection_holds_it(
+    monkeypatch: pytest.MonkeyPatch, app_config: Settings
+) -> None:
+    optimized = False
+    collections = [{"ratingKey": "box", "title": "Old"}]
+    calls: list[tuple[str, str]] = []
+
+    def handle(request: httpx2.Request) -> httpx2.Response:
+        nonlocal optimized
+        calls.append((request.method, request.url.path))
+        if request.url.path == "/library/sections/1/all" and not optimized:
+            return httpx2.Response(409, text="Conflict")
+        if request.url.path == "/library/sections/1/collections":
+            return httpx2.Response(
+                200, json={"MediaContainer": {"Metadata": collections}}
+            )
+        if request.url.path == "/library/optimize":
+            optimized = True
+            return httpx2.Response(200)
+        if request.url.path == "/hubs/sections/1/manage":
+            return httpx2.Response(200, json={"MediaContainer": {"Hub": []}})
+        return httpx2.Response(200, json={"MediaContainer": {}})
+
+    factory, _transport = mock_client_factory(handle)
+    client = PlexClient(
+        server=server_of(app_config), app_config=app_config, client_factory=factory
+    )
+    monkeypatch.setattr(PlexClient, "resolve_secure_url", keep_configured_plex_url)
+    details = CollectionDetails(
+        title="Renamed",
+        summary=None,
+        sort_title=None,
+        mode=CollectionMode.DEFAULT,
+        order=CollectionOrder.TITLE_ASC,
+        smart=False,
+        visible_home=False,
+    )
+    try:
+        await client.update_collection_details("box", "1", details)
+        assert ("PUT", "/library/optimize") in calls
+
+        # Another live collection holding the title is a real conflict, not an orphan.
+        optimized = False
+        collections.append({"ratingKey": "other", "title": "Renamed"})
+        with pytest.raises(MediaServerError, match="HTTP 409"):
+            await client.update_collection_details("box", "1", details)
+    finally:
+        await client.close()

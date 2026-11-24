@@ -181,6 +181,17 @@ export function collectionArtDisplayUrl(
   return collectionArtUrl(collection, artType, "display");
 }
 
+/** The detail page's poster and, when it is shown, background for a collection. */
+export function collectionDetailImageUrls(
+  collection: CollectionRead,
+  withBackground: boolean,
+): string[] {
+  return [
+    collectionArtDisplayUrl(collection, "poster"),
+    withBackground ? collectionArtDisplayUrl(collection, "background") : null,
+  ].filter((url): url is string => url !== null);
+}
+
 /** The original poster, for opening in a new tab. */
 export function collectionPosterOriginalUrl(collection: CollectionRead | null): string | null {
   return collectionArtUrl(collection, "poster");

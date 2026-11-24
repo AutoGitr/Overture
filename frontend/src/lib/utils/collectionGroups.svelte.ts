@@ -13,6 +13,18 @@ import { syncSelection } from "../stores/syncSelection.svelte";
 import { renameAssetsGroup } from "./assetsForm.svelte";
 import { errorMessage } from "./errors";
 import type { ChoosableCollection } from "./popupSelection";
+import { toOptions, type SelectOption } from "./selectOptions";
+
+/** The choice that opens Collection groups to create a group instead of joining one. */
+export const NEW_GROUP_OPTION = { value: "__new__", label: "Create new group..." } as const;
+
+/** The groups a collection can join, by name, with Ungrouped and *held* among them. */
+export function groupOptions(groups: readonly string[], held = ""): SelectOption[] {
+  const names = [UNGROUPED_GROUP, ...groups, ...(held ? [held] : [])];
+  return toOptions(
+    names.filter((name, index) => names.indexOf(name) === index).sort((a, b) => a.localeCompare(b)),
+  );
+}
 
 /** Actions for the selected group; the popup owns which group is selected. */
 export class CollectionGroupActions {

@@ -33,7 +33,7 @@ function bound(key: string, source: string): boolean {
   const policy = POLICY_FIELDS.get(key);
   return (
     (policy !== undefined && policySource.includes(`policy.${policy}`)) ||
-    source.includes(`draft.${key}`) ||
+    new RegExp(`\\bdraft(?:\\.current)?\\.${key}\\b`).test(source) ||
     source.includes(`${key}: `) ||
     source.includes(`"${key}"`) ||
     (arr !== null && source.includes(`\${key}_${arr[2]}`))

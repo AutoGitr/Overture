@@ -51,6 +51,8 @@ const HOMES: Record<string, Home> = {
       "lib/components/CheckboxList.svelte": "the list",
       "lib/components/ConfirmDialog.svelte":
         "its choices are radios or checkboxes, each with a description",
+      "lib/components/GlobalCollectionDefaults.svelte":
+        "each Arr service section has its own Search when added switch",
       "lib/components/Schedules.svelte": "each schedule row has its own on switch",
       "lib/components/SourceOrderList.svelte": "each ordered row turns its source on",
       "lib/popups/NotificationsPopup.svelte": "each rule's row holds its own settings",
@@ -72,6 +74,22 @@ const HOMES: Record<string, Home> = {
   "rows a job panel spans": {
     pattern: /grid-row[^;\n]*span/,
     homes: { "lib/components/JobPanel.svelte": "JobPanel.test.ts counts its rows" },
+  },
+  "native select and datalist": {
+    pattern: /<(?:select|datalist)\b/,
+    homes: {},
+  },
+  "dropdown listboxes": {
+    pattern: /role="listbox"/,
+    homes: { "lib/components/Listbox.svelte": "the floating option list" },
+  },
+  "combobox controls": {
+    pattern: /role="combobox"/,
+    homes: {
+      "lib/components/Select.svelte": "fixed-choice dropdown",
+      "lib/components/SidebarControls.svelte": "ignore `/` shortcut inside comboboxes",
+      "lib/components/ValueCombobox.svelte": "searchable and free-text combobox",
+    },
   },
 };
 

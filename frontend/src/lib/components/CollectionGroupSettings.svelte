@@ -30,6 +30,7 @@
   import FieldRow from "./FieldRow.svelte";
   import LibraryOptions from "./LibraryOptions.svelte";
   import { selectedValuesForAll, toggleSelectedValue } from "../utils/popupSelection";
+  import { draftOf } from "../utils/draft.svelte";
 
   let {
     group,
@@ -66,18 +67,14 @@
   type GroupDraft = Omit<CollectionGroupPolicyInput, "generator"> & {
     generator: SetGenerator | null;
   };
-  // Seeded once: a refetch, such as one a sync's broadcasts start, never undoes an edit.
-  let draft = $state<GroupDraft | null>(null);
-  $effect(() => {
-    if (query.data && draft === null) draft = structuredClone($state.snapshot(query.data));
-  });
+  const draft = draftOf((): GroupDraft | null => query.data ?? null);
   const collections = createQuery(() => listCollectionsOptions());
   /** A set offers what its libraries share, a group what its collections do; an empty one both. */
   let mediaTypes = $derived.by<MediaType[]>(() => {
     const held = new Set<MediaType>(
-      draft?.generator
+      draft.current?.generator
         ? libraries
-            .filter((library) => draft?.generator?.library_ids.includes(library.id))
+            .filter((library) => draft.current?.generator?.library_ids.includes(library.id))
             .map((library) => library.media_type)
         : (collections.data ?? [])
             .filter((row) => row.collection_group === group)
@@ -97,7 +94,7 @@
   );
   /** Why the group has nothing to send to the server yet, or null when it has. */
   let serverBlocker = $derived(
-    hasMembers || draft?.generator ? null : "The group has no collections yet",
+    hasMembers || draft.current?.generator ? null : "The group has no collections yet",
   );
 
   /**
@@ -105,14 +102,14 @@
    * group chosen, which sends its settings to its collections.
    */
   async function save(sync = false) {
-    if (!draft || busy) return;
+    if (!draft.current || busy) return;
     // The popup may close or show another group once told of the save, which
     // ends this component, so what follows reads nothing of it.
     const saving = group;
     const saved = hasMembers
       ? "Saved. Its collections get it on the server with their next sync."
       : "Saved. Its collections use it once they are made.";
-    const variables = { query: { name: saving }, body: $state.snapshot(draft) };
+    const variables = { query: { name: saving }, body: $state.snapshot(draft.current) };
     try {
       const policy = await request.mutateAsync(variables);
       client.setQueryData(
@@ -142,8 +139,8 @@
   hasData={options.for("movie").data !== undefined}
   onretry={() => options.for("movie").refetch()}
 />
-{#if draft}
-  {@const form = draft}
+{#if draft.current}
+  {@const form = draft.current}
   <!-- Ungrouped holds collections without a group, so it never creates any. -->
   {#if group !== UNGROUPED_GROUP}<DetailForm
     collapsible
@@ -175,7 +172,7 @@
           ))}
       />
       <CollectionSetEditor
-        bind:generator={draft.generator!}
+        bind:generator={draft.current.generator!}
         libraryIds={generator.library_ids}
         {libraries}
         {capabilities}
@@ -192,7 +189,7 @@
     {busy}
   >
     <CollectionPolicyFields
-      bind:policy={draft}
+      bind:policy={draft.current}
       level="group"
       defaults={defaults.data}
       plex={capabilities?.visibility ?? false}
@@ -216,12 +213,12 @@
     description="When the group's collections are on the server each year."
     {busy}
   >
-    <CollectionScheduleFields bind:policy={draft} level="group" defaults={defaults.data} />
+    <CollectionScheduleFields bind:policy={draft.current} level="group" defaults={defaults.data} />
   </DetailForm>
 {/if}
 
 {#snippet actions()}
-  {#if draft}
+  {#if draft.current}
     <button
       type="button"
       class="btn btn-secondary"

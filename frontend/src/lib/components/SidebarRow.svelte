@@ -207,7 +207,6 @@
     text-align: left;
     background: transparent;
     border: 1px solid transparent;
-    border-radius: var(--radius-sm);
     cursor: pointer;
     transition: background-color 0.12s ease;
   }

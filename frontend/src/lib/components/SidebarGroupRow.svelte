@@ -37,7 +37,6 @@
     padding: var(--space-3);
     width: 100%;
     text-align: left;
-    border-radius: var(--radius-sm);
   }
   .group-row:hover {
     background: var(--bg-hover);

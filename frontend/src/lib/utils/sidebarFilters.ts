@@ -9,7 +9,7 @@ import {
   SELECTED_ART_SOURCE_LABELS,
   THEME_ID_SOURCE_LABELS,
 } from "../../generated/settings";
-import type { FilterState } from "../stores/uiState.svelte";
+
 import { alphabetical } from "./alphabetical";
 import { CATALOG_SELECTION_FILTERS, type CatalogSelectionFilter } from "./catalogSelections";
 import { keysOf } from "./records";
@@ -24,6 +24,7 @@ import {
   type SidebarSource,
   type SidebarTab,
 } from "./sidebarShared";
+import type { FilterState } from "../stores/filterState.svelte";
 
 export const CATALOG_FILTER_LABELS = {
   poster: "Poster",
@@ -100,14 +101,14 @@ export const ART_SLOT_LABELS = {
 } as const;
 export type ArtSlot = keyof typeof ART_SLOT_LABELS;
 
-/** Which of a row's art the art source filter looks at. */
-export const ART_SOURCE_SLOTS = {
+/** Which of a row's art an art filter looks at. */
+export const ART_FILTER_SLOTS = {
   any: ["poster", "background", "season_posters"],
   poster: ["poster"],
   background: ["background"],
   season_posters: ["season_posters"],
 } as const satisfies Record<string, readonly ArtSlot[]>;
-export type ArtSourceSlot = keyof typeof ART_SOURCE_SLOTS;
+export type ArtFilterSlot = keyof typeof ART_FILTER_SLOTS;
 
 /** Where a slot's selected art comes from; collections hold no season posters. */
 function slotSources(row: Row, slot: ArtSlot): readonly (string | null)[] {
@@ -198,15 +199,15 @@ function triState<T>(
 function artSourcePredicate(filters: FilterState): Predicate<Row> | null {
   if (!filters.artSource.sources.length) return null;
   const sources = new Set<string | null>(filters.artSource.sources);
-  const slots = ART_SOURCE_SLOTS[filters.artSource.artType];
+  const slots = ART_FILTER_SLOTS[filters.artSource.artType];
   return (row) =>
     slots.some((slot) => slotSources(row, slot).some((source) => sources.has(source)));
 }
 
 function resolutionPredicate(filters: FilterState): Predicate<Row> | null {
   if (!isRangeActive(filters.resolution)) return null;
-  const slot = filters.resolution.artType;
-  return (row) => inRange(slotWidth(row, slot), filters.resolution);
+  const slots = ART_FILTER_SLOTS[filters.resolution.artType];
+  return (row) => slots.some((slot) => inRange(slotWidth(row, slot), filters.resolution));
 }
 
 function issuesPredicate(

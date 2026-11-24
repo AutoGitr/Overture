@@ -7,6 +7,8 @@
   import ArtWorkflowCard from "./ArtWorkflowCard.svelte";
   import CollectionChecklist from "./CollectionChecklist.svelte";
   import LibraryChecklist from "./LibraryChecklist.svelte";
+  import Select from "./Select.svelte";
+  import { toOptions } from "../utils/selectOptions";
   import SidebarItemsOption from "./SidebarItemsOption.svelte";
   import SourceOrderList from "./SourceOrderList.svelte";
   import WorkflowCard from "./WorkflowCard.svelte";
@@ -27,6 +29,7 @@
   } = $props();
 
   let config = $derived(form.config);
+  const SKIP_UNITS = toOptions(["hours", "days"] as const);
 </script>
 
 <div class="option-card">
@@ -84,10 +87,11 @@
         value={config.skipRecentVal}
         oninput={(event) => (config.skipRecentVal = Number(event.currentTarget.value) || 0)}
       />
-      <select bind:value={config.skipRecentUnit} aria-label="Skip window unit">
-        <option value="hours">hours</option>
-        <option value="days">days</option>
-      </select>
+      <Select
+        label="Skip window unit"
+        options={SKIP_UNITS}
+        bind:value={config.skipRecentUnit}
+      />
     </span>
   </div>
 </div>

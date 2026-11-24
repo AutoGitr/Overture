@@ -9,13 +9,15 @@
   import type {
     CollectionFieldRead,
     CollectionSourceRead,
-    FilterGroupInput,
+    FilterGroupOutput,
     MediaType,
   } from "../../generated/rest/types.gen";
   import { criteriaClipboard } from "../stores/criteriaClipboard.svelte";
   import { emptyGroup, fieldCondition, groupFits } from "../utils/collectionCriteria";
   import CriteriaCondition from "./CriteriaCondition.svelte";
   import CriteriaEditor from "./CriteriaEditor.svelte";
+  import Select from "./Select.svelte";
+  import { toOptions } from "../utils/selectOptions";
 
   let {
     group = $bindable(),
@@ -29,7 +31,7 @@
     onremove = null,
     onduplicate = null,
   }: {
-    group: FilterGroupInput;
+    group: FilterGroupOutput;
     fields: CollectionFieldRead[];
     sources: CollectionSourceRead[];
     mediaType: MediaType;
@@ -68,33 +70,39 @@
       : [],
   );
 
-  function insertSaved(filterId: number) {
+  let insertOptions = $derived(insertable.map((entry) => ({ value: entry.id, label: entry.name })));
+  const MODE_OPTIONS = toOptions(["all", "any"] as const);
+
+  /** Adds the saved filter chosen; the list then shows its placeholder again. */
+  function insertSaved(filterId: number | undefined) {
     const entry = insertable.find((candidate) => candidate.id === filterId);
-    if (entry) (group.groups ??= []).push(structuredClone(entry.criteria));
+    if (entry) group.groups.push(structuredClone(entry.criteria));
   }
 
   function paste() {
     if (copied?.kind === "condition")
-      (group.conditions ??= []).push(structuredClone(copied.condition));
-    else if (copied?.kind === "group") (group.groups ??= []).push(structuredClone(copied.group));
+      group.conditions.push(structuredClone(copied.condition));
+    else if (copied?.kind === "group") group.groups.push(structuredClone(copied.group));
   }
 
   function addCondition() {
     const first = fields[0];
-    if (first) (group.conditions ??= []).push(fieldCondition(first));
+    if (first) group.conditions.push(fieldCondition(first));
   }
 </script>
 
 <fieldset class={["group", { nested: depth > 0 }]}>
   <legend class="sr-only">{label}</legend>
   <div class="head">
-    <label class="mode"
+    <span class="mode"
       >Match
-      <select bind:value={group.mode} aria-label={`${label} match`}>
-        <option value="all">all</option>
-        <option value="any">any</option>
-      </select>
-      of the following</label
+      <Select
+        compact
+        label={`${label} match`}
+        options={MODE_OPTIONS}
+        bind:value={group.mode}
+      />
+      of the following</span
     >
     {#if onremove && onduplicate}
       <div class="head-actions">
@@ -122,7 +130,7 @@
       </div>
     {/if}
   </div>
-  {#each group.conditions ?? [] as condition, index (condition)}
+  {#each group.conditions as condition, index (condition)}
     <CriteriaCondition
       bind:condition={group.conditions![index]!}
       {fields}
@@ -131,14 +139,14 @@
       {libraryId}
       {scope}
       label={`${label} condition ${index + 1}`}
-      onchange={(replacement) => group.conditions?.splice(index, 1, replacement)}
+      onchange={(replacement) => group.conditions.splice(index, 1, replacement)}
       onduplicate={() =>
-        group.conditions?.splice(index + 1, 0, $state.snapshot(condition))}
+        group.conditions.splice(index + 1, 0, $state.snapshot(condition))}
       oncopy={() => criteriaClipboard.copyCondition(mediaType, condition)}
-      onremove={() => group.conditions?.splice(index, 1)}
+      onremove={() => group.conditions.splice(index, 1)}
     />
   {/each}
-  {#each group.groups ?? [] as nested, index (nested)}
+  {#each group.groups as nested, index (nested)}
     <CriteriaEditor
       bind:group={group.groups![index]!}
       {fields}
@@ -148,12 +156,12 @@
       {scope}
       label={`${label} group ${index + 1}`}
       depth={depth + 1}
-      onremove={() => group.groups?.splice(index, 1)}
+      onremove={() => group.groups.splice(index, 1)}
       onduplicate={() =>
-        group.groups?.splice(index + 1, 0, $state.snapshot(nested))}
+        group.groups.splice(index + 1, 0, $state.snapshot(nested))}
     />
   {/each}
-  {#if !group.conditions?.length && !group.groups?.length}
+  {#if !group.conditions.length && !group.groups.length}
     <p class="hint">No conditions yet.</p>
   {/if}
   <div class="actions">
@@ -167,25 +175,18 @@
       <button
         type="button"
         class="btn btn-ghost btn-sm"
-        onclick={() => (group.groups ??= []).push(emptyGroup(group.mode === "all" ? "any" : "all"))}
+        onclick={() => group.groups.push(emptyGroup(group.mode === "all" ? "any" : "all"))}
         ><Plus size={14} /> Group</button
       >
     {/if}
     {#if insertable.length}
-      <select
-        class="insert"
-        aria-label={`Add a saved filter to ${label}`}
-        value=""
-        onchange={(event) => {
-          insertSaved(Number(event.currentTarget.value));
-          event.currentTarget.value = "";
-        }}
-      >
-        <option value="">Add saved filter...</option>
-        {#each insertable as entry (entry.id)}
-          <option value={entry.id}>{entry.name}</option>
-        {/each}
-      </select>
+      <Select
+        compact
+        label={`Add a saved filter to ${label}`}
+        placeholder="Add saved filter..."
+        options={insertOptions}
+        bind:value={() => undefined, insertSaved}
+      />
     {/if}
     {#if copied}
       <button
@@ -229,11 +230,6 @@
     justify-content: flex-start;
   }
 
-  .insert {
-    width: auto;
-    max-width: 100%;
-  }
-
   .head-actions {
     display: flex;
     gap: 2px;
@@ -245,9 +241,5 @@
     align-items: center;
     gap: var(--space-2);
     font-size: var(--text-sm);
-  }
-
-  .mode select {
-    width: auto;
   }
 </style>

@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { FilterGroupInput } from "../../../generated/rest/types.gen";
+import type { FilterGroupOutput } from "../../../generated/rest/types.gen";
 import {
   criteriaPredicate,
   isEmptyCriteria,
   serverConditions,
 } from "../../../lib/utils/libraryCriteria";
+import { emptyGroup } from "../../../lib/utils/collectionCriteria";
 import { mediaItem } from "../../helpers/fixtures";
 
 const horror = { kind: "field", field: "genre", operator: "is", value: "Horror" } as const;
@@ -15,10 +16,10 @@ const unmonitored = { kind: "field", field: "monitored", operator: "is", value: 
 describe("library criteria", () => {
   it("asks the server only about metadata and sources, in evaluation order", () => {
     const actor = { kind: "field", field: "actor", operator: "is", value: "Lead" } as const;
-    const group: FilterGroupInput = {
+    const group: FilterGroupOutput = {
       mode: "all",
       conditions: [horror, unarted],
-      groups: [{ mode: "any", conditions: [narrow, actor] }],
+      groups: [{ mode: "any", conditions: [narrow, actor], groups: [] }],
     };
 
     expect(serverConditions(group)).toEqual([horror, actor]);
@@ -41,10 +42,13 @@ describe("library criteria", () => {
       mediaItem({ id: 3, title: "Unarted drama", art_status: "missing" }),
       mediaItem({ id: 4, title: "Unmonitored horror", art_status: "complete", monitored: false }),
     ];
-    const group: FilterGroupInput = {
+    const group: FilterGroupOutput = {
       mode: "all",
       conditions: [horror],
-      groups: [{ mode: "any", conditions: [unarted, narrow, unmonitored] }, { mode: "all" }],
+      groups: [
+        { mode: "any", conditions: [unarted, narrow, unmonitored], groups: [] },
+        emptyGroup(),
+      ],
     };
 
     const matches = criteriaPredicate(group, [[1, 2, 4]]);
@@ -55,7 +59,7 @@ describe("library criteria", () => {
       "Narrow horror",
       "Unmonitored horror",
     ]);
-    expect(isEmptyCriteria({ mode: "all", groups: [{ mode: "any" }] })).toBe(true);
+    expect(isEmptyCriteria({ ...emptyGroup(), groups: [emptyGroup("any")] })).toBe(true);
     expect(isEmptyCriteria(group)).toBe(false);
   });
 });

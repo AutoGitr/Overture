@@ -5,10 +5,10 @@ import { queryClient } from "../../../lib/rest/queryClient";
 import { ApiError } from "../../../lib/rest/transport";
 import { assetManagerState } from "../../../lib/stores/assetManagerState.svelte";
 import { serverAuditState } from "../../../lib/stores/serverAuditState.svelte";
-import { sidebarState } from "../../../lib/stores/sidebarState.svelte";
 import { uiState } from "../../../lib/stores/uiState.svelte";
 import { renderWithQueryClient } from "../../helpers/render";
 import { assetScanEvent, serverAuditEvent } from "../../helpers/fixtures";
+import { showInSidebar } from "../../helpers/sidebar";
 
 const { getFolderRoots, startScan, startServerAudit, stopScan, stopServerAudit } = vi.hoisted(
   () => ({
@@ -56,7 +56,7 @@ describe.each([
     beforeEach(() => {
       vi.resetAllMocks();
       queryClient.clear();
-      sidebarState.current = null;
+      showInSidebar({ current: null });
       uiState.openOperations(initialTab);
       state.reset();
       getFolderRoots.mockResolvedValue({ data: { movies: ["/movies"], shows: [] } });
@@ -109,7 +109,7 @@ describe.each([
     it("starts with a snapshot of the current sidebar items instead of folders", async () => {
       localStorage.setItem(selectionKey, JSON.stringify(["/movies"]));
       localStorage.setItem(sidebarKey, "true");
-      sidebarState.current = { type: "movie", itemIds: [4, 9] };
+      showInSidebar({ current: { type: "movie", itemIds: [4, 9] } });
       renderWithQueryClient(OperationsPopup);
       expect(
         await screen.findByRole("checkbox", { name: "Current sidebar items 2 movies" }),
@@ -126,7 +126,7 @@ describe.each([
 
     it("returns to folder selection when a folder is chosen", async () => {
       localStorage.setItem(sidebarKey, "true");
-      sidebarState.current = { type: "movie", itemIds: [4] };
+      showInSidebar({ current: { type: "movie", itemIds: [4] } });
       renderWithQueryClient(OperationsPopup);
       const sidebarOption = await screen.findByRole("checkbox", { name: /Current sidebar items/ });
       expect(sidebarOption).toBeChecked();

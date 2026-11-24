@@ -39,7 +39,7 @@
   let itemsById = $derived(new Map(libraryItems.map((item) => [item.id, item])));
   /** The collection's members, as the library lists them, in its order. */
   let held = $derived(
-    editor?.collection.member_ids.flatMap((id) => itemsById.get(id) ?? []) ?? [],
+    editor?.memberIds.flatMap((id) => itemsById.get(id) ?? []) ?? [],
   );
   /** The collection's libraries, as the library list names them, in its order. */
   let collectionLibraries = $derived(
@@ -90,7 +90,7 @@
     const member = group[index];
     const neighbour = group[target];
     if (!editor || !member || !neighbour) return;
-    void editor.moveMember(member.id, editor.collection.member_ids.indexOf(neighbour.id));
+    void editor.moveMember(member.id, editor.memberIds.indexOf(neighbour.id));
   }
   let available = $derived(editor?.availableMembers(libraryItems) ?? []);
 

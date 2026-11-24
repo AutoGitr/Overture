@@ -28,19 +28,23 @@
 - **Collections:** each library's criteria are headed by its server's badge and edged in its colour when several servers are configured.
 - **Interface:** hovering a title's or collection's **Poster** or **Background** tab names the servers, or the folder, that do not yet show Overture's image.
 - **Interface:** every list of libraries, art sources, theme sources and metadata issues offers **Select all** and **Deselect all** beside the list's name, partly ticked while only some are chosen.
-- **Interface:** show filters take in season posters: **Season posters complete**, season posters in **Art resolution** and **Art source**, and season poster source and width in custom filters.
+- **Interface:** show filters take in season posters: **Season posters complete**, season posters in **Art resolution** and **Art source**, and season poster source and width in custom filters; **Art resolution** also offers **Any art**.
 - **Operations:** Sync, Assets, Renamer and Server audit count what they have read while they plan, instead of showing **Planning...** until the total is known.
 
 ### 🌟 Enhancements
 
-- **Artwork:** an image offered by several sources is listed and loaded once: under OvertureDB when it is its choice, else TMDB, else the first server.
+- **Artwork:** TMDB and OvertureDB each list every candidate they offer; media servers and collection members leave out images already in TMDB, OvertureDB or an earlier server.
 - **Collections:** a sync checks the art and theme of every server copy, not just the first, and a collection is complete only once every copy shows them.
 - **Collections:** a chosen theme stays chosen when a server plays another; the collection's next sync or an Assets run sends it again.
+- **Interface:** dropdowns and menus share one floating list; typing a letter in a dropdown jumps to the choices it starts, and comboboxes narrow their values as you type.
+- **Interface:** opening a collection from the sidebar shows its poster, background and art candidates at once while its full details load, and auto-advance preloads the next collection's images.
 - **Interface:** saving a collection reads the library's titles again only when its members or TMDB collection change, so editing collections one after another stays quick instead of slowing every page.
+- **Interface:** sidebar rows sit square against each other, and Renamer and Server audit results are spaced without a dark band cutting into the flagged rows' edge.
 - **Interface:** a criteria value is typed, with the values the libraries hold listed as you type, however many there are, such as every actor; a collection is picked by its title from the same list.
 - **Interface:** an image larger than 20 MB is refused before it uploads, saying so.
 - **Interface:** a database record names an asset's copy by its server and file, such as `Background on Jellyfin`, and other rows by what they are, such as `Collection rule 19`.
 - **Library:** auto-unmonitor counts a title's theme as complete when OvertureDB says it has none and Overture trusts that flag.
+- **Operations:** a greyed-out button to start a run says why beside it and when hovered, such as nothing chosen yet or another operation running; **Rename** and **Refresh** say to select something first.
 - **Operations:** Server audit compares and fixes collection images and themes exactly as a sync does, and records what it finds on a collection's copies, so the collection's status follows the audit.
 - **Operations:** Assets runs decide titles and collections by the same rules: a saved choice is restored wherever a place lacks it, a source replaces a different image or theme only when ranked above **Current selection**, and planning lines count `assets` and `collection assets`.
 - **Operations:** a sync logs each collection on each server, in each library: created, how many titles were added and removed, unchanged, deleted and why (such as a library leaving it), or left alone and why, so a run's totals count collections too. Reading the servers logs how many collections each lists, each new one and each one gone.
@@ -54,7 +58,8 @@
 - **API:** an ID too large for the database is refused with 422 instead of failing with 500.
 - **Collections:** the bulk sort title template takes as many characters as the sort title format.
 - **Collections:** Emby makes new collections again instead of failing with HTTP 500, and Jellyfin and Emby collections of more than about 200 titles sync instead of failing with HTTP 414.
-- **Collections:** renaming a Plex collection renames the collection tag its titles carry too, so deleting it later no longer makes Plex create it again under its old title.
+- **Collections:** renaming a Plex collection renames the collection tag its titles carry too, clearing any orphaned tag left by an earlier deletion instead of failing with HTTP 409, so deleting it later no longer makes Plex create it again under its old title.
+- **Collections:** uploading a collection background to Jellyfin or Emby replaces its primary backdrop instead of adding behind an existing one.
 - **Collections:** a sync never locks the titles in a Jellyfin or Emby collection. Jellyfin and Emby keep a collection's name, and its summary when Overture sets one, through metadata refreshes, by locking those fields alone, so the server no longer renames it after the TMDB collection its name resembles (such as `Foreign` becoming `The Foreign Exchange Student Collection`).
 - **Collections:** a collection a server made while failing the request is found by its title at the next sync instead of made again, and a server collection belongs to one Overture collection only, even when Jellyfin gives one made again the ID of one it deleted.
 - **Collections:** one server refusing a collection no longer stops the others: its error is logged for that server, the others sync, and a collection made on another server before the refusal is kept instead of made again by every sync. A timed-out membership or details write to Jellyfin or Emby is retried.
@@ -70,6 +75,7 @@
 - **Operations:** a run's log offers its media server filters when it is about more than one server; the log covered them.
 - **Operations:** a run's log shows every line it has counted, even while the run is quiet, instead of empty placeholder rows when opened or reconnected mid-run.
 - **Operations:** a running collection download shows its stage instead of `undefined/undefined`.
+- **Operations:** Server audit no longer reports a collection out of its active dates as having no server copy; its sync took it off the servers on purpose.
 - **Operations:** a run's log filters and its notifications count the targets each line names, so `94 collections` counts 94, as the run's totals do.
 - **Operations:** log lines name a collection's asset as one, such as `Alien (collection poster)`, so it never reads as the title of the same name; theme lines name the theme.
 - **Operations:** a title or collection that leaves the library during an Assets run is skipped, not an error, in every kind of run.

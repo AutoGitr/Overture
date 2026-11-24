@@ -1,11 +1,15 @@
 import { fireEvent, screen } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it } from "vitest";
+import { listCollectionsOptions } from "../../../../generated/rest/@tanstack/svelte-query.gen";
 import { queryClient } from "../../../../lib/rest/queryClient";
 import CollectionPage from "../../../../lib/router/pages/CollectionPage.svelte";
 import { navigate } from "../../../../lib/router/routes";
 import { uiState } from "../../../../lib/stores/uiState.svelte";
 import { mockFetchRoutes } from "../../../helpers/fetch";
-import { collectionDetail as collection } from "../../../helpers/fixtures";
+import {
+  collection as collectionRow,
+  collectionDetail as collection,
+} from "../../../helpers/fixtures";
 import { renderWithQueryClient } from "../../../helpers/render";
 
 const action = collection({ id: 12, title: "Action" });
@@ -34,6 +38,43 @@ describe("CollectionPage", () => {
 
     expect(await screen.findByRole("heading", { name: "Action" })).toBeInTheDocument();
     expect(uiState.mobileShowDetail).toBe(true);
+  });
+
+  it("shows a cached sidebar collection and its images before its detail finishes loading", async () => {
+    let resolveDetail: (response: Response) => void = () => {};
+    const detail = new Promise<Response>((resolve) => {
+      resolveDetail = resolve;
+    });
+    queryClient.setQueryData(listCollectionsOptions().queryKey, [
+      collectionRow({
+        id: 12,
+        title: "Action",
+        server_poster_version: "p1",
+        server_background_version: "b1",
+      }),
+    ]);
+    mockFetchRoutes({
+      "/api/collections/defaults": {},
+      "/api/collections/groups": [],
+      "/api/library/libraries": [],
+      "/api/library/items": { items: [], total: 0 },
+      "/api/collections/12/art/poster/sources": { sources: {} },
+      "/api/collections/12": () => detail,
+    });
+    await openCollection("12-action");
+
+    const { container } = renderWithQueryClient(CollectionPage);
+
+    expect(screen.getByRole("heading", { name: "Action" })).toBeInTheDocument();
+    expect(
+      container.querySelector('img[src="/api/collections/12/image/poster?t=p1&size=display"]'),
+    ).not.toBeNull();
+    expect(
+      container.querySelector('img[src="/api/collections/12/image/background?t=b1&size=display"]'),
+    ).not.toBeNull();
+
+    resolveDetail(Response.json(action));
+    expect(await screen.findByRole("heading", { name: "Action" })).toBeInTheDocument();
   });
 
   it("selects nothing for a collection the server no longer lists", async () => {

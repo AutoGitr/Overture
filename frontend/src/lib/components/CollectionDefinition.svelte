@@ -11,6 +11,10 @@
   import SetDimensionField from "./SetDimensionField.svelte";
   import type { LibrarySectionRead } from "../../generated/rest/types.gen";
   import LibraryOptions from "./LibraryOptions.svelte";
+  import Select from "./Select.svelte";
+  import { toOptions } from "../utils/selectOptions";
+  import { NEW_GROUP_OPTION, groupOptions } from "../utils/collectionGroups.svelte";
+  import ValueCombobox from "./ValueCombobox.svelte";
 
   let {
     editor,
@@ -23,13 +27,23 @@
   } = $props();
 
   const id = $props.id();
-  const NEW_GROUP = "__new__";
   const KINDS = [
     ["collection", "One collection"],
     ["set", "One per value"],
   ] as const;
   let draft = $derived(editor instanceof CollectionDraft ? editor : null);
   let creatingSet = $derived(draft?.kind === "set");
+  let groupChoices = $derived([...groupOptions(groups, editor.collectionGroup), NEW_GROUP_OPTION]);
+  /** Choosing to create a group keeps the current one until Collection groups makes it. */
+  function chooseGroup(chosen: string) {
+    if (chosen !== NEW_GROUP_OPTION.value) {
+      editor.collectionGroup = chosen;
+      return;
+    }
+    uiState.openCollectionGroups("", (name, replacement) => {
+      if (!name || editor.collectionGroup === name) editor.collectionGroup = replacement;
+    });
+  }
 </script>
 
 <DetailForm
@@ -100,16 +114,14 @@
       for={`${id}-group`}
       hint="A set is a group whose collections it creates; Split by names it. A group that holds collections can become a set; one that already is a set cannot."
     >
-      <input
+      <ValueCombobox
         id={`${id}-group`}
+        required={false}
         maxlength={TEXT_LIMITS.groupName}
-        bind:value={form.collectionGroup}
         placeholder="e.g. Decades"
-        list={`${id}-groups`}
+        bind:value={form.collectionGroup}
+        options={toOptions(groups)}
       />
-      <datalist id={`${id}-groups`}>
-        {#each groups as group (group)}<option value={group}></option>{/each}
-      </datalist>
     </FieldRow>
     {#each form.setNotices as notice (notice.title)}
       <Notice
@@ -143,29 +155,12 @@
         ? "Its group's set titles this collection."
         : (draft?.groupHint ?? "The collection inherits the group's defaults.")}
     >
-      <select
+      <Select
         id={`${id}-group`}
         disabled={editor.generated}
-        value={editor.collectionGroup || UNGROUPED_GROUP}
-        onchange={(event) => {
-          if (event.currentTarget.value !== NEW_GROUP) {
-            editor.collectionGroup = event.currentTarget.value;
-            return;
-          }
-          // The select keeps showing the current group until the popup creates one.
-          event.currentTarget.value = editor.collectionGroup || UNGROUPED_GROUP;
-          uiState.openCollectionGroups("", (name, replacement) => {
-            if (!name || editor.collectionGroup === name) editor.collectionGroup = replacement;
-          });
-        }}
-      >
-        {#if !groups.includes(UNGROUPED_GROUP)}<option value={UNGROUPED_GROUP}>{UNGROUPED_GROUP}</option>{/if}
-        {#if editor.collectionGroup && editor.collectionGroup !== UNGROUPED_GROUP && !groups.includes(editor.collectionGroup)}
-          <option value={editor.collectionGroup || UNGROUPED_GROUP}>{editor.collectionGroup}</option>
-        {/if}
-        {#each groups as group (group)}<option value={group}>{group}</option>{/each}
-        <option value={NEW_GROUP}>Create new group...</option>
-      </select>
+        options={groupChoices}
+        bind:value={() => editor.collectionGroup || UNGROUPED_GROUP, chooseGroup}
+      />
     </FieldRow>
   {/if}
 

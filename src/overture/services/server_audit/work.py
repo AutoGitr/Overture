@@ -3,11 +3,13 @@
 lazy from collections import defaultdict
 lazy from collections.abc import Awaitable, Callable, Collection
 lazy from dataclasses import dataclass
+lazy from datetime import date
 lazy from pathlib import Path
 
 lazy from ...db.ledger import read_asset
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
+lazy from ...db.models.settings import get_app_settings
 lazy from ...db.session import CHUNK_SIZE, Database
 lazy from ...domain import (
     ITEM_ART_TYPES,
@@ -23,6 +25,7 @@ lazy from ...repositories.seasons import SeasonRepository
 lazy from ...schemas.server_audit import ServerAuditRequest
 lazy from ...utils.path import is_within_roots, real_path
 lazy from ...utils.threads import owned_thread
+lazy from ..collections.policy import out_of_season, resolve_policy
 lazy from ..local_assets.service import LocalAssets
 lazy from ..storage.assets import AssetStorage, FolderListing
 
@@ -200,14 +203,22 @@ async def plan_audit(
 
 
 async def plan_collection_audit(
-    params: ServerAuditRequest, *, database: Database
+    params: ServerAuditRequest, *, database: Database, today: date
 ) -> list[CollectionAuditTarget]:
-    """Return each collection image or theme Overture holds, by title."""
+    """Return each collection image or theme Overture holds, by title.
+
+    A collection out of season that no server holds is left out: its sync took
+    it off the servers, and the one that puts it back sends its art and theme.
+    """
     async with database.read_session() as session:
         rows = await CollectionRepository(session).list_listed()
+        settings = await get_app_settings(session)
     planned: list[CollectionAuditTarget] = []
     for row in sorted(rows, key=lambda row: (row.title.casefold(), row.id or 0)):
-        if row.id is None:
+        if row.id is None or (
+            not row.copies
+            and out_of_season(row, resolve_policy(settings, row.group, row.rule), today)
+        ):
             continue
         planned.extend(
             CollectionAuditTarget(row.id, art_type.server_asset)

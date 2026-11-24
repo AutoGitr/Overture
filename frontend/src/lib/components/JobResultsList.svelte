@@ -128,7 +128,6 @@
     position: relative;
     display: grid;
     grid-template: minmax(0, 1fr) / minmax(0, 1fr);
-    border-top: var(--border-subtle);
   }
 
   .findings-body.listed {

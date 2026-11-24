@@ -14,6 +14,7 @@ import { sidebarState } from "../../../lib/stores/sidebarState.svelte";
 import { uiState } from "../../../lib/stores/uiState.svelte";
 import { collection, mediaItem } from "../../helpers/fixtures";
 import SidebarHarness from "../../helpers/SidebarHarness.svelte";
+import { filterState } from "../../../lib/stores/filterState.svelte";
 
 const movie = mediaItem({
   id: 1,
@@ -48,7 +49,7 @@ describe("Sidebar", () => {
     uiState.mobileShowDetail = false;
     await navigate("/movies", { replace: true });
     uiState.searchQuery = "";
-    uiState.clearFilters();
+    filterState.clear();
     settingsState.load(
       appSettings({
         workflow: "art",
@@ -154,7 +155,7 @@ describe("Sidebar", () => {
       props: { client, movies, totalMovies: movies.length, shows: [show], totalShows: 1 },
     });
     await waitFor(() => expect(sidebarState.current?.itemIds).toHaveLength(80));
-    uiState.currentFilters.monitored = "unmonitored";
+    filterState.current.monitored = "unmonitored";
     await fireEvent.click(screen.getByRole("button", { name: "Choose search field" }));
     await fireEvent.click(screen.getByRole("menuitemradio", { name: "Director" }));
     expect(screen.getByLabelText("Search sidebar")).toHaveFocus();
@@ -411,7 +412,7 @@ describe("Sidebar", () => {
       server_poster_version: "p3",
     });
 
-    uiState.currentFilters.art = "incomplete";
+    filterState.current.art = "incomplete";
     const movies = [movie1, movie2, movie3];
 
     const { container, rerender } = render(SidebarHarness, {
@@ -495,7 +496,7 @@ describe("Sidebar TMDB search", () => {
     await navigate("/movies", { replace: true });
     settingsState.load(appSettings({ media_servers: [], collections_supported: false }));
     settingsState.current.tmdb_configured = true;
-    uiState.clearFilters();
+    filterState.clear();
     uiState.searchField = "tmdb";
     uiState.searchQuery = "matrix";
   });

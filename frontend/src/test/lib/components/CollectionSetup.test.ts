@@ -13,7 +13,7 @@ import {
   mediaItem,
   mediaServers,
 } from "../../helpers/fixtures";
-import { renderWithQueryClient } from "../../helpers/render";
+import { chooseOption, renderWithQueryClient } from "../../helpers/render";
 import { uiState } from "../../../lib/stores/uiState.svelte";
 import { syncSelection } from "../../../lib/stores/syncSelection.svelte";
 
@@ -104,7 +104,7 @@ describe("collection setup flow", () => {
       .getAllByText(/^(Create|Split by|Libraries)$/)
       .map((label) => label.textContent);
     expect(labels).toEqual(["Create", "Split by", "Libraries"]);
-    expect(setup.getByLabelText("Split by")).toHaveValue("decade");
+    expect(setup.getByLabelText("Split by")).toHaveTextContent("Decades");
     expect(setup.getByRole("combobox", { name: /^Group/ })).toHaveValue("Decades");
   });
 
@@ -148,19 +148,13 @@ describe("collection setup flow", () => {
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "Requests" } });
     await fireEvent.click(screen.getByLabelText("Smart"));
     await fireEvent.click(screen.getByRole("button", { name: "Condition" }));
-    await fireEvent.change(screen.getByLabelText("Criteria condition 1 field"), {
-      target: { value: "source:radarr_tag" },
-    });
+    await chooseOption(screen.getByLabelText("Criteria condition 1 field"), "Radarr tags");
     await fireEvent.change(screen.getByLabelText("Criteria condition 1 tags"), {
       target: { value: "request" },
     });
     await fireEvent.click(screen.getByRole("button", { name: "Condition" }));
-    await fireEvent.change(screen.getByLabelText("Criteria condition 2 field"), {
-      target: { value: "field:unplayed" },
-    });
-    await fireEvent.change(screen.getByLabelText("Criteria condition 2 value"), {
-      target: { value: "false" },
-    });
+    await chooseOption(screen.getByLabelText("Criteria condition 2 field"), "Unplayed");
+    await chooseOption(screen.getByLabelText("Criteria condition 2 value"), "false");
     await fireEvent.click(screen.getByRole("button", { name: "Save and Sync" }));
     await waitFor(() =>
       expect(
@@ -206,10 +200,10 @@ describe("collection setup flow", () => {
     await onlyLibrary(setup, "Other movies");
     await fireEvent.click(setup.getByLabelText("One per value"));
     // Split by fills in the group, the title and the defaults its collections start with.
-    await fireEvent.change(setup.getByLabelText("Split by"), { target: { value: "franchise" } });
+    await chooseOption(setup.getByLabelText("Split by"), "TMDB franchises");
     const group = setup.getByRole("combobox", { name: /^Group/ });
     expect(group).toHaveValue("TMDB franchises");
-    await fireEvent.change(setup.getByLabelText("Split by"), { target: { value: "decade" } });
+    await chooseOption(setup.getByLabelText("Split by"), "Decades");
     expect(group).toHaveValue("Decades");
     const set = within(screen.getByRole("region", { name: "Collection content" }));
     expect(set.queryByLabelText("Split by")).toBeNull();
@@ -246,7 +240,7 @@ describe("collection setup flow", () => {
     const setup = within(screen.getByRole("region", { name: "Collection setup" }));
     await onlyLibrary(setup, "Other movies");
     await fireEvent.click(setup.getByLabelText("One per value"));
-    await fireEvent.change(setup.getByLabelText("Split by"), { target: { value: "decade" } });
+    await chooseOption(setup.getByLabelText("Split by"), "Decades");
 
     expect(await setup.findByText('"Decades" already is a set')).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save and Sync" })).toBeDisabled();
@@ -282,8 +276,7 @@ describe("collection setup flow", () => {
     expect(screen.queryByRole("button", { name: "Orphan collection" })).toBeNull();
     expect(screen.queryByRole("tab", { name: /Art/ })).toBeNull();
 
-    await screen.findByRole("option", { name: "Franchises" });
-    await fireEvent.change(screen.getByLabelText("Group"), { target: { value: "Franchises" } });
+    await chooseOption(screen.getByLabelText("Group"), "Franchises");
     expect(adopt).toBeEnabled();
     await fireEvent.click(adopt);
     await waitFor(() =>
@@ -314,15 +307,17 @@ describe("collection setup flow", () => {
       expect(screen.queryByRole("radiogroup", { name: "Collection type" })).toBeNull();
       await fireEvent.click(screen.getByRole("button", { name: "Condition" }));
       const field = screen.getByLabelText("Criteria condition 1 field");
-      expect(within(field).queryByRole("option", { name: "Unplayed" })).toBeNull();
-      expect(within(field).queryByRole("option", { name: "HDR" })).toBeNull();
+      await fireEvent.click(field);
+      expect(screen.queryByRole("option", { name: "Unplayed" })).toBeNull();
+      expect(screen.queryByRole("option", { name: "HDR" })).toBeNull();
+      await fireEvent.keyDown(field, { key: "Escape" });
       await fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+      const sort = within(
+        screen.getByRole("region", { name: "Collection settings" }),
+      ).getByLabelText("Sort");
+      await fireEvent.click(sort);
       expect(
-        within(
-          within(screen.getByRole("region", { name: "Collection settings" })).getByLabelText(
-            "Sort",
-          ),
-        )
+        within(screen.getByRole("listbox"))
           .getAllByRole("option")
           .map((option) => option.textContent),
       ).toEqual(["Default", "Release date (oldest first)", "Title (A to Z)"]);
@@ -338,16 +333,12 @@ describe("collection setup flow", () => {
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "Attenborough" } });
     const boxes = screen.getAllByRole("button", { name: "Condition" });
     await fireEvent.click(boxes[1] as HTMLElement);
-    await fireEvent.change(screen.getByLabelText("Other movies criteria condition 1 field"), {
-      target: { value: "field:year" },
-    });
+    await chooseOption(screen.getByLabelText("Other movies criteria condition 1 field"), "Year");
     await fireEvent.input(screen.getByLabelText("Other movies criteria condition 1 value"), {
       target: { value: "1990" },
     });
     await fireEvent.click(boxes[0] as HTMLElement);
-    await fireEvent.change(screen.getByLabelText("Movies criteria condition 1 field"), {
-      target: { value: "field:year" },
-    });
+    await chooseOption(screen.getByLabelText("Movies criteria condition 1 field"), "Year");
     await fireEvent.input(screen.getByLabelText("Movies criteria condition 1 value"), {
       target: { value: "2000" },
     });
@@ -381,9 +372,7 @@ describe("collection setup flow", () => {
     await createPage();
     await onlyLibrary(screen, "Movies");
     await fireEvent.click(screen.getByRole("button", { name: "Condition" }));
-    await fireEvent.change(screen.getByLabelText("Criteria condition 1 field"), {
-      target: { value: "field:year" },
-    });
+    await chooseOption(screen.getByLabelText("Criteria condition 1 field"), "Year");
 
     // No preview is needed: the advice follows the criteria.
     const title = await screen.findByText("A smart collection suits these criteria");
@@ -404,9 +393,7 @@ describe("collection setup flow", () => {
     await onlyLibrary(screen, "Movies");
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "Nineties" } });
     await fireEvent.click(screen.getByRole("button", { name: "Condition" }));
-    await fireEvent.change(screen.getByLabelText("Criteria condition 1 field"), {
-      target: { value: "field:year" },
-    });
+    await chooseOption(screen.getByLabelText("Criteria condition 1 field"), "Year");
     await fireEvent.click(screen.getByRole("button", { name: "Preview members" }));
     expect(await screen.findByText("2 members: First, Second")).toBeInTheDocument();
     expect(postedBody(calls, "/api/collections/preview")).toMatchObject({

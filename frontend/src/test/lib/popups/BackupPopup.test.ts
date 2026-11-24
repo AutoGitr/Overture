@@ -53,7 +53,8 @@ describe("BackupPopup", () => {
     renderWithQueryClient(BackupPopup);
     expect(screen.getByRole("button", { name: "Save schedule" })).toBeDisabled();
     expect(await screen.findByRole("alert")).toHaveTextContent("Schedule unavailable");
-    expect(screen.getByLabelText("Cron expression")).toBeDisabled();
+    // Nothing to edit until the schedule is read.
+    expect(screen.queryByLabelText("Cron expression")).toBeNull();
     getBackupSchedule.mockResolvedValue({ data: schedule });
     await fireEvent.click(screen.getByRole("button", { name: "Retry backup schedule" }));
     await waitFor(() => expect(screen.getByLabelText("Cron expression")).toHaveValue("0 4 * * *"));

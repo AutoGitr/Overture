@@ -6,7 +6,7 @@ import {
   setCollectionThemeMutation,
   setCollectionMonitoredMutation,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
-import type { CollectionDetail } from "../../generated/rest/types.gen";
+import type { CollectionRead } from "../../generated/rest/types.gen";
 import { patchCollection, patchCollectionTheme } from "../rest/cache";
 import { downloadStageLabel, downloadState } from "../stores/downloadState.svelte";
 import { createNotifier } from "../stores/notificationState.svelte";
@@ -25,7 +25,7 @@ export class CollectionActions {
   private readonly setMonitoredRequest = createMutation(() => setCollectionMonitoredMutation());
   private chosen = $state<{ collectionId: number; videoId: string } | null>(null);
 
-  constructor(private readonly current: () => CollectionDetail) {}
+  constructor(private readonly current: () => CollectionRead) {}
 
   private get themeJob() {
     return downloadState.getCollectionJob(this.current().id);

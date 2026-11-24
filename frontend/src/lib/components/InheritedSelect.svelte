@@ -1,5 +1,6 @@
 <script lang="ts" generics="T extends string | boolean">
   import FieldRow from "./FieldRow.svelte";
+  import Select from "./Select.svelte";
 
   let {
     label,
@@ -23,23 +24,19 @@
 
   const id = $props.id();
   let inheritedLabel = $derived(options.find(([option]) => option === inherited)?.[1]);
+  let choices = $derived([
+    ...(inherits
+      ? [{ value: null, label: inheritedLabel ? `Default (${inheritedLabel})` : "Default" }]
+      : []),
+    ...options.map(([option, name]) => ({ value: option, label: name })),
+  ]);
 </script>
 
 <FieldRow {label} for={id} {hint}>
-  <select
+  <Select
     {id}
     {disabled}
-    value={value == null ? "" : String(value)}
-    onchange={(event) => {
-      const raw = event.currentTarget.value;
-      value = options.find(([option]) => String(option) === raw)?.[0] ?? null;
-    }}
-  >
-    {#if inherits}
-      <option value="">{inheritedLabel ? `Default (${inheritedLabel})` : "Default"}</option>
-    {/if}
-    {#each options as [option, name] (String(option))}
-      <option value={String(option)}>{name}</option>
-    {/each}
-  </select>
+    options={choices}
+    bind:value={() => value ?? null, (next) => (value = next)}
+  />
 </FieldRow>

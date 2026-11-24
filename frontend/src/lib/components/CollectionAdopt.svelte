@@ -1,16 +1,18 @@
 <script lang="ts">
   import { createMutation } from "@tanstack/svelte-query";
   import { adoptCollectionMutation } from "../../generated/rest/@tanstack/svelte-query.gen";
-  import type { CollectionDetail } from "../../generated/rest/types.gen";
+  import type { CollectionRead } from "../../generated/rest/types.gen";
   import { storeCollectionDetail } from "../rest/cache";
   import { createNotifier } from "../stores/notificationState.svelte";
   import { UNGROUPED_GROUP } from "../../generated/settings";
+  import { groupOptions } from "../utils/collectionGroups.svelte";
   import { errorMessage } from "../utils/errors";
   import DetailForm from "./DetailForm.svelte";
   import FieldRow from "./FieldRow.svelte";
   import PendingButton from "./PendingButton.svelte";
+  import Select from "./Select.svelte";
 
-  let { collection, groups }: { collection: CollectionDetail; groups: string[] } = $props();
+  let { collection, groups }: { collection: CollectionRead; groups: string[] } = $props();
 
   const id = $props.id();
   const request = createMutation(() => adoptCollectionMutation());
@@ -45,10 +47,7 @@
       : ""}. It can then be edited, synced and given art and a theme like any other.
   </p>
   <FieldRow label="Group" for={`${id}-group`}>
-    <select id={`${id}-group`} bind:value={group}>
-      {#if !groups.includes(UNGROUPED_GROUP)}<option value={UNGROUPED_GROUP}>{UNGROUPED_GROUP}</option>{/if}
-      {#each groups as name (name)}<option value={name}>{name}</option>{/each}
-    </select>
+    <Select id={`${id}-group`} options={groupOptions(groups)} bind:value={group} />
   </FieldRow>
   <div class="actions-row">
     <PendingButton

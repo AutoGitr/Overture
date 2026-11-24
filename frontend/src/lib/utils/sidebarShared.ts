@@ -9,7 +9,7 @@ import {
   UNGROUPED_GROUP,
   UNMANAGED_GROUP,
 } from "../../generated/settings";
-import type { NumberRange } from "../stores/uiState.svelte";
+import type { NumberRange } from "../stores/filterState.svelte";
 
 export type SidebarTab = "movie" | "show";
 export type SidebarMode = "items" | "collections";

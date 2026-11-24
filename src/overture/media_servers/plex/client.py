@@ -72,6 +72,8 @@ _PLEX_TYPES = frozendict(
 _EPISODE_TYPE = 4
 #: Plex's metadata type number for collections.
 _COLLECTION_TYPE = 18
+#: Seconds to wait for Plex to optimize its database, which rewrites all of it.
+_OPTIMIZE_TIMEOUT = 600
 #: The member orders Plex keeps itself; others are stored as a custom order.
 PLEX_COLLECTION_SORTS: frozendict[CollectionOrder, int] = frozendict(
     {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
@@ -1025,7 +1027,7 @@ class PlexClient(MediaServerHttpClient):
                 "titleSort.value": sort_title,
                 "titleSort.locked": int(bool(sort_title)),
             }
-        await self._request("PUT", f"/library/sections/{section_id}/all", params=fields)
+        await self._edit_collection_fields(section_id, collection_id, title, fields)
         prefs: dict[str, int] = {"collectionMode": PLEX_COLLECTION_MODES[details.mode]}
         if not details.smart:
             prefs["collectionSort"] = PLEX_COLLECTION_SORTS.get(
@@ -1070,6 +1072,40 @@ class PlexClient(MediaServerHttpClient):
             await self._request(
                 "POST", path, params={**params, "metadataItemId": collection_id}
             )
+
+    async def _edit_collection_fields(
+        self,
+        section_id: str,
+        collection_id: str,
+        title: str,
+        fields: dict[str, str | int],
+    ) -> None:
+        """Write collection fields through its section, clearing an orphaned tag.
+
+        Deleting a Plex collection leaves its tag row in SQLite until database
+        optimization runs, and renaming another collection to that title
+        answers 409 Conflict until the unused tag is cleaned up.
+        """
+        path = f"/library/sections/{section_id}/all"
+        try:
+            await self._request("PUT", path, params=fields)
+        except MediaServerError as exc:
+            if exc.upstream_status_code != 409:
+                raise
+            wanted = title.casefold()
+            if any(
+                str(row.get("ratingKey")) != collection_id
+                and (row.get("title") or "").casefold() == wanted
+                for row in await self.get_collections(section_id)
+            ):
+                raise
+            await self._request(
+                "PUT",
+                "/library/optimize",
+                params={"async": 0},
+                timeout=_OPTIMIZE_TIMEOUT,
+            )
+            await self._request("PUT", path, params=fields)
 
     async def upload_collection_art(
         self, collection_id: str, art_type: ArtType, image_bytes: bytes, mime_type: str

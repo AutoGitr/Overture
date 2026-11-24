@@ -72,7 +72,7 @@
     max-width: 100%;
   }
 
-  .field-row :global(select),
+  .field-row :global(.combobox),
   .field-row :global(input:not([type="checkbox"], [type="radio"])) {
     flex: var(--field-input-flex, 0 1 auto);
     width: auto;

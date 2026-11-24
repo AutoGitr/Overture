@@ -1,5 +1,6 @@
 """The verify script checks Overture and its media servers without changing either."""
 
+lazy import argparse
 lazy import json
 lazy from dataclasses import replace
 lazy from pathlib import Path
@@ -8,7 +9,13 @@ lazy from typing import Any, cast, override
 lazy import httpx2
 lazy import pytest
 
-lazy from overture.domain import AssetStatus, MediaType, ServerAsset
+lazy from overture.domain import (
+    ArtType,
+    AssetStatus,
+    CollectionOrder,
+    MediaType,
+    ServerAsset,
+)
 lazy from overture.media_servers.adapters import (
     CollectionDetails,
     MemberWrite,
@@ -19,7 +26,9 @@ lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.schemas.assets import TitleAssets
 lazy from overture.schemas.collections import CollectionCapabilities
 lazy from overture.utils.http_security import API_KEY_HEADER
-lazy from scripts import verify as module
+lazy from scripts.verify import cli, common, media_browser, writes
+lazy from scripts.verify import library as verify_library
+lazy from scripts.verify import plex as verify_plex
 
 _GENRE = {
     "field": "genre",
@@ -468,12 +477,12 @@ def requests(monkeypatch: pytest.MonkeyPatch) -> Requests:
     def client(**kwargs: Any) -> httpx2.AsyncClient:
         return original(transport=httpx2.MockTransport(handler), **kwargs)
 
-    monkeypatch.setattr(module.httpx2, "AsyncClient", client)
+    monkeypatch.setattr(httpx2, "AsyncClient", client)
     return seen
 
 
 def _args(report: Path | None, url: str, **servers: str) -> Any:
-    return module.argparse.Namespace(
+    return argparse.Namespace(
         url=url,
         report=report,
         sources=None,
@@ -493,7 +502,7 @@ async def test_a_run_checks_overture_against_plex_and_names_each_problem(
     monkeypatch.setenv("PLEX_TOKEN", "token")
     report = tmp_path / "report.md"
 
-    status = await module.run(
+    status = await cli.run(
         _args(report, "http://plex.test", plex="http://plex-server.test")
     )
 
@@ -538,7 +547,7 @@ async def test_a_run_checks_overture_against_plex_and_names_each_problem(
     }
     assert {
         path for host, method, path, _ in requests if host == "plex" and method != "GET"
-    } <= module.OVERTURE_READS
+    } <= common.OVERTURE_READS
 
 
 async def test_jellyfin_filters_are_compared_with_the_values_and_counts_offered(
@@ -548,7 +557,7 @@ async def test_jellyfin_filters_are_compared_with_the_values_and_counts_offered(
     monkeypatch.setenv("JELLYFIN_API_KEY", "jelly")
     report = tmp_path / "report.md"
 
-    await module.run(
+    await cli.run(
         _args(report, "http://jellyfin.test", jellyfin="http://jellyfin-server.test")
     )
 
@@ -575,7 +584,7 @@ async def test_servers_of_one_kind_in_one_instance_are_checked_through_overture(
     monkeypatch.setenv("PLEX_TOKEN", "token")
     report = tmp_path / "report.md"
 
-    await module.run(_args(report, "http://twin.test", plex="http://plex-server.test"))
+    await cli.run(_args(report, "http://twin.test", plex="http://plex-server.test"))
 
     text = report.read_text()
     # Which Plex was given cannot be told, so neither is read directly.
@@ -585,9 +594,9 @@ async def test_servers_of_one_kind_in_one_instance_are_checked_through_overture(
 
 
 async def test_overture_is_never_sent_a_request_that_could_change_it() -> None:
-    overture = module.Overture("http://plex.test", "key")
+    overture = common.Overture("http://plex.test", "key")
     try:
-        with pytest.raises(module.WriteRefusedError):
+        with pytest.raises(common.WriteRefusedError):
             await overture.post("/api/collections", {})
     finally:
         await overture.client.aclose()
@@ -598,26 +607,24 @@ async def test_keys_and_credentials_are_required(
 ) -> None:
     monkeypatch.delenv("OVERTURE_API_KEY", raising=False)
     with pytest.raises(SystemExit, match="OVERTURE_API_KEY"):
-        await module.run(_args(None, "http://plex.test"))
+        await cli.run(_args(None, "http://plex.test"))
 
     monkeypatch.setenv("OVERTURE_API_KEY", "key")
     monkeypatch.delenv("PLEX_TOKEN", raising=False)
     with pytest.raises(SystemExit, match="PLEX_TOKEN"):
-        await module.run(
-            _args(None, "http://plex.test", plex="http://plex-server.test")
-        )
+        await cli.run(_args(None, "http://plex.test", plex="http://plex-server.test"))
 
 
 def test_the_first_title_the_evaluators_disagree_on_is_found() -> None:
     whole = (True, True)
-    assert module.first_difference(["A", "C"], ["A", "B", "C"], complete=whole) == (
+    assert common.first_difference(["A", "C"], ["A", "B", "C"], complete=whole) == (
         "B",
         True,
     )
-    assert module.first_difference(["A", "B"], ["A", "B"], complete=whole) is None
+    assert common.first_difference(["A", "B"], ["A", "B"], complete=whole) is None
     # A list the preview cut short may hold the title further on.
-    assert module.first_difference(["A"], ["A", "B"], complete=(False, True)) is None
-    assert module.first_difference(["A"], ["A", "B"], complete=whole) == ("B", True)
+    assert common.first_difference(["A"], ["A", "B"], complete=(False, True)) is None
+    assert common.first_difference(["A"], ["A", "B"], complete=whole) == ("B", True)
 
 
 async def test_services_are_read_and_compared_without_their_keys_in_the_report(
@@ -629,7 +636,7 @@ async def test_services_are_read_and_compared_without_their_keys_in_the_report(
     monkeypatch.setenv("RADARR_API_KEY", "radarr-secret")
     report = tmp_path / "report.md"
 
-    await module.run(_args(report, "http://plex.test", radarr="http://radarr.test"))
+    await cli.run(_args(report, "http://plex.test", radarr="http://radarr.test"))
 
     text = report.read_text()
     for secret in ("tmdb-secret", "mdb-secret", "radarr-secret", "private"):
@@ -652,7 +659,7 @@ async def test_an_arr_needs_its_key(
 ) -> None:
     monkeypatch.setenv("OVERTURE_API_KEY", "plex-key")
     with pytest.raises(SystemExit, match="SONARR_API_KEY"):
-        await module.run(_args(None, "http://plex.test", sonarr="http://sonarr.test"))
+        await cli.run(_args(None, "http://plex.test", sonarr="http://sonarr.test"))
 
 
 class _Collections:
@@ -661,7 +668,7 @@ class _Collections:
     def __init__(self, *, fail_at: str | None = None) -> None:
         self.held: dict[str, ServerCollection] = {
             "old": ServerCollection(
-                id="old", title=f"{module.WRITE_PREFIX} regular", member_ids=()
+                id="old", title=f"{writes.WRITE_PREFIX} regular", member_ids=()
             ),
             "kept": ServerCollection(id="kept", title="Mine", member_ids=()),
         }
@@ -728,14 +735,14 @@ class _Collections:
             "ForcedSortName": details.sort_title,
             "Overview": details.summary,
             "DisplayOrder": "SortName"
-            if details.order is module.CollectionOrder.TITLE_ASC
+            if details.order is CollectionOrder.TITLE_ASC
             else "PremiereDate",
         }
 
     async def upload_collection_art(
         self, collection_id: str, art_type: Any, *_args: Any
     ) -> None:
-        if art_type is module.ArtType.POSTER:
+        if art_type is ArtType.POSTER:
             self.items[collection_id]["ImageTags"] = {"Primary": "new"}
 
     async def delete_collection(self, collection_id: str) -> None:
@@ -750,7 +757,7 @@ class _Collections:
         self.closed = True
 
 
-class _Jellyfin(module.MediaBrowserServer):
+class _Jellyfin(media_browser.MediaBrowserServer):
     def __init__(self, server: _Collections) -> None:
         super().__init__("jellyfin", "http://jellyfin.test", "key")
         self.server_state = server
@@ -786,11 +793,11 @@ async def test_writes_touch_only_their_own_collections_and_delete_them_whatever_
     def provider(*_args: object, **_kwargs: object) -> tuple[Any, Any]:
         return server, server
 
-    monkeypatch.setattr(module, "write_provider", provider)
-    monkeypatch.setattr(module, "SETTLE_SECONDS", 0)
+    monkeypatch.setattr(writes, "write_provider", provider)
+    monkeypatch.setattr(writes, "SETTLE_SECONDS", 0)
     direct = _Jellyfin(server)
     try:
-        cases = await module.WriteCheck(
+        cases = await writes.WriteCheck(
             direct, "http://jellyfin.test", "key", verify=True
         ).run()
     finally:
@@ -812,7 +819,7 @@ async def test_writes_touch_only_their_own_collections_and_delete_them_whatever_
                 "replace a member": refused,
                 "keep the images' names through an edit": refused,
                 # Filling a large collection is a membership write too.
-                f"create a collection of up to {module.LARGE_COLLECTION} members": (
+                f"create a collection of up to {writes.LARGE_COLLECTION} members": (
                     refused.replace("verify regular", "verify large")
                 ),
             }
@@ -836,13 +843,13 @@ async def test_a_collection_is_deleted_once_its_server_stops_saving_it(
     async def unsettled(*_args: object) -> None:
         return None
 
-    monkeypatch.setattr(module, "write_provider", provider)
-    monkeypatch.setattr(module, "SETTLE_SECONDS", 0)
+    monkeypatch.setattr(writes, "write_provider", provider)
+    monkeypatch.setattr(writes, "SETTLE_SECONDS", 0)
     if not settle:
-        monkeypatch.setattr(module.WriteCheck, "settled", unsettled)
+        monkeypatch.setattr(writes.WriteCheck, "settled", unsettled)
     direct = _Jellyfin(server)
     try:
-        cases = await module.WriteCheck(
+        cases = await writes.WriteCheck(
             direct, "http://jellyfin.test", "key", verify=True
         ).run()
     finally:
@@ -854,8 +861,8 @@ async def test_a_collection_is_deleted_once_its_server_stops_saving_it(
     assert deleted.problem == (
         ""
         if settle
-        else f"the server made '{module.WRITE_PREFIX} edited' (zz Overture verify "
-        f"regular again, 2 members), '{module.WRITE_PREFIX} large' (zz Overture "
+        else f"the server made '{writes.WRITE_PREFIX} edited' (zz Overture verify "
+        f"regular again, 2 members), '{writes.WRITE_PREFIX} large' (zz Overture "
         "verify large again, 3 members) itself"
     )
     assert list(server.held) == ["kept"]
@@ -869,26 +876,26 @@ async def test_writes_fill_a_large_collection_and_explain_an_unsaved_edit(
     def provider(*_args: object, **_kwargs: object) -> tuple[Any, Any]:
         return server, server
 
-    monkeypatch.setattr(module, "write_provider", provider)
-    monkeypatch.setattr(module, "SETTLE_SECONDS", 0)
+    monkeypatch.setattr(writes, "write_provider", provider)
+    monkeypatch.setattr(writes, "SETTLE_SECONDS", 0)
     direct = _Jellyfin(server)
     try:
         cases = {
             case.label: case
-            for case in await module.WriteCheck(
+            for case in await writes.WriteCheck(
                 direct, "http://jellyfin.test", "key", verify=True
             ).run()
         }
     finally:
         await direct.client.aclose()
 
-    large = cases[f"create a collection of up to {module.LARGE_COLLECTION} members"]
+    large = cases[f"create a collection of up to {writes.LARGE_COLLECTION} members"]
     assert (large.count, large.held, large.problem) == (3, 3, "")
     edit = cases["edit the title, sort title, summary and order"]
     assert edit.problem.startswith("the server holds another title")
     # Read as an administrator, the title shows the edit was never saved.
     assert (
-        edit.note == f"an administrator sees the title '{module.WRITE_PREFIX} regular'"
+        edit.note == f"an administrator sees the title '{writes.WRITE_PREFIX} regular'"
     )
 
 
@@ -896,21 +903,21 @@ def test_the_kind_expected_follows_who_tests_the_condition() -> None:
     plex = {"operators": ["is"], "smart_operators": ["is"], "labelled": False}
     labelled = {**plex, "labelled": True}
     only_plex = {"operators": [], "smart_operators": ["is"], "labelled": False}
-    assert module.expected_kind(plex, "is") == "smart"
+    assert common.expected_kind(plex, "is") == "smart"
     # A label Overture keeps is refreshed on each sync, so it suits regular.
-    assert module.expected_kind(labelled, "is") == "regular"
-    assert module.expected_kind(only_plex, "is") == "smart"
+    assert common.expected_kind(labelled, "is") == "regular"
+    assert common.expected_kind(only_plex, "is") == "smart"
 
 
 def test_a_collection_overture_leaves_out_is_named_with_why() -> None:
-    listing = module.Listing(frozenset({"charts"}), import_unmanaged=False)
+    listing = common.Listing(frozenset({"charts"}), import_unmanaged=False)
     assert listing.reason("Charts", 0, None, "movie") == "a separator"
     assert listing.reason("Old", 0, None, "movie") == "empty"
     assert listing.reason("Seasons", 3, "season", "show") == "holds seasons"
     assert "importing unmanaged collections is off" in listing.reason(
         "Mine", 3, "show", "show"
     )
-    assert not module.Listing(frozenset(), import_unmanaged=True).reason(
+    assert not common.Listing(frozenset(), import_unmanaged=True).reason(
         "Mine", 3, None, "show"
     )
 
@@ -948,7 +955,7 @@ class _Previews:
 
 async def test_the_years_are_narrowed_until_the_title_that_differs_is_named() -> None:
     previews = _Previews()
-    library = module.Library(
+    library = verify_library.Library(
         cast("Any", previews),
         "Plex",
         _capabilities("plex"),
@@ -958,19 +965,19 @@ async def test_the_years_are_narrowed_until_the_title_that_differs_is_named() ->
         [{"title": title, "year": year} for title, year in previews.titles.items()],
         [],
         None,
-        module.Listing(frozenset(), import_unmanaged=True),
+        common.Listing(frozenset(), import_unmanaged=True),
         lead=True,
     )
-    first = module.Members(199, sorted(previews.titles)[:20])
+    first = common.Members(199, sorted(previews.titles)[:20])
     span, ours, theirs = await library.narrow(
-        {"field": "genre"}, first, module.Members(200, sorted(previews.titles)[:20])
+        {"field": "genre"}, first, common.Members(200, sorted(previews.titles)[:20])
     )
 
     assert span is not None
     assert span[0] <= 1994 <= span[1]
     assert ours.whole
     assert theirs.whole
-    assert module.first_difference(ours.names, theirs.names, complete=(True, True)) == (
+    assert common.first_difference(ours.names, theirs.names, complete=(True, True)) == (
         "Film 104",
         True,
     )
@@ -984,7 +991,7 @@ def test_a_refused_request_is_named_with_what_the_server_answered() -> None:
     )
     response = httpx2.Response(500, text="  Internal\n error ", request=request)
     error = httpx2.HTTPStatusError("500", request=request, response=response)
-    assert module.failure(error) == (
+    assert common.failure(error) == (
         "HTTP 500: GET /library/sections/1/all answered 'Internal error'"
     )
 
@@ -1006,8 +1013,8 @@ async def test_the_character_plex_refuses_in_a_text_value_is_named(
     def client(**kwargs: Any) -> httpx2.AsyncClient:
         return original(transport=httpx2.MockTransport(plex), **kwargs)
 
-    monkeypatch.setattr(module.httpx2, "AsyncClient", client)
-    server = module.PlexServer("http://plex-server.test", "token")
+    monkeypatch.setattr(httpx2, "AsyncClient", client)
+    server = verify_plex.PlexServer("http://plex-server.test", "token")
     library = cast("Any", type("L", (), {"key": "2", "media_type": "show"}))
     try:
         note = await server.refused(
@@ -1062,12 +1069,12 @@ async def test_a_server_that_does_not_lead_differs_in_details_but_not_in_labels(
     def client(**kwargs: Any) -> httpx2.AsyncClient:
         return original(transport=httpx2.MockTransport(emby), **kwargs)
 
-    monkeypatch.setattr(module.httpx2, "AsyncClient", client)
+    monkeypatch.setattr(httpx2, "AsyncClient", client)
     capabilities = _capabilities("emby")
     capabilities["fields"].append(
         {**capabilities["fields"][0], "field": "label", "label": "Tag"}
     )
-    library = module.Library(
+    library = verify_library.Library(
         cast("Any", _Offers()),
         "Emby",
         capabilities,
@@ -1077,10 +1084,10 @@ async def test_a_server_that_does_not_lead_differs_in_details_but_not_in_labels(
         [],
         [],
         None,
-        module.Listing(frozenset(), import_unmanaged=True),
+        common.Listing(frozenset(), import_unmanaged=True),
         lead=False,
     )
-    server = module.MediaBrowserServer("emby", "http://emby.test", "key")
+    server = media_browser.MediaBrowserServer("emby", "http://emby.test", "key")
     try:
         await server.check_library(library)
     finally:
@@ -1091,7 +1098,7 @@ async def test_a_server_that_does_not_lead_differs_in_details_but_not_in_labels(
     # The lead server gives the genres, so Emby's own are only noted.
     assert "Genre" not in problems
     assert "Overture does not offer horror" in notes["Genre"]
-    assert module.LEAD_DETAILS in notes["Genre is 'Drama'"]
+    assert media_browser.LEAD_DETAILS in notes["Genre is 'Drama'"]
     # Labels are Emby's own, so one Overture lacks, or counts apart, is a problem.
     assert problems == {
         "Tag": "Overture does not offer kept",
@@ -1139,9 +1146,11 @@ async def test_servers_are_asked_what_overture_cannot_see_for_itself(
     def client(**kwargs: Any) -> httpx2.AsyncClient:
         return original(transport=httpx2.MockTransport(server), **kwargs)
 
-    monkeypatch.setattr(module.httpx2, "AsyncClient", client)
-    jellyfin = module.MediaBrowserServer("jellyfin", "http://jellyfin.test", "key")
-    plex = module.PlexServer("http://plex-server.test", "token")
+    monkeypatch.setattr(httpx2, "AsyncClient", client)
+    jellyfin = media_browser.MediaBrowserServer(
+        "jellyfin", "http://jellyfin.test", "key"
+    )
+    plex = verify_plex.PlexServer("http://plex-server.test", "token")
     library = cast(
         "Any",
         type(
@@ -1316,10 +1325,10 @@ async def test_collection_assets_and_plex_themes_are_read_from_asset_deliveries(
 
         return original(transport=httpx2.MockTransport(dispatch), **kwargs)
 
-    monkeypatch.setattr(module.httpx2, "AsyncClient", client)
-    overture = module.Overture("http://overture.test", "key")
-    plex_server = module.PlexServer("http://plex-server.test", "token")
-    library = module.Library(
+    monkeypatch.setattr(httpx2, "AsyncClient", client)
+    overture = common.Overture("http://overture.test", "key")
+    plex_server = verify_plex.PlexServer("http://plex-server.test", "token")
+    library = verify_library.Library(
         overture,
         "Plex",
         _capabilities("plex"),
@@ -1329,7 +1338,7 @@ async def test_collection_assets_and_plex_themes_are_read_from_asset_deliveries(
         [],
         collections,
         plex_server,
-        module.Listing(frozenset(), import_unmanaged=True),
+        common.Listing(frozenset(), import_unmanaged=True),
         lead=True,
     )
     try:

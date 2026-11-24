@@ -1,4 +1,10 @@
-import { test as base, expect, type Page, type WebSocketRoute } from "@playwright/test";
+import {
+  test as base,
+  expect,
+  type Locator,
+  type Page,
+  type WebSocketRoute,
+} from "@playwright/test";
 import type {
   FolderRootsResponse,
   JobLogPage,
@@ -187,6 +193,15 @@ export async function logIn(page: Page, url = "/") {
 
 export function startupLoader(page: Page) {
   return page.getByRole("status", { name: "Loading Overture" });
+}
+
+/** Open a `Select` combobox and pick the named option. */
+export async function chooseOption(control: Locator, option: string | RegExp) {
+  await control.click();
+  await control
+    .page()
+    .getByRole("option", { name: option, exact: typeof option === "string" })
+    .click();
 }
 
 /** Assert the exact path, with no hash, once the app has navigated there. */

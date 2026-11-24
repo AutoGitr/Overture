@@ -93,7 +93,7 @@ change, refresh the screenshot with `bun run test:e2e -- --update-snapshots`.
 ### Checking Overture against real media servers
 
 Unit tests replace the media server, TMDB, MDBList, Radarr and Sonarr. To see
-how Overture behaves against the real ones, point `scripts/verify.py` at a
+how Overture behaves against the real ones, point `scripts/verify/` at a
 synced instance with your servers in `MEDIA_SERVERS`, and at those servers
 themselves:
 

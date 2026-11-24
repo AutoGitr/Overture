@@ -1,6 +1,8 @@
 import type { CatalogEntryRow, CollectionRead } from "../../generated/rest/types.gen";
+import { findCachedCollection } from "../rest/cache";
 import { goToCatalogEntry, goToCollectionView, type ItemView } from "../router/routes";
 import { settingsState } from "../stores/settingsState.svelte";
+import { collectionDetailImageUrls } from "./artDisplay";
 import {
   AUTO_ADVANCE_DELAY_MS,
   catalogKey,
@@ -8,10 +10,12 @@ import {
   continueWalk,
   isCurrent,
   scheduleAutoAdvance,
+  walkRecords,
   type AutoAdvanceContext,
   type AutoAdvanceSettings,
 } from "./autoAdvance";
 import type { CatalogContext } from "./catalogDraft";
+import { preloadImages } from "./imagePreload";
 
 /**
  * A slot of a collection or catalog entry: its art, one season's poster (or
@@ -103,6 +107,23 @@ export function handleRecordSelectionAdvance(
     context,
     AUTO_ADVANCE_DELAY_MS,
   );
+}
+
+/** Fetch the detail images of the collection auto-advance would open next. */
+export function preloadNextCollection(collectionId: number, settings: AutoAdvanceSettings): void {
+  if (settings.auto_advance !== "slots_and_items") return;
+  const records = walkRecords();
+  const index = records.findIndex((record) => record.key === collectionKey(collectionId));
+  if (index === -1) return;
+  const skip = settings.auto_advance_skip_completed;
+  for (const record of records.slice(index + 1)) {
+    if (!shownSlots(record, settings).some(({ complete }) => !skip || !complete)) continue;
+    if (!record.key.startsWith("collection:")) return;
+    const next = findCachedCollection(Number(record.key.slice("collection:".length)));
+    if (next)
+      preloadImages(collectionDetailImageUrls(next, settingsState.show_background_image), "next");
+    return;
+  }
 }
 
 /** A library collection; it has no theme where no server keeps collection themes. */

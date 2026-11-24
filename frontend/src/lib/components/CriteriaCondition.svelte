@@ -7,14 +7,22 @@
   import type {
     CollectionFieldRead,
     CollectionSourceRead,
-    ConditionInput,
+    ConditionOutput,
+    FilterOperator,
     MediaType,
   } from "../../generated/rest/types.gen";
-  import { defaultValue, fieldCondition, sourceCondition } from "../utils/collectionCriteria";
+  import {
+    defaultValue,
+    fieldCondition,
+    isDateOperator,
+    sourceCondition,
+  } from "../utils/collectionCriteria";
   import { FIELD_LABELS, OPERATOR_LABELS, SOURCE_OPERATOR_LABELS } from "../../generated/settings";
   import { countOf } from "../utils/plural";
   import SourceFields from "./SourceFields.svelte";
   import DataStatus from "./DataStatus.svelte";
+  import Select from "./Select.svelte";
+  import { fromLabels, type SelectOption } from "../utils/selectOptions";
   import ValueCombobox from "./ValueCombobox.svelte";
 
   let {
@@ -30,7 +38,7 @@
     oncopy,
     onremove,
   }: {
-    condition: ConditionInput;
+    condition: ConditionOutput;
     fields: CollectionFieldRead[];
     sources: CollectionSourceRead[];
     mediaType: MediaType;
@@ -41,7 +49,7 @@
     /** Names the condition for assistive technology, such as "Criteria condition 2". */
     label: string;
     /** Replaces the condition when another field or source is chosen. */
-    onchange: (condition: ConditionInput) => void;
+    onchange: (condition: ConditionOutput) => void;
     /** Adds a copy of the condition right after it. */
     onduplicate: () => void;
     /** Keeps the condition to paste into these or other criteria. */
@@ -107,66 +115,71 @@
     if (kind === "field" && chosenField) onchange(fieldCondition(chosenField));
     else if (kind === "source" && chosenSource) onchange(sourceCondition(chosenSource.type));
   }
+
+  /** A date value and a relative or plain one do not convert, so switching resets it. */
+  function setOperator(chosen: CollectionFieldRead, operator: FilterOperator) {
+    if (condition.kind !== "field") return;
+    if (isDateOperator(operator) !== isDateOperator(condition.operator))
+      condition.value = defaultValue(chosen, operator);
+    condition.operator = operator;
+  }
+
+  let subjectOptions = $derived<SelectOption[]>([
+    ...fields.map((entry) => ({
+      value: `field:${entry.field}`,
+      label: entry.label,
+      group: "Metadata",
+    })),
+    ...sources.map((entry) => ({
+      value: `source:${entry.type}`,
+      label: entry.unavailable ? `${entry.label} (${entry.unavailable})` : entry.label,
+      disabled: !!entry.unavailable,
+      group: "Lists & tags",
+    })),
+  ]);
+  let operatorOptions = $derived(
+    (field?.operators ?? []).map((operator) => ({
+      value: operator,
+      label: OPERATOR_LABELS[operator],
+    })),
+  );
+  const SOURCE_OPERATORS = fromLabels(SOURCE_OPERATOR_LABELS);
+  const BOOLEAN_OPTIONS = [
+    { value: true, label: "true" },
+    { value: false, label: "false" },
+  ];
 </script>
 
 <div class="condition" role="group" aria-label={label}>
-  <select
-    aria-label={`${label} field`}
-    value={subject}
-    onchange={(e) => choose(e.currentTarget.value)}
-  >
-    {#if condition.kind === "field" && !field}
-      <option value={subject} disabled>{fieldName} (unavailable)</option>
-    {/if}
-    <optgroup label="Metadata">
-      {#each fields as entry (entry.field)}
-        <option value={`field:${entry.field}`}>{entry.label}</option>
-      {/each}
-    </optgroup>
-    <optgroup label="Lists & tags">
-      {#each sources as entry (entry.type)}
-        <option value={`source:${entry.type}`} disabled={!!entry.unavailable}
-          >{entry.label}{entry.unavailable ? ` (${entry.unavailable})` : ""}</option
-        >
-      {/each}
-    </optgroup>
-  </select>
+  <Select
+    label={`${label} field`}
+    options={subjectOptions}
+    placeholder={fieldName && !field ? `${fieldName} (unavailable)` : ""}
+    bind:value={() => subject, choose}
+  />
 
   {#if condition.kind === "source"}
-    <select aria-label={`${label} operator`} bind:value={condition.operator}>
-      {#each Object.entries(SOURCE_OPERATOR_LABELS) as [operator, operatorLabel] (operator)}
-        <option value={operator}>{operatorLabel}</option>
-      {/each}
-    </select>
+    <Select
+      label={`${label} operator`}
+      options={SOURCE_OPERATORS}
+      bind:value={condition.operator}
+    />
     <SourceFields bind:source={condition.source} {mediaType} {label} />
   {:else if field}
     {@const kind = field.kind}
-    <select
-      aria-label={`${label} operator`}
-      value={condition.operator}
-      onchange={(event) => {
-        const operator = field.operators.find((entry) => entry === event.currentTarget.value);
-        if (!operator || condition.kind !== "field") return;
-        const dateShape = (op: string) => op === "before" || op === "after";
-        if (dateShape(operator) !== dateShape(condition.operator ?? "is"))
-          condition.value = defaultValue(field, operator);
-        condition.operator = operator;
-      }}
-    >
-      {#each field.operators as operator (operator)}
-        <option value={operator}>{OPERATOR_LABELS[operator]}</option>
-      {/each}
-    </select>
+    <Select
+      label={`${label} operator`}
+      options={operatorOptions}
+      bind:value={() => condition.operator, (operator) => setOperator(field, operator)}
+    />
     {#if kind === "boolean"}
-      <select
-        aria-label={`${label} value`}
-        value={String(condition.value)}
-        onchange={(event) => (condition.value = event.currentTarget.value === "true")}
-      >
-        <option value="true">true</option>
-        <option value="false">false</option>
-      </select>
-    {:else if condition.operator === "before" || condition.operator === "after"}
+      <!-- Only `true` is true: a value read back as text must not show as set. -->
+      <Select
+        label={`${label} value`}
+        options={BOOLEAN_OPTIONS}
+        bind:value={() => condition.value === true, (next) => (condition.value = next)}
+      />
+    {:else if isDateOperator(condition.operator)}
       <input
         type="date"
         required
@@ -175,21 +188,12 @@
         oninput={(event) => (condition.value = event.currentTarget.value)}
       />
     {:else if fixed.length}
-      <select
-        aria-label={`${label} value`}
-        required
-        value={chosenFixed?.value ?? current}
-        onchange={(event) => (condition.value = event.currentTarget.value)}
-      >
-        {#if !chosenFixed}
-          <option value={current} disabled
-            >{current ? `${current} (not one of its values)` : "Choose a value"}</option
-          >
-        {/if}
-        {#each fixed as entry (entry.value)}
-          <option value={entry.value}>{entry.label}</option>
-        {/each}
-      </select>
+      <Select
+        label={`${label} value`}
+        options={fixed}
+        placeholder={current ? `${current} (not one of its values)` : "Choose a value"}
+        bind:value={() => chosenFixed?.value ?? current, (next) => (condition.value = next)}
+      />
     {:else if kind === "number" || kind === "date"}
       <input
         type="number"
@@ -264,7 +268,7 @@
     }
   }
 
-  .condition > select:first-child {
+  .condition > :global(.combobox:first-child) {
     @media (max-width: 640px) {
       grid-column: 1 / -1;
     }
@@ -284,10 +288,9 @@
   }
 
   .condition > :global(.source-fields),
-  .condition > :global(.combobox),
+  .condition > :global(.combobox:nth-child(3)),
   .condition > .hint,
-  .condition > input,
-  .condition > select:nth-of-type(3) {
+  .condition > input {
     @media (max-width: 640px) {
       grid-column: 1 / -1;
       grid-row: 3;

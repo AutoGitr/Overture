@@ -40,3 +40,14 @@ export function renameInStoredList(key: string, value: string, replacement: stri
     writeJson(key, [...new Set(stored.map((entry) => (entry === value ? replacement : entry)))]);
   }
 }
+
+/** *value* when it is one of *allowed*, as stored JSON names a choice, else *fallback*. */
+export function stringOption<T extends readonly string[]>(
+  value: unknown,
+  allowed: T,
+  fallback: T[number],
+): T[number] {
+  return typeof value === "string" && (allowed as readonly string[]).includes(value)
+    ? (value as T[number])
+    : fallback;
+}

@@ -11,7 +11,7 @@
   import { createNotifier } from "../stores/notificationState.svelte";
   import { setSectionView } from "../stores/sectionState.svelte";
   import { catalogSyncState } from "../stores/jobStates.svelte";
-  import { settingsState } from "../stores/settingsState.svelte";
+  import { settingsState, type SettingsDraft } from "../stores/settingsState.svelte";
   import { uiState } from "../stores/uiState.svelte";
   import {
     applyAppearancePreferences,
@@ -22,6 +22,7 @@
     type ThemeMode,
   } from "../utils/appearance";
   import { delayedFlag } from "../utils/delayedFlag.svelte";
+  import { draftOf } from "../utils/draft.svelte";
   import { errorMessage } from "../utils/errors";
   import CardColumn from "../components/CardColumn.svelte";
   import PopupShell from "../components/PopupShell.svelte";
@@ -31,6 +32,8 @@
   import OvertureDbSettings from "../components/OvertureDbSettings.svelte";
   import PopupSection from "../components/PopupSection.svelte";
   import SegmentedControl from "../components/SegmentedControl.svelte";
+  import Select from "../components/Select.svelte";
+  import type { SelectOption } from "../utils/selectOptions";
 
   const THEMES: readonly (readonly [ThemeMode, string])[] = [
     ["system", "System"],
@@ -38,19 +41,44 @@
     ["dark", "Dark"],
   ];
 
+  const AUTO_ADVANCE: readonly (readonly [SettingsDraft["auto_advance"], string])[] = [
+    ["off", "Off"],
+    ["slots", "Slots"],
+    ["slots_and_items", "Slots and items"],
+  ];
+  const WORKFLOWS: SelectOption<SettingsDraft["workflow"]>[] = [
+    { value: "art", label: "Art" },
+    { value: "art_and_themes", label: "Art & Themes" },
+    { value: "themes", label: "Themes" },
+  ];
+  const AUTO_UNMONITOR: SelectOption<SettingsDraft["auto_unmonitor"]>[] = [
+    { value: "off", label: "Off" },
+    { value: "art", label: "Art complete" },
+    { value: "theme", label: "Theme complete" },
+    { value: "art_or_theme", label: "Art or theme complete" },
+    { value: "art_and_theme", label: "Art and theme complete" },
+  ];
+  const ASPECT_TOLERANCE_OPTIONS: SelectOption<SettingsDraft["aspect_ratio_tolerance"]>[] = [
+    { value: "strict", label: `Strict (+/-${percent(ASPECT_TOLERANCES.strict)})` },
+    { value: "lenient", label: `Lenient (+/-${percent(ASPECT_TOLERANCES.lenient)})` },
+    { value: "off", label: "Off (any ratio)" },
+  ];
+  const TMDB_LANGUAGES: SelectOption<SettingsDraft["tmdb_language_filter"]>[] = [
+    { value: "en_null", label: "English and undefined only" },
+    { value: "all", label: "All languages" },
+  ];
+
   setSectionView("settings");
+  const id = $props.id();
   const queryClient = useQueryClient();
 
-  let draft = $state(settingsState.toUpdatePayload());
   const settingsQuery = createQuery(() => getSettingsOptions());
-  let draftInitialised = $state(false);
-  let canEdit = $derived(draftInitialised && !settingsQuery.isError);
-  $effect(() => {
-    if (settingsQuery.data && !draftInitialised) {
-      Object.assign(draft, settingsState.toUpdatePayload());
-      draftInitialised = true;
-    }
-  });
+  /** Every editable setting, taken once they load; the settings store follows the query. */
+  const draft = draftOf(
+    () => settingsQuery.data && settingsState.toUpdatePayload(),
+    settingsState.toUpdatePayload(),
+  );
+  let canEdit = $derived(settingsQuery.data !== undefined && !settingsQuery.isError);
   let saving = $state(false);
   const showSaving = delayedFlag(() => saving);
   const feedback = createNotifier();
@@ -72,7 +100,7 @@
     feedback.clear();
     try {
       const previous = settingsState.current;
-      const fresh = await updateSettingsRequest.mutateAsync({ body: draft });
+      const fresh = await updateSettingsRequest.mutateAsync({ body: draft.current });
       queryClient.setQueryData(getSettingsOptions().queryKey, fresh);
       if (catalogEnabledDirty) {
         const status = await saveCatalogEnabledRequest.mutateAsync({
@@ -85,8 +113,8 @@
       // has_incorrect_aspect_ratio, computed for the tolerance, and their theme
       // completeness, which follows OvertureDB's No theme flag.
       void invalidateTags(
-        previous.aspect_ratio_tolerance === draft.aspect_ratio_tolerance &&
-          previous.overturedb_no_theme === draft.overturedb_no_theme
+        previous.aspect_ratio_tolerance === draft.current.aspect_ratio_tolerance &&
+          previous.overturedb_no_theme === draft.current.overturedb_no_theme
           ? ["art", "collections"]
           : ["art", "library", "collections"],
       );
@@ -103,9 +131,9 @@
 
   /** Put every setting back to its default in the form; only Save keeps it. */
   function resetToDefaults() {
-    for (const key of Object.keys(draft) as (keyof typeof draft)[]) {
+    for (const key of Object.keys(draft.current) as (keyof typeof draft.current)[]) {
       if (key in DEFAULT_APP_SETTINGS)
-        Object.assign(draft, { [key]: DEFAULT_APP_SETTINGS[key as keyof typeof DEFAULT_APP_SETTINGS] });
+        Object.assign(draft.current, { [key]: DEFAULT_APP_SETTINGS[key as keyof typeof DEFAULT_APP_SETTINGS] });
     }
     appearance = { ...DEFAULT_APPEARANCE };
   }
@@ -132,21 +160,22 @@
     <CardColumn>
       <PopupSection label="Workflow">
         <div class="options-col">
-          <label class="form-row justify-between">
-            <span>Workflow</span>
-            <select bind:value={draft.workflow} class="select-compact">
-              <option value="art">Art</option>
-              <option value="art_and_themes">Art &amp; Themes</option>
-              <option value="themes">Themes</option>
-            </select>
-          </label>
+          <div class="form-row justify-between">
+            <label for={`${id}-workflow`}>Workflow</label>
+            <Select
+              id={`${id}-workflow`}
+              compact
+              options={WORKFLOWS}
+              bind:value={draft.current.workflow}
+            />
+          </div>
           <label class="form-row justify-between">
             <span>Auto-match art on load</span>
-            <input type="checkbox" bind:checked={draft.auto_match_art} />
+            <input type="checkbox" bind:checked={draft.current.auto_match_art} />
           </label>
           <label class="form-row justify-between">
             <span>Auto-search themes on load</span>
-            <input type="checkbox" bind:checked={draft.auto_search_themes} />
+            <input type="checkbox" bind:checked={draft.current.auto_search_themes} />
           </label>
           <div class="form-row justify-between">
             <span>Auto-advance</span>
@@ -154,12 +183,8 @@
               --segmented-width="auto"
               --segmented-margin="0"
               label="Auto-advance"
-              options={[
-                ["off", "Off"],
-                ["slots", "Slots"],
-                ["slots_and_items", "Slots and items"],
-              ]}
-              bind:value={() => draft.auto_advance ?? "off", (mode) => (draft.auto_advance = mode)}
+              options={AUTO_ADVANCE}
+              bind:value={draft.current.auto_advance}
             />
           </div>
           <span class="hint"
@@ -170,53 +195,55 @@
             <span>Skip completed slots and items</span>
             <input
               type="checkbox"
-              bind:checked={draft.auto_advance_skip_completed}
-              disabled={draft.auto_advance === "off"}
+              bind:checked={draft.current.auto_advance_skip_completed}
+              disabled={draft.current.auto_advance === "off"}
             />
           </label>
-          <label class="form-row justify-between">
-            <span>Auto-unmonitor</span>
-            <select bind:value={draft.auto_unmonitor} class="select-compact">
-              <option value="off">Off</option>
-              <option value="art">Art complete</option>
-              <option value="theme">Theme complete</option>
-              <option value="art_or_theme">Art or theme complete</option>
-              <option value="art_and_theme">Art and theme complete</option>
-            </select>
-          </label>
+          <div class="form-row justify-between">
+            <label for={`${id}-unmonitor`}>Auto-unmonitor</label>
+            <Select
+              id={`${id}-unmonitor`}
+              compact
+              options={AUTO_UNMONITOR}
+              bind:value={draft.current.auto_unmonitor}
+            />
+          </div>
         </div>
       </PopupSection>
 
       <PopupSection label="Artwork">
         <div class="options-col">
-          <label class="form-row justify-between">
-            <span>Aspect ratio control</span>
-            <select bind:value={draft.aspect_ratio_tolerance} class="select-compact">
-              <option value="strict">Strict (+/-{percent(ASPECT_TOLERANCES.strict)})</option>
-              <option value="lenient">Lenient (+/-{percent(ASPECT_TOLERANCES.lenient)})</option>
-              <option value="off">Off (any ratio)</option>
-            </select>
-          </label>
+          <div class="form-row justify-between">
+            <label for={`${id}-aspect`}>Aspect ratio control</label>
+            <Select
+              id={`${id}-aspect`}
+              compact
+              options={ASPECT_TOLERANCE_OPTIONS}
+              bind:value={draft.current.aspect_ratio_tolerance}
+            />
+          </div>
           <label class="form-row justify-between">
             <span>
               Skip TMDB images from {settingsState.media_server_name}
             </span>
-            <input type="checkbox" bind:checked={draft.skip_media_server_tmdb_urls} />
+            <input type="checkbox" bind:checked={draft.current.skip_media_server_tmdb_urls} />
           </label>
           <label class="form-row justify-between">
             <span>
               Disable fetching art from {settingsState.media_server_name}
             </span>
-            <input type="checkbox" bind:checked={draft.disable_media_server_art} />
+            <input type="checkbox" bind:checked={draft.current.disable_media_server_art} />
           </label>
           {#if settingsState.current.tmdb_configured}
-            <label class="form-row justify-between">
-              <span>TMDB image languages</span>
-              <select bind:value={draft.tmdb_language_filter} class="select-compact">
-                <option value="en_null">English and undefined only</option>
-                <option value="all">All languages</option>
-              </select>
-            </label>
+            <div class="form-row justify-between">
+              <label for={`${id}-tmdb-lang`}>TMDB image languages</label>
+              <Select
+                id={`${id}-tmdb-lang`}
+                compact
+                options={TMDB_LANGUAGES}
+                bind:value={draft.current.tmdb_language_filter}
+              />
+            </div>
           {/if}
         </div>
       </PopupSection>
@@ -230,7 +257,7 @@
               type="text"
               class="text-input"
               aria-describedby="theme-search-variables"
-              bind:value={draft.theme_search_format}
+              bind:value={draft.current.theme_search_format}
               placeholder={DEFAULT_APP_SETTINGS.theme_search_format}
             />
           </div>
@@ -245,7 +272,7 @@
                 type="number"
                 class="number-input"
                 min="0"
-                bind:value={draft.min_duration_seconds}
+                bind:value={draft.current.min_duration_seconds}
               />
             </div>
             <div class="duration-field">
@@ -255,19 +282,19 @@
                 type="number"
                 class="number-input"
                 min="0"
-                bind:value={draft.max_duration_seconds}
+                bind:value={draft.current.max_duration_seconds}
               />
             </div>
           </div>
           <label class="form-row justify-between">
             <span>Normalize theme loudness</span>
-            <input type="checkbox" bind:checked={draft.normalize_theme_loudness} />
+            <input type="checkbox" bind:checked={draft.current.normalize_theme_loudness} />
           </label>
         </div>
       </PopupSection>
 
       <PopupSection label="Collections">
-        <GlobalCollectionDefaults bind:draft />
+        <GlobalCollectionDefaults bind:draft={draft.current} />
       </PopupSection>
 
       <PopupSection label="OvertureDB">
@@ -280,7 +307,7 @@
         />
         {#if catalogQuery.data}
           <OvertureDbSettings
-            bind:draft
+            bind:draft={draft.current}
             bind:enabled={catalogEnabled}
             disabled={catalogSyncState.running}
           />

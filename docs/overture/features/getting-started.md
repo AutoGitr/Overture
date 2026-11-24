@@ -38,9 +38,10 @@ by default and sort by title or year; the filters then choose whether titles
 your library or OvertureDB holds are listed.
 
 Every section of the filters popup collapses, and stays as you left it. The
-item filters can also show only the titles of one **Collection**. For shows,
-**Season posters complete** lists the shows with every season poster saved,
-and **Art resolution** and **Art source** can look at the season posters: a
+item filters can also show only the titles of one **Collection**. **Art
+resolution** and **Art source** can look at **Any art** or a single slot. For
+shows, **Season posters complete** lists the shows with every season poster
+saved, and **Art resolution** and **Art source** also include season posters: a
 show's season posters are as wide as the narrowest of them, and come from
 each of their sources. While
 OvertureDB is on, **OvertureDB poster**, **OvertureDB background** and (for

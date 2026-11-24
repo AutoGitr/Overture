@@ -24,26 +24,24 @@ test("the ID mismatch issue shows only items whose catalog IDs differ", async ({
   await expect(page.getByRole("button", { name: "Select Matching", exact: true })).toHaveCount(0);
 });
 
-test("dropdown borders follow the accent colour", async ({ page }) => {
+test("dropdown triggers follow the accent colour when open and Escape closes the list first", async ({
+  page,
+}) => {
   await logIn(page);
   const accent = "rgb(72, 164, 218)";
   await page.evaluate((colour) => {
     document.documentElement.style.setProperty("--accent", colour);
   }, accent);
 
-  await page.getByRole("button", { name: "Choose search field" }).click();
-  await expect(page.getByRole("menu", { name: "Search by" })).toHaveCSS("border-color", accent);
-  await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Choose sort order" }).click();
-  await expect(page.getByRole("menu", { name: "Sort by" })).toHaveCSS("border-color", accent);
-  await page.keyboard.press("Escape");
   await page.getByLabel("Open menu").click();
-  await expect(page.locator(".menu-dropdown")).toHaveCSS("border-color", accent);
   await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await expect(page.getByRole("combobox", { name: "Aspect ratio control" })).toHaveCSS(
-    "border-color",
-    accent,
-  );
+  const control = page.getByRole("combobox", { name: "Aspect ratio control" });
+  await control.click();
+  await expect(control).toHaveCSS("border-color", accent);
+  await expect(page.getByRole("listbox", { name: "Options" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("listbox")).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
 });
 
 test("filter range limits share a row without overflowing", async ({ page }) => {
@@ -231,7 +229,7 @@ test("settings cannot be saved until their server values have loaded", async ({ 
   await expect(dialog.getByRole("button", { name: "Retry settings", exact: true })).toBeEnabled();
   available = true;
   await dialog.getByRole("button", { name: "Retry settings", exact: true }).click();
-  await expect(dialog.getByRole("combobox", { name: "Workflow" })).toHaveValue("themes");
+  await expect(dialog.getByRole("combobox", { name: "Workflow" })).toHaveText("Themes");
   await expect(dialog.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
 });
 
@@ -244,7 +242,7 @@ test("all popups stay strictly inside the viewport and prevent overlay scrolling
         json: {
           enabled: false,
           cron_expression: "0 0 * * *",
-          retention: null,
+          retention: { latest: 3, daily: 0, weekly: 0, monthly: 0 },
           timezone: "UTC",
         },
       });

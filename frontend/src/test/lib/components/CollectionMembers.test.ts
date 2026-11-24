@@ -24,6 +24,7 @@ describe("CollectionMembers", () => {
     ];
     // The collection names its libraries and members in another order.
     const editor = {
+      memberIds: [1, 2, 3],
       collection: collectionDetail({
         member_ids: [1, 2, 3],
         library_ids: ["s", "m", "a"],
@@ -52,6 +53,7 @@ describe("CollectionMembers", () => {
       { id: "j", title: "Movies", media_type: "movie" as const, server_id: 2, count: 1 },
     ];
     const editor = {
+      memberIds: [1, 2],
       collection: collectionDetail({ member_ids: [1, 2], library_ids: ["j", "p"], child_count: 2 }),
       manualMembersAllowed: false,
       availableMembers: () => [],

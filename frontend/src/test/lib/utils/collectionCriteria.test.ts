@@ -67,6 +67,7 @@ describe("collection criteria helpers", () => {
     expect(newSource("tmdb_person")).toEqual({
       type: "tmdb_person",
       person_id: 0,
+      person_name: null,
       roles: ["actor"],
     });
     expect(newSource("tmdb_chart")).toEqual({ type: "tmdb_chart", chart: "popular", limit: 100 });

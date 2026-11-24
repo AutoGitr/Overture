@@ -311,19 +311,16 @@ describe("Sync tab", () => {
     });
     await renderSync();
 
-    await fireEvent.change(screen.getByRole("combobox", { name: "Schedule type" }), {
-      target: { value: "incremental" },
-    });
+    await fireEvent.click(screen.getByRole("combobox", { name: "Schedule type" }));
+    await fireEvent.click(screen.getByRole("option", { name: "New-media polling" }));
     await fireEvent.click(screen.getByRole("button", { name: "Every 15 min" }));
     const downloadArt = screen.getByRole("checkbox", {
       name: "Download OvertureDB art for new media",
     });
     await waitFor(() => expect(downloadArt).toBeEnabled());
     await fireEvent.click(downloadArt);
-    await fireEvent.change(
-      screen.getByRole("combobox", { name: /Download themes for new media/i }),
-      { target: { value: "overturedb_themerrdb" } },
-    );
+    await fireEvent.click(screen.getByRole("combobox", { name: /Download themes for new media/i }));
+    await fireEvent.click(screen.getByRole("option", { name: "OvertureDB -> ThemerrDB" }));
     await fireEvent.input(screen.getByPlaceholderText("Hourly sync"), {
       target: { value: "Poll" },
     });
@@ -379,7 +376,9 @@ describe("Sync tab", () => {
     expect(summary).toHaveAttribute("aria-expanded", "true");
 
     await fireEvent.click(screen.getByRole("button", { name: "Edit schedule" }));
-    expect(screen.getByRole("combobox", { name: "Schedule type" })).toHaveValue("incremental");
+    expect(screen.getByRole("combobox", { name: "Schedule type" })).toHaveTextContent(
+      "New-media polling",
+    );
     expect(screen.getByRole("checkbox", { name: "Movies" })).not.toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Shows" })).toBeChecked();
     await fireEvent.click(screen.getByRole("button", { name: "Update schedule" }));

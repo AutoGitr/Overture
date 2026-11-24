@@ -108,9 +108,17 @@ messages and the changelog.
   is open lives in the URL (`routes.ts`); stores hold only client state and
   realtime projections. Route pages own their queries and pass data as props.
 - **Effects only reach outside** (timers, the DOM, navigation, network, a
-  store, seeding a form draft once). Derive instead of copying into `$state`;
-  use a writable `$derived` for local state that resets with its inputs.
+  store). Derive instead of copying into `$state`; use a writable `$derived`
+  for local state that resets with its inputs, and `draftOf`
+  (`utils/draft.svelte.ts`) for a form draft taken once from server data.
   Listen with `<svelte:window>` and `<svelte:document>`.
+- **Edited API data keeps its defaults filled.** A form holds what it edits
+  in the generated `…Output` type, where the server's defaults are present,
+  so fields need no fallbacks; it is sent as the `…Input` it satisfies.
+- **One control per kind of choice.** `Select` picks from a fixed list and
+  `ValueCombobox` from values that can be typed; both are bound with
+  `bind:value`, through a function binding when the value is converted, and
+  their options are built in the script.
 - **Styles are scoped to the component that renders the markup.** `app.css`
   holds only tokens and app-wide utilities. A parent adjusts a child through
   CSS custom properties; `:global` appears only beneath the component's own

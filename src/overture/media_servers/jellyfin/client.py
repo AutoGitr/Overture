@@ -619,10 +619,16 @@ class JellyfinClient(MediaServerHttpClient):
     async def upload_collection_art(
         self, collection_id: str, art_type: ArtType, image_bytes: bytes, mime_type: str
     ) -> None:
-        """MediaBrowser accepts base64 image data with the original image type."""
+        """MediaBrowser accepts base64 image data with the original image type.
+
+        Backdrops are indexed, so index 0 replaces the backdrop the BoxSet
+        shows instead of appending behind one it already holds.
+        """
+        image_type = IMAGE_TYPES[art_type]
+        slot = f"{image_type}/0" if art_type is ArtType.BACKGROUND else image_type
         await self._request(
             "POST",
-            f"/Items/{collection_id}/Images/{IMAGE_TYPES[art_type]}",
+            f"/Items/{collection_id}/Images/{slot}",
             content=base64.b64encode(image_bytes),
             headers={"Content-Type": mime_type},
         )

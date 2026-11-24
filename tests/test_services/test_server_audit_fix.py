@@ -29,7 +29,7 @@ lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.art.phash import PhashService
 lazy from overture.services.downloads.theme import DownloadThemeHandler
 lazy from overture.services.server_audit import fix as module
-lazy from overture.services.server_audit.compare import AuditContext
+lazy from overture.services.server_audit.context import AuditContext
 lazy from overture.services.server_audit.fix import (
     PENDING,
     VERIFIED,

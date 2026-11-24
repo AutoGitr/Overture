@@ -16,6 +16,7 @@ import { defaultCatalogFilters } from "../../../lib/utils/sidebarFilters";
 import { appSettings, catalogRow, mediaItem, catalogStatus } from "../../helpers/fixtures";
 import { mockFetchRoutes } from "../../helpers/fetch";
 import { renderWithQueryClient } from "../../helpers/render";
+import { filterState } from "../../../lib/stores/filterState.svelte";
 
 const alien = catalogRow({
   poster_url: "https://image.tmdb.org/t/p/original/poster.jpg",
@@ -35,7 +36,7 @@ describe("catalog sidebar", () => {
   beforeEach(async () => {
     queryClient.clear();
     settingsState.load(appSettings());
-    uiState.catalogFilters = defaultCatalogFilters();
+    filterState.catalog = defaultCatalogFilters();
     uiState.searchQuery = "";
     uiState.searchField = "title";
     await navigate("/overturedb/movies");
@@ -76,7 +77,7 @@ describe("catalog sidebar", () => {
     expect(screen.getByRole("button", { name: "Select Arrival" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Select Alien" })).toBeNull();
     await fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
-    const libraryFilters = JSON.parse(JSON.stringify(uiState.currentFilters));
+    const libraryFilters = JSON.parse(JSON.stringify(filterState.current));
     renderWithQueryClient(FiltersPopup);
     expect(screen.queryByText("Monitor status")).toBeNull();
     expect(screen.queryByRole("button", { name: "Run" })).toBeNull();
@@ -88,7 +89,7 @@ describe("catalog sidebar", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
     expect(screen.getByRole("button", { name: "Select Alien" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Select Arrival" })).toBeNull();
-    expect(uiState.currentFilters).toEqual(libraryFilters);
+    expect(filterState.current).toEqual(libraryFilters);
   });
   it("lists catalog collections without a media server and stops listing a disabled catalog", async () => {
     queryClient.setQueryData(

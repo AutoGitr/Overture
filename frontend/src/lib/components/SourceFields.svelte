@@ -7,7 +7,7 @@
     listSonarrTagsOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import type {
-    CollectionSourceInput,
+    CollectionSourceOutput,
     MediaType,
     TmdbChart,
     TmdbPersonRole,
@@ -17,6 +17,7 @@
   import CheckboxList from "./CheckboxList.svelte";
   import IdListInput from "./IdListInput.svelte";
   import { toggleSelectedValue } from "../utils/popupSelection";
+  import Select from "./Select.svelte";
   import SourcePicker from "./SourcePicker.svelte";
 
   let {
@@ -24,7 +25,7 @@
     mediaType,
     label,
   }: {
-    source: CollectionSourceInput;
+    source: CollectionSourceOutput;
     mediaType: MediaType;
     /** Names the condition the inputs belong to, for assistive technology. */
     label: string;
@@ -45,7 +46,9 @@
     enabled: source.type === "tmdb_chart",
   }));
   let charts = $derived(
-    alphabetical(capabilities.data?.charts ?? [], (chart) => CHART_LABELS[chart]),
+    alphabetical(capabilities.data?.charts ?? [], (chart) => CHART_LABELS[chart]).map(
+      (chart) => ({ value: chart, label: CHART_LABELS[chart] }),
+    ),
   );
 
   const radarrTags = createQuery(() => ({
@@ -141,33 +144,26 @@
       <!-- A person source needs at least one role, so nothing clears them all at once. -->
       <CheckboxList
         options={ROLES.map(([value, roleLabel]) => ({ value, label: roleLabel }))}
-        selected={source.roles ?? ["actor"]}
+        selected={source.roles}
         ontoggle={(role) => {
           if (source.type === "tmdb_person")
-            source.roles = toggleSelectedValue(source.roles ?? ["actor"], role);
+            source.roles = toggleSelectedValue(source.roles, role);
         }}
       />
     </div>
   {:else if source.type === "tmdb_chart"}
-    <select
-      aria-label={`${label} TMDB chart`}
-      value={source.chart}
-      onchange={(event) => {
-        const chart = charts.find((entry) => entry === event.currentTarget.value);
-        if (source.type === "tmdb_chart" && chart) source.chart = chart;
-      }}
-    >
-      {#each charts as chart (chart)}
-        <option value={chart}>{CHART_LABELS[chart]}</option>
-      {/each}
-    </select>
+    <Select
+      label={`${label} TMDB chart`}
+      options={charts}
+      bind:value={source.chart}
+    />
     <input
       type="number"
       min="1"
       max="500"
       aria-label={`${label} chart length`}
       title="How many of the chart's top titles count"
-      value={source.limit ?? 100}
+      value={source.limit}
       oninput={(event) => {
         if (source.type === "tmdb_chart" && event.currentTarget.value)
           source.limit = event.currentTarget.valueAsNumber;

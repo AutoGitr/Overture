@@ -3,7 +3,7 @@ import type {
   CollectionRead,
   MediaItemRead,
 } from "../../generated/rest/types.gen";
-import type { FilterState } from "../stores/uiState.svelte";
+
 import { keysOf } from "./records";
 import {
   collectionPredicates,
@@ -15,6 +15,7 @@ import {
 import { searchDef, type SidebarSearchField } from "./sidebarSearches";
 import { matchesTriState, type SidebarSortDir } from "./sidebarShared";
 import { sortBy, type SidebarSortField } from "./sidebarSorts";
+import type { FilterState } from "../stores/filterState.svelte";
 
 export function filterCatalogEntries(options: {
   entries: CatalogEntryRow[];

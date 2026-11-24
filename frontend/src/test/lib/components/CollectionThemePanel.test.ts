@@ -56,6 +56,7 @@ function renderPanel() {
   goToCollectionView(shown, "themes");
   return renderWithQueryClient(CollectionManager, {
     collection: shown,
+    detail: shown,
     libraryItems: [],
     groups: [],
     libraries: [],

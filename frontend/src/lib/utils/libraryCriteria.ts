@@ -1,6 +1,6 @@
 import type {
-  ConditionInput,
-  FilterGroupInput,
+  ConditionOutput,
+  FilterGroupOutput,
   MediaItemRead,
 } from "../../generated/rest/types.gen";
 import { LIBRARY_STATUS_FIELDS } from "../../generated/settings";
@@ -51,24 +51,24 @@ const STATUS_VALUES = {
 
 const STATUS_FIELDS: ReadonlySet<string> = new Set(LIBRARY_STATUS_FIELDS);
 
-type StatusCondition = Extract<ConditionInput, { kind: "field" }> & {
+type StatusCondition = Extract<ConditionOutput, { kind: "field" }> & {
   field: LibraryStatusField;
 };
 
-function isStatusCondition(condition: ConditionInput): condition is StatusCondition {
+function isStatusCondition(condition: ConditionOutput): condition is StatusCondition {
   return condition.kind === "field" && STATUS_FIELDS.has(condition.field);
 }
 
 /** Whether a group holds no condition at all, however deeply nested. */
-export function isEmptyCriteria(group: FilterGroupInput): boolean {
-  return !group.conditions?.length && (group.groups ?? []).every(isEmptyCriteria);
+export function isEmptyCriteria(group: FilterGroupOutput): boolean {
+  return !group.conditions.length && group.groups.every(isEmptyCriteria);
 }
 
 /** The conditions the server tests, in the order their matches come back. */
-export function serverConditions(group: FilterGroupInput): ConditionInput[] {
+export function serverConditions(group: FilterGroupOutput): ConditionOutput[] {
   return [
-    ...(group.conditions ?? []).filter((condition) => !isStatusCondition(condition)),
-    ...(group.groups ?? []).flatMap(serverConditions),
+    ...group.conditions.filter((condition) => !isStatusCondition(condition)),
+    ...group.groups.flatMap(serverConditions),
   ];
 }
 
@@ -76,7 +76,7 @@ const fold = (value: unknown) => String(value).toLocaleLowerCase();
 
 function matchesStatus(
   value: StatusValue,
-  operator: ConditionInput["operator"],
+  operator: ConditionOutput["operator"],
   target: string | number | boolean,
 ): boolean {
   if (Array.isArray(value)) {
@@ -108,19 +108,19 @@ function matchesStatus(
  * as the server leaves them out.
  */
 export function criteriaPredicate(
-  group: FilterGroupInput,
+  group: FilterGroupOutput,
   matches: readonly (readonly number[])[],
 ): (item: MediaItemRead) => boolean {
   const tested = serverConditions(group);
   const matched = new Map(tested.map((condition, index) => [condition, new Set(matches[index])]));
-  const test = (item: MediaItemRead, current: FilterGroupInput): boolean => {
+  const test = (item: MediaItemRead, current: FilterGroupOutput): boolean => {
     const results = [
-      ...(current.conditions ?? []).map((condition) =>
+      ...current.conditions.map((condition) =>
         isStatusCondition(condition)
           ? matchesStatus(STATUS_VALUES[condition.field](item), condition.operator, condition.value)
           : (matched.get(condition)?.has(item.id) ?? false),
       ),
-      ...(current.groups ?? [])
+      ...current.groups
         .filter((nested) => !isEmptyCriteria(nested))
         .map((nested) => test(item, nested)),
     ];

@@ -1,10 +1,12 @@
 """Collection policy resolution, from explicit choices to global defaults."""
 
 lazy from dataclasses import dataclass, fields
+lazy from datetime import date
 lazy from typing import Any
 
 lazy from ...db.models.collection_group import CollectionGroup
 lazy from ...db.models.collection_rule import CollectionRule
+lazy from ...db.models.media_collection import MediaCollection
 lazy from ...db.models.settings import AppSettings
 lazy from ...domain import (
     DEFAULT_COLLECTION_ORDER,
@@ -19,6 +21,7 @@ lazy from ...domain import (
     SyncMode,
 )
 lazy from ...schemas.collections import CollectionGroupPolicy, CollectionRuleWrite
+lazy from ...utils.collection_formats import is_within_active_window
 
 type RuleOrPolicy = CollectionRule | CollectionRuleWrite | None
 
@@ -79,6 +82,21 @@ class CollectionPolicy:
         The first style it takes; Individual when it takes no OvertureDB poster.
         """
         return next(iter(self.overturedb_posters), CollectionPosterStyle.INDIVIDUAL)
+
+
+def active_window(
+    row: MediaCollection, policy: CollectionPolicy
+) -> tuple[str | None, str | None]:
+    """The MM-DD dates a collection runs from and to: its own, else its policy's."""
+    return (
+        row.active_start_mmdd or policy.active_start_mmdd,
+        row.active_end_mmdd or policy.active_end_mmdd,
+    )
+
+
+def out_of_season(row: MediaCollection, policy: CollectionPolicy, today: date) -> bool:
+    """Whether *today* falls outside the dates the collection runs."""
+    return not is_within_active_window(*active_window(row, policy), today)
 
 
 def resolve_policy(

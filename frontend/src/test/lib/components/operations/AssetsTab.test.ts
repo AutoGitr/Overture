@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import OperationsPopup from "../../../../lib/popups/OperationsPopup.svelte";
 import { queryClient } from "../../../../lib/rest/queryClient";
 import { ApiError } from "../../../../lib/rest/transport";
-import { sidebarState } from "../../../../lib/stores/sidebarState.svelte";
 import { syncState } from "../../../../lib/stores/jobStates.svelte";
 import { matchState, themeJobState } from "../../../../lib/stores/bulkJobState.svelte";
 import { downloadState } from "../../../../lib/stores/downloadState.svelte";
@@ -18,6 +17,7 @@ import {
   mediaServers,
   syncEvent,
 } from "../../../helpers/fixtures";
+import { showInSidebar } from "../../../helpers/sidebar";
 
 const startBulkAssets = vi.hoisted(() => vi.fn());
 const stopBulkAssets = vi.hoisted(() => vi.fn());
@@ -88,7 +88,7 @@ describe("AssetsPopup", () => {
   beforeEach(() => {
     queryClient.clear();
     localStorage.clear();
-    sidebarState.current = null;
+    showInSidebar({ current: null });
     uiState.openOperations("assets");
     matchState.reset();
     themeJobState.reset();
@@ -163,7 +163,7 @@ describe("AssetsPopup", () => {
 
   it("runs the complete current sidebar snapshot instead of persisted libraries", async () => {
     localStorage.setItem("assetsPopup_selectedLibraries", JSON.stringify(["1"]));
-    sidebarState.current = { type: "movie", itemIds: [7, 12, 25] };
+    showInSidebar({ current: { type: "movie", itemIds: [7, 12, 25] } });
     renderWithQueryClient(OperationsPopup);
     await screen.findByRole("checkbox", { name: /Movies/ });
     await fireEvent.click(screen.getByRole("checkbox", { name: /Current sidebar items/ }));
@@ -183,14 +183,14 @@ describe("AssetsPopup", () => {
         }),
       ),
     );
-    sidebarState.current.itemIds = [99];
+    showInSidebar({ current: { type: "movie", itemIds: [99] } });
     expect(startBulkAssets.mock.calls[0]?.[0].item_ids).toEqual([7, 12, 25]);
   });
 
   it("remembers sidebar scope after reopening and clearing results, using fresh item IDs", async () => {
     startBulkAssets.mockResolvedValue({ art: "not_requested", themes: "started" });
     localStorage.setItem("assetsPopup_selectedLibraries", JSON.stringify(["1"]));
-    sidebarState.current = { type: "movie", itemIds: [7, 12] };
+    showInSidebar({ current: { type: "movie", itemIds: [7, 12] } });
     const popup = renderWithQueryClient(OperationsPopup);
     await screen.findByRole("checkbox", { name: /Movies/ });
     await fireEvent.click(screen.getByRole("checkbox", { name: /Current sidebar items/ }));
@@ -206,7 +206,7 @@ describe("AssetsPopup", () => {
     );
     popup.unmount();
 
-    sidebarState.current = { type: "movie", itemIds: [25] };
+    showInSidebar({ current: { type: "movie", itemIds: [25] } });
     renderWithQueryClient(OperationsPopup);
     await fireEvent.click(await screen.findByRole("button", { name: "Clear results" }));
     const sidebarCheckbox = await screen.findByRole("checkbox", { name: /Current sidebar items/ });
@@ -223,7 +223,7 @@ describe("AssetsPopup", () => {
 
   it("supports show artwork and switches back to a clicked library", async () => {
     localStorage.setItem("assetsPopup_selectedLibraries", JSON.stringify(["1"]));
-    sidebarState.current = { type: "show", itemIds: [8] };
+    showInSidebar({ current: { type: "show", itemIds: [8] } });
     renderWithQueryClient(OperationsPopup);
     await screen.findByRole("checkbox", { name: /Movies/ });
     await fireEvent.click(screen.getByRole("checkbox", { name: /Current sidebar items/ }));
@@ -245,7 +245,7 @@ describe("AssetsPopup", () => {
   });
 
   it("prevents empty or unavailable sidebar results from running", async () => {
-    sidebarState.current = { type: "movie", itemIds: [7] };
+    showInSidebar({ current: { type: "movie", itemIds: [7] } });
     renderWithQueryClient(OperationsPopup);
     await screen.findByRole("checkbox", { name: /Movies/ });
     await fireEvent.click(screen.getByRole("checkbox", { name: /Current sidebar items/ }));
@@ -255,10 +255,10 @@ describe("AssetsPopup", () => {
       }),
     );
     expect(screen.getByRole("button", { name: "Run now" })).toBeEnabled();
-    sidebarState.current = { type: "movie", itemIds: [] };
+    showInSidebar({ current: { type: "movie", itemIds: [] } });
     await waitFor(() => expect(screen.getByRole("button", { name: "Run now" })).toBeDisabled());
     expect(assetsPanel().getByText("0 movies")).toBeInTheDocument();
-    sidebarState.current = null;
+    showInSidebar({ current: null });
     await waitFor(() => expect(assetsPanel().queryByText("0 movies")).not.toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Run now" })).toBeDisabled();
     expect(startBulkAssets).not.toHaveBeenCalled();
@@ -285,9 +285,8 @@ describe("AssetsPopup", () => {
 
     const skipInput = screen.getByRole("spinbutton");
     await fireEvent.input(skipInput, { target: { value: "2" } });
-    await fireEvent.change(screen.getByRole("combobox"), {
-      target: { value: "days" },
-    });
+    await fireEvent.click(screen.getByRole("combobox", { name: "Skip window unit" }));
+    await fireEvent.click(screen.getByRole("option", { name: "days" }));
     await fireEvent.click(screen.getByText("Run now"));
 
     await waitFor(() => {
@@ -438,7 +437,7 @@ describe("AssetsPopup", () => {
   });
 
   it("persists overrides and sends them with a sidebar run", async () => {
-    sidebarState.current = { type: "movie", itemIds: [7] };
+    showInSidebar({ current: { type: "movie", itemIds: [7] } });
     const popup = renderWithQueryClient(OperationsPopup);
     await screen.findByRole("checkbox", { name: /Movies/ });
     await fireEvent.click(screen.getByRole("checkbox", { name: /Current sidebar items/ }));

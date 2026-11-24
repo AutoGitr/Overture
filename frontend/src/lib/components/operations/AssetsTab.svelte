@@ -25,14 +25,11 @@
     stopBulkAssetsMutation,
     updateBulkAssetsScheduleMutation,
   } from "../../../generated/rest/@tanstack/svelte-query.gen";
-  import { libraryGate } from "../../stores/libraryGate.svelte";
   import { settingsState } from "../../stores/settingsState.svelte";
-  import { createNotifier } from "../../stores/notificationState.svelte";
-  import { OPERATIONS } from "../../stores/operations";
   import { matchState, themeJobState } from "../../stores/bulkJobState.svelte";
   import { buildBulkAssetsStopRequest, type BulkAssetsRequest } from "../../utils/assetsPopup";
   import { errorMessage } from "../../utils/errors";
-  import { createClearResults } from "../../utils/jobSnapshots";
+  import { OperationRun } from "../../utils/operationRun.svelte";
   import { AssetsForm } from "../../utils/assetsForm.svelte";
   import {
     choosableCollections,
@@ -86,23 +83,17 @@
   });
   const config = form.config;
 
-  const feedback = createNotifier();
-
-  let hasResults = $derived(OPERATIONS.assets.hasRun);
-  let anyRunning = $derived(OPERATIONS.assets.running);
-
-  const startJobRequest = createMutation(() => startBulkAssetsMutation());
-  const stopJobRequest = createMutation(() => stopBulkAssetsMutation());
-  let stopping = $derived(
-    stopJobRequest.isPending || matchState.stopping || themeJobState.stopping,
-  );
-  const clearResults = createClearResults(
-    () => [
+  const run = new OperationRun("assets", {
+    blocker: () => form.blocker,
+    results: () => [
       ...(matchState.hasRun ? (["bulk_art"] as const) : []),
       ...(themeJobState.hasRun ? (["bulk_theme"] as const) : []),
     ],
-    feedback,
-  );
+    stopping: () => matchState.stopping || themeJobState.stopping,
+  });
+  const { feedback } = run;
+  const startJobRequest = createMutation(() => startBulkAssetsMutation());
+  const stopJobRequest = createMutation(() => stopBulkAssetsMutation());
   const createScheduleRequest = createMutation(() => createBulkAssetsScheduleMutation());
   const updateScheduleRequest = createMutation(() => updateBulkAssetsScheduleMutation());
   const deleteScheduleRequest = createMutation(() => deleteBulkAssetsScheduleMutation());
@@ -119,8 +110,6 @@
     run: runScheduleRequest,
   });
 
-  /** Why Run now cannot start, or null when it can. */
-  let runBlocker = $derived(libraryGate.blocked("assets") ?? form.blocker);
   /** Why the schedule cannot be saved, or null when it can. */
   let scheduleBlocker = $derived(
     config.useSidebarItems
@@ -155,11 +144,9 @@
     form.applySchedule(schedule);
   }
 
-  async function startJob() {
-    if (!form.canRun || libraryGate.blocked("assets") || startJobRequest.isPending) return;
-    config.save();
-    feedback.clear();
-    try {
+  function startJob() {
+    return run.start(async () => {
+      config.save();
       const result = await startJobRequest.mutateAsync({ body: form.request() });
       const messages: string[] = [];
       // An accepted run switches to results through its job state; a refused
@@ -169,29 +156,21 @@
       if (result.art === "already_running") messages.push("Art is already running.");
       if (result.themes === "already_running") messages.push("Themes are already running.");
       if (messages.length) feedback.info(messages.join(" "));
-    } catch (err) {
-      feedback.error(errorMessage(err, "Bulk assets failed"));
-    }
+    }, "Bulk assets failed");
   }
 
-  async function stopJob() {
-    if (stopJobRequest.isPending) return;
-    const stopArt = matchState.running;
-    const stopThemes = themeJobState.running;
-    const body = buildBulkAssetsStopRequest(stopArt, stopThemes);
+  function stopJob() {
+    const body = buildBulkAssetsStopRequest(matchState.running, themeJobState.running);
     if (!body.art && !body.themes) return;
-    feedback.clear();
-    try {
+    return run.stop(async () => {
       await stopJobRequest.mutateAsync({ body });
       if (body.art) matchState.markStopRequested();
       if (body.themes) themeJobState.markStopRequested();
-    } catch (error) {
-      feedback.error(errorMessage(error, "Could not stop the assets job. Please retry."));
-    }
+    }, "Could not stop the assets job. Please retry.");
   }
 </script>
 
-{#if !hasResults}
+{#if !run.hasResults}
   <CardColumn>
     <AssetDownloads />
     <AssetsConfigurationPanel
@@ -220,16 +199,8 @@
 {/if}
 
 {#snippet assetsFooter()}
-  <JobFooter
-    {hasResults}
-    running={anyRunning}
-    blocked={libraryGate.blocked("assets")}
-    {stopping}
-    onstop={stopJob}
-    clear={clearResults}
-  >
+  <JobFooter {run} onstop={stopJob}>
     {#snippet start()}
-      {#if form.blocker}<span class="popup-footer-note" role="status">{form.blocker}</span>{/if}
       <ScheduleSaveButton
         controller={scheduleController}
         blocker={scheduleBlocker}
@@ -238,9 +209,9 @@
       <PendingButton
         class="btn btn-primary"
         onclick={startJob}
-        title={runBlocker ?? undefined}
-        disabled={!!runBlocker}
-        pending={startJobRequest.isPending}
+        title={run.blocked ?? undefined}
+        disabled={!!run.blocked}
+        pending={run.starting}
         pendingLabel="Starting..."
       >
         <Image size={15} />

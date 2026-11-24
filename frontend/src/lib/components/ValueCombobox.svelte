@@ -1,31 +1,40 @@
-<script lang="ts">
-  import type { CollectionFieldValue } from "../../generated/rest/types.gen";
+<script lang="ts" generics="T extends { value: string; label: string }">
+  import Listbox, { type ListboxItem } from "./Listbox.svelte";
 
   let {
     value = $bindable(),
     options,
-    strict,
+    id,
+    strict = false,
+    required = true,
+    maxlength,
+    placeholder,
     label,
-    unlisted,
+    unlisted = "",
     describe,
   }: {
     value: string;
     /** The values to choose from, as many as the field holds; typing narrows them. */
-    options: readonly CollectionFieldValue[];
+    options: readonly T[];
+    id?: string;
     /** Only a listed value can be held, as IDs people choose by name must be. */
-    strict: boolean;
-    /** Names the control for assistive technology. */
-    label: string;
+    strict?: boolean;
+    required?: boolean;
+    maxlength?: number;
+    placeholder?: string;
+    /** Names the control when no external `<label for>` points to `id`. */
+    label?: string;
     /** What a strict control shows for a value no option holds. */
-    unlisted: string;
+    unlisted?: string;
     /** A line beside an option, such as how many titles hold it. */
-    describe: (option: CollectionFieldValue) => string;
+    describe?: (option: T) => string;
   } = $props();
 
   /** Options shown at once; a library can hold thousands of values. */
   const MAX_SHOWN = 50;
   const listId = $props.id();
 
+  let input: HTMLInputElement | undefined = $state();
   let listed = $derived(options.find((option) => option.value === value));
   /** What the input shows: the held value by name, or as typed. */
   let text = $derived(listed?.label ?? (strict ? unlisted : value));
@@ -40,6 +49,16 @@
       : options;
     return matching.slice(0, MAX_SHOWN);
   });
+  /** The list shows while open with values to offer. */
+  let showing = $derived(open && shown.length > 0);
+  let items = $derived<ListboxItem[]>(
+    shown.map((option) => ({
+      key: option.value,
+      label: option.label,
+      detail: describe?.(option) || undefined,
+      selected: option.value === value,
+    })),
+  );
 
   function show() {
     open = true;
@@ -47,7 +66,9 @@
     active = -1;
   }
 
-  function choose(option: CollectionFieldValue) {
+  function choose(index: number) {
+    const option = shown[index];
+    if (!option) return;
     value = option.value;
     open = false;
   }
@@ -81,16 +102,16 @@
         break;
       }
       case "Enter": {
-        const option = shown[active];
-        if (open && option) {
+        if (open && active >= 0 && shown[active]) {
           event.preventDefault();
-          choose(option);
+          choose(active);
         }
         break;
       }
       case "Escape":
         if (open) {
           event.preventDefault();
+          event.stopPropagation();
           settle();
         }
         break;
@@ -100,14 +121,17 @@
 
 <div class="combobox">
   <input
+    bind:this={input}
+    {id}
     role="combobox"
-    required
+    {required}
+    {maxlength}
     aria-label={label}
     aria-autocomplete="list"
     aria-expanded={open}
-    aria-controls={listId}
-    aria-activedescendant={open && active >= 0 ? `${listId}-${active}` : undefined}
-    placeholder={strict ? "Choose a value" : "Type or choose a value"}
+    aria-controls={showing ? listId : undefined}
+    aria-activedescendant={showing && active >= 0 ? `${listId}-${active}` : undefined}
+    placeholder={placeholder ?? (strict ? "Choose a value" : "Type or choose a value")}
     autocomplete="off"
     value={text}
     onfocus={show}
@@ -116,25 +140,16 @@
     onblur={settle}
     {onkeydown}
   />
-  {#if open && shown.length}
-    <ul id={listId} role="listbox" aria-label={`${label} values`}>
-      {#each shown as option, index (option.value)}
-        <!-- The input keeps focus and the keyboard; a press chooses before it blurs. -->
-        <li
-          id={`${listId}-${index}`}
-          role="option"
-          aria-selected={option.value === value}
-          class:active={index === active}
-          onpointerdown={(event) => {
-            event.preventDefault();
-            choose(option);
-          }}
-        >
-          <span>{option.label}</span>
-          {#if describe(option)}<span class="detail">{describe(option)}</span>{/if}
-        </li>
-      {/each}
-    </ul>
+  {#if showing}
+    <Listbox
+      id={listId}
+      label={label ? `${label} values` : "Values"}
+      {items}
+      {active}
+      anchor={input}
+      onchoose={choose}
+      onclose={settle}
+    />
   {/if}
 </div>
 
@@ -144,42 +159,7 @@
     min-width: 0;
   }
 
-  ul {
-    position: absolute;
-    inset-inline: 0;
-    top: calc(100% + 2px);
-    z-index: var(--z-menu);
-    max-height: 16rem;
-    margin: 0;
-    padding: var(--space-1) 0;
-    overflow-y: auto;
-    list-style: none;
-    background: var(--bg-elevated);
-    border: var(--border-subtle);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-md);
-  }
-
-  li {
-    display: flex;
-    justify-content: space-between;
-    gap: var(--space-2);
-    padding: var(--space-1) var(--space-3);
-    font-size: var(--text-sm);
-    cursor: pointer;
-
-    &:hover,
-    &.active {
-      background: var(--bg-hover);
-    }
-
-    &[aria-selected="true"] {
-      color: var(--accent-text);
-    }
-  }
-
-  .detail {
-    flex-shrink: 0;
-    color: var(--text-tertiary);
+  input {
+    width: 100%;
   }
 </style>

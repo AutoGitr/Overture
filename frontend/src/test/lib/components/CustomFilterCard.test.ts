@@ -71,6 +71,7 @@ describe("CustomFilterCard", () => {
       media_type: "movie",
       criteria: { conditions: [{ field: "art_status", operator: "is", value: "complete" }] },
     });
+    await fireEvent.click(screen.getByLabelText("Saved filter"));
     expect(await screen.findByRole("option", { name: "Unarted" })).toBeInTheDocument();
   });
 
@@ -119,6 +120,7 @@ describe("CustomFilterCard", () => {
     });
     renderWithQueryClient(CustomFilterCard, { filterId: null, mediaType: "movie" });
 
+    await fireEvent.click(screen.getByLabelText("Saved filter"));
     expect(await screen.findByRole("option", { name: "Shared" })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Seasons" })).toBeNull();
     expect(

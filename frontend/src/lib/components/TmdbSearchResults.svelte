@@ -176,25 +176,33 @@
 
   // Auto-advance moves through the titles shown, as it does through library rows,
   // and through those that open as a collection or catalog entry as through records.
-  $effect(() => {
-    sidebarState.tmdbResults = rows.flatMap((result): AdvanceEntry[] => {
+  let advanceResults = $derived(
+    rows.flatMap((result): AdvanceEntry[] => {
       if (catalogEntry(result)) return [];
       const id = storedItem(result)?.id ?? result.existing_item_id;
       if (id !== null) return [{ kind: "item", id }];
       const { tmdb_id, title, media_type } = result;
       return [{ kind: "tmdb", tmdb_id, title, media_type }];
-    });
-    sidebarState.tmdbRecords = [...groups, ...rows].flatMap((result): AdvanceRecord[] => {
+    }),
+  );
+  let advanceRecords = $derived(
+    [...groups, ...rows].flatMap((result): AdvanceRecord[] => {
       const entry = catalogEntry(result);
       if (entry) return [catalogRowRecord(entry)];
       const stored = result.kind === "collection" && storedCollection(result);
       return stored ? [collectionRecord(stored)] : [];
-    });
-    return () => {
-      sidebarState.tmdbResults = null;
-      sidebarState.tmdbRecords = null;
-    };
-  });
+    }),
+  );
+  $effect(() =>
+    sidebarState.search({
+      get results() {
+        return advanceResults;
+      },
+      get records() {
+        return advanceRecords;
+      },
+    }),
+  );
 
   function storedCollection(result: TmdbCollectionResult): CollectionRead | undefined {
     return collections.find((row) => row.tmdb_collection_id === result.tmdb_id);

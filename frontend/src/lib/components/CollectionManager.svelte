@@ -5,6 +5,7 @@
   import Unlink from "@lucide/svelte/icons/unlink";
   import type {
     CollectionDetail,
+    CollectionRead,
     MediaItemRead,
     LibrarySectionRead,
     TmdbCollectionResponse,
@@ -48,12 +49,16 @@
 
   let {
     collection,
+    detail,
     libraryItems,
     groups,
     libraries,
     seed = null,
   }: {
-    collection: CollectionDetail | null;
+    /** The collection shown, null while creating one; the sidebar's row until `detail` loads. */
+    collection: CollectionRead | null;
+    /** Its rule, members and themes, null while they load. */
+    detail: CollectionDetail | null;
     seed?: TmdbCollectionResponse | null;
     libraryItems: MediaItemRead[];
     groups: string[];
@@ -65,7 +70,7 @@
   let leadCopy = $derived(collection?.copies[0]);
   let serverLink = $derived(serverLinks.collection(leadCopy));
 
-  function currentCollection(): CollectionDetail {
+  function current(): CollectionRead {
     if (!collection) throw new Error("The saved collection must remain mounted");
     return collection;
   }
@@ -74,16 +79,20 @@
   const editor = unmanaged
     ? null
     : untrack(() => collection)
-      ? new CollectionEditor(currentCollection, () => libraries)
+      ? new CollectionEditor(current, () => detail, () => libraries)
       : new CollectionDraft(
           () => libraries,
           () => seed,
         );
   const actions =
-    editor instanceof CollectionEditor ? new CollectionActions(currentCollection) : null;
+    editor instanceof CollectionEditor ? new CollectionActions(current) : null;
   let view = $derived(routedCollectionView());
   let artType = $derived(routedCollectionArtType());
   let managing = $derived(!!editor && (editor.creating || view === "configure"));
+  /** Until its details say which servers keep its theme, the configured servers decide. */
+  let themeUnavailable = $derived(
+    detail ? detail.theme_unavailable : settingsState.current.collection_themes_unavailable,
+  );
   const catalog = new CatalogBrowsing();
   const collectionIssue = createQuery(() => ({
     ...getCatalogCollectionIssueOptions({ path: { collection_id: collection?.id ?? 0 } }),
@@ -146,16 +155,16 @@
         artType={view === "art" ? artType : "poster"}
         season={null}
       />
-      {#if collection.catalog_entry_key && catalog.browsable}
+      {#if detail?.catalog_entry_key && catalog.browsable}
         <IdBadge
           title="Open in OvertureDB"
           icon="/brand/overturedb-logo.svg"
           alt="OvertureDB"
           onselect={() => {
-            if (collection.catalog_entry_key)
+            if (detail.catalog_entry_key)
               goToCatalogEntry({
                 media_type: "collection",
-                entry_key: collection.catalog_entry_key,
+                entry_key: detail.catalog_entry_key,
               });
           }}
         />
@@ -216,9 +225,9 @@
     {/if}
   {/snippet}
   {#snippet sectionLinks()}
-    {#if collection && actions}<ConfigureNavigation
+    {#if detail && actions}<ConfigureNavigation
         {formId}
-        {collection}
+        collection={detail}
         configuring={managing}
       />{/if}
   {/snippet}
@@ -234,17 +243,19 @@
           hasData={false}
           onretry={() => editor.save()}
         />{/if}
-      <CollectionConfigure
-        collection={collection ?? undefined}
-        {editor}
-        {libraryItems}
-        {groups}
-        {formId}
-        {libraries}
-      />
-    {:else if collection && actions && view === "themes"}
-      <CollectionThemePanel {collection} {actions} />
-    {:else if collection}
+      {#if editor instanceof CollectionDraft || detail}
+        <CollectionConfigure
+          collection={detail ?? undefined}
+          {editor}
+          {libraryItems}
+          {groups}
+          {formId}
+          {libraries}
+        />
+      {/if}
+    {:else if detail && actions && view === "themes"}
+      <CollectionThemePanel collection={detail} {actions} />
+    {:else if collection && view === "art"}
       {#key `${collection.id}-${artType}`}
         <ArtSlotPanel
           slot={{
@@ -273,7 +284,7 @@
   {#if collection && actions}<AssetModeTabs
       mode={view}
       artStatus={statusTone(collection.art_status, actions.clearingArt)}
-      themeStatus={collection.theme_unavailable
+      themeStatus={themeUnavailable
         ? null
         : statusTone(collection.assets.theme.status, actions.themeBusy)}
       onart={() => goToCollectionView(collection, "art", artType)}
@@ -284,7 +295,7 @@
       collection.server_background_version
         ? () => void actions.clearArt("all")
         : null}
-      oncleartheme={!collection.theme_unavailable && holdsSomething(collection.assets.theme)
+      oncleartheme={!themeUnavailable && holdsSomething(collection.assets.theme)
         ? () => void actions.clearTheme()
         : null}
       artBusy={actions.clearingArt}

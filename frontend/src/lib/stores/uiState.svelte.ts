@@ -1,36 +1,14 @@
 import { goToCatalog, goToCollectionsList, goToLibrary, routeScope } from "../router/routes";
-import {
-  ART_SLOT_LABELS,
-  ART_SOURCE_SLOTS,
-  type ArtSlot,
-  ART_SOURCES,
-  METADATA_ISSUE_FLAGS,
-  THEME_SOURCES,
-  defaultCatalogFilters,
-  defaultTmdbFilters,
-  type ArtSourceSlot,
-  type CatalogFilters,
-  type MetadataIssue,
-  type TmdbFilters,
-} from "../utils/sidebarFilters";
 import { tmdbSearchBy, type SidebarSearchField } from "../utils/sidebarSearches";
 import type {
-  ArtSource,
   CollectionView,
   SidebarMode,
   SidebarSource,
   SidebarTab,
 } from "../utils/sidebarShared";
-import { keysOf } from "../utils/records";
-import { readJson, writeJson } from "../utils/storage";
-import type { CollectionPosterStyle, ThemeIdSource } from "../../generated/rest/types.gen";
+import { readJson, stringOption, writeJson } from "../utils/storage";
+import type { CollectionPosterStyle } from "../../generated/rest/types.gen";
 import { COLLECTION_POSTER_STYLES } from "../utils/collectionPosters";
-import {
-  CATALOG_SELECTION_FILTERS,
-  SELECTION_AGREEMENTS,
-  type CatalogSelectionFilter,
-  type SelectionAgreement,
-} from "../utils/catalogSelections";
 import { settingsState } from "./settingsState.svelte";
 
 export type OperationsTab = "assets" | "sync" | "renamer" | "audit";
@@ -48,197 +26,6 @@ export type PopupType =
   | "backup"
   | "stats";
 
-type Completeness = "all" | "complete" | "incomplete";
-
-/** Inclusive bounds; null leaves that side open, and two nulls disable the filter. */
-export interface NumberRange {
-  min: number | null;
-  max: number | null;
-}
-
-export interface FilterState extends Record<CatalogSelectionFilter, SelectionAgreement> {
-  monitored: "all" | "monitored" | "unmonitored";
-  collectionSize: "all" | "empty" | "below_minimum";
-  collectionKind: "all" | "regular" | "smart";
-  collectionHolds: "all" | "movie" | "show" | "both";
-  /** Whether a collection stands alone or is one a set made per value. */
-  collectionOrigin: "all" | "single" | "set";
-  collectionMembers: "all" | "managed" | "unmanaged";
-  collectionSync: "all" | "synced" | "failed";
-  art: Completeness;
-  theme: Completeness;
-  seasonPosters: Completeness;
-  overtureDb: Completeness;
-  themerrDb: Completeness;
-  aspectRatio: "all" | "correct" | "incorrect";
-  mediaServer: "all" | "present" | "missing";
-  libraryIds: string[];
-  collectionId: number | null;
-  /** The saved custom filter applied to the titles, if any. */
-  customFilter: number | null;
-  themeSources: ThemeIdSource[];
-  artSource: { sources: ArtSource[]; artType: ArtSourceSlot };
-  metadataIssues: { flags: MetadataIssue[]; mode: "all" | "any" };
-  resolution: NumberRange & { artType: ArtSlot };
-  themeLength: NumberRange;
-}
-
-const DEFAULT_FILTERS: FilterState = {
-  monitored: "all",
-  collectionSize: "all",
-  collectionKind: "all",
-  collectionHolds: "all",
-  collectionOrigin: "all",
-  collectionMembers: "all",
-  collectionSync: "all",
-  art: "all",
-  theme: "all",
-  seasonPosters: "all",
-  overtureDb: "all",
-  themerrDb: "all",
-  ...(Object.fromEntries(keysOf(CATALOG_SELECTION_FILTERS).map((key) => [key, "all"])) as Record<
-    CatalogSelectionFilter,
-    SelectionAgreement
-  >),
-  aspectRatio: "all",
-  mediaServer: "all",
-  libraryIds: [],
-  collectionId: null,
-  customFilter: null,
-  themeSources: [],
-  artSource: { sources: [], artType: "any" },
-  metadataIssues: { flags: [], mode: "all" },
-  resolution: { artType: "poster", min: null, max: null },
-  themeLength: { min: null, max: null },
-};
-
-export function defaultFilters(): FilterState {
-  return structuredClone(DEFAULT_FILTERS);
-}
-
-const MONITORED_FILTERS = ["all", "monitored", "unmonitored"] as const;
-const COMPLETENESS_FILTERS = ["all", "complete", "incomplete"] as const;
-const ASPECT_RATIO_FILTERS = ["all", "correct", "incorrect"] as const;
-const MEDIA_SERVER_FILTERS = ["all", "present", "missing"] as const;
-const METADATA_ISSUE_MODES = ["all", "any"] as const;
-const RESOLUTION_ART_TYPES = keysOf(ART_SLOT_LABELS);
-const ART_SOURCE_ART_TYPES = Object.keys(ART_SOURCE_SLOTS) as ArtSourceSlot[];
-
-function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
-}
-
-function stringOption<T extends readonly string[]>(
-  value: unknown,
-  allowed: T,
-  fallback: T[number],
-): T[number] {
-  return typeof value === "string" && (allowed as readonly string[]).includes(value)
-    ? (value as T[number])
-    : fallback;
-}
-
-function stringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((entry): entry is string => typeof entry === "string")
-    : [];
-}
-
-function allowedValues<T extends string>(value: unknown, allowed: readonly T[]): T[] {
-  const values = stringArray(value);
-  return allowed.filter((entry) => values.includes(entry));
-}
-
-function bound(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
-}
-
-function numberRange(value: unknown): NumberRange {
-  const source = record(value);
-  return { min: bound(source.min), max: bound(source.max) };
-}
-
-/** A stored row's ID, or null for anything else. */
-function savedId(value: unknown): number | null {
-  return typeof value === "number" && Number.isSafeInteger(value) ? value : null;
-}
-
-function normalizeFilters(value: unknown): FilterState {
-  const source = record(value);
-  const metadataIssues = record(source.metadataIssues);
-  const resolution = record(source.resolution);
-  const artSource = record(source.artSource);
-  const defaults = DEFAULT_FILTERS;
-
-  return {
-    monitored: stringOption(source.monitored, MONITORED_FILTERS, defaults.monitored),
-    collectionSize: stringOption(
-      source.collectionSize,
-      ["all", "empty", "below_minimum"] as const,
-      defaults.collectionSize,
-    ),
-    collectionHolds: stringOption(
-      source.collectionHolds,
-      ["all", "movie", "show", "both"] as const,
-      defaults.collectionHolds,
-    ),
-    collectionOrigin: stringOption(
-      source.collectionOrigin,
-      ["all", "single", "set"] as const,
-      defaults.collectionOrigin,
-    ),
-    collectionKind: stringOption(
-      source.collectionKind,
-      ["all", "regular", "smart"] as const,
-      defaults.collectionKind,
-    ),
-    collectionMembers: stringOption(
-      source.collectionMembers,
-      ["all", "managed", "unmanaged"] as const,
-      defaults.collectionMembers,
-    ),
-    collectionSync: stringOption(
-      source.collectionSync,
-      ["all", "synced", "failed"] as const,
-      defaults.collectionSync,
-    ),
-    art: stringOption(source.art, COMPLETENESS_FILTERS, defaults.art),
-    theme: stringOption(source.theme, COMPLETENESS_FILTERS, defaults.theme),
-    seasonPosters: stringOption(source.seasonPosters, COMPLETENESS_FILTERS, defaults.seasonPosters),
-    overtureDb: stringOption(source.overtureDb, COMPLETENESS_FILTERS, defaults.overtureDb),
-    themerrDb: stringOption(source.themerrDb, COMPLETENESS_FILTERS, defaults.themerrDb),
-    ...(Object.fromEntries(
-      keysOf(CATALOG_SELECTION_FILTERS).map((key) => [
-        key,
-        stringOption(source[key], SELECTION_AGREEMENTS, defaults[key]),
-      ]),
-    ) as Record<CatalogSelectionFilter, SelectionAgreement>),
-    aspectRatio: stringOption(source.aspectRatio, ASPECT_RATIO_FILTERS, defaults.aspectRatio),
-    mediaServer: stringOption(source.mediaServer, MEDIA_SERVER_FILTERS, defaults.mediaServer),
-    libraryIds: stringArray(source.libraryIds),
-    collectionId: savedId(source.collectionId),
-    customFilter: savedId(source.customFilter),
-    themeSources: allowedValues(source.themeSources, THEME_SOURCES),
-    artSource: {
-      sources: allowedValues(artSource.sources, ART_SOURCES),
-      artType: stringOption(artSource.artType, ART_SOURCE_ART_TYPES, defaults.artSource.artType),
-    },
-    metadataIssues: {
-      flags: allowedValues(metadataIssues.flags, METADATA_ISSUE_FLAGS),
-      mode: stringOption(metadataIssues.mode, METADATA_ISSUE_MODES, defaults.metadataIssues.mode),
-    },
-    resolution: {
-      artType: stringOption(resolution.artType, RESOLUTION_ART_TYPES, defaults.resolution.artType),
-      ...numberRange(resolution),
-    },
-    themeLength: numberRange(source.themeLength),
-  };
-}
-
-function loadFilters(key: string): FilterState {
-  return normalizeFilters(readJson<unknown>(key, null));
-}
-
 class UiState {
   searchQuery = $state("");
   searchField = $state<SidebarSearchField>("title");
@@ -251,12 +38,6 @@ class UiState {
   );
   mobileShowDetail = $state(false);
 
-  // Filters specific to section
-  movieFilters = $state<FilterState>(loadFilters("movieFilters"));
-  showFilters = $state<FilterState>(loadFilters("showFilters"));
-  collectionFilters = $state<FilterState>(loadFilters("collectionFilters"));
-  catalogFilters = $state<CatalogFilters>(defaultCatalogFilters());
-  tmdbFilters = $state<TmdbFilters>(defaultTmdbFilters());
   /** Which OvertureDB poster the catalog's collections show and edit. */
   catalogPosters = $state<CollectionPosterStyle>(
     stringOption(
@@ -379,34 +160,6 @@ class UiState {
   /** Start the search over after back, forward or a link changed the section. */
   followSection() {
     if (this.sidebarSection !== this.#searchSection) this.#startSearch(this.sidebarSection);
-  }
-
-  get currentFilters(): FilterState {
-    if (this.sidebarMode === "collections") return this.collectionFilters;
-    return this.sidebarTab === "movie" ? this.movieFilters : this.showFilters;
-  }
-
-  saveFilters() {
-    writeJson("movieFilters", this.movieFilters);
-    writeJson("showFilters", this.showFilters);
-    writeJson("collectionFilters", this.collectionFilters);
-  }
-
-  setFilters(value: FilterState) {
-    // Number inputs can bind zero or negative bounds; those mean "no bound".
-    const filters = normalizeFilters(value);
-    if (this.sidebarMode === "collections") {
-      this.collectionFilters = filters;
-    } else if (this.sidebarTab === "movie") {
-      this.movieFilters = filters;
-    } else {
-      this.showFilters = filters;
-    }
-    this.saveFilters();
-  }
-
-  clearFilters() {
-    this.setFilters(defaultFilters());
   }
 }
 

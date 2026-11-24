@@ -9,8 +9,12 @@
   import CollectionManager from "../../components/CollectionManager.svelte";
   import DataStatus from "../../components/DataStatus.svelte";
   import DetailPanel from "../../components/DetailPanel.svelte";
+  import { findCachedCollection } from "../../rest/cache";
+  import { settingsState } from "../../stores/settingsState.svelte";
   import { uiState } from "../../stores/uiState.svelte";
+  import { cancelPendingAutoAdvance } from "../../utils/autoAdvance";
   import { allLibraries } from "../../utils/libraries.svelte";
+  import { preloadNextCollection } from "../../utils/recordAdvance";
   import { route, routedCollectionId, routedCollectionView } from "../routes";
 
   let creating = $derived(route.pathname.endsWith("/collections/new"));
@@ -20,8 +24,14 @@
     ...getCollectionOptions({ path: { collection_id: collectionId ?? 0 } }),
     enabled: collectionId !== null,
   }));
+  let detail = $derived(collectionQuery.data?.id === collectionId ? collectionQuery.data : null);
+  // The sidebar's row shows the collection, its images and art candidates at
+  // once; its details follow.
   let collection = $derived(
-    collectionQuery.data?.id === collectionId ? collectionQuery.data : null,
+    detail ??
+      (collectionId !== null && !collectionQuery.isError
+        ? (findCachedCollection(collectionId) ?? null)
+        : null),
   );
   let seedId = $derived(creating ? Number(route.search.tmdb_id) || 0 : 0);
   const seed = createQuery(() => ({
@@ -50,6 +60,13 @@
   $effect(() => {
     uiState.mobileShowDetail = creating || collectionId !== null;
   });
+  $effect(() => {
+    if (collection) preloadNextCollection(collection.id, settingsState.current);
+  });
+  $effect(() => {
+    void route.pathname;
+    return cancelPendingAutoAdvance;
+  });
 </script>
 
 {#if collectionId}
@@ -57,7 +74,7 @@
     label="collection"
     error={collectionQuery.error}
     loading={collectionQuery.isFetching}
-    hasData={collectionQuery.data !== undefined}
+    hasData={collection !== null}
     onretry={() => collectionQuery.refetch()}
   />
 {/if}
@@ -98,6 +115,7 @@
     ? `${route.search.draft ?? ""}`
     : `${collectionId}:${collection?.managed}`}<CollectionManager
       {collection}
+      {detail}
       seed={creating ? (seed.data ?? null) : null}
       libraries={libraries.data ?? []}
       {groups}

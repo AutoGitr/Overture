@@ -1,4 +1,4 @@
-import { expect, logIn, test } from "./fixtures";
+import { chooseOption, expect, logIn, test } from "./fixtures";
 import {
   appSettings,
   collectionDetail,
@@ -158,9 +158,9 @@ test("collection members, metadata and rule views work on desktop and mobile", a
     .click();
   await expect(page.getByRole("heading", { name: "Curated saga", exact: true })).toBeVisible();
   await views.getByRole("link", { name: "Content", exact: true }).click();
-  await expect(page.getByLabel("Sync mode", { exact: true })).toHaveValue("append");
+  await expect(page.getByLabel("Sync mode", { exact: true })).toHaveText("Append");
   await page.getByRole("button", { name: "Condition", exact: true }).click();
-  await page.getByLabel("Criteria condition 2 field", { exact: true }).selectOption("field:year");
+  await chooseOption(page.getByLabel("Criteria condition 2 field", { exact: true }), "Year");
   await page.getByLabel("Criteria condition 2 value", { exact: true }).fill("1990");
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
   const modes = page.getByRole("tablist", { name: "Detail modes", exact: true });
@@ -256,9 +256,7 @@ test("collection creation uses the selected library and TMDB list sources", asyn
   await expect(page.getByText("One collection", { exact: true })).toBeInViewport();
   await page.getByLabel("Title", { exact: true }).fill("New collection");
   await page.getByRole("button", { name: "Condition", exact: true }).click();
-  await page
-    .getByLabel("Criteria condition 1 field", { exact: true })
-    .selectOption("source:tmdb_list");
+  await chooseOption(page.getByLabel("Criteria condition 1 field", { exact: true }), "TMDB list");
   await page.getByLabel("Criteria condition 1 TMDB list IDs", { exact: true }).fill("123");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page).toHaveURL(/collections\/12-new-collection$/);
@@ -451,7 +449,7 @@ test("a franchise set shares Setup and saves its library, group and schedule", a
   await setup.getByText("One per value", { exact: true }).click();
   await expect(page.getByRole("navigation", { name: "Configure sections" })).toHaveCount(0);
   const submit = page.getByRole("button", { name: "Save", exact: true });
-  await page.getByLabel(/^Split by/).selectOption("franchise");
+  await chooseOption(page.getByLabel(/^Split by/), "TMDB franchises");
   // Split by names the group, and fills in what suits franchises.
   await expect(setup.getByLabel(/^Group/)).toHaveValue("TMDB franchises");
   await setup.getByLabel(/^Group/).fill("Franchises");
@@ -533,20 +531,17 @@ test("smart collections combine list sources and live criteria", async ({ page }
   await page.getByLabel("Title", { exact: true }).fill("Unwatched favorites");
   await page.getByText("Smart", { exact: true }).click();
   await page.getByRole("button", { name: "Condition", exact: true }).click();
-  await page
-    .getByLabel("Criteria condition 1 field", { exact: true })
-    .selectOption("source:mdblist");
+  await chooseOption(page.getByLabel("Criteria condition 1 field", { exact: true }), "MDBList");
   const lists = page.getByLabel("Criteria condition 1 MDBList lists", { exact: true });
   await lists.pressSequentially("first/list, second/list");
   await expect(lists).toHaveValue("first/list, second/list");
   await page.getByRole("button", { name: "Condition", exact: true }).click();
-  await page
-    .getByLabel("Criteria condition 2 field", { exact: true })
-    .selectOption("field:unplayed");
+  await chooseOption(page.getByLabel("Criteria condition 2 field", { exact: true }), "Unplayed");
   await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page
-    .getByRole("combobox", { name: "Collection filtering", exact: true })
-    .selectOption("user");
+  await chooseOption(
+    page.getByRole("combobox", { name: "Collection filtering", exact: true }),
+    "User's library",
+  );
   await page.getByRole("button", { name: "Active dates", exact: true }).click();
   await page.getByLabel(/^Active from/).fill("12-01");
   await page.getByLabel(/^Active until/).fill("01-05");
@@ -589,12 +584,12 @@ test("group management saves and sends defaults apart from an unsaved collection
   await logIn(page, "/collections/new");
   await page.getByLabel("Title", { exact: true }).fill("Unsaved collection");
   const setup = page.getByRole("region", { name: "Collection setup", exact: true });
-  await setup.getByLabel("Group", { exact: true }).selectOption("Weekend");
+  await chooseOption(setup.getByLabel("Group", { exact: true }), "Weekend");
   // Groups are created and edited only in the popup.
-  await setup.getByLabel("Group", { exact: true }).selectOption("Create new group...");
-  await expect(setup.getByLabel("Group", { exact: true })).toHaveValue("Weekend");
+  await chooseOption(setup.getByLabel("Group", { exact: true }), "Create new group...");
+  await expect(setup.getByLabel("Group", { exact: true })).toHaveText("Weekend");
   const dialog = page.getByRole("dialog", { name: "Collection groups" });
-  await dialog.getByRole("combobox", { name: "Group", exact: true }).selectOption("Weekend");
+  await chooseOption(dialog.getByRole("combobox", { name: "Group", exact: true }), "Weekend");
   await dialog.getByRole("button", { name: "Settings", exact: true }).click();
   await dialog.getByRole("textbox", { name: "Sort title", exact: true }).fill("02_{title}");
   await expect(page.locator("body")).toHaveJSProperty(
@@ -628,7 +623,7 @@ test("deleting a group from the groups popup asks what happens to its collection
   await logIn(page, "/collections");
   await page.getByRole("button", { name: "Manage groups" }).click();
   const popup = page.getByRole("dialog", { name: "Collection groups" });
-  await popup.getByRole("combobox", { name: "Group" }).selectOption("Weekend");
+  await chooseOption(popup.getByRole("combobox", { name: "Group" }), "Weekend");
   await popup.getByRole("button", { name: "Rename or delete" }).click();
   await popup.getByRole("button", { name: "Delete group" }).click();
 

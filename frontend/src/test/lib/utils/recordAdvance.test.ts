@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { listCollectionsOptions } from "../../../generated/rest/@tanstack/svelte-query.gen";
+import { queryClient } from "../../../lib/rest/queryClient";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
 import { sidebarState } from "../../../lib/stores/sidebarState.svelte";
 import {
@@ -7,15 +9,19 @@ import {
   type AutoAdvanceSettings,
 } from "../../../lib/utils/autoAdvance";
 import type { CatalogContext } from "../../../lib/utils/catalogDraft";
+import * as imagePreload from "../../../lib/utils/imagePreload";
 import {
   catalogPageRecord,
+  collectionRecord,
   handleRecordSelectionAdvance,
   nextRecordTarget,
   openNextRecord,
+  preloadNextCollection,
   type AdvanceRecord,
   type RecordSlot,
 } from "../../../lib/utils/recordAdvance";
-import { appSettings, catalogDetail, catalogEntry } from "../../helpers/fixtures";
+import { appSettings, catalogDetail, catalogEntry, collection } from "../../helpers/fixtures";
+import { searchInSidebar, showInSidebar } from "../../helpers/sidebar";
 
 vi.mock("../../../lib/router/routes", () => ({
   route: { pathname: "/overturedb/collections/tmdb-1/art/poster" },
@@ -51,8 +57,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cancelPendingAutoAdvance();
-  sidebarState.records = null;
-  sidebarState.tmdbRecords = null;
+  showInSidebar({ records: null });
+  sidebarState.searched = null;
   sidebarState.walk = null;
   settingsState.reset();
 });
@@ -113,9 +119,9 @@ describe("after a save", () => {
   it("advances after the delay, through the rows shown when the save began", () => {
     vi.useFakeTimers();
     const rows = [record("a", {}, ["theme"]), record("b")];
-    sidebarState.records = rows;
+    showInSidebar({ records: rows });
     const context = beginAutoAdvance();
-    sidebarState.records = [];
+    showInSidebar({ records: [] });
 
     handleRecordSelectionAdvance("a", "theme", context);
     expect(rows[1]!.open).not.toHaveBeenCalled();
@@ -128,7 +134,7 @@ describe("after a save", () => {
     vi.useFakeTimers();
     const row = record("a", {}, ["poster", "background", "seasons", "theme"]);
     const page = record("a", {}, ["poster", "background", "season:1", "theme"]);
-    sidebarState.records = [row];
+    showInSidebar({ records: [row] });
 
     handleRecordSelectionAdvance("a", "background", beginAutoAdvance(), page);
     vi.runAllTimers();
@@ -141,8 +147,8 @@ describe("after a save", () => {
     vi.useFakeTimers();
     const listed = record("b");
     const found = record("c");
-    sidebarState.records = [record("a", {}, ["theme"]), listed];
-    sidebarState.tmdbRecords = [record("a", {}, ["theme"]), found];
+    showInSidebar({ records: [record("a", {}, ["theme"]), listed] });
+    searchInSidebar({ records: [record("a", {}, ["theme"]), found] });
 
     handleRecordSelectionAdvance("a", "theme", beginAutoAdvance());
     vi.runAllTimers();
@@ -167,5 +173,47 @@ describe("a catalog page", () => {
       seasons: [],
     });
     expect(page.slots.find(({ slot }) => slot === "poster")?.complete).toBe(true);
+  });
+});
+
+describe("next collection preloading", () => {
+  it("fetches the detail images of the collection auto-advance would open next", () => {
+    const spy = vi.spyOn(imagePreload, "preloadImages").mockImplementation(() => {});
+    const first = collection({ id: 1, title: "First" });
+    const done = collection({
+      id: 2,
+      title: "Done",
+      assets: {
+        poster: { status: "complete" },
+        background: { status: "complete" },
+        theme: { status: "complete" },
+      },
+    });
+    const next = collection({
+      id: 3,
+      title: "Next",
+      server_poster_version: "p3",
+      server_background_version: "b3",
+    });
+    queryClient.setQueryData(listCollectionsOptions().queryKey, [first, done, next]);
+    showInSidebar({
+      records: [collectionRecord(first), collectionRecord(done), collectionRecord(next)],
+    });
+    settingsState.show_background_image = true;
+
+    preloadNextCollection(1, { ...settings, auto_advance: "off" });
+    preloadNextCollection(99, settings);
+    expect(spy).not.toHaveBeenCalled();
+
+    preloadNextCollection(1, { ...settings, auto_advance_skip_completed: true });
+    expect(spy).toHaveBeenCalledExactlyOnceWith(
+      [
+        "/api/collections/3/image/poster?t=p3&size=display",
+        "/api/collections/3/image/background?t=b3&size=display",
+      ],
+      "next",
+    );
+    queryClient.clear();
+    spy.mockRestore();
   });
 });

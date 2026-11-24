@@ -154,6 +154,15 @@ export function findCachedLibraryItem(itemId: number): MediaItemRead | undefined
   }
 }
 
+export function findCachedCollection(collectionId: number): CollectionRead | undefined {
+  for (const [, collections] of queryClient.getQueriesData<CollectionRead[]>({
+    predicate: ({ queryKey }) => isTaggedQuery(queryKey, "listCollections"),
+  })) {
+    const collection = collections?.find((current) => current.id === collectionId);
+    if (collection) return collection;
+  }
+}
+
 export async function refreshItem(itemId: number | string): Promise<MediaItemRead> {
   const options = getItemOptions({ path: { item_id: Number(itemId) } });
   await queryClient.invalidateQueries({ queryKey: options.queryKey, exact: true });

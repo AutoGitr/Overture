@@ -20,15 +20,14 @@
   import PendingButton from "../PendingButton.svelte";
   import JobFooter from "./JobFooter.svelte";
   import ServerAuditResultsPanel from "../ServerAuditResultsPanel.svelte";
-  import { libraryGate } from "../../stores/libraryGate.svelte";
-  import { confirmAction, createNotifier } from "../../stores/notificationState.svelte";
+  import { confirmAction } from "../../stores/notificationState.svelte";
   import { serverAuditFixState } from "../../stores/serverAuditFixState.svelte";
   import { serverAuditState } from "../../stores/serverAuditState.svelte";
   import { settingsState } from "../../stores/settingsState.svelte";
   import { assetsInScope } from "../../utils/artTypes";
   import { errorMessage } from "../../utils/errors";
   import { createFolderScope } from "../../utils/folderScope.svelte";
-  import { createClearResults } from "../../utils/jobSnapshots";
+  import { OperationRun } from "../../utils/operationRun.svelte";
   import { persistedState } from "../../utils/persistedState.svelte";
   import { toggleSelectedValue } from "../../utils/popupSelection";
   import {
@@ -62,22 +61,25 @@
     assetsInScope(config.artTypes, { hasSelection: scope.hasSelection, hasShows: scope.hasShows }),
   );
   let checkThemes = $derived((scope.hasSelection || checkCollections) && config.checkThemes);
-  let canAudit = $derived(
-    scope.ready &&
-      ((scope.hasSelection && (artTypes.length > 0 || checkThemes)) ||
-        (checkCollections && (collectionArtTypes.length > 0 || checkThemes))),
-  );
-
-  const feedback = createNotifier();
+  let fixing = $derived(serverAuditFixState.running);
+  const run = new OperationRun("audit", {
+    blocker: () => {
+      if (!scope.ready) return "Loading the folders...";
+      if (!scope.hasSelection && !checkCollections)
+        return "Choose a folder, the sidebar's titles or collections";
+      const checks =
+        (scope.hasSelection && (artTypes.length > 0 || checkThemes)) ||
+        (checkCollections && (collectionArtTypes.length > 0 || checkThemes));
+      return checks ? null : "Choose an art type or themes";
+    },
+    results: () => ["server_audit"],
+    stopping: () => (fixing ? serverAuditFixState.stopping : serverAuditState.stopping),
+  });
+  const { feedback } = run;
   const startAuditRequest = createMutation(() => startServerAuditMutation());
   const stopAuditRequest = createMutation(() => stopServerAuditMutation());
   const fixRequest = createMutation(() => fixAuditFindingsMutation());
   const stopFixRequest = createMutation(() => stopAuditFixMutation());
-  const clearResults = createClearResults(() => ["server_audit"], feedback);
-  let hasResults = $derived(serverAuditState.hasRun);
-  let stopping = $derived(stopAuditRequest.isPending || serverAuditState.stopping);
-  let fixing = $derived(serverAuditFixState.running);
-  let stoppingFix = $derived(stopFixRequest.isPending || serverAuditFixState.stopping);
 
   let actionsLocked = $derived(serverAuditState.running || fixing);
   let selectedArtResults = $derived(
@@ -96,11 +98,9 @@
     config.artTypes = toggleSelectedValue(config.artTypes, type);
   }
 
-  async function startAudit() {
-    if (!canAudit || libraryGate.blocked("audit")) return;
-    config.save();
-    feedback.clear();
-    try {
+  function startAudit() {
+    return run.start(async () => {
+      config.save();
       await startAuditRequest.mutateAsync({
         body: {
           art_types: [...new Set([...artTypes, ...(checkCollections ? collectionArtTypes : [])])],
@@ -110,19 +110,20 @@
         },
       });
       serverAuditState.markStartAccepted();
-    } catch (err) {
-      feedback.error(errorMessage(err, "Server audit failed"));
-    }
+    }, "Server audit failed");
   }
 
-  async function stopAudit() {
-    feedback.clear();
-    try {
-      await stopAuditRequest.mutateAsync({});
-      serverAuditState.markStopRequested();
-    } catch (error) {
-      feedback.error(errorMessage(error, "Could not stop the audit. Please retry."));
-    }
+  /** Stop the fix while one runs, else the audit. */
+  function stop() {
+    return fixing
+      ? run.stop(async () => {
+          await stopFixRequest.mutateAsync({});
+          serverAuditFixState.markStopRequested();
+        }, "Could not stop the fix. Please retry.")
+      : run.stop(async () => {
+          await stopAuditRequest.mutateAsync({});
+          serverAuditState.markStopRequested();
+        }, "Could not stop the audit. Please retry.");
   }
 
   /**
@@ -199,19 +200,9 @@
       feedback.error(errorMessage(err, "Refresh failed"));
     }
   }
-
-  async function stopFix() {
-    feedback.clear();
-    try {
-      await stopFixRequest.mutateAsync({});
-      serverAuditFixState.markStopRequested();
-    } catch (error) {
-      feedback.error(errorMessage(error, "Could not stop the fix. Please retry."));
-    }
-  }
 </script>
 
-{#if !hasResults}
+{#if !run.hasResults}
   <CardColumn>
     <FolderScopeCard {scope} collections={settingsState.current.collections_supported ? collectionScope : undefined} />
     <ArtTypeFiltersCard
@@ -249,20 +240,14 @@
 {/snippet}
 
 {#snippet auditFooter()}
-  <JobFooter
-    {hasResults}
-    running={serverAuditState.running || fixing}
-    blocked={libraryGate.blocked("audit")}
-    stopping={fixing ? stoppingFix : stopping}
-    onstop={fixing ? stopFix : stopAudit}
-    clear={clearResults}
-  >
+  <JobFooter {run} onstop={stop}>
     {#snippet start()}
       <PendingButton
         class="btn btn-primary"
         onclick={startAudit}
-        disabled={!canAudit || !!libraryGate.blocked("audit")}
-        pending={startAuditRequest.isPending}
+        title={run.blocked ?? undefined}
+        disabled={!!run.blocked}
+        pending={run.starting}
         pendingLabel="Starting..."
       >
         <ShieldCheck size={15} />
@@ -283,6 +268,7 @@
         <PendingButton
           class="btn btn-primary"
           onclick={fixSelected}
+          title={selectedCount ? undefined : "Select the items to refresh"}
           disabled={selectedCount === 0}
           pending={fixRequest.isPending}
         >

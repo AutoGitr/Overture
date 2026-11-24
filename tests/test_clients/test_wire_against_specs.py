@@ -43,7 +43,7 @@ SCHEMAS: dict[str, dict[str, tuple[str, ...]]] = {
     "PlexDirector": {"plex": ("Tag",)},
     "PlexContainer": {"plex": ("mediaContainerWithMetadata", "MediaContainer")},
 }
-#: Fields Plex sends that its published specification leaves out; verify.py
+#: Fields Plex sends that its published specification leaves out; scripts/verify
 #: reads each from a real server.
 UNPUBLISHED = {
     "PlexMetadata": {

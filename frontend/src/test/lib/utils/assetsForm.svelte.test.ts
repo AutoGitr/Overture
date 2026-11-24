@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { LibrarySectionRead } from "../../../generated/rest/types.gen";
-import { sidebarState } from "../../../lib/stores/sidebarState.svelte";
 import { AssetsForm } from "../../../lib/utils/assetsForm.svelte";
 import { bulkAssetsSchedule } from "../../helpers/fixtures";
+import { showInSidebar } from "../../helpers/sidebar";
 
 const movies: LibrarySectionRead[] = [
   { id: "1", title: "Movies", media_type: "movie", server_id: 1, count: 10 },
@@ -28,7 +28,7 @@ function form({ catalog = true, loaded = true } = {}) {
 describe("AssetsForm", () => {
   beforeEach(() => {
     localStorage.clear();
-    sidebarState.current = null;
+    showInSidebar({ current: null });
   });
 
   it("can run only once libraries, art types and sources are chosen", () => {
@@ -86,7 +86,7 @@ describe("AssetsForm", () => {
     expect(assets.selectedLibraries).toEqual(["1", "2"]);
 
     assets.config.useSidebarItems = true;
-    sidebarState.current = { type: "show", itemIds: [5, 6] };
+    showInSidebar({ current: { type: "show", itemIds: [5, 6] } });
     expect(assets.hasSelectedLibraries).toBe(true);
     expect(assets.hasShowLibraries).toBe(true);
     expect(assets.request()).toMatchObject({ library_ids: [], item_ids: [5, 6] });
@@ -139,12 +139,12 @@ describe("AssetsForm", () => {
 describe("collection theme scope", () => {
   beforeEach(() => {
     localStorage.clear();
-    sidebarState.current = null;
-    sidebarState.collections = null;
+    showInSidebar({ current: null });
+    showInSidebar({ listedCollections: null });
   });
 
   it("runs art and themes over the sidebar's collection rows", () => {
-    sidebarState.collections = { type: "movie", collectionIds: [12, 34] };
+    showInSidebar({ listedCollections: { type: "movie", collectionIds: [12, 34] } });
     const assets = form();
     assets.config.useSidebarItems = true;
     assets.config.artTypes = ["poster"];
@@ -157,7 +157,7 @@ describe("collection theme scope", () => {
     expect(assets.request().item_ids).toBeUndefined();
     assets.config.enableThemes = false;
     expect(assets.canRun).toBe(true);
-    sidebarState.collections = null;
+    showInSidebar({ listedCollections: null });
   });
 
   it("runs libraries and every collection, or the chosen groups, together", () => {

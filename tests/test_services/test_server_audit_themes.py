@@ -1,6 +1,7 @@
 """Comparing local theme files with the themes a media server plays."""
 
 lazy import asyncio
+lazy from datetime import date
 lazy from pathlib import Path
 lazy from typing import override
 
@@ -37,12 +38,9 @@ lazy from overture.services import server_copies
 lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.art.phash import PhashService
 lazy from overture.services.downloads.theme import DownloadThemeHandler
-lazy from overture.services.server_audit import compare as module
-lazy from overture.services.server_audit.compare import (
-    AuditContext,
-    audit_target,
-    differences,
-)
+lazy from overture.services.server_audit import collection_assets, themes
+lazy from overture.services.server_audit.compare import audit_target, differences
+lazy from overture.services.server_audit.context import AuditContext
 lazy from overture.services.server_audit.work import (
     AuditTarget,
     CollectionAuditTarget,
@@ -96,7 +94,7 @@ def probed(monkeypatch: pytest.MonkeyPatch) -> list[bytes]:
         return durations.get(data)
 
     # The local file is read by the audit, a served theme by the server copies.
-    for reader in (module, server_copies):
+    for reader in (themes, collection_assets, server_copies):
         monkeypatch.setattr(reader, "ffprobe_duration", probe)
     return calls
 
@@ -116,7 +114,7 @@ def hashed(monkeypatch: pytest.MonkeyPatch) -> list[bytes]:
         packets = audio.get(data, data)
         return compute_bytes_hash(packets) if packets is not None else None
 
-    for reader in (module, server_copies):
+    for reader in (themes, server_copies):
         monkeypatch.setattr(reader, "audio_hash", audio_hash)
     return calls
 
@@ -512,11 +510,14 @@ async def test_plex_collection_theme_audit_checks_served_audio_and_updates_deliv
         await plan_collection_audit(
             ServerAuditRequest(check_collections=True, check_themes=False),
             database=database,
+            today=date(2026, 1, 1),
         )
         == []
     )
     assert await plan_collection_audit(
-        ServerAuditRequest(check_collections=True), database=database
+        ServerAuditRequest(check_collections=True),
+        database=database,
+        today=date(2026, 1, 1),
     ) == [CollectionAuditTarget(1, ServerAsset.THEME)]
 
     publisher = _RecordingPublisher()

@@ -101,7 +101,7 @@
   {#if open}
     <div
       id="{menuId}-menu"
-      class={["menu", align]}
+      class={["menu", "menu-surface", align]}
       role="menu"
       aria-label={menuLabel}
       tabindex="-1"
@@ -165,11 +165,6 @@
   .menu {
     position: absolute;
     top: calc(100% + 4px);
-    z-index: var(--z-menu);
-    background: var(--bg-secondary);
-    border: var(--border-accent);
-    border-radius: var(--radius-sm);
-    box-shadow: var(--shadow-md);
     min-width: 110px;
     max-height: 80dvh;
     overflow-x: hidden;

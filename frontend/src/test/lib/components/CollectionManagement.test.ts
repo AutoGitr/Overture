@@ -27,7 +27,7 @@ import {
   withAsset,
 } from "../../helpers/fixtures";
 import { answerConfirmation } from "../../helpers/notifications";
-import { renderWithQueryClient } from "../../helpers/render";
+import { chooseOption, renderWithQueryClient } from "../../helpers/render";
 
 const members = [
   mediaItem({ id: 1, title: "First", library_id: "movies", server_item_id: "m1" }),
@@ -49,16 +49,14 @@ const capabilities = collectionCapabilities();
 const movieLibrary = { id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 2 };
 
 /** Add a source condition to the criteria and fill in its one input. */
-async function addSource(source: string, input: string, value: string) {
+async function addSource(sourceLabel: string, input: string, value: string) {
   await fireEvent.click(await screen.findByRole("button", { name: "Condition" }));
-  await fireEvent.change(screen.getByLabelText("Criteria condition 1 field"), {
-    target: { value: `source:${source}` },
-  });
+  await chooseOption(screen.getByLabelText("Criteria condition 1 field"), sourceLabel);
   await fireEvent.change(screen.getByLabelText(input), { target: { value } });
 }
 
 function addTmdbTitles(ids: string) {
-  return addSource("tmdb_item", "Criteria condition 1 TMDB IDs", ids);
+  return addSource("TMDB title list", "Criteria condition 1 TMDB IDs", ids);
 }
 
 /** Choose exactly one library in Setup's Libraries. */
@@ -153,9 +151,8 @@ describe("collection management", () => {
     });
     goToCollectionView(detail, "configure");
     renderWithQueryClient(CollectionPage);
-    await fireEvent.change(await screen.findByLabelText("Sync mode"), {
-      target: { value: "append" },
-    });
+    await fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    await chooseOption(await screen.findByLabelText("Sync mode"), "Append");
     await fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(calls.some((call) => call.init.method === "PUT" && !call.url.includes("/rule"))).toBe(
@@ -194,8 +191,7 @@ describe("collection management", () => {
     });
     renderWithQueryClient(CollectionPage);
     const group = await screen.findByLabelText("Group");
-    await screen.findByRole("option", { name: "Weekend" });
-    await fireEvent.change(group, { target: { value: "Weekend" } });
+    await chooseOption(group, "Weekend");
     await fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(calls.some((call) => call.init.method === "PUT" && !call.url.includes("/rule"))).toBe(
@@ -222,13 +218,14 @@ describe("collection management", () => {
     });
     renderWithQueryClient(CollectionPage);
     const group = await screen.findByLabelText("Group");
+    await fireEvent.click(group);
     await screen.findByRole("option", { name: "Weekend" });
     expect(screen.queryByRole("button", { name: "Manage groups" })).toBeNull();
-    await fireEvent.change(group, { target: { value: "__new__" } });
+    await fireEvent.click(screen.getByRole("option", { name: "Create new group..." }));
     expect(uiState.openPopup).toBe("collection-groups");
-    expect(group).toHaveValue("Ungrouped");
+    expect(group).toHaveTextContent("Ungrouped");
     uiState.collectionGroupChanged("", "Fresh");
-    await waitFor(() => expect(group).toHaveValue("Fresh"));
+    await waitFor(() => expect(group).toHaveTextContent("Fresh"));
     uiState.closePopup();
   });
 
@@ -890,16 +887,16 @@ describe("collection management", () => {
     await screen.findByLabelText("Title");
     await fireEvent.click(screen.getByRole("button", { name: "Settings", expanded: false }));
     for (const [label, explicit] of [
-      ["Sort", "title.asc"],
-      ["Collection mode", "hide"],
-      ["Library recommended", "true"],
-      ["Home", "false"],
-      ["Shared users' home", "true"],
+      ["Sort", "Title (A to Z)"],
+      ["Collection mode", "Hide collection"],
+      ["Library recommended", "Show"],
+      ["Home", "Hide"],
+      ["Shared users' home", "Show"],
     ] as const) {
       const select = screen.getByLabelText(label);
-      await fireEvent.change(select, { target: { value: explicit } });
-      await fireEvent.change(select, { target: { value: "" } });
-      expect(select).toHaveValue("");
+      await chooseOption(select, explicit);
+      await chooseOption(select, /^Default/);
+      expect(select).toHaveTextContent(/^Default/);
     }
     // Only smart collections filter by user, so a regular one does not offer it.
     expect(screen.queryByLabelText("Collection filtering")).toBeNull();
@@ -949,9 +946,7 @@ describe("collection management", () => {
     await fireEvent.input(await screen.findByLabelText("Minimum members"), {
       target: { value: "2" },
     });
-    await fireEvent.change(screen.getByLabelText("Below minimum"), {
-      target: { value: "false" },
-    });
+    await chooseOption(screen.getByLabelText("Below minimum"), "Keep on server");
     await fireEvent.input(screen.getByRole("textbox", { name: "Sort title" }), {
       target: { value: "+{title}" },
     });

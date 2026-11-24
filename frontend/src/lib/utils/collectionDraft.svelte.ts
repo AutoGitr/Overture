@@ -3,7 +3,6 @@ import { SvelteMap } from "svelte/reactivity";
 import { UNGROUPED_GROUP, UNMANAGED_GROUP } from "../../generated/settings";
 import {
   createCollectionMutation,
-  getCollectionDefaultsOptions,
   getCollectionGroupPolicyOptions,
   listCollectionSetsOptions,
   listCollectionsOptions,
@@ -12,10 +11,10 @@ import {
 import type {
   CollectionDimensionRead,
   CollectionFiltering,
-  CollectionLibraryCriteriaInput,
+  CollectionLibraryCriteriaOutput,
   CollectionMode,
   CollectionOrder,
-  FilterGroupInput,
+  FilterGroupOutput,
   LibrarySectionRead,
   MediaType,
   TmdbCollectionResponse,
@@ -40,7 +39,7 @@ import {
 } from "./collectionFormShared.svelte";
 import { CriteriaPreview } from "./criteriaPreview.svelte";
 import { errorMessage } from "./errors";
-import { CollectionOptions as Capabilities } from "./libraries.svelte";
+import type { CollectionOptions as Capabilities } from "./libraries.svelte";
 import { openSync } from "./syncShortcut";
 
 /** Something a new set's form found that the person should know before saving. */
@@ -60,7 +59,7 @@ export class CollectionDraft extends CollectionRuleForm {
   readonly defaults;
   readonly options: Capabilities;
   /** Criteria of a library just left, so swapping one for another keeps them. */
-  readonly lastCriteria = new SvelteMap<MediaType, FilterGroupInput>();
+  readonly lastCriteria = new SvelteMap<MediaType, FilterGroupOutput>();
   readonly creating = true;
   readonly manualMembersAllowed = false;
   readonly generated = false;
@@ -106,15 +105,7 @@ export class CollectionDraft extends CollectionRuleForm {
     private readonly seed: () => TmdbCollectionResponse | null,
   ) {
     super();
-    this.defaults = createQuery(() =>
-      getCollectionDefaultsOptions({
-        query: { name: this.collectionGroup || undefined },
-      }),
-    );
-    // Last: their queries read the form as soon as they are created.
-    this.options = new Capabilities(() =>
-      this.libraryIds.map((id) => ({ id, media_type: this.typeOf(id) })),
-    );
+    ({ defaults: this.defaults, options: this.options } = this.formQueries());
     this.preview = new CriteriaPreview(() => this);
   }
 
@@ -122,7 +113,9 @@ export class CollectionDraft extends CollectionRuleForm {
     return this.libraries().find((library) => library.id === libraryId)?.media_type ?? "movie";
   }
   /** A franchise holds movies, so a seeded form starts with its only movie library. */
-  private startingLibraries(seed: TmdbCollectionResponse | null): CollectionLibraryCriteriaInput[] {
+  private startingLibraries(
+    seed: TmdbCollectionResponse | null,
+  ): CollectionLibraryCriteriaOutput[] {
     const candidates = seed
       ? this.libraries().filter((library) => library.media_type === "movie")
       : this.libraries();

@@ -9,7 +9,7 @@
     listCatalogEntriesOptions,
     listCollectionsOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
-  import { defaultFilters, uiState, type FilterState } from "../stores/uiState.svelte";
+  import { uiState } from "../stores/uiState.svelte";
   import { errorMessage } from "../utils/errors";
   import {
     filterAvailableValues,
@@ -30,18 +30,21 @@
   import PopupShell from "../components/PopupShell.svelte";
   import RangeFields from "../components/RangeFields.svelte";
   import SegmentedControl from "../components/SegmentedControl.svelte";
+  import Select from "../components/Select.svelte";
+  import type { SelectOption } from "../utils/selectOptions";
   import { setSectionView } from "../stores/sectionState.svelte";
   import { settingsState } from "../stores/settingsState.svelte";
   import { alphabetical } from "../utils/alphabetical";
   import { keysOf } from "../utils/records";
   import { COLLECTION_POSTER_OPTIONS } from "../utils/collectionPosters";
+  import { filterState, defaultFilters, type FilterState } from "../stores/filterState.svelte";
 
   setSectionView("filters");
   const id = $props.id();
   const catalogBrowsing = new CatalogBrowsing();
   let catalogEnabled = $derived(catalogBrowsing.enabled);
 
-  let draft = $state<FilterState>($state.snapshot(uiState.currentFilters));
+  let draft = $state<FilterState>($state.snapshot(filterState.current));
 
   const MONITOR_OPTIONS = [
     ["all", "All"],
@@ -64,16 +67,16 @@
     ["missing", "Missing"],
   ] as const;
   /** The art the art filters can look at: season posters only a show's. */
-  let artSlots = $derived(
-    keysOf(ART_SLOT_LABELS)
+  let artFilterSlots = $derived([
+    ["any", "Any art"] as const,
+    ...keysOf(ART_SLOT_LABELS)
       .filter(
         (slot) =>
           slot !== "season_posters" ||
           (uiState.sidebarMode === "items" && uiState.sidebarTab === "show"),
       )
       .map((slot) => [slot, ART_SLOT_LABELS[slot]] as const),
-  );
-  let artSourceSlots = $derived([["any", "Any art"] as const, ...artSlots]);
+  ]);
   const MEMBERS_OPTIONS = [
     ["all", "All"],
     ["managed", "Overture"],
@@ -162,6 +165,10 @@
       (row) => row.title,
     ),
   );
+  let collectionOptions = $derived<SelectOption<number | null>[]>([
+    { value: null, label: "Any collection" },
+    ...collections.map((row) => ({ value: row.id, label: row.title })),
+  ]);
   let metadataIssueOptions = $derived(
     metadataIssuesFor(uiState.sidebarTab, catalogEnabled, uiState.sidebarMode),
   );
@@ -214,9 +221,9 @@
     bulkItemsRequest.isPending || bulkSetCollectionMonitoredRequest.isPending,
   );
 
-  let catalogDraft = $state($state.snapshot(uiState.catalogFilters));
+  let catalogDraft = $state($state.snapshot(filterState.catalog));
   let catalogPosters = $state(uiState.catalogPosters);
-  let tmdbDraft = $state($state.snapshot(uiState.tmdbFilters));
+  let tmdbDraft = $state($state.snapshot(filterState.tmdb));
   let tmdbFilterKeys = $derived(
     tmdbFilterKeysFor(uiState.sidebarSource, uiState.sidebarMode, catalogEnabled),
   );
@@ -242,27 +249,27 @@
   /** Nothing differs from the filters in use, so Apply would change nothing. */
   let unchanged = $derived(
     uiState.searchingTmdb
-      ? JSON.stringify(tmdbDraft) === JSON.stringify(uiState.tmdbFilters)
+      ? JSON.stringify(tmdbDraft) === JSON.stringify(filterState.tmdb)
       : uiState.sidebarSource === "overturedb"
-      ? JSON.stringify(catalogDraft) === JSON.stringify(uiState.catalogFilters) &&
+      ? JSON.stringify(catalogDraft) === JSON.stringify(filterState.catalog) &&
         catalogPosters === uiState.catalogPosters
-      : JSON.stringify(filters) === JSON.stringify(uiState.currentFilters),
+      : JSON.stringify(filters) === JSON.stringify(filterState.current),
   );
 
   function apply() {
     if (uiState.searchingTmdb) {
-      uiState.tmdbFilters = $state.snapshot(tmdbDraft);
+      filterState.tmdb = $state.snapshot(tmdbDraft);
       uiState.closePopup();
       return;
     }
     if (uiState.sidebarSource === "overturedb") {
-      uiState.catalogFilters = $state.snapshot(catalogDraft);
+      filterState.catalog = $state.snapshot(catalogDraft);
       uiState.setCatalogPosters(catalogPosters);
       uiState.closePopup();
       return;
     }
     const applied = $state.snapshot(filters);
-    uiState.setFilters(
+    filterState.set(
       catalogEnabled ? applied : withoutCatalogFilters(applied, defaultFilters()),
     );
     uiState.closePopup();
@@ -281,7 +288,7 @@
     <FieldRow {label}>
       <SegmentedControl
         label="Resolution art type"
-        options={artSlots}
+        options={artFilterSlots}
         bind:value={draft.resolution.artType}
       />
     </FieldRow>
@@ -296,7 +303,7 @@
     <FieldRow {label}>
       <SegmentedControl
         label="Art source art type"
-        options={artSourceSlots}
+        options={artFilterSlots}
         bind:value={draft.artSource.artType}
       />
     </FieldRow>
@@ -320,19 +327,11 @@
     />
   {:else if key === "collection"}
     <FieldRow {label} for={`${id}-collection`}>
-      <select
+      <Select
         id={`${id}-collection`}
-        value={filters.collectionId === null ? "" : String(filters.collectionId)}
-        onchange={(event) =>
-          (draft.collectionId = event.currentTarget.value
-            ? Number(event.currentTarget.value)
-            : null)}
-      >
-        <option value="">Any collection</option>
-        {#each collections as row (row.id)}
-          <option value={String(row.id)}>{row.title}</option>
-        {/each}
-      </select>
+        options={collectionOptions}
+        bind:value={() => filters.collectionId, (next) => (draft.collectionId = next)}
+      />
     </FieldRow>
     {#if collectionsQuery.isError}
       <p class="hint">{errorMessage(collectionsQuery.error, "Failed to load collections")}</p>

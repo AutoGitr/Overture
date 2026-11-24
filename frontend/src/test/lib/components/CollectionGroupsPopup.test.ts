@@ -4,7 +4,7 @@ import CollectionGroupsPopup from "../../../lib/popups/CollectionGroupsPopup.sve
 import { queryClient } from "../../../lib/rest/queryClient";
 import { uiState } from "../../../lib/stores/uiState.svelte";
 import { mockFetchRoutes } from "../../helpers/fetch";
-import { renderWithQueryClient } from "../../helpers/render";
+import { chooseOption, renderWithQueryClient } from "../../helpers/render";
 import { navigate } from "../../../lib/router/routes";
 import { answerConfirmation } from "../../helpers/notifications";
 
@@ -66,7 +66,9 @@ it("does not offer rename or delete for the reserved fallback", async () => {
     "/api/collections/defaults": {},
   });
   renderWithQueryClient(CollectionGroupsPopup);
-  await screen.findByRole("option", { name: "Ungrouped" });
+  await waitFor(() =>
+    expect(screen.getByRole("combobox", { name: "Group" })).toHaveTextContent("Ungrouped"),
+  );
   expect(screen.queryByRole("button", { name: "Rename or delete" })).not.toBeInTheDocument();
 });
 
@@ -96,7 +98,9 @@ it.each(["rename", "delete"])("updates the group picker after %s", async (operat
     await fireEvent.click(screen.getByRole("button", { name: "Delete group" }));
     await answerConfirmation(true, "Move them to Ungrouped");
     await waitFor(() => expect(changed).toHaveBeenCalledWith("Weekend", ""));
-    expect(screen.getByRole("combobox", { name: "Group" })).toHaveValue("__new__");
+    expect(screen.getByRole("combobox", { name: "Group" })).toHaveTextContent(
+      "Create new group...",
+    );
     expect(screen.getByLabelText("Group name")).toHaveValue("");
   }
 });
@@ -104,13 +108,13 @@ it.each(["rename", "delete"])("updates the group picker after %s", async (operat
 it("switches between existing and new groups without carrying a pending creation", async () => {
   renderGroups();
   const picker = await screen.findByRole("combobox", { name: "Group" });
-  await screen.findByRole("option", { name: "Weekend" });
-  await fireEvent.change(picker, { target: { value: "__new__" } });
+  await waitFor(() => expect(picker).toHaveTextContent("Weekend"));
+  await chooseOption(picker, "Create new group...");
   await fireEvent.input(screen.getByLabelText("Group name"), { target: { value: "Fresh" } });
   await fireEvent.click(screen.getByRole("button", { name: "Configure" }));
-  await fireEvent.change(picker, { target: { value: "Weekend" } });
+  await chooseOption(picker, "Weekend");
   await fireEvent.click(await screen.findByRole("button", { name: "Save" }));
-  expect(screen.getByRole("combobox", { name: "Group" })).toHaveValue("Weekend");
+  expect(screen.getByRole("combobox", { name: "Group" })).toHaveTextContent("Weekend");
 });
 
 it("keeps every section closed, and forgets one opened", async () => {

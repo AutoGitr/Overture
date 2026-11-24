@@ -1,17 +1,11 @@
 <script lang="ts">
   import Folders from "@lucide/svelte/icons/folders";
   import LayersPlus from "@lucide/svelte/icons/layers-plus";
-  import { createQuery } from "@tanstack/svelte-query";
   import type {
     CatalogEntryRow,
     CollectionRead,
     MediaItemRead,
   } from "../../generated/rest/types.gen";
-  import {
-    listCollectionGroupsOptions,
-    listCollectionsOptions,
-    listCatalogEntriesOptions,
-  } from "../../generated/rest/@tanstack/svelte-query.gen";
   import {
     goToCatalogEntry,
     routedCatalogEntry,
@@ -29,42 +23,17 @@
   import { downloadState } from "../stores/downloadState.svelte";
   import { sidebarState } from "../stores/sidebarState.svelte";
   import { settingsState } from "../stores/settingsState.svelte";
-  import { defaultFilters, uiState } from "../stores/uiState.svelte";
-  import { CatalogBrowsing } from "../utils/catalogBrowsing.svelte";
-  import { CollectionMembers } from "../utils/collectionMembers.svelte";
-  import { CustomFilterMatch } from "../utils/customFilterMatch.svelte";
+  import { uiState } from "../stores/uiState.svelte";
   import { collectionArtDisplayUrl, itemArtDisplayUrl, remotePosterUrl } from "../utils/artDisplay";
-  import {
-    filterCatalogEntries,
-    filterSidebarCollections,
-    filterSidebarItems,
-  } from "../utils/sidebarDomain";
   import {
     activeFilterCount,
     catalogFilterCount,
     defaultCatalogFilters,
     defaultTmdbFilters,
-    tmdbFilterKeysFor,
   } from "../utils/sidebarFilters";
+  import { SidebarListing } from "../utils/sidebarListing.svelte";
   import { searchFieldGroups, searchPlaceholder } from "../utils/sidebarSearches";
-  import {
-    collectionGroupNames,
-    inCollectionGroup,
-    statusTone,
-    type CollectionGroupRow,
-    type SidebarSortDir as SortDir,
-    type SidebarTab,
-    type SortScope,
-  } from "../utils/sidebarShared";
-  import {
-    collectionGroupRows,
-    defaultSort,
-    normalizeSortPreference,
-    sortCollectionGroups,
-    sortMenu,
-    type SidebarSortField as SortField,
-    type SidebarSortPreference,
-  } from "../utils/sidebarSorts";
+  import { collectionGroupNames, statusTone, type CollectionGroupRow } from "../utils/sidebarShared";
   import { UNMANAGED_GROUP, UNGROUPED_GROUP } from "../../generated/settings";
   import { readJson, writeJson } from "../utils/storage";
   import DataStatus from "./DataStatus.svelte";
@@ -75,7 +44,7 @@
   import SidebarRow from "./SidebarRow.svelte";
   import SidebarTabs from "./SidebarTabs.svelte";
   import TmdbSearchResults from "./TmdbSearchResults.svelte";
-  import { catalogRowRecord, collectionRecord } from "../utils/recordAdvance";
+  import { filterState, defaultFilters } from "../stores/filterState.svelte";
 
   let {
     loading = false,
@@ -93,125 +62,30 @@
     shows?: MediaItemRead[];
   } = $props();
 
-  const catalog = new CatalogBrowsing();
-
-  const collectionsQuery = createQuery(() => ({
-    ...listCollectionsOptions(),
-    enabled: settingsState.current.collections_supported && uiState.sidebarSource === "library",
-  }));
-  let collections = $derived(collectionsQuery.data ?? []);
-  const groupsQuery = createQuery(() => ({
-    ...listCollectionGroupsOptions(),
-    enabled: settingsState.current.collections_supported && uiState.sidebarSource === "library",
-  }));
-
-  const catalogMovies = createQuery(() => ({
-    ...listCatalogEntriesOptions({ query: { media_type: "movie" } }),
-    enabled: catalog.browsable && uiState.sidebarSource === "overturedb",
-  }));
-  const catalogShows = createQuery(() => ({
-    ...listCatalogEntriesOptions({ query: { media_type: "show" } }),
-    enabled: catalog.browsable && uiState.sidebarSource === "overturedb",
-  }));
-  const catalogCollections = createQuery(() => ({
-    ...listCatalogEntriesOptions({
-      query: { media_type: "collection", posters: uiState.catalogPosters },
-    }),
-    enabled: catalog.browsable && uiState.sidebarSource === "overturedb",
-  }));
-  let catalogQuery = $derived(
-    uiState.sidebarMode === "collections"
-      ? catalogCollections
-      : uiState.sidebarTab === "show"
-        ? catalogShows
-        : catalogMovies,
-  );
-  // A disabled query keeps its cached entries, which turning browsing off must not show.
-  let catalogEntries = $derived(catalog.browsable ? (catalogQuery.data ?? []) : []);
-
-  const SORT_KEYS: Record<SortScope, string> = {
-    library: "overture_sidebar_sort",
-    collections: "overture_collection_sort",
-    groups: "overture_group_sort",
-    overturedb: "overture_catalog_sort",
-    tmdb: "overture_tmdb_sort",
-  };
-
-  function loadSortPreference(scope: SortScope, tab: SidebarTab) {
-    return normalizeSortPreference(
-      readJson<unknown>(`${SORT_KEYS[scope]}_${tab}`, null),
-      scope,
-    );
-  }
-
-  /** Items, collections, groups and the catalog each remember their sort per tab. */
-  let sortByScope = $state<Record<SortScope, Record<SidebarTab, SidebarSortPreference>>>({
-    library: {
-      movie: loadSortPreference("library", "movie"),
-      show: loadSortPreference("library", "show"),
-    },
-    collections: {
-      movie: loadSortPreference("collections", "movie"),
-      show: loadSortPreference("collections", "show"),
-    },
-    groups: {
-      movie: loadSortPreference("groups", "movie"),
-      show: loadSortPreference("groups", "show"),
-    },
-    overturedb: {
-      movie: loadSortPreference("overturedb", "movie"),
-      show: loadSortPreference("overturedb", "show"),
-    },
-    tmdb: {
-      movie: loadSortPreference("tmdb", "movie"),
-      show: loadSortPreference("tmdb", "show"),
-    },
-  });
-  let groupView = $derived(uiState.collectionView === "groups");
-  let currentGroup = $derived(groupView ? sidebarGroup() : null);
-  /** The groups list sorts its groups; an open group its collections. */
-  let sortScope = $derived<SortScope>(
-    uiState.searchingTmdb
-      ? "tmdb"
-      : uiState.sidebarSource === "overturedb"
-        ? "overturedb"
-        : uiState.sidebarMode !== "collections"
-          ? "library"
-          : groupView && currentGroup === null
-            ? "groups"
-            : "collections",
-  );
-  let sortFields = $derived(
-    sortMenu(sortScope, {
-      inGroup: groupView,
-      plex: settingsState.hasServerType("plex"),
-    }),
-  );
-  let chosenSort = $derived(sortByScope[sortScope][uiState.sidebarTab]);
-  // A saved sort this list does not offer, such as Group inside a group, gives way to its default.
-  let sort = $derived<SidebarSortPreference>(
-    sortFields.some((entry) => entry.id === chosenSort.field)
-      ? chosenSort
-      : defaultSort(sortFields),
-  );
-  let tmdbFilterKeys = $derived(
-    tmdbFilterKeysFor(uiState.sidebarSource, uiState.sidebarMode, catalog.enabled),
-  );
-  let catalogRows = $derived(
-    filterCatalogEntries({
-      entries: catalogEntries,
-      filters: uiState.catalogFilters,
-      searchQuery: uiState.searchQuery,
-      searchField: uiState.searchField,
-      sortField: sort.field,
-      sortDir: sort.dir,
-    }),
-  );
-
-  function setSort(field: SortField, dir: SortDir) {
-    sortByScope[sortScope][uiState.sidebarTab] = { field, dir };
-    writeJson(`${SORT_KEYS[sortScope]}_${uiState.sidebarTab}`, { field, dir });
-  }
+  const listing = new SidebarListing(() => ({ movies, shows, loading, error }));
+  $effect(() => sidebarState.show(listing));
+  let {
+    catalog,
+    collectionsQuery,
+    groupsQuery,
+    catalogMovies,
+    catalogShows,
+    catalogCollections,
+    collections,
+    catalogQuery,
+    catalogEntries,
+    groupView,
+    currentGroup,
+    sortFields,
+    sort,
+    tmdbFilterKeys,
+    catalogRows,
+    libraryItems,
+    filteredItems,
+    filteredCollections,
+    collectionGroups,
+    visibleCollections,
+  } = $derived(listing);
 
   let section = $derived(uiState.sidebarSection);
   $effect(() => uiState.followSection());
@@ -238,117 +112,6 @@
   }
 
   let searchingTmdb = $derived(uiState.searchingTmdb);
-  let libraryItems = $derived(uiState.sidebarTab === "movie" ? movies : shows);
-
-  const customFilter = new CustomFilterMatch(() =>
-    uiState.sidebarMode === "items"
-      ? { mediaType: uiState.sidebarTab, filterId: uiState.currentFilters.customFilter }
-      : null,
-  );
-  const filteredCollection = new CollectionMembers(() =>
-    uiState.sidebarMode === "items" ? uiState.currentFilters.collectionId : null,
-  );
-  let filteredItems = $derived(
-    filterSidebarItems({
-      items: libraryItems,
-      filters: uiState.currentFilters,
-      catalogEnabled: catalog.enabled,
-      collectionMembers: filteredCollection.ids,
-      customFilter: customFilter.predicate,
-      searchQuery: uiState.searchQuery,
-      searchField: uiState.searchField,
-      sortField: sort.field,
-      sortDir: sort.dir,
-    }),
-  );
-
-  $effect(() => {
-    sidebarState.view = JSON.stringify([
-      uiState.sidebarSource,
-      uiState.sidebarMode,
-      uiState.sidebarTab,
-      sortScope,
-      sort,
-      currentGroup,
-      uiState.currentFilters,
-      uiState.catalogFilters,
-      uiState.tmdbFilters,
-      uiState.searchQuery,
-      uiState.searchField,
-    ]);
-    return () => {
-      sidebarState.view = null;
-    };
-  });
-
-  // Auto-advance follows the order the user sees.
-  $effect(() => {
-    sidebarState.current =
-      uiState.sidebarSource === "library" &&
-      uiState.sidebarMode === "items" &&
-      !searchingTmdb &&
-      !loading &&
-      !error
-        ? { type: uiState.sidebarTab, itemIds: filteredItems.map((item) => item.id) }
-        : null;
-    return () => {
-      sidebarState.current = null;
-    };
-  });
-
-  let filteredCollections = $derived(
-    filterSidebarCollections({
-      collections,
-      filters: uiState.currentFilters,
-      catalogEnabled: catalog.enabled,
-      searchQuery: uiState.searchQuery,
-      searchField: uiState.searchField,
-      sortField: sort.field,
-      sortDir: sort.dir,
-    }),
-  );
-
-  let collectionGroups = $derived(
-    sortCollectionGroups(
-      collectionGroupRows(
-        collectionGroupNames(groupsQuery.data ?? [], filteredCollections),
-        filteredCollections,
-      ),
-      sort.field,
-      sort.dir,
-    ),
-  );
-  let visibleCollections = $derived(
-    groupView
-      ? filteredCollections.filter((row) => inCollectionGroup(row, currentGroup))
-      : filteredCollections,
-  );
-
-  $effect(() => {
-    sidebarState.collections =
-      uiState.sidebarSource === "library" &&
-      uiState.sidebarMode === "collections" &&
-      collectionsQuery.isSuccess
-        ? { type: uiState.sidebarTab, collectionIds: visibleCollections.map((row) => row.id) }
-        : null;
-    return () => {
-      sidebarState.collections = null;
-    };
-  });
-
-  // Auto-advance moves through collections and catalog entries as they are shown.
-  $effect(() => {
-    sidebarState.records = searchingTmdb
-      ? null
-      : uiState.sidebarSource === "overturedb"
-        ? catalogRows.map(catalogRowRecord)
-        : uiState.sidebarMode === "collections" && collectionsQuery.isSuccess
-          ? visibleCollections.map(collectionRecord)
-          : null;
-    return () => {
-      sidebarState.records = null;
-    };
-  });
 
   let itemsMessage = $derived(
     error || (filteredItems.length === 0 && !loading ? "No items found" : ""),
@@ -465,19 +228,19 @@
     {sortFields}
     filtersOpen={uiState.openPopup === "filters"}
     activeFilters={searchingTmdb
-      ? tmdbFilterKeys.filter((key) => uiState.tmdbFilters[key] !== "all").length
+      ? tmdbFilterKeys.filter((key) => filterState.tmdb[key] !== "all").length
       : uiState.sidebarSource === "overturedb"
-      ? catalogFilterCount(uiState.catalogFilters, uiState.sidebarTab)
+      ? catalogFilterCount(filterState.catalog, uiState.sidebarTab)
       : activeFilterCount(
-          uiState.currentFilters,
+          filterState.current,
           catalog.enabled,
           uiState.sidebarMode,
         )}
     onResetFilters={() => {
-      if (searchingTmdb) uiState.tmdbFilters = defaultTmdbFilters();
+      if (searchingTmdb) filterState.tmdb = defaultTmdbFilters();
       else if (uiState.sidebarSource === "overturedb")
-        uiState.catalogFilters = defaultCatalogFilters();
-      else uiState.setFilters(defaultFilters());
+        filterState.catalog = defaultCatalogFilters();
+      else filterState.set(defaultFilters());
     }}
     searchQuery={uiState.searchQuery}
     searchField={uiState.searchField}
@@ -491,7 +254,7 @@
       uiState.searchField = field;
       uiState.searchQuery = "";
     }}
-    onSetSort={setSort}
+    onSetSort={listing.setSort}
   />
 
   {#if uiState.sidebarSource === "library" && uiState.sidebarMode === "collections" && settingsState.current.collections_supported}
@@ -536,7 +299,7 @@
             {catalogEntries}
             {catalogRow}
             collectionsOnly={uiState.sidebarMode === "collections"}
-            filters={uiState.tmdbFilters}
+            filters={filterState.tmdb}
             filterKeys={tmdbFilterKeys}
             by={uiState.tmdbSearchBy ?? "title"}
             sortField={sort.field}
@@ -571,7 +334,7 @@
           {libraryRow}
           {collections}
           collectionsOnly={uiState.sidebarMode === "collections"}
-          filters={uiState.tmdbFilters}
+          filters={filterState.tmdb}
           filterKeys={tmdbFilterKeys}
           by={uiState.tmdbSearchBy ?? "title"}
           sortField={sort.field}

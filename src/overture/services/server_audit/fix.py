@@ -35,13 +35,8 @@ lazy from ..art.targets import target_label
 lazy from ..downloads.collection_theme import reupload_collection_theme
 lazy from ..server_identity import resolve_owners
 lazy from ..themes.youtube_resolver import DownloadError
-lazy from .compare import (
-    AUDIT_CONCURRENCY,
-    AUDIT_ERRORS,
-    AuditContext,
-    audit_target,
-    differences,
-)
+lazy from .compare import AUDIT_CONCURRENCY, AUDIT_ERRORS, audit_target, differences
+lazy from .context import AuditContext
 lazy from .work import AuditTarget, AuditWork, CollectionAuditTarget
 
 #: Seconds between audits of the fixed files the server does not show yet.

@@ -18,6 +18,8 @@
   import LibraryChecklist from "../LibraryChecklist.svelte";
   import FieldRow from "../FieldRow.svelte";
   import Schedules from "../Schedules.svelte";
+  import Select from "../Select.svelte";
+  import { fromLabels } from "../../utils/selectOptions";
   import {
     createSyncScheduleMutation,
     deleteSyncScheduleMutation,
@@ -29,8 +31,6 @@
     stopSyncMutation,
     updateSyncScheduleMutation,
   } from "../../../generated/rest/@tanstack/svelte-query.gen";
-  import { libraryGate } from "../../stores/libraryGate.svelte";
-  import { createNotifier } from "../../stores/notificationState.svelte";
   import { settingsState } from "../../stores/settingsState.svelte";
   import { syncState } from "../../stores/jobStates.svelte";
   import { syncSelection } from "../../stores/syncSelection.svelte";
@@ -41,7 +41,7 @@
     collectionGroupNames,
   } from "../../utils/collectionGroups.svelte";
   import { errorMessage } from "../../utils/errors";
-  import { createClearResults } from "../../utils/jobSnapshots";
+  import { OperationRun } from "../../utils/operationRun.svelte";
   import { formatDateInTimezone } from "../../utils/popupFormat";
   import {
     chosenApart,
@@ -78,6 +78,8 @@
     overturedb_themerrdb: "OvertureDB -> ThemerrDB",
     themerrdb_overturedb: "ThemerrDB -> OvertureDB",
   };
+  const MODE_OPTIONS = fromLabels(MODE_LABELS);
+  const THEME_ORDER_OPTIONS = fromLabels(THEME_ORDER_LABELS);
 
   const scheduleTypeId = $props.id();
   const libraryKeys = (available: ServerLibraryRead[]) => available.map((library) => library.key);
@@ -99,8 +101,20 @@
     ),
   );
   /** Results show exactly while a run exists, never ahead of the server's answer. */
-  let hasResults = $derived(syncState.hasRun);
-  const feedback = createNotifier();
+  const run = new OperationRun("sync", {
+    blocker: () =>
+      loading
+        ? "Loading the libraries..."
+        : configurationError
+          ? "The libraries could not be loaded"
+          : hasSelectedLibraries ||
+              collectionsChosen ||
+              (libraries.length === 0 && settingsState.current.tmdb_configured)
+            ? null
+            : "Choose a library or collections",
+    results: () => ["sync"],
+    stopping: () => syncState.stopping,
+  });
   let catalogEnabled = $derived(!!catalogStatusQuery.data?.enabled);
   let catalogStatusError = $derived(
     catalogStatusQuery.error
@@ -134,8 +148,6 @@
 
   const runSyncRequest = createMutation(() => runSyncMutation());
   const stopSyncRequest = createMutation(() => stopSyncMutation());
-  let stopping = $derived(stopSyncRequest.isPending || syncState.stopping);
-  const clearResults = createClearResults(() => ["sync"], feedback);
   const createScheduleRequest = createMutation(() => createSyncScheduleMutation());
   const updateScheduleRequest = createMutation(() => updateSyncScheduleMutation());
   const deleteScheduleRequest = createMutation(() => deleteSyncScheduleMutation());
@@ -162,13 +174,6 @@
       (includeCollections ||
         selectedCollectionGroups.length > 0 ||
         selectedCollectionIds.length > 0),
-  );
-  let canRunSync = $derived(
-    !loading &&
-      !configurationError &&
-      (hasSelectedLibraries ||
-        collectionsChosen ||
-        (libraries.length === 0 && settingsState.current.tmdb_configured)),
   );
   // What a schedule may download depends on OvertureDB, so it waits for its status.
   let scheduleBlocker = $derived(
@@ -254,29 +259,21 @@
         : null;
   }
 
-  async function runNow() {
-    if (!canRunSync || libraryGate.blocked("sync") || runSyncRequest.isPending) return;
-    saveSelection();
-    feedback.clear();
-    try {
+  function runNow() {
+    return run.start(async () => {
+      saveSelection();
       await runSyncRequest.mutateAsync({
         body: { library_ids: selectedLibraryIds, ...collectionScope() },
       });
       syncState.markStartAccepted();
-    } catch (err) {
-      feedback.error(errorMessage(err, "Sync failed"));
-    }
+    }, "Sync failed");
   }
 
-  async function stopSync() {
-    if (stopSyncRequest.isPending) return;
-    feedback.clear();
-    try {
+  function stopSync() {
+    return run.stop(async () => {
       await stopSyncRequest.mutateAsync({});
       syncState.markStopRequested();
-    } catch (err) {
-      feedback.error(errorMessage(err, "Stop failed"));
-    }
+    }, "Stop failed");
   }
 
   onMount(() => {
@@ -284,7 +281,7 @@
   });
 </script>
 
-{#if !hasResults}
+{#if !run.hasResults}
   <CardColumn>
     <div class="option-card">
       <LibraryChecklist
@@ -329,10 +326,11 @@
               ? "Adds new items only; Run now always syncs fully."
               : undefined}
           >
-            <select id={scheduleTypeId} bind:value={scheduleMode}>
-              <option value="full">{MODE_LABELS.full}</option>
-              <option value="incremental">{MODE_LABELS.incremental}</option>
-            </select>
+            <Select
+              id={scheduleTypeId}
+              options={MODE_OPTIONS}
+              bind:value={scheduleMode}
+            />
           </FieldRow>
           {#if scheduleMode === "incremental"}
             <label
@@ -348,23 +346,21 @@
                 disabled={!catalogEnabled}
               />
             </label>
-            <label
+            <div
               class={[
                 "form-row justify-between",
                 { "option-card-disabled": !catalogEnabled },
               ]}
             >
-              <span>Download themes for new media</span>
-              <select
-                class="select-compact"
-                bind:value={downloadThemes}
+              <label for={`${scheduleTypeId}-themes`}>Download themes for new media</label>
+              <Select
+                id={`${scheduleTypeId}-themes`}
+                compact
                 disabled={!catalogEnabled}
-              >
-                {#each Object.entries(THEME_ORDER_LABELS) as [value, label] (value)}
-                  <option {value}>{label}</option>
-                {/each}
-              </select>
-            </label>
+                options={THEME_ORDER_OPTIONS}
+                bind:value={downloadThemes}
+              />
+            </div>
             {#if !catalogEnabled && !catalogStatusError}
               <p class="hint">Enable OvertureDB to use these.</p>
             {/if}
@@ -439,19 +435,8 @@
 {/if}
 
 {#snippet syncFooter()}
-  <JobFooter
-    {hasResults}
-    running={syncState.running}
-    blocked={libraryGate.blocked("sync")}
-    {stopping}
-    onstop={stopSync}
-    clear={clearResults}
-  >
+  <JobFooter {run} onstop={stopSync}>
     {#snippet start()}
-      {#if !canRunSync && !loading}<span
-          class="popup-footer-note"
-          role="status">Choose a library or collections</span
-        >{/if}
       <ScheduleSaveButton
         controller={scheduleController}
         blocker={scheduleBlocker}
@@ -460,8 +445,9 @@
       <PendingButton
         class="btn btn-primary"
         onclick={runNow}
-        disabled={!canRunSync || !!libraryGate.blocked("sync")}
-        pending={runSyncRequest.isPending}
+        title={run.blocked ?? undefined}
+        disabled={!!run.blocked}
+        pending={run.starting}
         pendingLabel="Starting..."
       >
         <RefreshCw size={15} />

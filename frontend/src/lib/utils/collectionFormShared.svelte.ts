@@ -1,3 +1,5 @@
+import { createQuery } from "@tanstack/svelte-query";
+import { getCollectionDefaultsOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
 import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import { UNGROUPED_GROUP } from "../../generated/settings";
 import type {
@@ -5,19 +7,19 @@ import type {
   AutoArtSource,
   CollectionDimensionRead,
   CollectionFiltering,
-  CollectionGeneratorInput,
+  CollectionGeneratorOutput,
   CollectionGroupPolicyInput,
   CollectionMode,
   CollectionOptions,
   CollectionOrder,
   CollectionPosterStyle,
-  CollectionRuleWriteInput,
-  FilterGroupInput,
+  CollectionRuleWriteOutput,
+  FilterGroupOutput,
   MediaType,
   SyncMode,
 } from "../../generated/rest/types.gen";
 import { availableFields, availableOrders, emptyGroup } from "./collectionCriteria";
-import type { CollectionOptions as Capabilities } from "./libraries.svelte";
+import { CollectionOptions as Capabilities } from "./libraries.svelte";
 
 /** Collection policy as a collection, a group and the global defaults hold it. */
 export type PolicyData = {
@@ -56,7 +58,7 @@ export type ScheduleData = {
 export type DraftKind = "collection" | "set";
 
 /** A set's generator, whose criteria the form always edits in place. */
-export type SetGenerator = CollectionGeneratorInput & { criteria: FilterGroupInput };
+export type SetGenerator = CollectionGeneratorOutput & { criteria: FilterGroupOutput };
 /** The defaults a set's group gives its collections. */
 export type SetPolicy = Omit<CollectionGroupPolicyInput, "generator">;
 
@@ -65,9 +67,9 @@ export interface CollectionFormLike {
   readonly mediaTypes: MediaType[];
   readonly options: Capabilities;
   readonly capabilities: ReturnType<Capabilities["for"]>;
-  readonly lastCriteria: SvelteMap<MediaType, FilterGroupInput>;
+  readonly lastCriteria: SvelteMap<MediaType, FilterGroupOutput>;
   readonly orders: CollectionOrder[];
-  rule: CollectionRuleWriteInput;
+  rule: CollectionRuleWriteOutput;
   title: string;
   sortTitleFormat: string;
   summaryFormat: string;
@@ -98,9 +100,22 @@ function dropUnofferedOrder(form: CollectionFormLike) {
 
 /** What a collection form derives from its rule and the libraries it names. */
 export abstract class CollectionRuleForm {
-  abstract rule: CollectionRuleWriteInput;
+  abstract rule: CollectionRuleWriteOutput;
+  abstract collectionGroup: string;
   abstract readonly options: Capabilities;
   abstract typeOf(libraryId: string): MediaType;
+
+  /** Its group's defaults and its libraries' capabilities; made last, as they read the form at once. */
+  protected formQueries() {
+    return {
+      defaults: createQuery(() =>
+        getCollectionDefaultsOptions({ query: { name: this.collectionGroup || undefined } }),
+      ),
+      options: new Capabilities(() =>
+        this.libraryIds.map((id) => ({ id, media_type: this.typeOf(id) })),
+      ),
+    };
+  }
 
   get smart() {
     return !!this.rule.smart;
@@ -129,7 +144,7 @@ export abstract class CollectionRuleForm {
   }
 }
 
-export function defaultRule(): CollectionRuleWriteInput {
+export function defaultRule(): CollectionRuleWriteOutput {
   return {
     libraries: [],
     smart: false,
@@ -212,7 +227,7 @@ function heldTypes(libraryIds: string[], typeOf: (id: string) => MediaType): Med
 }
 
 /** The rule a form saves; display choices are the rule's overrides. */
-export function ruleBody(form: CollectionFormLike): CollectionRuleWriteInput {
+export function ruleBody(form: CollectionFormLike): CollectionRuleWriteOutput {
   return {
     ...$state.snapshot(form.rule),
     sort_title_format: null,
@@ -251,8 +266,8 @@ export function optionsBody(form: CollectionFormLike): CollectionOptions {
 function startingCriteria(
   form: CollectionFormLike,
   mediaType: MediaType,
-  fallback: FilterGroupInput,
-): FilterGroupInput {
+  fallback: FilterGroupOutput,
+): FilterGroupOutput {
   const alike = form.rule.libraries.find((entry) => form.typeOf(entry.library_id) === mediaType);
   return alike
     ? structuredClone($state.snapshot(alike.criteria))
@@ -264,13 +279,13 @@ export function setLibrary(
   form: CollectionFormLike,
   libraryId: string,
   chosen: boolean,
-  fallback: FilterGroupInput,
+  fallback: FilterGroupOutput,
 ) {
   const leaving = form.rule.libraries.find((entry) => entry.library_id === libraryId);
   if (leaving)
     form.lastCriteria.set(
       form.typeOf(libraryId),
-      $state.snapshot(leaving.criteria) as FilterGroupInput,
+      $state.snapshot(leaving.criteria) as FilterGroupOutput,
     );
   form.rule.libraries = chosen
     ? [
@@ -300,8 +315,8 @@ const RULE_POLICY = [
   "member_label",
   "arr_tag",
   "home_order",
-] as const satisfies readonly (keyof CollectionRuleWriteInput)[];
-type RulePolicy = Pick<CollectionRuleWriteInput, (typeof RULE_POLICY)[number]>;
+] as const satisfies readonly (keyof CollectionRuleWriteOutput)[];
+type RulePolicy = Pick<CollectionRuleWriteOutput, (typeof RULE_POLICY)[number]>;
 
 /**
  * A form's settings as the settings fields edit them at every level. Display
@@ -309,7 +324,8 @@ type RulePolicy = Pick<CollectionRuleWriteInput, (typeof RULE_POLICY)[number]>;
  * form; the rest are the rule's.
  */
 export function formPolicy(form: CollectionFormLike) {
-  const rule: RulePolicy = {};
+  // Each of its keys is defined just below, reading and writing the form.
+  const rule = {} as RulePolicy;
   for (const key of RULE_POLICY) {
     Object.defineProperty(rule, key, {
       enumerable: true,

@@ -1,6 +1,12 @@
-import { render } from "@testing-library/svelte";
+import { fireEvent, render, screen } from "@testing-library/svelte";
 import type { Component } from "svelte";
 import QueryHarness from "./QueryHarness.svelte";
+
+/** Open a `Select` combobox and pick the named option. */
+export async function chooseOption(control: HTMLElement, option: string | RegExp) {
+  await fireEvent.click(control);
+  await fireEvent.click(await screen.findByRole("option", { name: option }));
+}
 
 /**
  * Render a component inside the app's QueryClientProvider, as Root.svelte does.

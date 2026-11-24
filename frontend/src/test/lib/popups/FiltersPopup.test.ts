@@ -12,7 +12,7 @@ import { settingsState } from "../../../lib/stores/settingsState.svelte";
 import FiltersPopup from "../../../lib/popups/FiltersPopup.svelte";
 import { queryClient } from "../../../lib/rest/queryClient";
 import { navigate, openSidebarGroup } from "../../../lib/router/routes";
-import { defaultFilters, uiState } from "../../../lib/stores/uiState.svelte";
+import { uiState } from "../../../lib/stores/uiState.svelte";
 import { mockFetch, mockFetchRoutes, mockFetchSequence } from "../../helpers/fetch";
 import {
   appSettings,
@@ -24,7 +24,8 @@ import {
   mediaServers,
 } from "../../helpers/fixtures";
 import { answerConfirmation } from "../../helpers/notifications";
-import { renderWithQueryClient } from "../../helpers/render";
+import { chooseOption, renderWithQueryClient } from "../../helpers/render";
+import { filterState, defaultFilters } from "../../../lib/stores/filterState.svelte";
 
 // sidebarTab/sidebarMode are derived from the URL, so the route sets them.
 describe("FiltersPopup edits one draft of the filter set", () => {
@@ -34,7 +35,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     // No saved custom filters, without asking.
     queryClient.setQueryData(listSavedFiltersOptions().queryKey, []);
     mockFetch([]);
-    uiState.setFilters(defaultFilters());
+    filterState.set(defaultFilters());
     uiState.searchQuery = "";
     uiState.searchField = "title";
     storeCatalogStatus(catalogStatus({ enabled: false }));
@@ -50,7 +51,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     const issues = view.getByRole("region", { name: "Metadata issues" });
     await fireEvent.click(within(issues).getByRole("checkbox", { name: "ID mismatch" }));
     await fireEvent.click(view.getByRole("button", { name: "Apply filters" }));
-    expect(uiState.movieFilters.metadataIssues.flags).toEqual(["id_mismatch"]);
+    expect(filterState.movie.metadataIssues.flags).toEqual(["id_mismatch"]);
   });
 
   it("applies the draft to the active tab's filters", async () => {
@@ -59,18 +60,18 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     await fireEvent.click(view.getByRole("radio", { name: "Monitored" }));
     await fireEvent.click(view.getByRole("button", { name: "Apply filters" }));
 
-    expect(uiState.movieFilters.monitored).toBe("monitored");
-    expect(uiState.showFilters.monitored).toBe("all");
+    expect(filterState.movie.monitored).toBe("monitored");
+    expect(filterState.show.monitored).toBe("all");
   });
 
   it("clears back to the shared defaults rather than a second copy of them", async () => {
-    uiState.setFilters({ ...defaultFilters(), themeLength: { min: 30, max: 400 } });
+    filterState.set({ ...defaultFilters(), themeLength: { min: 30, max: 400 } });
 
     const view = renderWithQueryClient(FiltersPopup);
     await fireEvent.click(view.getByRole("button", { name: "Reset filters" }));
     await fireEvent.click(view.getByRole("button", { name: "Apply filters" }));
 
-    expect(uiState.movieFilters).toEqual(defaultFilters());
+    expect(filterState.movie).toEqual(defaultFilters());
   });
 
   it("applies theme length and resolution ranges, leaving empty limits open", async () => {
@@ -86,8 +87,8 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     await fireEvent.input(view.getByLabelText("Max width (px)"), { target: { value: "1280" } });
     await fireEvent.click(view.getByRole("button", { name: "Apply filters" }));
 
-    expect(uiState.movieFilters.themeLength).toEqual({ min: 30, max: 90 });
-    expect(uiState.movieFilters.resolution).toEqual({
+    expect(filterState.movie.themeLength).toEqual({ min: 30, max: 90 });
+    expect(filterState.movie.resolution).toEqual({
       artType: "background",
       min: null,
       max: 1280,
@@ -101,7 +102,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     await fireEvent.click(view.getByRole("checkbox", { name: "Downloaded" }));
     await fireEvent.click(view.getByRole("button", { name: "Apply filters" }));
 
-    expect(uiState.movieFilters.themeSources).toEqual(["download", "embedded_id"]);
+    expect(filterState.movie.themeSources).toEqual(["download", "embedded_id"]);
   });
 
   it("applies selected art sources for the chosen artwork", async () => {
@@ -116,7 +117,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     await fireEvent.click(view.getByRole("checkbox", { name: "TMDB" }));
     await fireEvent.click(view.getByRole("button", { name: "Apply filters" }));
 
-    expect(uiState.movieFilters.artSource).toEqual({
+    expect(filterState.movie.artSource).toEqual({
       artType: "poster",
       // Sources keep the list's alphabetical order.
       sources: ["tmdb", "tpdb"],
@@ -140,13 +141,13 @@ describe("FiltersPopup edits one draft of the filter set", () => {
       { id: "lib-1", title: "Films", count: 3 },
       { id: "lib-2", title: "Kids", count: 1 },
     ]);
-    uiState.setFilters({ ...defaultFilters(), libraryIds: ["gone", "lib-1"] });
+    filterState.set({ ...defaultFilters(), libraryIds: ["gone", "lib-1"] });
     const view = renderWithQueryClient(FiltersPopup);
 
     expect(await view.findByText("1 of 2 selected")).toBeInTheDocument();
     await fireEvent.click(view.getByRole("button", { name: "Apply filters" }));
 
-    expect(uiState.movieFilters.libraryIds).toEqual(["lib-1"]);
+    expect(filterState.movie.libraryIds).toEqual(["lib-1"]);
   });
 
   it("leaves the stored filters untouched until Apply", async () => {
@@ -154,7 +155,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
 
     await fireEvent.click(view.getByRole("radio", { name: "Unmonitored" }));
 
-    expect(uiState.movieFilters.monitored).toBe("all");
+    expect(filterState.movie.monitored).toBe("all");
   });
 
   it("applies the media server and themerrdb filter drafts when active", async () => {
@@ -169,8 +170,8 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     );
     await fireEvent.click(view.getByRole("button", { name: "Apply filters" }));
 
-    expect(uiState.movieFilters.mediaServer).toBe("missing");
-    expect(uiState.movieFilters.themerrDb).toBe("complete");
+    expect(filterState.movie.mediaServer).toBe("missing");
+    expect(filterState.movie.themerrDb).toBe("complete");
   });
 
   it("unmonitors currently filtered items after user confirmation", async () => {
@@ -278,7 +279,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     await fireEvent.click(view.getByRole("radio", { name: "Unmonitored" }));
     expect(view.getByRole("button", { name: "Remove themes 1" })).toBeEnabled();
     expect(view.getByRole("button", { name: "Delete from Overture 1" })).toBeEnabled();
-    expect(uiState.movieFilters.monitored).toBe("all");
+    expect(filterState.movie.monitored).toBe("all");
   });
 
   it.each([
@@ -298,7 +299,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
         items: [...items, mediaItem({ id: 3 })],
         total: 3,
       });
-      uiState.setFilters({ ...defaultFilters(), theme: "complete" });
+      filterState.set({ ...defaultFilters(), theme: "complete" });
       const { calls } = mockFetchSequence([
         { body: [] }, // Libraries query on mount.
         {
@@ -466,19 +467,28 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     await fireEvent.click(
       within(view.getByRole("radiogroup", { name: "Size" })).getByLabelText("Empty"),
     );
-    await fireEvent.change(view.getByLabelText("Operation"), { target: { value: operation } });
+    const operationLabels = {
+      set_group: "Assign group",
+      set_order: "Set sort",
+      apply_sort_title_format: "Format sort titles",
+      set_visibility: "Set visibility",
+      orphan: "Orphan managed",
+      delete: "Delete collections",
+    } as const;
+    await chooseOption(
+      view.getByLabelText("Operation"),
+      operationLabels[operation as keyof typeof operationLabels],
+    );
     if (operation === "set_group")
-      await fireEvent.change(view.getByLabelText("Target group"), { target: { value: "Weekend" } });
+      await chooseOption(view.getByLabelText("Target group"), "Weekend");
     if (operation === "set_order" && "order_type" in expected && expected.order_type)
-      await fireEvent.change(await view.findByLabelText(/^Sort/), {
-        target: { value: expected.order_type },
-      });
+      await chooseOption(await view.findByLabelText(/^Sort/), "Title (A to Z)");
     if (operation === "apply_sort_title_format")
       await fireEvent.input(view.getByRole("textbox", { name: /^Sort title template/ }), {
         target: { value: "+{title}" },
       });
     if (operation === "set_visibility") {
-      await fireEvent.change(view.getByLabelText("Visibility"), { target: { value: "hide" } });
+      await chooseOption(view.getByLabelText("Visibility"), "Hide collection");
       await fireEvent.click(view.getByLabelText("Visible on home"));
     }
     await fireEvent.click(view.getByRole("button", { name: "Apply to 1 collections" }));
@@ -505,7 +515,8 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     });
     const view = renderWithQueryClient(FiltersPopup);
     await view.findByRole("radiogroup", { name: "Kind" });
-    const operations = within(view.getByLabelText("Operation"))
+    await fireEvent.click(view.getByLabelText("Operation"));
+    const operations = within(view.getByRole("listbox"))
       .getAllByRole("option")
       .map((option) => option.textContent?.trim());
     expect(operations).toEqual([
@@ -517,14 +528,16 @@ describe("FiltersPopup edits one draft of the filter set", () => {
       "Set sort",
       "Set visibility",
     ]);
-    await fireEvent.change(view.getByLabelText("Operation"), { target: { value: "set_group" } });
+    await fireEvent.click(view.getByRole("option", { name: "Assign group" }));
+    await fireEvent.click(view.getByLabelText("Target group"));
     await waitFor(() =>
       expect(
-        within(view.getByLabelText("Target group"))
+        within(view.getByRole("listbox"))
           .getAllByRole("option")
           .map((option) => option.textContent),
       ).toEqual(["Anime", "Ungrouped", "Weekend"]),
     );
+    await fireEvent.keyDown(view.getByLabelText("Target group"), { key: "Escape" });
     // Groups are renamed and deleted in Collection groups, not among the filters.
     expect(view.queryByRole("button", { name: /rename/i })).toBeNull();
     expect(view.queryByRole("button", { name: /delete group/i })).toBeNull();
@@ -591,11 +604,12 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     const view = renderWithQueryClient(FiltersPopup);
 
     const select = await view.findByRole("combobox", { name: "Collection" });
-    expect(within(select).queryByRole("option", { name: "Lost" })).toBeNull();
-    await fireEvent.change(select, { target: { value: "5" } });
+    await fireEvent.click(select);
+    expect(view.queryByRole("option", { name: "Lost" })).toBeNull();
+    await fireEvent.click(view.getByRole("option", { name: "Alien" }));
     await fireEvent.click(view.getByRole("button", { name: "Apply filters" }));
 
-    expect(uiState.movieFilters.collectionId).toBe(5);
+    expect(filterState.movie.collectionId).toBe(5);
   });
 
   it("discards the drafts of the catalog entries the filters match", async () => {

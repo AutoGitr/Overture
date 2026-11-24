@@ -100,31 +100,36 @@ class CandidateSources:
     errors: list[str] = field(default_factory=list[str])
 
     def flat(self) -> list[ArtCandidate]:
-        """Return every candidate, each once, as :func:`in_source_order` lists them.
+        """Return every candidate once, the first source offering a URL keeping it.
 
-        TMDB's art comes first, so it sorts higher when match scores tie.
+        Sources are in :func:`in_source_order`, so TMDB's art sorts higher when
+        match scores tie.
         """
-        return [c for candidates in self.by_source.values() for c in candidates]
+        unique: dict[str, ArtCandidate] = {}
+        for candidates in self.by_source.values():
+            for candidate in candidates:
+                unique.setdefault(candidate.url, candidate)
+        return list(unique.values())
 
 
 def in_source_order(
     by_source: dict[str, list[ArtCandidate]],
 ) -> dict[str, list[ArtCandidate]]:
-    """*by_source* as the art panel lists it, each image once, TMDB first.
+    """*by_source* as the art panel lists it, TMDB first, OvertureDB last.
 
-    Every candidate's link is canonical, so one image offered by several
-    sources has one link, and is kept by the one that says most about it:
-    OvertureDB, which chose it, then TMDB, which servers relay it from, then
-    the servers and members in order.
+    TMDB and OvertureDB each keep everything they offer, even when OvertureDB
+    chose a TMDB image; media servers and members drop any image TMDB,
+    OvertureDB or an earlier server already offers.
     """
-    keeper: dict[str, int] = {ArtSource.OVERTUREDB: 0, ArtSource.TMDB: 1}
-    held: set[str] = set()
+    own = {ArtSource.TMDB, ArtSource.OVERTUREDB}
+    held = {c.url for name in own for c in by_source.get(name, ())}
     unique: dict[str, list[ArtCandidate]] = {}
-    for name, candidates in sorted(
-        by_source.items(), key=lambda pair: keeper.get(pair[0], 2)
-    ):
-        unique[name] = [c for c in candidates if c.url not in held]
-        held.update(c.url for c in unique[name])
+    for name, candidates in by_source.items():
+        if name in own:
+            unique[name] = list({c.url: c for c in candidates}.values())
+        else:
+            unique[name] = [c for c in candidates if c.url not in held]
+            held.update(c.url for c in unique[name])
     rank: dict[str, int] = {ArtSource.TMDB: 0, ArtSource.OVERTUREDB: 2}
     return dict(sorted(unique.items(), key=lambda pair: rank.get(pair[0], 1)))
 
@@ -285,8 +290,22 @@ class ArtCandidates:
                     )
         found = await self._resolve(collection.title, lookups)
         catalog = _catalog_collection_candidates(entry, art_type, posters)
+        styles = {c.url: c.poster_style for c in catalog if c.poster_style}
+        by_source = (
+            {
+                name: [
+                    c.model_copy(update={"poster_style": styles[c.url]})
+                    if c.url in styles
+                    else c
+                    for c in candidates
+                ]
+                for name, candidates in found.by_source.items()
+            }
+            if styles
+            else found.by_source
+        )
         return CandidateSources(
-            in_source_order({ArtSource.OVERTUREDB: catalog, **found.by_source}),
+            in_source_order({ArtSource.OVERTUREDB: catalog, **by_source}),
             found.errors,
         )
 

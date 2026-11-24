@@ -4,10 +4,10 @@ import type {
   CollectionFieldRead,
   CollectionSourceRead,
   CollectionOrder,
-  CollectionSourceInput,
-  ConditionInput,
-  FieldConditionInput,
-  FilterGroupInput,
+  CollectionSourceOutput,
+  ConditionOutput,
+  FieldConditionOutput,
+  FilterGroupOutput,
   FilterOperator,
   MediaType,
   SourceType,
@@ -22,12 +22,12 @@ export function sortedOrders(orders: readonly CollectionOrder[]): CollectionOrde
   );
 }
 
-export function emptyGroup(mode: FilterGroupInput["mode"] = "all"): FilterGroupInput {
+export function emptyGroup(mode: FilterGroupOutput["mode"] = "all"): FilterGroupOutput {
   return { mode, conditions: [], groups: [] };
 }
 
-export function groupIsEmpty(group: FilterGroupInput): boolean {
-  return !group.conditions?.length && (group.groups ?? []).every(groupIsEmpty);
+export function groupIsEmpty(group: FilterGroupOutput): boolean {
+  return !group.conditions.length && group.groups.every(groupIsEmpty);
 }
 
 /**
@@ -51,22 +51,27 @@ export function availableOrders(
   return (smart ? capabilities?.smart_orders : capabilities?.orders) ?? [];
 }
 
+/** Whether *operator* compares with a calendar date rather than a number or text. */
+export function isDateOperator(operator: FilterOperator | undefined): boolean {
+  return operator === "before" || operator === "after";
+}
+
 export function defaultValue(
   field: CollectionFieldRead,
   operator: FilterOperator,
-): FieldConditionInput["value"] {
+): FieldConditionOutput["value"] {
   if (field.kind === "boolean") return true;
   if (field.kind === "number" || operator === "in_last" || operator === "not_in_last") return 30;
-  if (operator === "before" || operator === "after") return new Date().toISOString().slice(0, 10);
+  if (isDateOperator(operator)) return new Date().toISOString().slice(0, 10);
   return field.choices[0]?.value ?? "";
 }
 
-export function fieldCondition(field: CollectionFieldRead): ConditionInput {
+export function fieldCondition(field: CollectionFieldRead): ConditionOutput {
   const operator = field.operators[0] ?? "is";
   return { kind: "field", field: field.field, operator, value: defaultValue(field, operator) };
 }
 
-export function newSource(type: SourceType): CollectionSourceInput {
+export function newSource(type: SourceType): CollectionSourceOutput {
   switch (type) {
     case "tmdb_collection":
       return { type, collection_id: 0 };
@@ -75,7 +80,7 @@ export function newSource(type: SourceType): CollectionSourceInput {
     case "tmdb_item":
       return { type, tmdb_ids: [] };
     case "tmdb_person":
-      return { type, person_id: 0, roles: ["actor"] };
+      return { type, person_id: 0, person_name: null, roles: ["actor"] };
     case "tmdb_chart":
       return { type, chart: "popular", limit: 100 };
     case "mdblist":
@@ -86,12 +91,12 @@ export function newSource(type: SourceType): CollectionSourceInput {
   }
 }
 
-export function sourceCondition(type: SourceType): ConditionInput {
+export function sourceCondition(type: SourceType): ConditionOutput {
   return { kind: "source", operator: "is", source: newSource(type) };
 }
 
 /** Criteria a TMDB franchise seeds: the franchise's movies. */
-export function franchiseCriteria(collectionId: number): FilterGroupInput {
+export function franchiseCriteria(collectionId: number): FilterGroupOutput {
   return {
     mode: "all",
     conditions: [
@@ -143,13 +148,13 @@ const TYPED_SOURCES: ReadonlySet<SourceType> = new Set(["tmdb_item", "tmdb_chart
  * of *from*: they test its field with its operator, or offer its source.
  */
 export function conditionFits(
-  condition: ConditionInput,
+  condition: ConditionOutput,
   target: CriteriaTarget,
   from: MediaType,
 ): boolean {
   if (condition.kind === "field") {
     const field = target.fields.find((entry) => entry.field === condition.field);
-    return !!field && field.operators.includes(condition.operator ?? "is");
+    return !!field && field.operators.includes(condition.operator);
   }
   const type = condition.source.type;
   return (
@@ -160,12 +165,12 @@ export function conditionFits(
 
 /** Whether every condition of a copied group, at any depth, fits *target*. */
 export function groupFits(
-  group: FilterGroupInput,
+  group: FilterGroupOutput,
   target: CriteriaTarget,
   from: MediaType,
 ): boolean {
   return (
-    (group.conditions ?? []).every((condition) => conditionFits(condition, target, from)) &&
-    (group.groups ?? []).every((nested) => groupFits(nested, target, from))
+    group.conditions.every((condition) => conditionFits(condition, target, from)) &&
+    group.groups.every((nested) => groupFits(nested, target, from))
   );
 }

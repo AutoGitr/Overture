@@ -803,7 +803,7 @@ async def test_clear_season_posters_without_a_season_forgets_every_season(
     assert read_asset(item, ServerAsset.POSTER).url == "https://x/p.jpg"
 
 
-def test_each_image_is_offered_once_by_the_source_that_says_most_about_it() -> None:
+def test_tmdb_and_overturedb_keep_their_images_while_servers_drop_repeats() -> None:
     def offered(*names: str) -> list[ArtCandidate]:
         return [
             ArtCandidate(url=f"https://image.tmdb.org/t/p/original/{n}.jpg")
@@ -813,7 +813,7 @@ def test_each_image_is_offered_once_by_the_source_that_says_most_about_it() -> N
     sources = in_source_order(
         {
             "Jellyfin": offered("relayed", "chosen", "jellyfin"),
-            "Emby": offered("relayed", "emby"),
+            "Emby": offered("relayed", "jellyfin", "emby"),
             ArtSource.OVERTUREDB: offered("chosen"),
             ArtSource.TMDB: offered("relayed", "chosen", "tmdb"),
         }
@@ -823,7 +823,7 @@ def test_each_image_is_offered_once_by_the_source_that_says_most_about_it() -> N
         name: [c.url.rsplit("/", 1)[1] for c in found]
         for name, found in sources.items()
     } == {
-        ArtSource.TMDB: ["relayed.jpg", "tmdb.jpg"],
+        ArtSource.TMDB: ["relayed.jpg", "chosen.jpg", "tmdb.jpg"],
         "Jellyfin": ["jellyfin.jpg"],
         "Emby": ["emby.jpg"],
         ArtSource.OVERTUREDB: ["chosen.jpg"],

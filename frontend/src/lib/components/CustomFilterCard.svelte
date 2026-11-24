@@ -8,7 +8,7 @@
     listSavedFiltersOptions,
     updateSavedFilterMutation,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
-  import type { FilterGroupInput, MediaType } from "../../generated/rest/types.gen";
+  import type { FilterGroupOutput, MediaType } from "../../generated/rest/types.gen";
   import { invalidateTags } from "../rest/cache";
   import { settingsState } from "../stores/settingsState.svelte";
   import { emptyGroup } from "../utils/collectionCriteria";
@@ -16,6 +16,8 @@
   import CriteriaEditor from "./CriteriaEditor.svelte";
   import FieldRow from "./FieldRow.svelte";
   import PopupSection from "./PopupSection.svelte";
+  import Select from "./Select.svelte";
+  import type { SelectOption } from "../utils/selectOptions";
 
   let {
     filterId = $bindable(),
@@ -30,7 +32,7 @@
     /** The saved filter being edited; null for a new one. */
     id: number | null;
     name: string;
-    criteria: FilterGroupInput;
+    criteria: FilterGroupOutput;
   }
 
   let draft = $state<Draft | null>(null);
@@ -39,6 +41,10 @@
   let offered = $derived(
     (saved.data ?? []).filter((entry) => entry.media_types.includes(mediaType)),
   );
+  let filterOptions = $derived<SelectOption<number | null>[]>([
+    { value: null, label: "None" },
+    ...offered.map((entry) => ({ value: entry.id, label: entry.name })),
+  ]);
   let elsewhere = $derived((saved.data?.length ?? 0) - offered.length);
   const capabilities = createQuery(() => ({
     ...getLibraryFilterCapabilitiesOptions({ query: { media_type: mediaType } }),
@@ -95,18 +101,12 @@
 >
   <FieldRow label="Saved filter" for="custom-filter">
     <div class="pick">
-      <select
+      <Select
         id="custom-filter"
-        value={filterId ?? ""}
-        onchange={(event) =>
-          (filterId = event.currentTarget.value ? Number(event.currentTarget.value) : null)}
         disabled={busy}
-      >
-        <option value="">None</option>
-        {#each offered as entry (entry.id)}
-          <option value={entry.id}>{entry.name}</option>
-        {/each}
-      </select>
+        options={filterOptions}
+        bind:value={filterId}
+      />
       <button type="button" class="btn btn-secondary btn-sm" onclick={() => edit(false)}>New</button>
       {#if selected}
         <button type="button" class="btn btn-secondary btn-sm" onclick={() => edit(true)}>Edit</button>
@@ -175,7 +175,7 @@
     align-items: center;
   }
 
-  .pick select {
+  .pick :global(.combobox) {
     flex: 1 1 10rem;
     min-width: 0;
   }

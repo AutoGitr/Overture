@@ -1,12 +1,12 @@
 <script lang="ts">
-  import type { AppSettingsUpdate } from "../../generated/rest/types.gen";
+  import type { SettingsDraft } from "../stores/settingsState.svelte";
 
   let {
     draft = $bindable(),
     enabled = $bindable(),
     disabled = false,
   }: {
-    draft: AppSettingsUpdate;
+    draft: SettingsDraft;
     /** Whether OvertureDB syncs its catalog; the app settings do not hold it. */
     enabled: boolean;
     /** The switch cannot change, such as while the catalog syncs. */

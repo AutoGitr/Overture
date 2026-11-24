@@ -2,6 +2,7 @@
 
 lazy import asyncio
 lazy from dataclasses import replace
+lazy from datetime import date
 lazy from pathlib import Path
 lazy from types import SimpleNamespace
 lazy from typing import Any, cast
@@ -23,7 +24,8 @@ lazy from overture.services.art.collection_art import CollectionArtService
 lazy from overture.services.art.phash import PHASH_HEX_LENGTH, PhashService
 lazy from overture.services.downloads.theme import DownloadThemeHandler
 lazy from overture.services.server_audit import compare as server_audit
-lazy from overture.services.server_audit.compare import AuditContext
+lazy from overture.services.server_audit import item_art
+lazy from overture.services.server_audit.context import AuditContext
 lazy from overture.services.server_audit.work import AuditTarget
 lazy from overture.services.storage.assets import AssetStorage
 lazy from tests.publishers import NullEventPublisher
@@ -96,7 +98,7 @@ async def test_server_audit_reports_overlapping_targets_in_plan_order(
         return [result]
 
     monkeypatch.setattr(server_audit, "plan_audit", fake_plan)
-    monkeypatch.setattr(server_audit, "_audit_art_one", fake_audit)
+    monkeypatch.setattr(server_audit, "audit_item_art", fake_audit)
     probe = JobProbe(lifecycle=LIFECYCLE)
 
     await server_audit.run_server_audit(
@@ -108,6 +110,7 @@ async def test_server_audit_reports_overlapping_targets_in_plan_order(
             database=database,
             phash=PhashService(app_config=app_config),
         ),
+        today=date(2026, 1, 1),
     )
 
     reported = [
@@ -120,7 +123,7 @@ async def test_server_audit_reports_overlapping_targets_in_plan_order(
     assert peak > 1
 
 
-async def testlocal_fingerprint_reuses_the_record_until_the_file_changes(
+async def test_local_fingerprint_reuses_the_record_until_the_file_changes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     *,
@@ -152,15 +155,14 @@ async def testlocal_fingerprint_reuses_the_record_until_the_file_changes(
     )
 
     assert (
-        await server_audit.local_fingerprint(poster, tmp_path, known, context)
-        == recorded
+        await item_art.local_fingerprint(poster, tmp_path, known, context) == recorded
     )
     assert computed == []
 
     poster.write_bytes(b"a changed poster")
 
     assert (
-        await server_audit.local_fingerprint(poster, tmp_path, known, context)
+        await item_art.local_fingerprint(poster, tmp_path, known, context)
         == "b" * PHASH_HEX_LENGTH
     )
     assert computed == [str(poster)]
@@ -197,6 +199,7 @@ async def test_server_audit_fails_at_once_while_the_media_server_is_down(
         ServerAuditRequest(),
         probe.context,
         audit_context=replace(context, provider_registry=registry),
+        today=date(2026, 1, 1),
     )
 
     assert probe.names()[-1].endswith(".failed")

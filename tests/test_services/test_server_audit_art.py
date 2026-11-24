@@ -3,6 +3,7 @@
 lazy import io
 lazy from collections.abc import AsyncIterator
 lazy from concurrent.futures import ThreadPoolExecutor
+lazy from datetime import date
 lazy from pathlib import Path
 lazy from typing import override
 
@@ -47,7 +48,8 @@ lazy from overture.services.art.phash import PhashService
 lazy from overture.services.art.uploads import ArtUploads
 lazy from overture.services.downloads.theme import DownloadThemeHandler
 lazy from overture.services.removal import AssetRemover
-lazy from overture.services.server_audit.compare import AuditContext, audit_target
+lazy from overture.services.server_audit.compare import audit_target
+lazy from overture.services.server_audit.context import AuditContext
 lazy from overture.services.server_audit.work import (
     AuditTarget,
     CollectionAuditTarget,
@@ -181,7 +183,7 @@ async def test_the_same_image_on_the_server_is_a_visual_match(
 
     assert (result.status, result.reason, result.hamming) == (
         AuditStatus.PHASH_MATCH,
-        "d=0 visual match",
+        "The server shows this image",
         0,
     )
     assert result.title == "Alien"
@@ -205,7 +207,7 @@ async def test_a_different_image_on_the_server_reports_its_distance(
     assert result.status is AuditStatus.PHASH_MISMATCH
     assert result.hamming is not None
     assert result.hamming > 0
-    assert result.reason == f"d={result.hamming}"
+    assert result.reason == "The server shows another image"
 
 
 @pytest.mark.parametrize(
@@ -418,7 +420,9 @@ async def _audit_collection(
         publisher=NullEventPublisher(),
     )
     planned = await plan_collection_audit(
-        ServerAuditRequest(check_collections=True), database=database
+        ServerAuditRequest(check_collections=True),
+        database=database,
+        today=date(2026, 1, 1),
     )
     assert planned == (
         [CollectionAuditTarget(1, ServerAsset.POSTER)] if uploaded is not None else []
@@ -427,6 +431,41 @@ async def _audit_collection(
         CollectionAuditTarget(1, ServerAsset.POSTER), context=context
     )
     return result
+
+
+async def test_a_collection_out_of_season_that_no_server_holds_is_not_audited(
+    database: Database,
+) -> None:
+    async with database.write_session() as session:
+        for collection_id, title, window, copy in [
+            # Its sync took it off the servers until December.
+            (1, "Christmas", ("12-01", "12-31"), None),
+            # Out of season but kept on the server, so its image is compared.
+            (2, "Halloween", ("10-01", "10-31"), "box"),
+            # In season with no copy: a server is missing it.
+            (3, "Summer", ("06-01", "08-31"), None),
+        ]:
+            row = stored_collection(
+                id=collection_id,
+                server_item_id=copy,
+                title=title,
+                active_start_mmdd=window[0],
+                active_end_mmdd=window[1],
+                last_synced_at=utc_now(),
+            )
+            seed_asset(row, ServerAsset.POSTER, upload_hash="h", file_hash="h")
+            session.add(row)
+
+    planned = await plan_collection_audit(
+        ServerAuditRequest(check_collections=True),
+        database=database,
+        today=date(2026, 7, 1),
+    )
+
+    assert planned == [
+        CollectionAuditTarget(2, ServerAsset.POSTER),
+        CollectionAuditTarget(3, ServerAsset.POSTER),
+    ]
 
 
 @pytest.mark.parametrize(

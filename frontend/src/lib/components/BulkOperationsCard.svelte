@@ -20,7 +20,7 @@
   } from "../../generated/rest/types.gen";
   import { applyBulkItemOperation, bulkSetCollectionMonitoredInCache } from "../rest/cache";
   import { chooseAction, confirmAction, createNotifier } from "../stores/notificationState.svelte";
-  import { uiState, type FilterState } from "../stores/uiState.svelte";
+  import { uiState } from "../stores/uiState.svelte";
   import { sidebarGroup } from "../router/routes";
   import { runBulkCollections } from "../utils/bulkCollections";
   import { sortedOrders } from "../utils/collectionCriteria";
@@ -32,11 +32,15 @@
   import DataStatus from "./DataStatus.svelte";
   import FieldRow from "./FieldRow.svelte";
   import PopupSection from "./PopupSection.svelte";
+  import Select from "./Select.svelte";
+  import type { SelectOption } from "../utils/selectOptions";
+  import { groupOptions } from "../utils/collectionGroups.svelte";
   import {
     filterSidebarCollections,
     filterSidebarItems,
   } from "../utils/sidebarDomain";
   import { inCollectionGroup } from "../utils/sidebarShared";
+  import { type FilterState } from "../stores/filterState.svelte";
 
   /** A request the popup owns, so its other actions wait while one runs. */
   interface Request<TBody, TResult> {
@@ -291,27 +295,47 @@
         : collections,
   );
   let targetGroup = $state(UNGROUPED_GROUP);
-  let targetGroups = $derived(
-    [...new Set([UNGROUPED_GROUP, ...(groupsQuery.data ?? [])])].sort((a, b) =>
-      a.localeCompare(b),
-    ),
-  );
-  /** The operations, by label, with whether each has collections to act on. */
-  let collectionOperations = $derived(
-    (
-      [
-        ["adopt", "Adopt unmanaged", !unmanagedCollections.length],
-        ["orphan", "Orphan managed", !collections.length],
-        ["set_group", "Assign group", !collections.length],
-        ["set_order", "Set sort", !collections.length],
-        ["apply_sort_title_format", "Format sort titles", !collections.length],
+  const INHERIT_LABEL = "Inherit group or global default";
+  const VISIBILITY_OPTIONS: SelectOption<CollectionMode | null>[] = [
+    { value: null, label: INHERIT_LABEL },
+    { value: "hide", label: "Hide collection" },
+    { value: "hide_items", label: "Hide items" },
+    { value: "default", label: "Library default" },
+    { value: "show_items", label: "Show collection and items" },
+  ];
+  let targetGroups = $derived(groupOptions(groupsQuery.data ?? []));
+  /** The operations, by label, each disabled while it has no collections to act on. */
+  let collectionOperations = $derived.by(() => {
+    const operations: SelectOption<BulkCollectionOperation["operation"]>[] = [
+        { value: "adopt", label: "Adopt unmanaged", disabled: !unmanagedCollections.length },
+        { value: "orphan", label: "Orphan managed", disabled: !collections.length },
+        { value: "set_group", label: "Assign group", disabled: !collections.length },
+        { value: "set_order", label: "Set sort", disabled: !collections.length },
+        {
+          value: "apply_sort_title_format",
+          label: "Format sort titles",
+          disabled: !collections.length,
+        },
         ...(capabilities.data?.visibility
-          ? [["set_visibility", "Set visibility", !collections.length] as const]
+          ? [
+              {
+                value: "set_visibility" as const,
+                label: "Set visibility",
+                disabled: !collections.length,
+              },
+            ]
           : []),
-        ["delete", "Delete collections", !collections.length],
-      ] as const satisfies readonly (readonly [BulkCollectionOperation["operation"], string, boolean])[]
-    ).toSorted((a, b) => a[1].localeCompare(b[1])),
-  );
+      { value: "delete", label: "Delete collections", disabled: !collections.length },
+    ];
+    return operations.toSorted((a, b) => a.label.localeCompare(b.label));
+  });
+  let orderOptions = $derived<SelectOption<CollectionOrder | null>[]>([
+    { value: null, label: INHERIT_LABEL },
+    ...sortedOrders(capabilities.data?.orders ?? []).map((entry) => ({
+      value: entry,
+      label: ORDER_LABELS[entry],
+    })),
+  ]);
   let template = $state("{title}");
   let visibility = $state<CollectionMode | null>(null);
   let home = $state(false);
@@ -479,21 +503,21 @@
     description="For the collections the filters, search and open group match."
   >
     <FieldRow label="Operation" for={`${id}-operation`}>
-      <select
+      <Select
         id={`${id}-operation`}
-        bind:value={collectionOperation}
         disabled={busy || !resultsReady || !matchedCollections.length}
-      >
-        {#each collectionOperations as [value, label, disabled] (value)}
-          <option {value} {disabled}>{label}</option>
-        {/each}
-      </select>
+        options={collectionOperations}
+        bind:value={collectionOperation}
+      />
     </FieldRow>
     {#if collectionOperation === "set_group" || collectionOperation === "adopt"}
       <FieldRow label="Target group" for={`${id}-group`}>
-        <select id={`${id}-group`} bind:value={targetGroup} disabled={busy}>
-          {#each targetGroups as group (group)}<option value={group}>{group}</option>{/each}
-        </select>
+        <Select
+          id={`${id}-group`}
+          disabled={busy}
+          options={targetGroups}
+          bind:value={targetGroup}
+        />
       </FieldRow>
       <DataStatus
         label="collection groups"
@@ -521,21 +545,21 @@
         for={`${id}-order`}
         hint={capabilities.data?.smart ? "Smart collections cannot use a custom order." : undefined}
       >
-        <select id={`${id}-order`} bind:value={order} disabled={busy}
-          ><option value={null}>Inherit group or global default</option>{#each sortedOrders(capabilities.data?.orders ?? []) as entry (entry)}<option value={entry}
-              >{ORDER_LABELS[entry]}</option
-            >{/each}</select
-        >
+        <Select
+          id={`${id}-order`}
+          disabled={busy}
+          options={orderOptions}
+          bind:value={order}
+        />
       </FieldRow>
     {:else if collectionOperation === "set_visibility"}
       <FieldRow label="Visibility" for={`${id}-visibility`}>
-        <select id={`${id}-visibility`} bind:value={visibility} disabled={busy}
-          ><option value={null}>Inherit group or global default</option><option value="hide"
-            >Hide collection</option
-          ><option value="hide_items">Hide items</option><option value="default"
-            >Library default</option
-          ><option value="show_items">Show collection and items</option></select
-        >
+        <Select
+          id={`${id}-visibility`}
+          disabled={busy}
+          options={VISIBILITY_OPTIONS}
+          bind:value={visibility}
+        />
       </FieldRow>
       <FieldRow label="Visible on home" for={`${id}-home`}>
         <input id={`${id}-home`} type="checkbox" bind:checked={home} disabled={busy} />

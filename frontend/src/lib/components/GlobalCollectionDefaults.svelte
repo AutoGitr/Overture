@@ -4,16 +4,18 @@
     getCollectionArrOptionsOptions,
     getCollectionCapabilitiesOptions,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
-  import type { AppSettingsUpdate, MediaType } from "../../generated/rest/types.gen";
-  import { settingsState } from "../stores/settingsState.svelte";
+  import type { MediaType } from "../../generated/rest/types.gen";
+  import { settingsState, type SettingsDraft } from "../stores/settingsState.svelte";
   import CollectionPolicyFields from "./CollectionPolicyFields.svelte";
   import CollectionScheduleFields from "./CollectionScheduleFields.svelte";
   import type { PolicyData, ScheduleData } from "../utils/collectionFormShared.svelte";
   import { POLICY_SETTINGS, TEXT_LIMITS } from "../../generated/settings";
   import DataStatus from "./DataStatus.svelte";
   import FieldRow from "./FieldRow.svelte";
+  import Select from "./Select.svelte";
+  import { toOptions } from "../utils/selectOptions";
 
-  let { draft = $bindable() }: { draft: AppSettingsUpdate } = $props();
+  let { draft = $bindable() }: { draft: SettingsDraft } = $props();
   const id = $props.id();
 
   const TEXT = new Set(["sort_title_format", "summary_format"]);
@@ -100,6 +102,11 @@
       <p class="hint">Where Request missing adds titles, and whether it searches for them.</p>
       {#each ARR as [mediaType, name, key] (key)}
         {@const options = mediaType === "movie" ? radarr : sonarr}
+        {@const folders = toOptions(options.data?.root_folders ?? [])}
+        {@const profiles = (options.data?.quality_profiles ?? []).map((profile) => ({
+          value: profile.id,
+          label: profile.label,
+        }))}
         {#if settingsState.current[`${key}_configured`]}
           <DataStatus
             label={`${name} options`}
@@ -110,20 +117,20 @@
           />
           <div class="options-col">
             <FieldRow label={`${name} root folder`} for={`${id}-${key}-folder`}>
-              <select id={`${id}-${key}-folder`} bind:value={draft[`${key}_root_folder`]}>
-                <option value="">Choose a folder</option>
-                {#each options.data?.root_folders ?? [] as folder (folder)}
-                  <option value={folder}>{folder}</option>
-                {/each}
-              </select>
+              <Select
+                id={`${id}-${key}-folder`}
+                options={folders}
+                placeholder="Choose a folder"
+                bind:value={draft[`${key}_root_folder`]}
+              />
             </FieldRow>
             <FieldRow label={`${name} quality profile`} for={`${id}-${key}-profile`}>
-              <select id={`${id}-${key}-profile`} bind:value={draft[`${key}_quality_profile_id`]}>
-                <option value={null}>Choose a profile</option>
-                {#each options.data?.quality_profiles ?? [] as profile (profile.id)}
-                  <option value={profile.id}>{profile.label}</option>
-                {/each}
-              </select>
+              <Select
+                id={`${id}-${key}-profile`}
+                options={profiles}
+                placeholder="Choose a profile"
+                bind:value={draft[`${key}_quality_profile_id`]}
+              />
             </FieldRow>
             <label class="form-row justify-between">
               <span>Search when added</span>

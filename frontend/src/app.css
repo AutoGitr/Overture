@@ -166,7 +166,6 @@
 
   /* -- Controls -- */
   --control-height: 36px;
-  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5' fill='none' stroke='%23a9b0bf' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
   /* -- Scrollbars -- */
   --scrollbar-thumb: oklch(85% 0.03 262 / 0.16);
@@ -244,8 +243,6 @@
   --mono-logo-filter: invert(1);
   --shadow-md: 0 4px 14px oklch(30% 0.02 84 / 0.1), 0 1px 3px oklch(30% 0.02 84 / 0.06);
   --shadow-lg: 0 14px 40px oklch(30% 0.02 84 / 0.16), 0 2px 8px oklch(30% 0.02 84 / 0.06);
-
-  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5' fill='none' stroke='%2352525b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
   --scrollbar-thumb: oklch(35% 0.03 84 / 0.22);
   --scrollbar-thumb-hover: oklch(35% 0.03 84 / 0.36);
@@ -368,7 +365,6 @@ button {
 
 /* Every field reads at one size, whatever text it sits in. */
 input,
-select,
 textarea {
   font-family: inherit;
   font-size: var(--text-sm);
@@ -376,13 +372,9 @@ textarea {
   touch-action: manipulation;
 }
 
-/* Fields: text-like inputs, selects and text areas. Zero specificity, so a
-   component that draws a field its own way only needs a class. */
-:where(
-  input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"]),
-  select,
-  textarea
-) {
+/* Fields: text-like inputs and text areas. Zero specificity, so a component
+   that draws a field its own way only needs a class. */
+:where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"]), textarea) {
   background-color: var(--field-bg);
   border: var(--border-muted);
   border-radius: var(--radius-sm);
@@ -391,19 +383,8 @@ textarea {
   box-shadow: var(--shadow-sm);
 }
 
-:where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"]), select) {
+:where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"])) {
   min-height: var(--control-height);
-}
-
-/* One chevron in both modes instead of each platform's own. */
-:where(select:not([multiple], [size])) {
-  appearance: none;
-  padding-right: calc(var(--space-3) + 18px);
-  background-image: var(--select-chevron);
-  background-repeat: no-repeat;
-  background-position: right var(--space-3) center;
-  background-size: 12px;
-  cursor: pointer;
 }
 
 :where(
@@ -413,21 +394,15 @@ textarea {
   border-color: var(--border-hover);
 }
 
-/* Dropdowns, like the menus that open from buttons, are outlined in the accent. */
-:where(select) {
-  border-color: var(--accent);
-}
-
 :where(
   input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"]),
-  select,
   textarea
 ):where(:focus) {
   border-color: var(--accent);
   box-shadow: var(--focus-ring);
 }
 
-:where(input, select, textarea):where(:disabled) {
+:where(input, textarea):where(:disabled) {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -953,11 +928,46 @@ img {
   font-family: var(--font-mono, monospace);
 }
 
-/* Tighter, keeping the room the chevron needs on the right. */
-.select-compact {
-  width: auto;
-  padding-block: var(--space-1);
-  padding-left: var(--space-2);
+/* Every list that floats over the page, whether a menu or a dropdown's
+   options, is drawn alike. */
+.menu-surface {
+  z-index: var(--z-menu);
+  padding: var(--space-1) 0;
+  background: var(--bg-elevated);
+  border: var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.menu-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-1) var(--space-3);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+
+  &:hover:not([aria-disabled="true"]),
+  &.active:not([aria-disabled="true"]) {
+    background: var(--bg-hover);
+  }
+
+  &:is([aria-selected="true"], [aria-checked="true"]) {
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  &[aria-disabled="true"] {
+    color: var(--text-tertiary);
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
 }
 
 /* A row of options that wraps only when it is full. */
@@ -1100,7 +1110,6 @@ img {
   }
 
   input,
-  select,
   textarea {
     font-size: 16px;
   }

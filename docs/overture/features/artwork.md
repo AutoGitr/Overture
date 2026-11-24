@@ -8,9 +8,10 @@ description: Choosing, uploading and removing posters, backgrounds and season po
 
 Open an item to compare poster, background and season poster candidates from
 your media server, TMDB and OvertureDB, sorted by resolution and ranked by
-visual similarity to your existing selection. An image several sources offer
-is listed once: under OvertureDB when it is OvertureDB's choice, else under
-TMDB, else under the first server that offers it. Filter by aspect ratio and
+visual similarity to your existing selection. TMDB and OvertureDB each list
+every candidate they have; media servers and collection member items leave out
+images already listed under TMDB, OvertureDB or an earlier server. Filter by
+aspect ratio and
 language, paste an image URL, or upload an image of your own. Saving a choice
 downloads it beside the media, named the way your server expects (see
 [Files](files.md)).

@@ -1,9 +1,8 @@
-import { createMutation, createQuery } from "@tanstack/svelte-query";
+import { createMutation } from "@tanstack/svelte-query";
 import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import { UNGROUPED_GROUP } from "../../generated/settings";
 import {
   deleteCollectionMutation,
-  getCollectionDefaultsOptions,
   orphanCollectionMutation,
   saveCollectionRuleMutation,
   setCollectionMembersMutation,
@@ -12,9 +11,10 @@ import {
 import type {
   CollectionDetail,
   CollectionOrder,
-  CollectionRuleWriteInput,
+  CollectionRead,
+  CollectionRuleWriteOutput,
   DeleteCollectionData,
-  FilterGroupInput,
+  FilterGroupOutput,
   LibrarySectionRead,
   MediaItemRead,
   MediaType,
@@ -32,8 +32,9 @@ import {
   setLibrary,
 } from "./collectionFormShared.svelte";
 import { CriteriaPreview } from "./criteriaPreview.svelte";
+import { draftOf } from "./draft.svelte";
 import { errorMessage } from "./errors";
-import { CollectionOptions as Capabilities } from "./libraries.svelte";
+import type { CollectionOptions as Capabilities } from "./libraries.svelte";
 import { openSync } from "./syncShortcut";
 
 /** Form drafts and actions for one mounted collection. */
@@ -41,23 +42,23 @@ export class CollectionEditor extends CollectionRuleForm {
   readonly defaults;
   readonly options: Capabilities;
   /** Criteria of a library just left, so swapping one for another keeps them. */
-  readonly lastCriteria = new SvelteMap<MediaType, FilterGroupInput>();
+  readonly lastCriteria = new SvelteMap<MediaType, FilterGroupOutput>();
   readonly creating = false;
   // Drafts reset when saved fields change, not when unrelated collection data changes.
   private savedTitle = $derived.by(() => this.current().title);
   title = $derived(this.savedTitle);
   private savedSortExpression = $derived.by(
-    () => this.current().sort_title_format ?? this.current().rule?.sort_title_format ?? "",
+    () => this.current().sort_title_format ?? this.saved()?.rule?.sort_title_format ?? "",
   );
   sortTitleFormat = $derived(this.savedSortExpression);
   private savedGroup = $derived.by(() => this.current().collection_group);
   collectionGroup = $derived(this.savedGroup ?? UNGROUPED_GROUP);
-  private savedCollectionMode = $derived.by(() => this.current().rule?.collection_mode ?? null);
+  private savedCollectionMode = $derived.by(() => this.saved()?.rule?.collection_mode ?? null);
   collectionMode = $derived(this.savedCollectionMode);
-  private savedVisibleHome = $derived.by(() => this.current().rule?.visible_home ?? null);
+  private savedVisibleHome = $derived.by(() => this.saved()?.rule?.visible_home ?? null);
   visibleHome = $derived<boolean | null>(this.savedVisibleHome);
   private savedSummaryExpression = $derived.by(
-    () => this.current().summary_format ?? this.current().rule?.summary_format ?? "",
+    () => this.current().summary_format ?? this.saved()?.rule?.summary_format ?? "",
   );
   summaryFormat = $derived(this.savedSummaryExpression);
   private savedActiveStart = $derived.by(() => this.current().active_start_mmdd);
@@ -67,18 +68,35 @@ export class CollectionEditor extends CollectionRuleForm {
   private savedDeleteWhenInactive = $derived.by(() => this.current().delete_when_inactive);
   deleteWhenInactive = $derived(this.savedDeleteWhenInactive);
   private savedCollectionFiltering = $derived.by(
-    () => this.current().rule?.collection_filtering ?? null,
+    () => this.saved()?.rule?.collection_filtering ?? null,
   );
   collectionFiltering = $derived(this.savedCollectionFiltering);
-  private savedVisibleShared = $derived.by(() => this.current().rule?.visible_shared ?? null);
+  private savedVisibleShared = $derived.by(() => this.saved()?.rule?.visible_shared ?? null);
   visibleShared = $derived<boolean | null>(this.savedVisibleShared);
-  private savedVisibleLibrary = $derived.by(() => this.current().rule?.visible_library ?? null);
+  private savedVisibleLibrary = $derived.by(() => this.saved()?.rule?.visible_library ?? null);
   visibleLibrary = $derived<boolean | null>(this.savedVisibleLibrary);
   private savedTmdbId = $derived.by(() => this.current().tmdb_collection_id);
   tmdbCollectionId = $derived(this.savedTmdbId ?? undefined);
-  private savedOrder = $derived.by(() => this.current().rule?.order_type ?? null);
+  private savedOrder = $derived.by(() => this.saved()?.rule?.order_type ?? null);
   orderType = $derived<CollectionOrder | null>(this.savedOrder);
-  rule = $state<CollectionRuleWriteInput>(defaultRule());
+  /** The saved rule's editable part, taken once its details load. */
+  readonly #rule = draftOf((): CollectionRuleWriteOutput | null => {
+    const saved = this.saved()?.rule;
+    if (!saved) return null;
+    const {
+      last_error: _error,
+      last_synced_at: _synced,
+      source_summary: _summary,
+      ...editable
+    } = saved;
+    return editable;
+  }, defaultRule());
+  get rule() {
+    return this.#rule.current;
+  }
+  set rule(rule: CollectionRuleWriteOutput) {
+    this.#rule.current = rule;
+  }
 
   memberSearch = $state("");
   draggingMemberId = $state<number | null>(null);
@@ -93,29 +111,13 @@ export class CollectionEditor extends CollectionRuleForm {
 
   /** Edits a collection Overture manages; an unmanaged one is only adopted. */
   constructor(
-    private readonly current: () => CollectionDetail,
+    private readonly current: () => CollectionRead,
+    /** Its rule and members, null while they load. */
+    private readonly saved: () => CollectionDetail | null,
     private readonly libraries: () => LibrarySectionRead[],
   ) {
     super();
-    this.defaults = createQuery(() =>
-      getCollectionDefaultsOptions({
-        query: { name: this.collectionGroup || undefined },
-      }),
-    );
-    const saved = this.current().rule;
-    if (saved) {
-      const {
-        last_error: _error,
-        last_synced_at: _synced,
-        source_summary: _summary,
-        ...rest
-      } = saved;
-      this.rule = structuredClone(rest);
-    }
-    // Last: their queries read the form as soon as they are created.
-    this.options = new Capabilities(() =>
-      this.libraryIds.map((id) => ({ id, media_type: this.typeOf(id) })),
-    );
+    ({ defaults: this.defaults, options: this.options } = this.formQueries());
     this.preview = new CriteriaPreview(
       () => this,
       () => this.collectionId,
@@ -124,6 +126,11 @@ export class CollectionEditor extends CollectionRuleForm {
 
   get collection() {
     return this.current();
+  }
+
+  /** Its members in their order; none are known while its details load. */
+  get memberIds(): number[] {
+    return this.saved()?.member_ids ?? [];
   }
   typeOf(libraryId: string): MediaType {
     return (
@@ -143,14 +150,14 @@ export class CollectionEditor extends CollectionRuleForm {
   get manualMembersAllowed() {
     return (
       this.collection.kind !== "smart" &&
-      (this.collection.rule?.sync_mode ?? this.collection.effective_sync_mode) === "append"
+      (this.saved()?.rule?.sync_mode ?? this.saved()?.effective_sync_mode) === "append"
     );
   }
 
   availableMembers(libraryItems: MediaItemRead[]) {
     const query = this.memberSearch.trim().toLowerCase();
     if (!query) return [];
-    const memberIds = new SvelteSet(this.collection.member_ids);
+    const memberIds = new SvelteSet(this.memberIds);
     return libraryItems.filter(
       (item) =>
         item.copies.some((copy) => this.collection.library_ids.includes(copy.library_id)) &&
@@ -228,16 +235,16 @@ export class CollectionEditor extends CollectionRuleForm {
   }
 
   removeMember(id: number) {
-    return this.setMembers(this.collection.member_ids.filter((member) => member !== id));
+    return this.setMembers(this.memberIds.filter((member) => member !== id));
   }
 
   addMember(id: number) {
-    if (this.collection.member_ids.includes(id)) return Promise.resolve(false);
-    return this.setMembers([...this.collection.member_ids, id]);
+    if (this.memberIds.includes(id)) return Promise.resolve(false);
+    return this.setMembers([...this.memberIds, id]);
   }
 
   moveMember(id: number, targetIndex: number) {
-    const ids = [...this.collection.member_ids];
+    const ids = [...this.memberIds];
     const fromIndex = ids.indexOf(id);
     if (
       fromIndex === -1 ||

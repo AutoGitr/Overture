@@ -120,3 +120,6 @@ class SettingsState {
 }
 
 export const settingsState = new SettingsState();
+
+/** Every editable setting, as the settings popup edits them. */
+export type SettingsDraft = ReturnType<SettingsState["toUpdatePayload"]>;

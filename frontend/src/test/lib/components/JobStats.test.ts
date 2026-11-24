@@ -40,8 +40,7 @@ describe("JobStats", () => {
 
     const { rerender } = render(JobStats, { job, unit: "items", stats: [] });
 
-    expect(screen.getByText("1234")).toBeInTheDocument();
-    expect(screen.getByText("read")).toBeInTheDocument();
+    expect(screen.getByText("read").parentElement).toHaveTextContent(/^1234 read$/);
     await rerender({ job: { ...job, read: 0 }, unit: "items", stats: [] });
     expect(screen.getByText("Planning...")).toBeInTheDocument();
   });

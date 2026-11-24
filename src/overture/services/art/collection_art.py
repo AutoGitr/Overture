@@ -74,6 +74,7 @@ lazy from .candidates import (
     MEMBER_BACKGROUNDS_TOTAL,
     ArtCandidates,
     CandidatePolicy,
+    CandidateSources,
     in_source_order,
 )
 lazy from .choice import ArtSelector, require_valid_aspect_ratio
@@ -710,13 +711,7 @@ class CollectionArtService:
             raise PublicServiceError(422, "The collection has no image to match")
         reference, held = in_place
         sources = await self.found(collection_id, art_type)
-        candidates = list(
-            {
-                candidate.url: candidate
-                for group in sources.sources.values()
-                for candidate in group
-            }.values()
-        )
+        candidates = CandidateSources(sources.sources).flat()
         comparison = await self._matcher.match_candidates(
             reference, candidates, threshold
         )

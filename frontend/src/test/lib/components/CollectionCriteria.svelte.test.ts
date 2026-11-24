@@ -3,9 +3,9 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it } from "vitest";
 import type {
   CollectionGroupPolicyOutput,
-  CollectionSourceInput,
-  FilterGroupInput,
-  FieldConditionInput,
+  CollectionSourceOutput,
+  FilterGroupOutput,
+  FieldConditionOutput,
 } from "../../../generated/rest/types.gen";
 import GroupSettingsHarness from "../../helpers/GroupSettingsHarness.svelte";
 import CollectionPolicyFields from "../../../lib/components/CollectionPolicyFields.svelte";
@@ -17,7 +17,7 @@ import CollectionPage from "../../../lib/router/pages/CollectionPage.svelte";
 import { queryClient } from "../../../lib/rest/queryClient";
 import { goToCollectionView, navigate } from "../../../lib/router/routes";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
-import { emptyGroup } from "../../../lib/utils/collectionCriteria";
+import { emptyGroup, newSource } from "../../../lib/utils/collectionCriteria";
 import { defaultGenerator } from "../../../lib/utils/collectionFormShared.svelte";
 import { mockFetchRoutes } from "../../helpers/fetch";
 import {
@@ -29,7 +29,7 @@ import {
   dimension,
   mediaServers,
 } from "../../helpers/fixtures";
-import { renderWithQueryClient } from "../../helpers/render";
+import { chooseOption, renderWithQueryClient } from "../../helpers/render";
 import { uiState } from "../../../lib/stores/uiState.svelte";
 import { syncSelection } from "../../../lib/stores/syncSelection.svelte";
 
@@ -59,7 +59,7 @@ describe("collection criteria", () => {
     mockFetchRoutes({
       "/api/collections/field-values": [{ value: "Action", label: "Action", count: 3 }],
     });
-    const group = $state<FilterGroupInput>(emptyGroup());
+    const group = $state<FilterGroupOutput>(emptyGroup());
     renderWithQueryClient(CriteriaEditor, {
       group,
       fields: capabilities.fields.filter((field) => field.local),
@@ -71,36 +71,32 @@ describe("collection criteria", () => {
     });
 
     await fireEvent.click(screen.getByRole("button", { name: "Condition" }));
-    await fireEvent.change(screen.getByLabelText("Criteria condition 1 field"), {
-      target: { value: "field:genre" },
-    });
+    await chooseOption(screen.getByLabelText("Criteria condition 1 field"), "Genre");
     // The library's genres are listed, with how many titles hold each.
     await fireEvent.focus(screen.getByRole("combobox", { name: "Criteria condition 1 value" }));
-    await fireEvent.pointerDown(await screen.findByRole("option", { name: /^Action\s*3 titles$/ }));
+    await fireEvent.click(await screen.findByRole("option", { name: /^Action\s*3 titles$/ }));
 
     await fireEvent.click(screen.getByRole("button", { name: "Group" }));
     const nested = within(screen.getByRole("group", { name: "Criteria group 1" }));
     await fireEvent.click(nested.getByRole("button", { name: "Condition" }));
     const subject = nested.getByLabelText("Criteria group 1 condition 1 field");
-    expect(within(subject).getByRole("option", { name: /Sonarr tags/ })).toBeDisabled();
-    await fireEvent.change(subject, { target: { value: "source:mdblist" } });
-    await fireEvent.change(nested.getByLabelText("Criteria group 1 condition 1 operator"), {
-      target: { value: "is_not" },
-    });
+    await fireEvent.click(subject);
+    expect(screen.getByRole("option", { name: /Sonarr tags/ })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+    await fireEvent.click(screen.getByRole("option", { name: "MDBList" }));
+    await chooseOption(nested.getByLabelText("Criteria group 1 condition 1 operator"), "not in");
     await fireEvent.change(nested.getByLabelText("Criteria group 1 condition 1 MDBList lists"), {
       target: { value: "user/list, other/list" },
     });
     await fireEvent.click(nested.getByRole("button", { name: "Condition" }));
-    await fireEvent.change(nested.getByLabelText("Criteria group 1 condition 2 field"), {
-      target: { value: "field:added" },
-    });
-    await fireEvent.change(nested.getByLabelText("Criteria group 1 condition 2 operator"), {
-      target: { value: "after" },
-    });
+    await chooseOption(nested.getByLabelText("Criteria group 1 condition 2 field"), "Date added");
+    await chooseOption(nested.getByLabelText("Criteria group 1 condition 2 operator"), "is after");
     await fireEvent.input(nested.getByLabelText("Criteria group 1 condition 2 value"), {
       target: { value: "2020-01-31" },
     });
-    await fireEvent.change(screen.getByLabelText("Criteria match"), { target: { value: "any" } });
+    await chooseOption(screen.getByLabelText("Criteria match"), "any");
 
     expect($state.snapshot(group)).toEqual({
       mode: "any",
@@ -136,12 +132,12 @@ describe("collection criteria", () => {
       })),
     });
     const genre = { kind: "field" as const, field: "genre" as const, operator: "is" as const };
-    const source = $state<FilterGroupInput>({
+    const source = $state<FilterGroupOutput>({
       ...emptyGroup(),
       conditions: [{ ...genre, value: "Action" }],
       groups: [{ mode: "any", conditions: [{ ...genre, value: "Drama" }], groups: [] }],
     });
-    const target = $state<FilterGroupInput>(emptyGroup());
+    const target = $state<FilterGroupOutput>(emptyGroup());
     const props = {
       fields: capabilities.fields,
       sources: capabilities.sources,
@@ -189,7 +185,7 @@ describe("collection criteria", () => {
         count: 1,
       })),
     });
-    const group = $state<FilterGroupInput>({
+    const group = $state<FilterGroupOutput>({
       ...emptyGroup(),
       conditions: [{ kind: "field", field: "genre", operator: "is", value: "Future genre" }],
     });
@@ -220,12 +216,8 @@ describe("collection criteria", () => {
     expect(value).toHaveValue("Actor 290");
     expect(screen.queryByRole("listbox")).toBeNull();
 
-    await fireEvent.change(screen.getByLabelText("Criteria condition 1 field"), {
-      target: { value: "field:title" },
-    });
-    await fireEvent.change(screen.getByLabelText("Criteria condition 1 operator"), {
-      target: { value: "contains" },
-    });
+    await chooseOption(screen.getByLabelText("Criteria condition 1 field"), "Title");
+    await chooseOption(screen.getByLabelText("Criteria condition 1 operator"), "contains");
     await fireEvent.input(screen.getByRole("combobox", { name: "Criteria condition 1 value" }), {
       target: { value: "Future" },
     });
@@ -240,7 +232,7 @@ describe("collection criteria", () => {
       ],
     });
     const collection = capabilities.fields.find((field) => field.field === "genre")!;
-    const group = $state<FilterGroupInput>({
+    const group = $state<FilterGroupOutput>({
       ...emptyGroup(),
       conditions: [{ kind: "field", field: "genre", operator: "is", value: "12" }],
     });
@@ -260,7 +252,7 @@ describe("collection criteria", () => {
     await fireEvent.input(value, { target: { value: "letterboxd" } });
     // A typed title is no ID: only a listed collection is held.
     expect(group.conditions?.[0]).toMatchObject({ value: "12" });
-    await fireEvent.pointerDown(screen.getByRole("option", { name: /^Letterboxd Top 250/ }));
+    await fireEvent.click(screen.getByRole("option", { name: /^Letterboxd Top 250/ }));
     expect(group.conditions?.[0]).toMatchObject({ value: "7" });
     expect(value).toHaveValue("Letterboxd Top 250");
 
@@ -278,10 +270,10 @@ describe("collection criteria", () => {
     { kind: "field", field: "unplayed", operator: "is", value: true },
     { kind: "field", field: "year", operator: "gte", value: 2020 },
     { kind: "field", field: "added", operator: "in_last", value: 7 },
-  ] satisfies FieldConditionInput[])(
+  ] satisfies FieldConditionOutput[])(
     "keeps $field values typed while editing",
     async (condition) => {
-      const group = $state<FilterGroupInput>({ ...emptyGroup(), conditions: [condition] });
+      const group = $state<FilterGroupOutput>({ ...emptyGroup(), conditions: [condition] });
       renderWithQueryClient(CriteriaEditor, {
         group,
         fields: capabilities.fields,
@@ -293,9 +285,9 @@ describe("collection criteria", () => {
       });
       const input = screen.getByLabelText("Criteria condition 1 value");
       if (condition.field === "unplayed") {
-        await fireEvent.change(input, { target: { value: "false" } });
+        await chooseOption(input, "false");
         expect(group.conditions?.[0]).toMatchObject({ value: false });
-        await fireEvent.change(input, { target: { value: "true" } });
+        await chooseOption(input, "true");
         expect(group.conditions?.[0]).toMatchObject({ value: true });
       } else {
         await fireEvent.input(input, { target: { value: "0" } });
@@ -308,7 +300,7 @@ describe("collection criteria", () => {
 
   it("can replace a saved field that this server no longer offers", async () => {
     mockFetchRoutes({ "/api/collections/field-values": [] });
-    const group = $state<FilterGroupInput>({
+    const group = $state<FilterGroupOutput>({
       ...emptyGroup(),
       conditions: [{ kind: "field", field: "studio", operator: "is", value: "Studio" }],
     });
@@ -321,13 +313,14 @@ describe("collection criteria", () => {
       scope: "Movies on Plex",
       label: "Criteria",
     });
-    expect(screen.getByRole("option", { name: "Studio (unavailable)" })).toBeDisabled();
+    const fieldPicker = screen.getByLabelText("Criteria condition 1 field");
+    expect(fieldPicker).toHaveTextContent("Studio (unavailable)");
+    await fireEvent.click(fieldPicker);
+    expect(screen.queryByRole("option", { name: /Studio/ })).toBeNull();
     expect(
       screen.getByText("Studio cannot be tested for Movies on Plex; choose another field."),
     ).toBeInTheDocument();
-    await fireEvent.change(screen.getByLabelText("Criteria condition 1 field"), {
-      target: { value: "field:title" },
-    });
+    await fireEvent.click(screen.getByRole("option", { name: "Title" }));
     await fireEvent.input(screen.getByLabelText("Criteria condition 1 value"), {
       target: { value: "Saga" },
     });
@@ -342,7 +335,7 @@ describe("collection criteria", () => {
           ? Response.json({ detail: "Unavailable" }, { status: 422 })
           : Response.json([{ value: "English", label: "English", count: 0 }]),
     });
-    const group = $state<FilterGroupInput>({
+    const group = $state<FilterGroupOutput>({
       ...emptyGroup(),
       conditions: [{ kind: "field", field: "genre", operator: "is", value: "" }],
     });
@@ -361,18 +354,19 @@ describe("collection criteria", () => {
     // Plex lists its values without counts, so none are shown.
     const value = screen.getByRole("combobox", { name: "Criteria condition 1 value" });
     await fireEvent.focus(value);
-    await fireEvent.pointerDown(await screen.findByRole("option", { name: "English" }));
+    await fireEvent.click(await screen.findByRole("option", { name: "English" }));
     expect(group.conditions?.[0]).toMatchObject({ value: "English" });
   });
 
   it("edits person credits and offers the configured Radarr tags", async () => {
     mockFetchRoutes({ "/api/collections/tags/radarr": [{ id: 1, label: "criterion" }] });
-    const person = $state<CollectionSourceInput>({
+    const person = $state<CollectionSourceOutput>({
       type: "tmdb_person",
       person_id: 0,
+      person_name: null,
       roles: ["actor"],
     });
-    const tags = $state<CollectionSourceInput>({ type: "radarr_tag", tags: [] });
+    const tags = $state<CollectionSourceOutput>({ type: "radarr_tag", tags: [] });
     renderWithQueryClient(SourceFields, { source: person, mediaType: "movie", label: "Person" });
     renderWithQueryClient(SourceFields, { source: tags, mediaType: "movie", label: "Tags" });
 
@@ -399,7 +393,7 @@ describe("collection criteria", () => {
 
   it("shows a tag the condition names even when Radarr lacks it", async () => {
     mockFetchRoutes({ "/api/collections/tags/radarr": [{ id: 1, label: "criterion" }] });
-    const tags = $state<CollectionSourceInput>({ type: "radarr_tag", tags: ["requested"] });
+    const tags = $state<CollectionSourceOutput>({ type: "radarr_tag", tags: ["requested"] });
     renderWithQueryClient(SourceFields, { source: tags, mediaType: "movie", label: "Tags" });
 
     const named = await screen.findByRole("button", { name: "requested" });
@@ -435,8 +429,8 @@ describe("collection criteria", () => {
         ],
       },
     });
-    const person = $state<CollectionSourceInput>({ type: "tmdb_person", person_id: 0 });
-    const franchise = $state<CollectionSourceInput>({ type: "tmdb_collection", collection_id: 0 });
+    const person = $state<CollectionSourceOutput>(newSource("tmdb_person"));
+    const franchise = $state<CollectionSourceOutput>({ type: "tmdb_collection", collection_id: 0 });
     renderWithQueryClient(SourceFields, { source: person, mediaType: "movie", label: "Person" });
     renderWithQueryClient(SourceFields, { source: franchise, mediaType: "movie", label: "Saga" });
 
@@ -462,7 +456,7 @@ describe("collection criteria", () => {
     expect(screen.getByText("Star Wars Collection")).toBeInTheDocument();
   });
 
-  it("names inherited values and keeps member effects off the global level", () => {
+  it("names inherited values and keeps member effects off the global level", async () => {
     const collectionPolicy = $state<PolicyData>({ sync_mode: null });
     const collection = renderWithQueryClient(CollectionPolicyFields, {
       policy: collectionPolicy,
@@ -471,7 +465,7 @@ describe("collection criteria", () => {
       arr: "Radarr",
       memberLabels: true,
     });
-    expect(screen.getByRole("option", { name: "Default (Append)" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Sync mode")).toHaveTextContent("Default (Append)");
     expect(screen.getByLabelText("Member label")).toBeInTheDocument();
     expect(screen.getByLabelText("Radarr tag")).toBeInTheDocument();
     collection.unmount();
@@ -483,6 +477,7 @@ describe("collection criteria", () => {
       arr: "Radarr",
       memberLabels: true,
     });
+    await fireEvent.click(screen.getByLabelText("Sync mode"));
     expect(screen.queryByRole("option", { name: /^Default/ })).toBeNull();
     expect(screen.queryByLabelText("Member label")).toBeNull();
     expect(screen.queryByLabelText("Radarr tag")).toBeNull();
@@ -499,15 +494,16 @@ describe("collection criteria", () => {
     expect(screen.getByLabelText("Automatic theme")).toBeDisabled();
   });
 
-  it("offers the sorts the server supports", () => {
+  it("offers the sorts the server supports", async () => {
     const policy = $state<PolicyData>({ order_type: null });
     renderWithQueryClient(CollectionPolicyFields, {
       policy,
       level: "collection",
       orders: ["custom", "critic_rating.desc"],
     });
+    await fireEvent.click(screen.getByLabelText("Sort"));
     expect(
-      within(screen.getByLabelText("Sort"))
+      within(screen.getByRole("listbox"))
         .getAllByRole("option")
         .map((option) => option.textContent),
     ).toEqual(["Default", "Custom (manual or source order)", "Critic rating (highest first)"]);
@@ -533,19 +529,23 @@ describe("collection criteria", () => {
     const settings = within(screen.getByRole("region", { name: "Collection settings" }));
     await fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     const field = await content.findByLabelText("Criteria condition 1 field");
-    expect(within(field).queryByRole("option", { name: "HDR" })).toBeNull();
-    expect(
-      within(settings.getByLabelText("Sort")).getByRole("option", { name: /^Custom/ }),
-    ).toBeInTheDocument();
+    await fireEvent.click(field);
+    expect(screen.queryByRole("option", { name: "HDR" })).toBeNull();
+    await fireEvent.keyDown(field, { key: "Escape" });
+
+    const sort = settings.getByLabelText("Sort");
+    await fireEvent.click(sort);
+    expect(screen.getByRole("option", { name: /^Custom/ })).toBeInTheDocument();
+    await fireEvent.keyDown(sort, { key: "Escape" });
 
     await fireEvent.click(content.getByLabelText("Smart"));
-    expect(within(field).getByRole("option", { name: "HDR" })).toBeInTheDocument();
-    expect(
-      within(settings.getByLabelText("Sort")).queryByRole("option", { name: /^Custom/ }),
-    ).toBeNull();
-    await fireEvent.change(settings.getByLabelText("Sort"), {
-      target: { value: "critic_rating.desc" },
-    });
+    await fireEvent.click(field);
+    expect(screen.getByRole("option", { name: "HDR" })).toBeInTheDocument();
+    await fireEvent.keyDown(field, { key: "Escape" });
+
+    await fireEvent.click(sort);
+    expect(screen.queryByRole("option", { name: /^Custom/ })).toBeNull();
+    await fireEvent.click(screen.getByRole("option", { name: "Critic rating (highest first)" }));
     await fireEvent.input(settings.getByLabelText(/^Limit/), { target: { value: "25" } });
     await fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -611,22 +611,20 @@ describe("collection criteria", () => {
     renderWithQueryClient(CollectionPage);
 
     const display = within(await screen.findByRole("region", { name: "Collection settings" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     await fireEvent.input(display.getByLabelText(/^Summary$/i), {
       target: { value: "{title} - {group}" },
     });
     const schedule = within(screen.getByRole("region", { name: "Collection schedule" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Active dates" }));
     await fireEvent.input(schedule.getByLabelText(/^Active from/i), {
       target: { value: "12-15" },
     });
     await fireEvent.input(schedule.getByLabelText(/^Active until/i), {
       target: { value: "01-05" },
     });
-    await fireEvent.change(await display.findByLabelText(/Shared users' home/i), {
-      target: { value: "true" },
-    });
-    await fireEvent.change(display.getByLabelText(/Collection filtering/i), {
-      target: { value: "admin" },
-    });
+    await chooseOption(await display.findByLabelText(/Shared users' home/i), "Show");
+    await chooseOption(display.getByLabelText(/Collection filtering/i), "Admin's library");
     await fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(putBody).not.toBeNull());
@@ -704,9 +702,7 @@ describe("collection criteria", () => {
 
     await fireEvent.click(await screen.findByRole("button", { name: "Collection set" }));
     await fireEvent.click(screen.getByLabelText("Create this group's collections"));
-    await fireEvent.change(screen.getByLabelText("Split by"), {
-      target: { value: "genre" },
-    });
+    await chooseOption(screen.getByLabelText("Split by"), "Genres");
     expect(screen.getByLabelText(/^Title/)).toHaveValue("{value}");
     await fireEvent.input(screen.getByLabelText(/^Most common only/), {
       target: { value: "10" },
@@ -768,7 +764,7 @@ describe("collection criteria", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     expect(generator.aliases).toEqual([]);
 
-    await fireEvent.change(screen.getByLabelText("Split by"), { target: { value: "custom" } });
+    await chooseOption(screen.getByLabelText("Split by"), "Custom");
     expect(generator.custom_values).toHaveLength(1);
     await fireEvent.click(screen.getByRole("button", { name: "Add collection" }));
     await fireEvent.input(screen.getByLabelText("Collection 2 name"), {
@@ -778,9 +774,7 @@ describe("collection criteria", () => {
     await fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[0]!);
     expect(generator.custom_values?.map((value) => value.name)).toEqual(["B"]);
 
-    await fireEvent.change(screen.getByLabelText("Split by"), {
-      target: { value: "audio_language" },
-    });
+    await chooseOption(screen.getByLabelText("Split by"), /Audio languages/);
     expect(generator.smart).toBe(true);
     expect(generator.custom_values).toEqual([]);
     expect(screen.getByText("Only Plex knows these values.")).toBeInTheDocument();
@@ -804,37 +798,30 @@ describe("collection criteria", () => {
     });
     const draft = $state(settingsState.toUpdatePayload());
     renderWithQueryClient(GlobalCollectionDefaults, { draft });
-    await fireEvent.change(screen.getByLabelText("Sync mode"), { target: { value: "append" } });
+    await chooseOption(screen.getByLabelText("Sync mode"), "Append");
     expect(draft.collection_sync_mode).toBe("append");
     await fireEvent.input(screen.getByLabelText("Sort title"), { target: { value: "" } });
     expect(draft.collection_sort_title_format).toBe("");
-    await fireEvent.change(screen.getByLabelText("Collection mode"), {
-      target: { value: "hide" },
-    });
+    await chooseOption(screen.getByLabelText("Collection mode"), "Hide collection");
     expect(draft.collection_mode_default).toBe("hide");
     await fireEvent.input(screen.getByLabelText("TMDB region"), { target: { value: "SE" } });
     expect(draft.tmdb_region).toBe("SE");
-    await screen.findByRole("option", { name: "/movies" });
-    await fireEvent.change(screen.getByLabelText("Radarr root folder"), {
-      target: { value: "/movies" },
-    });
+    await chooseOption(screen.getByLabelText("Radarr root folder"), "/movies");
     expect(draft.radarr_root_folder).toBe("/movies");
     expect(screen.queryByLabelText("Sonarr root folder")).toBeNull();
+    await fireEvent.click(screen.getByLabelText("Sync mode"));
     expect(screen.queryByRole("option", { name: /^Default/ })).toBeNull();
   });
 
   it("picks a TMDB chart and how many of its titles count", async () => {
     mockFetchRoutes({ "/api/collections/capabilities": capabilities });
-    const chart = $state<CollectionSourceInput>({
+    const chart = $state<CollectionSourceOutput>({
       type: "tmdb_chart",
       chart: "popular",
       limit: 100,
     });
     renderWithQueryClient(SourceFields, { source: chart, mediaType: "movie", label: "Chart" });
-    await screen.findByRole("option", { name: "Trending this week" });
-    await fireEvent.change(screen.getByLabelText("Chart TMDB chart"), {
-      target: { value: "trending_week" },
-    });
+    await chooseOption(screen.getByLabelText("Chart TMDB chart"), "Trending this week");
     await fireEvent.input(screen.getByLabelText("Chart chart length"), {
       target: { value: "25" },
     });
@@ -846,7 +833,7 @@ describe("collection criteria", () => {
   });
 
   it("groups criteria sources under Lists & tags", async () => {
-    const group = $state<FilterGroupInput>(emptyGroup());
+    const group = $state<FilterGroupOutput>(emptyGroup());
     renderWithQueryClient(CriteriaEditor, {
       group,
       fields: capabilities.fields,
@@ -857,14 +844,13 @@ describe("collection criteria", () => {
       label: "Criteria",
     });
     await fireEvent.click(screen.getByRole("button", { name: "Condition" }));
-    const select = screen.getByLabelText("Criteria condition 1 field");
-    const optgroup = select.querySelector('optgroup[label="Lists & tags"]');
-    expect(optgroup).not.toBeNull();
+    await fireEvent.click(screen.getByLabelText("Criteria condition 1 field"));
+    expect(screen.getByText("Lists & tags")).toBeInTheDocument();
   });
 
   it("offers manual TMDB IDs without TMDB configured and adds title search when configured", async () => {
     settingsState.load(appSettings({ tmdb_configured: false }));
-    const source = $state<CollectionSourceInput>({
+    const source = $state<CollectionSourceOutput>({
       type: "tmdb_item",
       tmdb_ids: [550],
     });

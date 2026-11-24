@@ -78,7 +78,7 @@
         : event.key === "/" &&
           !(
             target instanceof HTMLElement &&
-            (target.isContentEditable || target.matches("input, textarea, select"))
+            (target.isContentEditable || target.matches('input, textarea, [role="combobox"]'))
           );
     if (!shortcut) return;
     searchInput.focus({ preventScroll: true });
@@ -141,7 +141,7 @@
             <div role="group" aria-label={group.label}>
               <!-- Headings only matter once there is more than one group. -->
               {#if searchGroups.length > 1}
-                <div class="group-label" aria-hidden="true">{group.label}</div>
+                <div class="caps-label group-label" aria-hidden="true">{group.label}</div>
               {/if}
               {#each group.fields as field (field.id)}
                 <MenuOption
@@ -281,11 +281,6 @@
 
   .group-label {
     padding: var(--space-2) var(--space-3) var(--space-1);
-    font-size: var(--text-xs);
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--text-tertiary);
   }
 
   .separator {

@@ -1,6 +1,7 @@
 """Live progress payload coverage for large scan operations."""
 
 lazy from collections.abc import Iterator
+lazy from datetime import date
 lazy from pathlib import Path
 lazy from types import SimpleNamespace
 lazy from typing import Any, cast
@@ -22,7 +23,7 @@ lazy from overture.services.art.phash import PhashService
 lazy from overture.services.asset_manager import scan as asset_scan
 lazy from overture.services.downloads.theme import DownloadThemeHandler
 lazy from overture.services.server_audit import compare as server_audit
-lazy from overture.services.server_audit.compare import AuditContext
+lazy from overture.services.server_audit.context import AuditContext
 lazy from overture.services.server_audit.work import AuditTarget
 lazy from overture.services.storage.assets import AssetStorage
 lazy from tests.bulk_helpers import Context, as_job_context
@@ -170,7 +171,7 @@ async def test_server_audit_streams_actionable_results_and_terminal_counts(
         return [result]
 
     monkeypatch.setattr(server_audit, "plan_audit", fake_plan)
-    monkeypatch.setattr(server_audit, "_audit_art_one", fake_audit)
+    monkeypatch.setattr(server_audit, "audit_item_art", fake_audit)
 
     context = Context(JobKind.SERVER_AUDIT)
     registry = NoopProviderRegistry(SimpleNamespace())
@@ -194,6 +195,7 @@ async def test_server_audit_streams_actionable_results_and_terminal_counts(
         ServerAuditRequest(),
         as_job_context(context),
         audit_context=audit_context,
+        today=date(2026, 1, 1),
     )
 
     planned = context.events[1][1]

@@ -9,14 +9,19 @@
   import CollectionGroupActions from "../components/CollectionGroupActions.svelte";
   import WorkflowSections from "../components/WorkflowSections.svelte";
   import DataStatus from "../components/DataStatus.svelte";
+  import Select from "../components/Select.svelte";
+  import { toOptions } from "../utils/selectOptions";
+  import { NEW_GROUP_OPTION } from "../utils/collectionGroups.svelte";
   import { setSectionView } from "../stores/sectionState.svelte";
   import { allLibraries } from "../utils/libraries.svelte";
   setSectionView("collection-groups");
+  const groupId = $props.id();
   let name = $state(uiState.collectionGroupToEdit);
   let newName = $state(uiState.collectionGroupToEdit);
   /** The group being configured has not been saved yet. */
   let unsaved = $state(false);
   const groups = createQuery(() => listCollectionGroupsOptions());
+  let groupChoices = $derived([NEW_GROUP_OPTION, ...toOptions(groups.data ?? [])]);
   const libraries = allLibraries();
   /** The open group's save actions, which its settings hand over. */
   let groupFooter = $state<Snippet | null>(null);
@@ -41,19 +46,20 @@
     hasData={libraries.data !== undefined}
     onretry={() => libraries.refetch()}
   />
-  <label class="form-label">
-    Group
-    <select
-      value={groups.data?.includes(name) ? name : "__new__"}
-      onchange={(event) => {
-        name = event.currentTarget.value === "__new__" ? "" : event.currentTarget.value;
-        unsaved = false;
-      }}
-    >
-      <option value="__new__">Create new group...</option>
-      {#each groups.data ?? [] as group (group)}<option value={group}>{group}</option>{/each}
-    </select>
-  </label>
+  <div class="form-label">
+    <label for={groupId}>Group</label>
+    <Select
+      id={groupId}
+      options={groupChoices}
+      bind:value={
+        () => (groups.data?.includes(name) ? name : NEW_GROUP_OPTION.value),
+        (chosen) => {
+          name = chosen === NEW_GROUP_OPTION.value ? "" : chosen;
+          unsaved = false;
+        }
+      }
+    />
+  </div>
   {#if !groups.data?.includes(name)}
     <label class="form-label"
       >Group name<input maxlength={TEXT_LIMITS.groupName} bind:value={newName} placeholder="e.g. Franchises" /></label

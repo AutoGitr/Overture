@@ -10,7 +10,6 @@ import {
   route,
 } from "../../../lib/router/routes";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
-import { sidebarState } from "../../../lib/stores/sidebarState.svelte";
 import {
   AUTO_ADVANCE_DELAY_MS,
   beginAutoAdvance,
@@ -18,6 +17,7 @@ import {
 } from "../../../lib/utils/autoAdvance";
 import { openPersistedItem } from "../../../lib/utils/tmdbItems";
 import { mediaItem, season } from "../../helpers/fixtures";
+import { searchInSidebar, showInSidebar } from "../../helpers/sidebar";
 
 vi.mock("../../../lib/rest/cache", () => ({
   upsertLibraryItem: vi.fn(),
@@ -50,12 +50,14 @@ describe("persisting a TMDB preview", () => {
     settingsState.load(appSettings({ auto_advance: "off", workflow: "art_and_themes" }));
     routed.view = sameView;
     route.pathname = "/movies/tmdb-603-matrix/art/poster";
-    sidebarState.current = null;
-    sidebarState.tmdbResults = [
-      { kind: "tmdb", tmdb_id: 603, title: "The Matrix", media_type: "movie" },
-      { kind: "item", id: 9 },
-      { kind: "tmdb", tmdb_id: 605, title: "The Matrix Revolutions", media_type: "movie" },
-    ];
+    showInSidebar({ current: null });
+    searchInSidebar({
+      results: [
+        { kind: "tmdb", tmdb_id: 603, title: "The Matrix", media_type: "movie" },
+        { kind: "item", id: 9 },
+        { kind: "tmdb", tmdb_id: 605, title: "The Matrix Revolutions", media_type: "movie" },
+      ],
+    });
   });
 
   it("opens the stored item in the same view at once without auto-advance", async () => {

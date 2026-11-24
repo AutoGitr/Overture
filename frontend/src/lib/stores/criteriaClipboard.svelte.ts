@@ -1,20 +1,20 @@
-import type { ConditionInput, FilterGroupInput, MediaType } from "../../generated/rest/types.gen";
+import type { ConditionOutput, FilterGroupOutput, MediaType } from "../../generated/rest/types.gen";
 import { conditionFits, groupFits, type CriteriaTarget } from "../utils/collectionCriteria";
 
 /** A copied condition or group, and the media type whose fields it names. */
 type Copied = { mediaType: MediaType } & (
-  { kind: "condition"; condition: ConditionInput } | { kind: "group"; group: FilterGroupInput }
+  { kind: "condition"; condition: ConditionOutput } | { kind: "group"; group: FilterGroupOutput }
 );
 
 /** Criteria copied from one collection, set or library to paste into another. */
 class CriteriaClipboard {
   copied = $state.raw<Copied | null>(null);
 
-  copyCondition(mediaType: MediaType, condition: ConditionInput) {
+  copyCondition(mediaType: MediaType, condition: ConditionOutput) {
     this.copied = { mediaType, kind: "condition", condition: $state.snapshot(condition) };
   }
 
-  copyGroup(mediaType: MediaType, group: FilterGroupInput) {
+  copyGroup(mediaType: MediaType, group: FilterGroupOutput) {
     this.copied = { mediaType, kind: "group", group: $state.snapshot(group) };
   }
 
