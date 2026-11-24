@@ -162,6 +162,9 @@ that its license fits, and add it to `licenses/THIRD_PARTY_NOTICES.md`.
 - Titles follow [Conventional Commits](https://www.conventionalcommits.org/),
   such as `fix(sync): keep seasons of unconnected shows`; the squash commit
   uses the title.
+- The description says what changed and why, and names an issue it closes as
+  `Fixes #123`. GitHub fills it from a single commit's message, so write that
+  there.
 - Update these docs when behaviour changes, and the README's feature list
   when a feature is added or removed, written for the person running Overture:
   what it does and how to use it, never how it was built.

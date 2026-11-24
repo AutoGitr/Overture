@@ -1,6 +1,3 @@
-## Summary
-
-
 ## Checklist
 
 - [ ] The title follows [Conventional Commits](https://www.conventionalcommits.org/).
