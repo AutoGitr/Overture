@@ -6,9 +6,7 @@ combines the results, so status filters follow every change at once.
 """
 
 lazy from ...domain import MediaType
-lazy from ...repositories.libraries import LibraryRepository
 lazy from ...schemas.collections import (
-    CollectionFieldRead,
     CollectionLibraryCriteria,
     FieldCondition,
     FilterGroup,
@@ -18,10 +16,7 @@ lazy from ...schemas.library_filters import (
     LibraryFilterMatch,
     LibraryFilterMatchRequest,
 )
-lazy from ...utils.collection_fields import (
-    FIELDS,
-    library_field_available,
-)
+lazy from ...utils.collection_fields import FIELDS
 lazy from ...utils.errors import PublicServiceError
 lazy from .access import CollectionAccess
 lazy from .criteria import evaluate
@@ -52,22 +47,10 @@ class LibraryFilters:
         A filter tests the titles of every library, so it offers what any
         configured server's titles hold.
         """
-        servers = sorted(self._access.configured_types())
-        tmdb = self._access.app_config.tmdb_configured
-        fields = [
-            CollectionFieldRead.of(field, available[0])
-            for field, spec in FIELDS.items()
-            if (
-                available := [
-                    server
-                    for server in servers
-                    if library_field_available(field, server, media_type)
-                ]
-            )
-            and (tmdb or not spec.tmdb)
-        ]
         return LibraryFilterCapabilities(
-            fields=sorted(fields, key=lambda entry: entry.label.casefold()),
+            fields=self._discovery.filter_fields(
+                media_type, sorted(self._access.configured_types())
+            ),
             sources=self._discovery.capabilities(media_type).sources,
         )
 
@@ -91,12 +74,7 @@ class LibraryFilters:
         self._validator.library_criteria(
             media_type, combined, self._access.configured_types()
         )
-        async with self._access.database.read_session() as session:
-            library_ids = [
-                library.id
-                for library in await LibraryRepository(session).listed()
-                if library.media_type is media_type
-            ]
+        library_ids = await self._access.libraries_of(media_type)
         # One scope per library loads the values every condition tests at once.
         scopes = await self._access.scopes(
             [

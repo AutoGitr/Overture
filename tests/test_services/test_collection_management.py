@@ -2160,6 +2160,32 @@ async def test_field_values_count_library_metadata_or_ask_plex(
     ]
 
 
+async def test_field_values_without_a_library_span_every_library_of_the_type(
+    manager: Manager,
+) -> None:
+    saga = await create(manager)
+    discovery = manager.service.discovery
+
+    # A library filter tests every library, so it is offered their values.
+    collections = await discovery.field_values(
+        MediaType.MOVIE, None, FilterField.COLLECTION
+    )
+    genres = await discovery.field_values(MediaType.MOVIE, None, FilterField.GENRE)
+    shows = await discovery.field_values(MediaType.SHOW, None, FilterField.GENRE)
+    # What only Plex can test is no library filter's to offer.
+    manager.provider.choices = {"audioLanguage": [("eng", "English")]}
+    languages = await discovery.field_values(
+        MediaType.MOVIE, None, FilterField.AUDIO_LANGUAGE
+    )
+
+    assert [(entry.value, entry.label, entry.count) for entry in collections] == [
+        (str(saga), "Saga", 3)
+    ]
+    assert [(entry.value, entry.count) for entry in genres] == [("Action", 3)]
+    assert [entry.value for entry in shows] == ["Animation"]
+    assert languages == []
+
+
 async def test_keyword_values_list_the_common_first_and_add_tmdb_matches(
     manager: Manager, database: Database
 ) -> None:
@@ -2564,6 +2590,43 @@ async def test_bulk_operations_order_and_visibility(manager: Manager) -> None:
     assert refreshed.visible_home is True
     assert refreshed.visible_shared is True
     assert refreshed.visible_library is True
+
+
+async def test_bulk_set_order_without_an_order_inherits_the_groups(
+    manager: Manager,
+) -> None:
+    await manager.service.groups.save_policy(
+        "Sorted", CollectionGroupPolicy(order_type=CollectionOrder.TITLE_ASC)
+    )
+    col = await created(
+        manager.service,
+        CollectionCreate(
+            title="Own order",
+            collection_group="Sorted",
+            order_type=CollectionOrder.RELEASE_ASC,
+            rule=chosen(manager),
+        ),
+    )
+    assert (await manager.service.reader.get(col.id)).order_type is (
+        CollectionOrder.RELEASE_ASC
+    )
+
+    result = await manager.service.bulk.run(
+        BulkCollectionOperation(
+            operation="set_order", collection_ids=[col.id], order_type=None
+        )
+    )
+
+    assert result.errors == {}
+    assert result.collection_ids == [col.id]
+    assert (await manager.service.reader.get(col.id)).order_type is (
+        CollectionOrder.TITLE_ASC
+    )
+
+
+def test_bulk_set_order_requires_a_choice() -> None:
+    with pytest.raises(ValidationError, match="Choose a sort"):
+        BulkCollectionOperation(operation="set_order", collection_ids=[1])
 
 
 async def test_tmdb_lists_merge_in_order_and_failures_keep_members(
@@ -3632,14 +3695,23 @@ async def test_every_dimension_previews_with_its_defaults(manager: Manager) -> N
             )
 
 
-async def test_plex_lists_resolutions_as_the_keys_sync_stores(manager: Manager) -> None:
-    manager.provider.choices = {"episode.resolution": [("4k", "4K"), ("1080", "1080p")]}
+async def test_shows_list_the_resolutions_their_episodes_come_in(
+    manager: Manager, database: Database
+) -> None:
+    async with database.write_session() as session:
+        show = (
+            await session.exec(
+                select(MediaItem).where(MediaItem.title == "Anime Series")
+            )
+        ).one()
+        await assign(session, show, resolution=["4k", "1080"])
 
     values = await manager.service.discovery.field_values(
         MediaType.SHOW, "1:shows", FilterField.RESOLUTION
     )
 
-    assert [value.value for value in values] == ["1080", "4k"]
+    # Sync stores Plex's keys, which every server's resolutions are named as.
+    assert [(value.value, value.count) for value in values] == [("1080", 1), ("4k", 1)]
 
 
 def spanning(

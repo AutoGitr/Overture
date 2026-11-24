@@ -30,8 +30,7 @@ def _set_group(options: CollectionOptions, body: BulkCollectionOperation) -> Non
 
 
 def _set_order(options: CollectionOptions, body: BulkCollectionOperation) -> None:
-    if body.order_type is not None:
-        options.order_type = body.order_type
+    options.order_type = body.order_type
 
 
 def _set_visibility(options: CollectionOptions, body: BulkCollectionOperation) -> None:

@@ -115,10 +115,13 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
             ),
         )
 
-    async def _seasons_by_show(self, parent_id: str) -> dict[str, list[ServerSeason]]:
-        """Read the seasons under a library or one show, grouped by show.
+    async def _show_details(
+        self, parent_id: str
+    ) -> tuple[dict[str, list[ServerSeason]], dict[str, set[str]]]:
+        """Read the seasons, and the resolutions of the episodes, under a library
+        or one show, each by show.
 
-        One listing covers every season under *parent_id* and one more counts
+        One listing covers every season under *parent_id* and one more reads
         its episodes: without a user the servers omit season child counts.
         """
         rows: dict[str, list[MediaBrowserItem]] = {}
@@ -136,18 +139,20 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
                     raise MediaServerError("Media server returned too many seasons")
                 show_seasons.append(season)
         if not rows:
-            return {}
-        counts = await self.client.count_episodes_by_season(parent_id)
+            return {}, {}
+        episodes = await self.client.tally_episodes(parent_id)
         # A season the server could not number, such as "Season Unknown" for
         # episodes it could not place, has no number to key it by: 0 is Specials.
         return {
             show_id: [
-                self._server_season(season, season_num, counts[season["Id"]])
+                self._server_season(
+                    season, season_num, episodes.per_season[season["Id"]]
+                )
                 for season in show_seasons
                 if (season_num := season.get("IndexNumber")) is not None
             ]
             for show_id, show_seasons in rows.items()
-        }
+        }, episodes.resolutions
 
     def _to_server_item(
         self,
@@ -201,7 +206,10 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
                 if (name := tag.get("Name"))
             ),
             content_rating=metadata.get("OfficialRating") or None,
-            resolution=video_resolution(metadata.get("Width")) if movie else None,
+            # A show's episodes are read with its seasons.
+            resolutions=(resolution,)
+            if movie and (resolution := video_resolution(metadata.get("Width")))
+            else (),
             # Critic ratings are percentages; Overture rates out of ten like Plex.
             critic_rating=float(critic_rating) / 10
             if isinstance(critic_rating, int | float)
@@ -250,10 +258,10 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
         """
         for section in await self.select_sections(library_ids):
             show = section.media_type is MediaType.SHOW
-            seasons = (
-                await self._seasons_by_show(section.key)
+            seasons, resolutions = (
+                await self._show_details(section.key)
                 if show and since is None
-                else {}
+                else ({}, {})
             )
             async for page in self.client.iter_section_items(
                 section.key, ITEM_TYPES[section.media_type]
@@ -273,8 +281,9 @@ class MediaBrowserProvider[C: JellyfinClient](BaseMediaServerProvider[C]):
                 if show:
                     for item in batch:
                         if since is not None:
-                            seasons = await self._seasons_by_show(item.id)
+                            seasons, resolutions = await self._show_details(item.id)
                         item.seasons = seasons.pop(item.id, [])
+                        item.resolutions = tuple(sorted(resolutions.pop(item.id, ())))
                 if batch:
                     yield batch
 

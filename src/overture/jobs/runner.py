@@ -231,6 +231,13 @@ class ManagedJob[TallyT: JobTally]:
         """Publish the ``started`` lifecycle event."""
         await self._publish("started", payload)
 
+    async def read(self, count: int) -> None:
+        """Count *count* more targets read while planning, and publish the count."""
+        if self.tally.total is not None:
+            raise RuntimeError("A run reads its targets before it plans them")
+        self.tally.read += count
+        await self.progress()
+
     async def planned(self, total: int, **payload: Any) -> None:
         """Fix the run's total from its complete work list, and publish it.
 

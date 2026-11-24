@@ -2,7 +2,7 @@
 
 lazy from ...db.models.collection_rule import CollectionRule
 lazy from ...db.models.media_collection import MediaCollection
-lazy from ...domain import CollectionFiltering, CollectionKind
+lazy from ...domain import CollectionFiltering, CollectionKind, CollectionOrder
 lazy from ...media_servers.adapters import CollectionDetails
 lazy from ...media_servers.errors import MediaServerError
 lazy from ...schemas.collections import CollectionOptions
@@ -112,6 +112,13 @@ def _explicit[T](options: CollectionOptions, name: str, inherited: T) -> T:
     return getattr(options, name) if name in options.model_fields_set else inherited
 
 
+def resolved_order(
+    options: CollectionOptions, policy: CollectionPolicy
+) -> CollectionOrder:
+    """The order the collection keeps: its own, or without one the policy's."""
+    return options.order_type or policy.order_type
+
+
 class CollectionDisplay:
     """Resolve a collection's effective display options and send them to the server."""
 
@@ -152,7 +159,7 @@ class CollectionDisplay:
             policy,
             rule.source_summary if isinstance(rule, CollectionRule) else None,
         )
-        order = _explicit(options, "order_type", policy.order_type)
+        order = resolved_order(options, policy)
         visible_home = _explicit(options, "visible_home", policy.visible_home)
         visible_shared = _explicit(options, "visible_shared", policy.visible_shared)
         visible_library = _explicit(options, "visible_library", policy.visible_library)
@@ -206,7 +213,7 @@ class CollectionDisplay:
                         sort_title=effective.sort_title,
                         mode=options.collection_mode or policy.collection_mode,
                         order=kept_order(
-                            effective.order_type,
+                            resolved_order(effective, policy),
                             provider.server_type,
                             copy.lead.media_type,
                             smart=smart,

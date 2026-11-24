@@ -49,7 +49,6 @@ class CollectionItem(NamedTuple):
     studio: str | None
     content_rating: str | None
     edition: str | None
-    resolution: str | None
     critic_rating: float | None
     audience_rating: float | None
     user_rating: float | None
@@ -139,11 +138,13 @@ def _named_terms[*Ts](stmt: Select[*Ts]) -> Select[*Ts]:
     )
 
 
-def _in_library(media_type: MediaType, library_id: str) -> list[ColumnElement[bool]]:
-    """Match the listed copies of one library, joined to their titles."""
+def _in_libraries(
+    media_type: MediaType, library_ids: Collection[str]
+) -> list[ColumnElement[bool]]:
+    """Match the listed copies of the libraries, joined to their titles."""
     return [
         col(MediaItemCopy.media_type) == media_type,
-        col(MediaItemCopy.library_id) == library_id,
+        col(MediaItemCopy.library_id).in_(library_ids),
         col(MediaItemCopy.removed_at).is_(None),
         col(MediaItem.server_removed_at).is_(None),
     ]
@@ -276,7 +277,7 @@ class CollectionItemRepository:
     ) -> list[CollectionItem]:
         """Return active server items in one library, with deterministic order."""
         selection = terms or TermSelection()
-        library = _in_library(media_type, library_id)
+        library = _in_libraries(media_type, [library_id])
         values = await self._selected_terms(library, selection)
         if TermKind.LABEL in selection.read:
             await self._read_labels(library, selection, values)
@@ -351,25 +352,31 @@ class CollectionItemRepository:
                 found.setdefault(item_id, {})[TermKind.LABEL] = held
 
     async def term_counts(
-        self, media_type: MediaType, library_id: str, kind: TermKind
+        self, media_type: MediaType, library_ids: Collection[str], kind: TermKind
     ) -> dict[str, int]:
-        """How many of a library's items hold each value of *kind*."""
+        """How many titles of the libraries hold each value of *kind*.
+
+        A title several of them hold counts once.
+        """
+        libraries = _in_libraries(media_type, library_ids)
         if kind is TermKind.LABEL:
-            counts: dict[str, int] = {}
+            holders: dict[str, set[int]] = {}
             rows = await self.session.exec(
-                select(col(MediaItemCopy.labels))
+                select(col(MediaItemCopy.media_item_id), col(MediaItemCopy.labels))
                 .join(MediaItem, col(MediaItem.id) == col(MediaItemCopy.media_item_id))
-                .where(*_in_library(media_type, library_id))
+                .where(*libraries)
             )
-            for labels in rows.all():
-                for label in dict.fromkeys(labels):
-                    counts[label] = counts.get(label, 0) + 1
-            return counts
+            for item_id, labels in rows.all():
+                for label in labels:
+                    holders.setdefault(label, set()).add(item_id)
+            return {label: len(items) for label, items in holders.items()}
         rows = await self.session.exec(
-            _named_terms(select(Term.name, func.count()))
-            .where(
-                *_in_library(media_type, library_id), col(MediaItemTerm.kind) == kind
+            _named_terms(
+                select(
+                    Term.name, func.count(col(MediaItemTerm.media_item_id).distinct())
+                )
             )
+            .where(*libraries, col(MediaItemTerm.kind) == kind)
             .group_by(col(Term.id))
         )
         return dict(rows.all())

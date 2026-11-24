@@ -17,6 +17,9 @@ finished.
 | Renamer      | Finds nonstandard asset filenames such as `folder.jpg` and renames the ones you select.                                                                                    |
 | Server audit | Compares local assets, and optionally the images Overture uploaded to collections, with the server; fixes selected differences and checks whether the changes took effect. |
 
+While a run reads what it will work on, its progress counts what it has read
+so far; the total follows once it knows everything.
+
 A run you start keeps its results on screen until you choose **Clear results**
 or the next run starts. A scheduled run, including an incremental poll, never
 leaves results to clear, whatever its outcome: the schedule's **Last run** sums

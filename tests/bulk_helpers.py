@@ -74,6 +74,23 @@ def progress_logs(context: Context) -> list[str]:
     ]
 
 
+def planned_event(context: Context) -> dict[str, Any]:
+    """The event that fixed the run's total, after what planning read climbed to it.
+
+    Every event after it carries the same total.
+    """
+    events = [payload for _, payload in context.events[1:]]
+    index = next(
+        i for i, payload in enumerate(events) if payload.get("total") is not None
+    )
+    planned = events[index]
+    reads = [payload["read"] for payload in events[:index]]
+    assert reads == sorted(reads)
+    assert planned["read"] == planned["total"]
+    assert {payload["total"] for payload in events[index:]} == {planned["total"]}
+    return planned
+
+
 def make_bulk_downloads(
     *,
     app_config: Settings,

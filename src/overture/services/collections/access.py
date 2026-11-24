@@ -266,14 +266,28 @@ class CollectionAccess:
             raise PublicServiceError(422, "Select one of the servers' libraries")
         return {library_id: types[library_id] for library_id in requested}
 
+    async def libraries_of(self, media_type: MediaType) -> list[str]:
+        """The IDs of the servers' listed libraries of *media_type*."""
+        async with self.database.read_session() as session:
+            return [
+                library.id
+                for library in await LibraryRepository(session).listed()
+                if library.media_type is media_type
+            ]
+
     async def library_names(self, library_ids: Iterable[str]) -> dict[str, str]:
         """The names of the listed libraries among *library_ids*, by ID."""
         async with self.database.read_session() as session:
             listed = await LibraryRepository(session).listed(set(library_ids))
         return {library.id: library.title for library in listed}
 
-    async def _require_type(self, library_id: str, media_type: MediaType) -> None:
-        if (await self.library_types([library_id]))[library_id] is not media_type:
+    async def _require_type(
+        self, library_ids: Iterable[str], media_type: MediaType
+    ) -> None:
+        if any(
+            held is not media_type
+            for held in (await self.library_types(library_ids)).values()
+        ):
             raise PublicServiceError(
                 422, "Select a library of the collection's media type"
             )
@@ -285,7 +299,7 @@ class CollectionAccess:
         terms: TermSelection | None = None,
     ) -> list[CollectionItem]:
         """The stored items of one of the server's libraries of this media type."""
-        await self._require_type(library_id, media_type)
+        await self._require_type([library_id], media_type)
         async with self.database.read_session() as session:
             return await CollectionItemRepository(session).library_items(
                 media_type, library_id, terms
@@ -301,13 +315,13 @@ class CollectionAccess:
             )
 
     async def term_counts(
-        self, library_id: str, media_type: MediaType, kind: TermKind
+        self, library_ids: Sequence[str], media_type: MediaType, kind: TermKind
     ) -> dict[str, int]:
-        """How many of the items of one of the server's libraries hold each value."""
-        await self._require_type(library_id, media_type)
+        """How many titles of the servers' libraries hold each value of *kind*."""
+        await self._require_type(library_ids, media_type)
         async with self.database.read_session() as session:
             return await CollectionItemRepository(session).term_counts(
-                media_type, library_id, kind
+                media_type, library_ids, kind
             )
 
     async def scope(

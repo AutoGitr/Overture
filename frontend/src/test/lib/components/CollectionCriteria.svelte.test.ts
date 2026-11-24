@@ -74,12 +74,9 @@ describe("collection criteria", () => {
     await fireEvent.change(screen.getByLabelText("Criteria condition 1 field"), {
       target: { value: "field:genre" },
     });
-    // The library's genres are few, so they are chosen from a list.
-    await waitFor(() =>
-      expect(screen.getByRole("option", { name: "Action (3)" })).toBeInTheDocument(),
-    );
-    const value = screen.getByLabelText("Criteria condition 1 value");
-    await fireEvent.change(value, { target: { value: "Action" } });
+    // The library's genres are listed, with how many titles hold each.
+    await fireEvent.focus(screen.getByRole("combobox", { name: "Criteria condition 1 value" }));
+    await fireEvent.pointerDown(await screen.findByRole("option", { name: /^Action\s*3 titles$/ }));
 
     await fireEvent.click(screen.getByRole("button", { name: "Group" }));
     const nested = within(screen.getByRole("group", { name: "Criteria group 1" }));
@@ -164,10 +161,7 @@ describe("collection criteria", () => {
     ]);
     expect(source.groups).toHaveLength(2);
     // A duplicate is its own condition, not a second view of the first.
-    await waitFor(() =>
-      expect(screen.getByLabelText("Source condition 2 value").tagName).toBe("SELECT"),
-    );
-    await fireEvent.change(screen.getByLabelText("Source condition 2 value"), {
+    await fireEvent.input(screen.getByRole("combobox", { name: "Source condition 2 value" }), {
       target: { value: "Comedy" },
     });
     expect(source.conditions?.[0]).toMatchObject({ value: "Action" });
@@ -187,34 +181,13 @@ describe("collection criteria", () => {
     ]);
   });
 
-  it("lists a value spelt in another case as the library's, as criteria match it", async () => {
+  it("types a tag value, as many as the library holds, and narrows the list to what is typed", async () => {
     mockFetchRoutes({
-      "/api/collections/field-values": [
-        { value: "United Kingdom", label: "United Kingdom", count: 258 },
-      ],
-    });
-    const group = $state<FilterGroupInput>({
-      ...emptyGroup(),
-      conditions: [{ kind: "field", field: "genre", operator: "is", value: "united kingdom" }],
-    });
-    renderWithQueryClient(CriteriaEditor, {
-      group,
-      fields: capabilities.fields,
-      sources: capabilities.sources,
-      mediaType: "movie",
-      libraryId: "movies",
-      scope: "Movies on Plex",
-      label: "Criteria",
-    });
-    await waitFor(() =>
-      expect(screen.getByLabelText("Criteria condition 1 value")).toHaveValue("United Kingdom"),
-    );
-    expect(screen.queryByRole("option", { name: /no title has it/ })).toBeNull();
-  });
-
-  it("chooses a tag value from the library's, keeps one it lacks, and types text to match part of", async () => {
-    mockFetchRoutes({
-      "/api/collections/field-values": [{ value: "Action", label: "Action", count: 3 }],
+      "/api/collections/field-values": Array.from({ length: 600 }, (_, index) => ({
+        value: `Actor ${index}`,
+        label: `Actor ${index}`,
+        count: 1,
+      })),
     });
     const group = $state<FilterGroupInput>({
       ...emptyGroup(),
@@ -229,64 +202,42 @@ describe("collection criteria", () => {
       scope: "Movies on Plex",
       label: "Criteria",
     });
+    const value = screen.getByRole("combobox", { name: "Criteria condition 1 value" });
     // A value no title has, as a saved filter may hold, shows as it is.
-    await waitFor(() =>
-      expect(screen.getByLabelText("Criteria condition 1 value").tagName).toBe("SELECT"),
-    );
-    const value = screen.getByLabelText("Criteria condition 1 value");
     expect(value).toHaveValue("Future genre");
-    expect(
-      within(value).getByRole("option", { name: "Future genre (no title has it)" }),
-    ).toBeDisabled();
-    await fireEvent.change(value, { target: { value: "Action" } });
-    expect(group.conditions?.[0]).toMatchObject({ value: "Action" });
+
+    await fireEvent.focus(value);
+    const listed = () => within(screen.getByRole("listbox")).getAllByRole("option");
+    await waitFor(() => expect(listed()).toHaveLength(50));
+    await fireEvent.input(value, { target: { value: "actor 29" } });
+    // Actor 29 and Actor 290 to 299, matched ignoring case.
+    expect(listed()).toHaveLength(11);
+    expect(group.conditions?.[0]).toMatchObject({ value: "actor 29" });
+    await fireEvent.keyDown(value, { key: "ArrowDown" });
+    await fireEvent.keyDown(value, { key: "ArrowDown" });
+    await fireEvent.keyDown(value, { key: "Enter" });
+    expect(group.conditions?.[0]).toMatchObject({ value: "Actor 290" });
+    expect(value).toHaveValue("Actor 290");
+    expect(screen.queryByRole("listbox")).toBeNull();
+
     await fireEvent.change(screen.getByLabelText("Criteria condition 1 field"), {
       target: { value: "field:title" },
     });
     await fireEvent.change(screen.getByLabelText("Criteria condition 1 operator"), {
       target: { value: "contains" },
     });
-    const input = screen.getByLabelText("Criteria condition 1 value");
-    expect(input.tagName).toBe("INPUT");
-    await fireEvent.input(input, { target: { value: "Future" } });
+    await fireEvent.input(screen.getByRole("combobox", { name: "Criteria condition 1 value" }), {
+      target: { value: "Future" },
+    });
     expect(group.conditions?.[0]).toMatchObject({ operator: "contains", value: "Future" });
-  });
-
-  it("types a value of a field the library holds too many of to list, suggesting at most 50", async () => {
-    mockFetchRoutes({
-      "/api/collections/field-values": Array.from({ length: 600 }, (_, index) => ({
-        value: `Studio ${index}`,
-        label: `Studio ${index}`,
-        count: 1,
-      })),
-    });
-    const group = $state<FilterGroupInput>(emptyGroup());
-    renderWithQueryClient(CriteriaEditor, {
-      group,
-      fields: capabilities.fields.filter((field) => field.local),
-      sources: capabilities.sources,
-      mediaType: "movie",
-      libraryId: "movies",
-      scope: "Movies on Plex",
-      label: "Criteria",
-    });
-    await fireEvent.click(screen.getByRole("button", { name: "Condition" }));
-    await fireEvent.change(screen.getByLabelText("Criteria condition 1 field"), {
-      target: { value: "field:genre" },
-    });
-    const value = screen.getByLabelText("Criteria condition 1 value");
-    const options = () => document.querySelectorAll(`#${value.getAttribute("list")} option`);
-
-    await waitFor(() => expect(options()).toHaveLength(50));
-    expect(value.tagName).toBe("INPUT");
-    await fireEvent.input(value, { target: { value: "studio 29" } });
-    // Studio 29 and Studio 290 to 299.
-    await waitFor(() => expect(options()).toHaveLength(11));
   });
 
   it("chooses a collection by its title and keeps its ID, naming one that holds no title", async () => {
     mockFetchRoutes({
-      "/api/collections/field-values": [{ value: "7", label: "Letterboxd Top 250", count: 238 }],
+      "/api/collections/field-values": [
+        { value: "7", label: "Letterboxd Top 250", count: 238 },
+        { value: "8", label: "IMDb Top 250", count: 250 },
+      ],
     });
     const collection = capabilities.fields.find((field) => field.field === "genre")!;
     const group = $state<FilterGroupInput>({
@@ -302,12 +253,25 @@ describe("collection criteria", () => {
       scope: "Movies on Plex",
       label: "Criteria",
     });
-    const value = screen.getByLabelText("Criteria condition 1 value");
+    const value = screen.getByRole("combobox", { name: "Criteria condition 1 value" });
+    await waitFor(() => expect(value).toHaveValue("Genre #12 (holds no title)"));
 
-    expect(await screen.findByRole("option", { name: "Letterboxd Top 250 (238)" })).toBeTruthy();
-    expect(screen.getByRole("option", { name: "Genre #12 (holds no title)" })).toBeTruthy();
-    await fireEvent.change(value, { target: { value: "7" } });
+    await fireEvent.focus(value);
+    await fireEvent.input(value, { target: { value: "letterboxd" } });
+    // A typed title is no ID: only a listed collection is held.
+    expect(group.conditions?.[0]).toMatchObject({ value: "12" });
+    await fireEvent.pointerDown(screen.getByRole("option", { name: /^Letterboxd Top 250/ }));
     expect(group.conditions?.[0]).toMatchObject({ value: "7" });
+    expect(value).toHaveValue("Letterboxd Top 250");
+
+    // A title typed whole is taken; anything else leaves the choice as it was.
+    await fireEvent.input(value, { target: { value: "imdb top 250" } });
+    await fireEvent.blur(value);
+    expect(group.conditions?.[0]).toMatchObject({ value: "8" });
+    await fireEvent.input(value, { target: { value: "Nothing like it" } });
+    await fireEvent.blur(value);
+    expect(group.conditions?.[0]).toMatchObject({ value: "8" });
+    expect(value).toHaveValue("IMDb Top 250");
   });
 
   it.each([
@@ -395,12 +359,9 @@ describe("collection criteria", () => {
     failed = false;
     await fireEvent.click(retry);
     // Plex lists its values without counts, so none are shown.
-    await waitFor(() =>
-      expect(screen.getByRole("option", { name: "English" })).toBeInTheDocument(),
-    );
-    await fireEvent.change(screen.getByLabelText("Criteria condition 1 value"), {
-      target: { value: "English" },
-    });
+    const value = screen.getByRole("combobox", { name: "Criteria condition 1 value" });
+    await fireEvent.focus(value);
+    await fireEvent.pointerDown(await screen.findByRole("option", { name: "English" }));
     expect(group.conditions?.[0]).toMatchObject({ value: "English" });
   });
 

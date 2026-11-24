@@ -3,7 +3,6 @@ import type {
   CollectionRead,
   MediaItemRead,
   MetadataIssue,
-  TitleAssets,
 } from "../../generated/rest/types.gen";
 import {
   METADATA_ISSUES,
@@ -93,13 +92,34 @@ export const ART_SOURCES = alphabetical(
   (source) => SELECTED_ART_SOURCE_LABELS[source],
 );
 
-/** Which of a row's artwork the art source filter looks at. */
+/** The art the art filters look at; a show's season posters count as one. */
+export const ART_SLOT_LABELS = {
+  poster: "Poster",
+  background: "Background",
+  season_posters: "Season posters",
+} as const;
+export type ArtSlot = keyof typeof ART_SLOT_LABELS;
+
+/** Which of a row's art the art source filter looks at. */
 export const ART_SOURCE_SLOTS = {
-  any: ["poster", "background"],
+  any: ["poster", "background", "season_posters"],
   poster: ["poster"],
   background: ["background"],
-} as const satisfies Record<string, readonly (keyof TitleAssets)[]>;
+  season_posters: ["season_posters"],
+} as const satisfies Record<string, readonly ArtSlot[]>;
 export type ArtSourceSlot = keyof typeof ART_SOURCE_SLOTS;
+
+/** Where a slot's selected art comes from; collections hold no season posters. */
+function slotSources(row: Row, slot: ArtSlot): readonly (string | null)[] {
+  if (slot !== "season_posters") return [row.assets[slot].source];
+  return "season_posters_sources" in row ? row.season_posters_sources : [];
+}
+
+/** A slot's width; season posters are as wide as the narrowest of them. */
+function slotWidth(row: Row, slot: ArtSlot): number | null {
+  if (slot !== "season_posters") return row.assets[slot].width;
+  return "season_posters_width" in row ? row.season_posters_width : null;
+}
 
 export type { MetadataIssue };
 /** Every metadata issue, by its label. */
@@ -179,13 +199,14 @@ function artSourcePredicate(filters: FilterState): Predicate<Row> | null {
   if (!filters.artSource.sources.length) return null;
   const sources = new Set<string | null>(filters.artSource.sources);
   const slots = ART_SOURCE_SLOTS[filters.artSource.artType];
-  return (row) => slots.some((slot) => sources.has(row.assets[slot].source));
+  return (row) =>
+    slots.some((slot) => slotSources(row, slot).some((source) => sources.has(source)));
 }
 
 function resolutionPredicate(filters: FilterState): Predicate<Row> | null {
   if (!isRangeActive(filters.resolution)) return null;
   const slot = filters.resolution.artType;
-  return (row) => inRange(row.assets[slot].width, filters.resolution);
+  return (row) => inRange(slotWidth(row, slot), filters.resolution);
 }
 
 function issuesPredicate(
@@ -285,6 +306,18 @@ export const FILTERS = {
       triState(filters.art, "complete", (item) => item.art_status === "complete"),
     collections: (filters) =>
       triState(filters.art, "complete", (row) => row.art_status === "complete"),
+  },
+  seasonPosters: {
+    label: "Season posters complete",
+    group: "status",
+    order: 35,
+    mediaTypes: ["show"],
+    library: (filters) =>
+      triState(
+        filters.seasonPosters,
+        "complete",
+        (item) => item.season_posters_status === "complete",
+      ),
   },
   aspectRatio: {
     label: "Aspect ratio",

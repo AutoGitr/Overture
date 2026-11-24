@@ -225,6 +225,18 @@ class CopyRepository:
         )
         return dict(rows.all())
 
+    async def season_copies_on(
+        self, season_ids: Collection[int], server_id: int
+    ) -> dict[int, SeasonCopy]:
+        """One server's copies of the seasons, by season."""
+        rows = await self.session.exec(
+            select(SeasonCopy).where(
+                col(SeasonCopy.season_id).in_(season_ids),
+                col(SeasonCopy.server_id) == server_id,
+            )
+        )
+        return {copy.season_id: copy for copy in rows.all()}
+
     async def keep_season_id(
         self, season_id: int, server_id: int, server_item_id: str
     ) -> str | None:
@@ -244,10 +256,15 @@ class CopyRepository:
         )
         return server_item_id
 
-    async def set_season_id(
-        self, season_id: int, server_id: int, server_item_id: str | None
+    async def set_season_copy(
+        self,
+        season_id: int,
+        server_id: int,
+        server_item_id: str | None,
+        poster_version: str | None,
     ) -> None:
-        """Record, or forget when ``None``, a server's ID of a season."""
+        """Record a server's ID of a season and the poster it shows, or forget
+        its copy when the ID is ``None``."""
         current = await self.session.get(SeasonCopy, (season_id, server_id))
         if server_item_id is None:
             if current is not None:
@@ -258,6 +275,7 @@ class CopyRepository:
                 season_id=season_id, server_id=server_id, server_item_id=server_item_id
             )
         current.server_item_id = server_item_id
+        current.poster_version = poster_version
         self.session.add(current)
 
     async def relabel(

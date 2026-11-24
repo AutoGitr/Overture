@@ -36,6 +36,7 @@ lazy from tests.bulk_helpers import (
     enable_catalog,
     make_bulk_downloads,
     movie_item,
+    planned_event,
     progress_logs,
     public_index,
     use_theme_work,
@@ -355,7 +356,7 @@ async def test_bulk_theme_items_without_catalog_theme_are_counted_in_one_step(
         else "ThemerrDB has no theme for it"
     )
     assert progress_logs(context) == [f"No match 150 assets - {reason}"]
-    assert context.events[1][1]["total"] == 150
+    assert planned_event(context)["total"] == 150
     completed = context.events[-1][1]
     assert completed["total"] == completed["log_targets"].get("No match", 0) == 150
 

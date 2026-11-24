@@ -14,6 +14,7 @@ describe("JobPanel", () => {
       log_servers: { "1": { Added: 1 }, "2": { Added: 1 } },
     });
     const job = {
+      read: 0,
       planning: false,
       done: 1,
       total: 2,

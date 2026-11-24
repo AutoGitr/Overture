@@ -1,7 +1,7 @@
 """Server-audit work planning."""
 
 lazy from collections import defaultdict
-lazy from collections.abc import Collection
+lazy from collections.abc import Awaitable, Callable, Collection
 lazy from dataclasses import dataclass
 lazy from pathlib import Path
 
@@ -142,11 +142,13 @@ async def plan_audit(
     *,
     database: Database,
     chunk: int = CHUNK_SIZE,
+    read: Callable[[int], Awaitable[None]] | None = None,
 ) -> list[AuditTarget]:
     """Return every local asset the audit will compare, movies then shows by title.
 
     Only monitored items in scope are read: their theme records are refreshed
     when themes are audited, and only files present now become targets.
+    *read* is told how many targets each chunk found, as it is inspected.
     """
     roots = {
         media_type: [Path(real_path(root)) for root in folders]
@@ -186,11 +188,12 @@ async def plan_audit(
                 if ArtType.SEASON_POSTER in params.art_types
                 else []
             )
-        planned.extend(
-            await owned_thread(
-                _inspect, params, selected, seasons, local_assets.asset_storage
-            )
+        inspected = await owned_thread(
+            _inspect, params, selected, seasons, local_assets.asset_storage
         )
+        planned.extend(inspected)
+        if read is not None:
+            await read(sum(len(targets) for _, targets in inspected))
         if len(items) < chunk:
             return [target for _, targets in sorted(planned) for target in targets]
         after_id = max(item.id or 0 for item in items)

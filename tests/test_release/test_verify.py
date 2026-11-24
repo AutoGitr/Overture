@@ -685,7 +685,7 @@ class _Collections:
     ) -> ServerCollection:
         made = ServerCollection(id=title, title=title, member_ids=tuple(members))
         self.held[made.id] = made
-        self.items[made.id] = {"Name": title, "ImageTags": {}, "DateLastSaved": 0}
+        self.items[made.id] = {"Name": title, "ImageTags": {}, "Etag": 0}
         self.saving[made.id] = self.refreshes
         return made
 
@@ -773,7 +773,7 @@ class _Jellyfin(module.MediaBrowserServer):
         found = self.server_state.items.get(params["Ids"])
         if found and self.server_state.saving.get(params["Ids"]):
             self.server_state.saving[params["Ids"]] -= 1
-            found["DateLastSaved"] += 1
+            found["Etag"] += 1
         return {"Items": [found] if found else []}
 
 

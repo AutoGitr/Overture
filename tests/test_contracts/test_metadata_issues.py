@@ -3,7 +3,7 @@
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.domain import MediaType, MetadataIssue
 lazy from overture.schemas.collections import collection_metadata_issues
-lazy from overture.schemas.library import ItemCopyRead, item_metadata_issues
+lazy from overture.schemas.library import item_metadata_issues
 lazy from tests.collection_helpers import stored_collection
 lazy from tests.media_servers import served_item
 
@@ -21,7 +21,7 @@ def test_a_title_lists_each_gap_and_a_catalog_id_conflict() -> None:
         server_item_id="9",
     )
 
-    held = [ItemCopyRead(server_id=1, server_item_id="9", library_id="1:1")]
+    held = complete.copies
     assert item_metadata_issues(bare, None, []) == [
         MetadataIssue.NO_TMDB_ID,
         MetadataIssue.NO_TVDB_ID,

@@ -64,13 +64,9 @@ export function catalogLocalArtUrl(
   return null;
 }
 
-function itemVersion(item: MediaItemRead, primaryHash?: string | null): string {
-  return String(primaryHash || item.last_matched_at || item.last_synced_at || 0);
-}
-
 /**
- * An item's art: its local file first, then the media server's copy. Without
- * a size it is the original image.
+ * An item's art: its local file first, then the image the lead media server
+ * shows, when it shows one. Without a size it is the original image.
  */
 function itemArtUrl(
   item: MediaItemRead | null,
@@ -81,13 +77,12 @@ function itemArtUrl(
   const asset = item.assets[artType];
   const hash = asset.file?.hash;
   if (hash) {
-    return localItemImageUrl(
-      { item_id: item.id, art_type: artType },
-      { t: itemVersion(item, hash), size },
-    );
+    return localItemImageUrl({ item_id: item.id, art_type: artType }, { t: hash, size });
   }
-  if (item.copies.length) {
-    return itemProviderArtUrl({ item_id: item.id }, { type: artType, t: itemVersion(item), size });
+  const serverVersion =
+    artType === "poster" ? item.server_poster_version : item.server_background_version;
+  if (serverVersion) {
+    return itemProviderArtUrl({ item_id: item.id }, { type: artType, t: serverVersion, size });
   }
   // Remote links are never shown in place of a file, except for an item
   // without a folder (chosen from TMDB), which can only ever show its choice.
@@ -124,10 +119,10 @@ export function seasonPosterUrls(
   const localUrl = fileHash
     ? localSeasonImageUrl({ season_id: season.id }, { t: fileHash, size: "display" })
     : null;
-  const serverUrl = item.copies.length
+  const serverUrl = season.server_poster_version
     ? seasonProviderArtUrl(
         { season_id: season.id },
-        { t: String(fileHash || item.last_synced_at || 0), size: "display" },
+        { t: season.server_poster_version, size: "display" },
       )
     : null;
 

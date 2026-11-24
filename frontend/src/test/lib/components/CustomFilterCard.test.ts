@@ -53,10 +53,9 @@ describe("CustomFilterCard", () => {
         return Response.json(stored[0]);
       },
     });
-    const props: { filterId: number | null; mediaType: MediaType; libraryId: string } = {
+    const props: { filterId: number | null; mediaType: MediaType } = {
       filterId: null,
       mediaType: "movie",
-      libraryId: "movies",
     };
     renderWithQueryClient(CustomFilterCard, props);
 
@@ -75,6 +74,34 @@ describe("CustomFilterCard", () => {
     expect(await screen.findByRole("option", { name: "Unarted" })).toBeInTheDocument();
   });
 
+  it("offers the values of every library, as the filter tests them all", async () => {
+    const collection: CollectionFieldRead = {
+      ...unarted,
+      field: "collection",
+      label: "Collection",
+      library_status: false,
+      choices: [],
+      by_id: true,
+      ignores_case: false,
+    };
+    const { calls } = mockFetchRoutes({
+      "/api/library/filters/capabilities": { fields: [collection], sources: [] },
+      "/api/library/filters/saved": [],
+      "/api/collections/field-values": [{ value: "4", label: "Requests", count: 62 }],
+    });
+    renderWithQueryClient(CustomFilterCard, { filterId: null, mediaType: "movie" });
+
+    await fireEvent.click(await screen.findByRole("button", { name: "New" }));
+    await fireEvent.click(await screen.findByRole("button", { name: /Condition/ }));
+    await fireEvent.focus(
+      screen.getByRole("combobox", { name: "Custom filter conditions condition 1 value" }),
+    );
+
+    expect(await screen.findByRole("option", { name: /^Requests/ })).toBeInTheDocument();
+    const asked = calls.find((call) => call.url.startsWith("/api/collections/field-values"));
+    expect(asked?.url).not.toContain("library_id");
+  });
+
   it("offers only the saved filters that suit the media type, and says where the rest are", async () => {
     const filter = (id: number, name: string, media_types: MediaType[]): SavedFilterRead => ({
       id,
@@ -90,7 +117,7 @@ describe("CustomFilterCard", () => {
         filter(2, "Seasons", ["show"]),
       ],
     });
-    renderWithQueryClient(CustomFilterCard, { filterId: null, mediaType: "movie", libraryId: "m" });
+    renderWithQueryClient(CustomFilterCard, { filterId: null, mediaType: "movie" });
 
     expect(await screen.findByRole("option", { name: "Shared" })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Seasons" })).toBeNull();

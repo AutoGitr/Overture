@@ -33,7 +33,8 @@
     fields: CollectionFieldRead[];
     sources: CollectionSourceRead[];
     mediaType: MediaType;
-    libraryId: string;
+    /** The library whose values are suggested; null for every library of the media type. */
+    libraryId: string | null;
     /** What the criteria test, as a message names it, such as "Movies on Plex". */
     scope: string;
     /** Names the group for assistive technology, such as "Criteria". */

@@ -225,7 +225,7 @@ def test_as_payload_returns_every_declared_counter() -> None:
     tally = _tally()
     tally.done = 2
 
-    assert tally.as_payload() == {"done": 2, "total": None, "settled": 0}
+    assert tally.as_payload() == {"done": 2, "total": None, "read": 0, "settled": 0}
 
 
 def test_as_payload_merges_extras_over_counters() -> None:
@@ -423,6 +423,24 @@ async def test_a_run_plans_its_total_once() -> None:
     )
     assert "total" not in started
     assert planned["total"] == probe.terminal()[1]["total"] == 3
+
+
+async def test_a_run_publishes_what_it_has_read_until_it_plans() -> None:
+    """A run counts what it reads while its total is unknown, then plans it."""
+    probe = JobProbe(lifecycle=ManagedJobLifecycle(JobKind.BULK_ART))
+
+    async with run_managed_job(probe.context, _tally()) as job:
+        await job.started()
+        await job.read(2)
+        await job.read(3)
+        await job.planned(5)
+        with pytest.raises(RuntimeError, match="before it plans"):
+            await job.read(1)
+
+    assert [
+        (payload["read"], payload["total"])
+        for payload in probe.publisher.payloads("match.progress")
+    ] == [(2, None), (5, None), (5, 5)]
 
 
 async def test_terminal_extras_are_added_to_the_final_event_only() -> None:

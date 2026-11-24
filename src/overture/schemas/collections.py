@@ -39,6 +39,7 @@ lazy from ..domain import (
     TmdbPersonRole,
 )
 lazy from ..integrations.mdblist import mdblist_identifier
+lazy from ..media_servers.adapters import image_version
 lazy from ..utils.collection_fields import (
     FIELDS,
     OPERATORS,
@@ -53,7 +54,6 @@ lazy from ..utils.collection_formats import (
     SortTitleFormat,
     SummaryFormat,
 )
-lazy from ..utils.hashing import text_digest
 lazy from .assets import AssetRead, TitleAssets, assets_read
 lazy from .base import PositiveId, PublicText, StrictBaseModel
 lazy from .catalog import CatalogSelections
@@ -459,8 +459,7 @@ def _server_image_version(
         if lead
         else None
     )
-    ref = found.observed_ref if found else None
-    return text_digest(ref, 16) if ref else None
+    return image_version(found.observed_ref if found else None)
 
 
 def collection_metadata_issues(row: MediaCollection) -> list[MetadataIssue]:
@@ -639,7 +638,8 @@ class CollectionOptions(StrictBaseModel):
     collection_group: GroupName | None = None
     tmdb_collection_id: PositiveId | None = None
     collection_mode: CollectionMode | None = None
-    order_type: CollectionOrder = CollectionOrder.RELEASE_ASC
+    #: Null inherits the group's or the global default.
+    order_type: CollectionOrder | None = None
     collection_filtering: CollectionFiltering | None = None
     visible_home: bool = False
     visible_shared: bool = False
@@ -1140,6 +1140,7 @@ class BulkCollectionOperation(StrictBaseModel):
     visible_home: bool | None = None
     visible_shared: bool | None = None
     visible_library: bool | None = None
+    #: The order ``set_order`` gives; null inherits the group's or global default.
     order_type: CollectionOrder | None = None
     monitored: bool | None = None
     collection_group: GroupName | None = None
@@ -1155,12 +1156,14 @@ class BulkCollectionOperation(StrictBaseModel):
         if len(set(self.collection_ids)) != len(self.collection_ids):
             raise ValueError("Select distinct collections")
         required = {
-            "set_order": self.order_type,
             "set_monitored": self.monitored,
             "apply_sort_title_format": self.sort_title_format,
         }
         if self.operation in required and required[self.operation] is None:
             raise ValueError("The operation requires a value")
+        # A null order inherits the group's or the global default.
+        if self.operation == "set_order" and "order_type" not in self.model_fields_set:
+            raise ValueError("Choose a sort")
         if self.operation == "set_visibility" and not {
             "collection_mode",
             "visible_home",

@@ -2301,6 +2301,109 @@ def test_replace_existing_becomes_where_current_selection_stands_and_back() -> N
         ]
 
 
+def test_resolutions_become_terms_and_the_first_comes_back() -> None:
+    with _at_revision("c6e2a8f4d913") as (conn, config):
+        conn.exec_driver_sql(
+            "INSERT INTO media_items (id, media_type, title, monitored, "
+            "resolution) VALUES "
+            "(1, 'movie', 'Sharp', 1, '4k'), (2, 'movie', 'Also sharp', 1, '4k'), "
+            "(3, 'movie', 'Unread', 1, NULL), (4, 'show', 'Blank', 1, '')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO terms (id, kind, name) VALUES (1, 'genre', 'Drama')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO media_item_terms (media_item_id, kind, position, term_id) "
+            "VALUES (1, 'genre', 0, 1)"
+        )
+
+        command.upgrade(config, "b4d7e2a9c615")
+        assert conn.exec_driver_sql(
+            "SELECT l.media_item_id, l.kind, l.position, t.name "
+            "FROM media_item_terms AS l JOIN terms AS t ON t.id = l.term_id "
+            "ORDER BY l.media_item_id, l.kind"
+        ).all() == [
+            (1, "genre", 0, "Drama"),
+            (1, "resolution", 0, "4k"),
+            (2, "resolution", 0, "4k"),
+        ]
+        assert conn.exec_driver_sql(
+            "SELECT COUNT(*) FROM terms WHERE kind = 'resolution'"
+        ).all() == [(1,)]
+        assert not conn.exec_driver_sql(
+            "SELECT 1 FROM sqlite_schema WHERE name = 'media_item_terms' "
+            "AND sql NOT LIKE '%WITHOUT ROWID%'"
+        ).all()
+        # A show holds each resolution its episodes come in.
+        conn.exec_driver_sql(
+            "INSERT INTO terms (id, kind, name) VALUES (9, 'resolution', '720')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO media_item_terms (media_item_id, kind, position, term_id) "
+            "VALUES (4, 'resolution', 0, 9), (4, 'resolution', 1, "
+            "(SELECT id FROM terms WHERE kind = 'resolution' AND name = '4k'))"
+        )
+
+        command.downgrade(config, "c6e2a8f4d913")
+        assert conn.exec_driver_sql(
+            "SELECT id, resolution FROM media_items ORDER BY id"
+        ).all() == [(1, "4k"), (2, "4k"), (3, None), (4, "720")]
+        assert conn.exec_driver_sql(
+            "SELECT kind, name FROM terms ORDER BY id"
+        ).all() == [("genre", "Drama")]
+        with pytest.raises(IntegrityError):
+            conn.exec_driver_sql(
+                "INSERT INTO terms (kind, name) VALUES ('resolution', '4k')"
+            )
+
+
+def test_server_copies_gain_image_versions_and_lose_them_on_downgrade() -> None:
+    with _at_revision("b4d7e2a9c615") as (conn, config):
+        conn.exec_driver_sql(
+            "INSERT INTO media_servers (id, key, title, identity) "
+            "VALUES (1, 'jelly', 'Jelly', 'jellyfin:jelly')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO libraries (id, media_type, title, server_id) "
+            "VALUES ('1:shows', 'show', 'Shows', 1)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO media_items (id, media_type, title, monitored) "
+            "VALUES (1, 'show', 'Show', 1)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO media_item_copies (media_item_id, server_id, media_type, "
+            "server_item_id, library_id, labels) "
+            "VALUES (1, 1, 'show', 's1', '1:shows', '[]')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO seasons (id, media_item_id, season_num, file_count) "
+            "VALUES (10, 1, 1, 3)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO season_copies (season_id, server_id, server_item_id) "
+            "VALUES (10, 1, 'x10')"
+        )
+
+        command.upgrade(config, "d2f8a4c6e913")
+        # Only a sync knows what a server shows.
+        assert conn.exec_driver_sql(
+            "SELECT server_item_id, poster_version, background_version "
+            "FROM media_item_copies"
+        ).all() == [("s1", None, None)]
+        assert conn.exec_driver_sql(
+            "SELECT server_item_id, poster_version FROM season_copies"
+        ).all() == [("x10", None)]
+
+        command.downgrade(config, "b4d7e2a9c615")
+        assert conn.exec_driver_sql(
+            "SELECT server_item_id FROM media_item_copies"
+        ).all() == [("s1",)]
+        assert conn.exec_driver_sql(
+            "SELECT server_item_id FROM season_copies"
+        ).all() == [("x10",)]
+
+
 def test_every_revision_has_a_test_here() -> None:
     """Each migration is exercised on rows as the app stores them, in this file."""
     tests = Path(__file__).read_text()

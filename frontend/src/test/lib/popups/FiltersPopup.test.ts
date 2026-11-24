@@ -419,6 +419,8 @@ describe("FiltersPopup edits one draft of the filter set", () => {
   it.each([
     ["set_group", { collection_group: "Weekend" }],
     ["set_order", { order_type: "title.asc" }],
+    // Inheriting the group's or global default is the first choice.
+    ["set_order", { order_type: null }],
     ["apply_sort_title_format", { sort_title_format: "+{title}" }],
     ["set_visibility", { collection_mode: "hide", visible_home: true }],
     ["orphan", {}],
@@ -467,9 +469,9 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     await fireEvent.change(view.getByLabelText("Operation"), { target: { value: operation } });
     if (operation === "set_group")
       await fireEvent.change(view.getByLabelText("Target group"), { target: { value: "Weekend" } });
-    if (operation === "set_order")
+    if (operation === "set_order" && "order_type" in expected && expected.order_type)
       await fireEvent.change(await view.findByLabelText(/^Sort/), {
-        target: { value: "title.asc" },
+        target: { value: expected.order_type },
       });
     if (operation === "apply_sort_title_format")
       await fireEvent.input(view.getByRole("textbox", { name: /^Sort title template/ }), {

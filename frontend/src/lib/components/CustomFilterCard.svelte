@@ -20,13 +20,10 @@
   let {
     filterId = $bindable(),
     mediaType,
-    libraryId,
   }: {
     /** The saved filter the list applies, or null for none. */
     filterId: number | null;
     mediaType: MediaType;
-    /** The library whose values conditions suggest. */
-    libraryId: string;
   } = $props();
 
   interface Draft {
@@ -139,7 +136,7 @@
           fields={capabilities.data.fields}
           sources={capabilities.data.sources}
           {mediaType}
-          {libraryId}
+          libraryId={null}
           scope={`${mediaType === "movie" ? "movies" : "shows"} on ${settingsState.media_server_name}`}
           label="Custom filter conditions"
         />

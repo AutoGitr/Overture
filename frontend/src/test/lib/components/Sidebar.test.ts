@@ -199,7 +199,7 @@ describe("Sidebar", () => {
     const { container } = render(SidebarHarness, {
       props: {
         client,
-        movies: [mediaItem({ ...movie, server_item_id: "plex-1" })],
+        movies: [mediaItem({ ...movie, server_item_id: "plex-1", server_poster_version: "v1" })],
         totalMovies: 1,
       },
     });
@@ -210,7 +210,7 @@ describe("Sidebar", () => {
       expect(poster).toHaveAttribute("loading", "eager");
       expect(poster).toHaveAttribute(
         "src",
-        "/api/library/items/1/provider-art?type=poster&t=0&size=display",
+        "/api/library/items/1/provider-art?type=poster&t=v1&size=display",
       );
     });
   });
@@ -352,6 +352,7 @@ describe("Sidebar", () => {
           mediaItem({
             ...movie,
             server_item_id: "plex-1",
+            server_poster_version: "v1",
             assets: { poster: { file: null, url: "https://remote.test/poster.jpg" } },
           }),
         ],
@@ -393,18 +394,21 @@ describe("Sidebar", () => {
       title: "Movie 1",
       media_type: "movie",
       server_item_id: "p1",
+      server_poster_version: "p1",
     });
     const movie2 = mediaItem({
       id: 20,
       title: "Movie 2",
       media_type: "movie",
       server_item_id: "p2",
+      server_poster_version: "p2",
     });
     const movie3 = mediaItem({
       id: 30,
       title: "Movie 3",
       media_type: "movie",
       server_item_id: "p3",
+      server_poster_version: "p3",
     });
 
     uiState.currentFilters.art = "incomplete";

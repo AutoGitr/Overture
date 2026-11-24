@@ -8,8 +8,10 @@ lazy from pydantic import Field
 
 lazy from ..db.ledger import item_art_status, read_asset
 lazy from ..db.models.media_item import MediaItem
+lazy from ..db.models.media_item_copy import MediaItemCopy, SeasonCopy
 lazy from ..db.models.season import Season
 lazy from ..domain import (
+    ArtSource,
     AssetStatus,
     BulkItemOperationKind,
     MediaType,
@@ -65,6 +67,15 @@ class MediaItemRead(StrictBaseModel):
     #: Every tracked season's poster taken together; a show without one is
     #: missing them.
     season_posters_status: AssetStatus = AssetStatus.MISSING
+    #: The version of the poster and background the lead server shows, which
+    #: names the image to fetch from it; null when it shows none.
+    server_poster_version: str | None = None
+    server_background_version: str | None = None
+    #: Where a show's tracked season posters come from, each source once.
+    season_posters_sources: list[ArtSource] = Field(default_factory=list[ArtSource])
+    #: The narrowest tracked season poster's width in pixels, which bounds
+    #: them all; null when no season poster's width is known.
+    season_posters_width: int | None = None
     has_incorrect_aspect_ratio: bool = False
     #: The item's OvertureDB entry, which the catalog view opens.
     catalog_entry_key: str | None = None
@@ -114,6 +125,9 @@ class SeasonRead(StrictBaseModel):
     file_count: int = 0
     folder_path: str | None = None
     poster: AssetRead
+    #: The version of the poster the lead server shows, which names the image
+    #: to fetch from it; null when it shows none.
+    server_poster_version: str | None = None
     last_matched_at: datetime | None = None
 
 
@@ -139,7 +153,7 @@ class FolderRootsResponse(StrictBaseModel):
 def item_metadata_issues(
     item: MediaItem,
     catalog_ids: Literal["matching", "mismatching"] | None,
-    copies: Sequence[ItemCopyRead],
+    copies: Sequence[MediaItemCopy],
 ) -> list[MetadataIssue]:
     """The gaps and conflicts in a title's metadata, in the enum's order."""
     found = {
@@ -167,14 +181,20 @@ def media_item_read_from_model(
     catalog_ids: Literal["matching", "mismatching"] | None = None,
     catalog_selections: CatalogSelections | None = None,
     library_collection_id: int | None = None,
-    copies: Sequence[ItemCopyRead] = (),
+    copies: Sequence[MediaItemCopy] = (),
 ) -> MediaItemRead:
     """Map a persisted media item to the public library item response.
 
     *seasons* are the item's tracked seasons, which a show's artwork status
     depends on, and *directors* a movie's; callers load both in bulk.
+    *copies* are its listed copies, the lead first.
     """
+    lead = next(iter(copies), None)
     art = item_art_status(item, seasons)
+    season_posters = [
+        asset_read(read_asset(season, ServerAsset.SEASON_POSTER)) for season in seasons
+    ]
+    sources = {poster.source for poster in season_posters}
     return MediaItemRead.model_validate(
         {
             # Item metadata stays internal: it serves collection criteria only.
@@ -183,25 +203,43 @@ def media_item_read_from_model(
             "assets": assets_read(item),
             "art_status": art.art,
             "season_posters_status": art.season_posters,
+            "season_posters_sources": [
+                source for source in ArtSource if source in sources
+            ],
+            "season_posters_width": min(
+                (poster.width for poster in season_posters if poster.width is not None),
+                default=None,
+            ),
             "catalog_entry_key": catalog_entry_key,
             "catalog_complete": catalog_complete,
             "catalog_themerrdb": catalog_themerrdb,
             "library_collection_id": library_collection_id,
             "catalog_ids": catalog_ids,
             "catalog_selections": catalog_selections,
-            "copies": list(copies),
+            "copies": [
+                ItemCopyRead(
+                    server_id=copy.server_id,
+                    server_item_id=copy.server_item_id,
+                    library_id=copy.library_id,
+                )
+                for copy in copies
+            ],
+            "server_poster_version": lead.poster_version if lead else None,
+            "server_background_version": lead.background_version if lead else None,
             "metadata_issues": item_metadata_issues(item, catalog_ids, copies),
             "has_incorrect_aspect_ratio": has_incorrect_aspect_ratio,
         }
     )
 
 
-def season_read_from_model(season: Season) -> SeasonRead:
-    """Map a persisted season to the public season response."""
+def season_read_from_model(season: Season, lead: SeasonCopy | None) -> SeasonRead:
+    """Map a persisted season, with its copy on the lead server, to the public
+    season response."""
     return SeasonRead.model_validate(
         {
             **season.model_dump(include=set(SeasonRead.model_fields)),
             "poster": asset_read(read_asset(season, ServerAsset.SEASON_POSTER)),
+            "server_poster_version": lead.poster_version if lead else None,
         }
     )
 

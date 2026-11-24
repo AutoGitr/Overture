@@ -22,6 +22,7 @@ lazy from ...domain import (
 lazy from ...integrations.proxy import ProxyClientManager
 lazy from ...media_servers.errors import MediaServerError
 lazy from ...media_servers.registry import ProviderRegistry
+lazy from ...repositories.copies import CopyRepository
 lazy from ...repositories.libraries import LibraryRepository
 lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...repositories.records import RecordRepository
@@ -286,7 +287,20 @@ class LibraryService:
         """Get a show's tracked seasons."""
         async with self._database.read_session() as db:
             seasons = await SeasonRepository(db).list_tracked_for_item(item_id)
-        return [season_read_from_model(season) for season in seasons]
+            copies = CopyRepository(db)
+            lead = next(iter(await copies.leads_first(item_id)), None)
+            on_lead = (
+                await copies.season_copies_on(
+                    [season.id for season in seasons if season.id is not None],
+                    lead.server_id,
+                )
+                if lead
+                else {}
+            )
+        return [
+            season_read_from_model(season, on_lead.get(season.id or 0))
+            for season in seasons
+        ]
 
     @staticmethod
     async def _item_folder(item: MediaItem) -> Path:

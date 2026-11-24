@@ -46,6 +46,7 @@ lazy from tests.bulk_helpers import (
     fast_fingerprints,
     make_bulk_downloads,
     no_tags,
+    planned_event,
     progress_logs,
     write_existing_asset,
 )
@@ -202,9 +203,8 @@ async def test_catalog_only_state_matrix(
     for title, action in expected.items():
         assert_item_log(logs, title, action)
 
-    # The total is fixed by the first event after started, and never changes.
-    totals = {payload.get("total") for _, payload in context.events[1:]}
-    assert totals == {len(expected)}
+    # Planning counts what it reads up to the total, which then never changes.
+    assert planned_event(context)["total"] == len(expected)
     completed = context.events[-1][1]
     assert completed["done"] == completed["total"] == len(expected)
     assert completed["log_targets"].get("Queued", 0) == len(queue_targets)

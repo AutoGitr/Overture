@@ -17,7 +17,7 @@ lazy from ...domain import (
     guid_int,
     guid_text,
 )
-lazy from ...media_servers.adapters import ServerItem, SyncItemResult
+lazy from ...media_servers.adapters import ServerItem, SyncItemResult, image_version
 lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...repositories.terms import TermRepository
 lazy from ...utils.time import utc_now
@@ -343,6 +343,8 @@ async def record_copy(
     copy.in_progress = server_item.in_progress
     copy.user_rating = server_item.user_rating
     copy.labels = list(server_item.labels)
+    copy.poster_version = image_version(server_item.poster_url)
+    copy.background_version = image_version(server_item.background_url)
     copy.director_etag = (
         server_item.director_etag if server_item.media_type == MediaType.MOVIE else None
     )
@@ -367,6 +369,7 @@ async def apply_server_metadata(
             TermKind.PRODUCER: server_item.producers,
             TermKind.COUNTRY: server_item.countries,
             TermKind.LABEL: server_item.labels,
+            TermKind.RESOLUTION: server_item.resolutions,
             TermKind.DIRECTOR: server_item.directors
             if server_item.media_type == MediaType.MOVIE
             else (),
@@ -377,7 +380,6 @@ async def apply_server_metadata(
     item.studio = server_item.studio
     item.content_rating = server_item.content_rating
     item.edition = server_item.edition
-    item.resolution = server_item.resolution
     item.critic_rating = server_item.critic_rating
     item.audience_rating = server_item.audience_rating
     item.user_rating = server_item.user_rating

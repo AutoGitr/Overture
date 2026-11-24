@@ -238,6 +238,48 @@ describe("sidebar item filters", () => {
     expect(bySource("poster", ["plex", "tpdb"])).toEqual(["Curated", "Poster DB"]);
   });
 
+  it("filters shows by their season posters' sources, narrowest width and completeness", () => {
+    const items = [
+      mediaItem({
+        id: 1,
+        title: "Sharp",
+        media_type: "show",
+        season_posters_sources: ["tmdb"],
+        season_posters_width: 1000,
+        season_posters_status: "complete",
+      }),
+      mediaItem({
+        id: 2,
+        title: "Blurry",
+        media_type: "show",
+        assets: { poster: { source: "tmdb", width: 2000 } },
+        season_posters_sources: ["fanart", "upload"],
+        season_posters_width: 400,
+        season_posters_status: "partial",
+      }),
+      mediaItem({ id: 3, title: "Bare", media_type: "show" }),
+    ];
+    const filtered = (filters: Partial<FilterState>) =>
+      filterItems(items, { filters: withFilters(filters) });
+    const sources = (sources: string[]) => sources as FilterState["artSource"]["sources"];
+
+    expect(
+      filtered({ artSource: { artType: "season_posters", sources: sources(["tmdb"]) } }),
+    ).toEqual(["Sharp"]);
+    // Any art takes in the season posters too.
+    expect(filtered({ artSource: { artType: "any", sources: sources(["upload"]) } })).toEqual([
+      "Blurry",
+    ]);
+    expect(filtered({ resolution: { artType: "season_posters", min: null, max: 500 } })).toEqual([
+      "Blurry",
+    ]);
+    expect(filtered({ resolution: { artType: "season_posters", min: 800, max: null } })).toEqual([
+      "Sharp",
+    ]);
+    expect(filtered({ seasonPosters: "complete" })).toEqual(["Sharp"]);
+    expect(filtered({ seasonPosters: "incomplete" })).toEqual(["Bare", "Blurry"]);
+  });
+
   it("filters items by themerrdb status only while the catalog is enabled", () => {
     const items = [
       mediaItem({ id: 1, title: "Theme match", catalog_themerrdb: true }),

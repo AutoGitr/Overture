@@ -10,15 +10,19 @@ lazy from ..schemas.base import StrictBaseModel
 class JobTally:
     """Progress and collected results for one managed job run.
 
-    ``total`` is ``None`` while the run plans its work and is set once, by
-    :meth:`ManagedJob.planned`, from the complete work list. It never changes
-    after that, so ``done`` only ever climbs towards a fixed number. Counts of
-    outcomes are not kept here: the run's log entries are the only source of
-    them (:class:`~overture.jobs.progress_log.OutcomeCounts`).
+    ``total`` is ``None`` while the run plans its work, counting what it
+    reads in ``read``, and is set once, by :meth:`ManagedJob.planned`, from
+    the complete work list. It never changes after that, so ``done`` only
+    ever climbs towards a fixed number. Counts of outcomes are not kept here:
+    the run's log entries are the only source of them
+    (:class:`~overture.jobs.progress_log.OutcomeCounts`).
     """
 
     done: int = 0
     total: int | None = None
+    #: Targets read while the run plans, which shows it working until the
+    #: total is known.
+    read: int = 0
 
     #: Payload key for the full collected list on terminal events.
     collect_key: ClassVar[str | None] = None

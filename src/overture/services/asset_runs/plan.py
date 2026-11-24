@@ -7,7 +7,7 @@ its sources. Titles are visited before collections, each by title.
 """
 
 lazy from collections import Counter, defaultdict
-lazy from collections.abc import AsyncGenerator, Iterator, Sequence
+lazy from collections.abc import AsyncGenerator, Awaitable, Callable, Iterator, Sequence
 lazy from dataclasses import dataclass, field
 lazy from datetime import datetime, timedelta
 lazy from itertools import batched
@@ -575,9 +575,21 @@ async def plan_run(
     *,
     database: Database,
     chunk: int = CHUNK_SIZE,
+    read: Callable[[int], Awaitable[None]] | None = None,
 ) -> AssetPlan:
-    """Plan every target in scope without reading a file or asking a source."""
+    """Plan every target in scope without reading a file or asking a source.
+
+    *read* is told how many targets each chunk planned, as it is planned.
+    """
     plan = AssetPlan()
+    reported = 0
+
+    async def report() -> None:
+        nonlocal reported
+        if read is not None:
+            await read(plan.total - reported)
+        reported = plan.total
+
     wanted = kinds(params)
     themes = ServerAsset.THEME in wanted
     # Catalog picks decide a target only when every usable source is a catalog.
@@ -618,6 +630,7 @@ async def plan_run(
                 catalog=catalog,
                 failed=failed,
             )
+            await report()
     if params.collection_scope:
         after = 0
         while True:
@@ -648,5 +661,6 @@ async def plan_run(
                 catalog=True,
                 failed=failed,
             )
+            await report()
             after = rows[-1].id or after
     return plan

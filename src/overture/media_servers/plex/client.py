@@ -465,6 +465,27 @@ class PlexClient(MediaServerHttpClient):
             if (key := row.get("grandparentRatingKey")) is not None
         }
 
+    async def get_show_resolutions(self, section_key: str) -> dict[str, set[str]]:
+        """Return the resolutions of each show's episodes in a section, by show.
+
+        A show section filters its shows by their episodes' resolution, so one
+        listing per resolution its episodes hold covers every show.
+        """
+        held: dict[str, set[str]] = {}
+        for resolution, _ in await self.get_filter_choices(
+            section_key, MediaType.SHOW, "episode.resolution"
+        ):
+            data = await self._get(
+                f"/library/sections/{section_key}/all",
+                params={
+                    "type": _PLEX_TYPES[MediaType.SHOW],
+                    "episode.resolution": resolution,
+                },
+            )
+            for row in plex_items(data):
+                held.setdefault(str(row["ratingKey"]), set()).add(resolution)
+        return held
+
     async def get_metadata(
         self, rating_key: str, *, include_fields: str | None = None
     ) -> PlexMetadata | None:

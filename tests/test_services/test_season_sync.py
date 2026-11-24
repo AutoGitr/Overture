@@ -12,7 +12,7 @@ lazy from overture.db.ledger import select_art
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.db.models.season import Season
 lazy from overture.domain import ArtType, MediaType
-lazy from overture.media_servers.adapters import ServerSeason
+lazy from overture.media_servers.adapters import ServerSeason, image_version
 lazy from overture.repositories.copies import CopyRepository
 lazy from overture.services.storage.assets import AssetStorage
 lazy from overture.services.sync import season_sync as module
@@ -170,6 +170,12 @@ async def test_creates_new_seasons_and_applies_art_urls_without_filesystem_io(
     assert by_num[0].folder_path is None
     copies = await CopyRepository(db_session).season_copies(by_num[0].id or 0)
     assert copies == {1: "srv-special"}
+    # The copy names the poster its server shows by a version, not its link.
+    (special,) = (
+        await CopyRepository(db_session).season_copies_on([by_num[0].id or 0], 1)
+    ).values()
+    assert special.poster_version == image_version("https://example.test/specials.jpg")
+    assert special.poster_version != "https://example.test/specials.jpg"
 
     assert by_num[1].title == "Season 1"
     assert by_num[1].file_count == 5

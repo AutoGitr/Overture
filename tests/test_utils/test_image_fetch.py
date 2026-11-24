@@ -13,6 +13,7 @@ lazy from overture.utils import rate_limit
 lazy from overture.utils.image_fetch import (
     MAX_IMAGE_BYTES,
     FetchedImage,
+    ImageNotFoundError,
     RateLimitedError,
     RemoteImageError,
     fetch_image,
@@ -404,6 +405,8 @@ async def test_a_failed_status_names_the_host_without_pausing_it(
         ) as exc:
             await fetch_image("https://tpdb.test/poster.png", client)
     assert not isinstance(exc.value, RateLimitedError)
+    # The host holds no image there, which callers tell from a failure.
+    assert isinstance(exc.value, ImageNotFoundError)
     raise_if_rate_limited()
 
 

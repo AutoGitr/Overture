@@ -982,7 +982,8 @@ export const listCollectionFieldValuesQueryKey = (options: Options<ListCollectio
 /**
  * List Collection Field Values
  *
- * List a criteria field's values in a library, most common first.
+ * List a criteria field's values in a library, or in every library of the
+ * media type, most common first.
  */
 export const listCollectionFieldValuesOptions = (options: Options<ListCollectionFieldValuesData>) => queryOptions<ListCollectionFieldValuesResponse, ListCollectionFieldValuesError, ListCollectionFieldValuesResponse, ReturnType<typeof listCollectionFieldValuesQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {

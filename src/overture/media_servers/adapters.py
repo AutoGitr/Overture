@@ -12,6 +12,7 @@ lazy from ..domain import (
     CollectionOrder,
     MediaType,
 )
+lazy from ..utils.hashing import text_digest
 
 MAX_SEASONS_PER_SHOW = 1000
 
@@ -56,6 +57,15 @@ type CollectionSupport = UploadThemes | FolderThemes | NoCollectionThemes
 def server_path(path: str) -> PurePath:
     """Interpret a server path by its syntax, independent of Overture's OS."""
     return PureWindowsPath(path) if "\\" in path else PurePosixPath(path)
+
+
+def image_version(ref: str | None) -> str | None:
+    """Name the image a server shows by its link, without revealing the link.
+
+    ``None`` when the server shows none. The name changes whenever the link
+    does, so a browser fetches a replaced image again.
+    """
+    return text_digest(ref, 16) if ref else None
 
 
 def video_resolution(width: int | None) -> str | None:
@@ -147,7 +157,9 @@ class ServerItem:
     labels: tuple[str, ...] = ()
     content_rating: str | None = None
     edition: str | None = None
-    resolution: str | None = None
+    #: Every resolution its video comes in, named as Plex names them: a
+    #: movie's versions, a show's episodes.
+    resolutions: tuple[str, ...] = ()
     critic_rating: float | None = None
     audience_rating: float | None = None
     user_rating: float | None = None

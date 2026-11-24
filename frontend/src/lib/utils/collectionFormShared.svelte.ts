@@ -240,7 +240,7 @@ export function optionsBody(form: CollectionFormLike): CollectionOptions {
     collection_group: form.collectionGroup || UNGROUPED_GROUP,
     tmdb_collection_id: form.tmdbCollectionId ?? null,
     collection_mode: form.collectionMode,
-    ...(form.orderType === null ? {} : { order_type: form.orderType }),
+    order_type: form.orderType,
     ...(form.visibleHome === null ? {} : { visible_home: form.visibleHome }),
     ...(form.visibleShared === null ? {} : { visible_shared: form.visibleShared }),
     ...(form.visibleLibrary === null ? {} : { visible_library: form.visibleLibrary }),

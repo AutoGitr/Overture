@@ -42,6 +42,7 @@ lazy from overture.media_servers.adapters import (
     ServerSeason,
     ServerSection,
     SyncStopCheck,
+    image_version,
 )
 lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.repositories.copies import CopyRepository
@@ -301,6 +302,32 @@ async def test_listed_sync_skips_rows_it_already_claimed(
         (1, "server-42"),
         (2, "server-43"),
     ]
+
+
+async def test_sync_records_the_versions_of_the_images_each_copy_shows(
+    *,
+    app_config: Settings,
+    database: Database,
+) -> None:
+    poster = "https://jellyfin.test/Items/server-42/Images/Primary?tag=a"
+    item = replace(normalized_items()[0], poster_url=poster, background_url=None)
+    reconciler = LibraryReconciler(
+        publisher=NullEventPublisher(),
+        local_assets=make_local_assets(app_config=app_config, database=database),
+        downloads=NoopDownloads(),
+        app_config=app_config,
+        database=database,
+    )
+
+    await sync_full(reconciler, [item], report=RecordedReport())
+
+    async with database.read_session() as session:
+        (copy,) = (await session.exec(select(MediaItemCopy))).all()
+    # Named by a version, never the server's link; none where it shows none.
+    assert (copy.poster_version, copy.background_version) == (
+        image_version(poster),
+        None,
+    )
 
 
 async def test_staged_sync_stamps_items_and_reports_changes_stamped(
@@ -580,22 +607,25 @@ async def test_run_sync_broadcasts_progress_and_saves_completed_snapshot(
         "sync.progress",
         "sync.progress",
         "sync.progress",
+        "sync.progress",
         "sync.completed",
     ]
     assert "total" not in probe.events[0][1]
-    # The staged listing fixes the total before the first item is reconciled.
+    # Staging counts what it reads; the staged listing then fixes the total
+    # before the first item is reconciled.
     listed = len(normalized_items())
-    assert probe.events[2][1]["total"] == listed
-    assert probe.events[2][1]["done"] == 0
+    assert (probe.events[2][1]["read"], probe.events[2][1]["total"]) == (listed, None)
+    assert probe.events[3][1]["total"] == listed
+    assert probe.events[3][1]["done"] == 0
     assert (
-        JobLogEntry.model_validate(probe.events[3][1]["log"]).format()
+        JobLogEntry.model_validate(probe.events[4][1]["log"]).format()
         == "[Plex] Added One - pulled"
     )
     assert (
-        JobLogEntry.model_validate(probe.events[4][1]["log"]).format()
+        JobLogEntry.model_validate(probe.events[5][1]["log"]).format()
         == "[Plex] Unchanged Two - checked"
     )
-    assert {payload["total"] for _, payload in probe.events[2:]} == {listed}
+    assert {payload["total"] for _, payload in probe.events[3:]} == {listed}
 
     last_event, last_payload = probe.terminal()
     assert last_event == "sync.completed"

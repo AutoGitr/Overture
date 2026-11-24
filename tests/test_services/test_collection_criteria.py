@@ -517,8 +517,11 @@ def test_plex_show_queries_test_media_fields_on_episodes() -> None:
     assert field_available(
         FilterField.RESOLUTION, ServerType.PLEX, MediaType.SHOW, smart=True
     )
-    assert not field_available(
-        FilterField.RESOLUTION, ServerType.PLEX, MediaType.SHOW, smart=False
+    # Sync reads each show's episode resolutions, so every server's collections
+    # test them.
+    assert all(
+        field_available(FilterField.RESOLUTION, server, MediaType.SHOW, smart=False)
+        for server in ServerType
     )
     assert not field_available(
         FilterField.EDITION, ServerType.PLEX, MediaType.SHOW, smart=True

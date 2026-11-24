@@ -471,7 +471,7 @@ async def _run(
                 downloads=downloads,
                 database=database,
             )
-            plan = await plan_run(params, database=database)
+            plan = await plan_run(params, database=database, read=job.read)
             await job.planned(plan.total)
             for (collections, outcome, reason), count in plan.decided.items():
                 await job.report(

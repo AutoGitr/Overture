@@ -21,9 +21,16 @@ lazy import schemathesis
 lazy from fastapi import FastAPI
 lazy from hypothesis import HealthCheck, settings
 lazy from schemathesis.checks import not_a_server_error
+lazy from schemathesis.core.mutations import OperatorKind
 lazy from schemathesis.generation import GenerationMode
+lazy from schemathesis.generation.meta import (
+    CoveragePhaseData,
+    CoverageScenario,
+    FuzzingPhaseData,
+)
 lazy from schemathesis.specs.openapi.checks import (
     allow_header_conformance,
+    negative_data_rejection,
     positive_data_acceptance,
     unsupported_method,
 )
@@ -90,6 +97,24 @@ def running_client(
         yield client
 
 
+def _changes_types_only(case: Any) -> bool:
+    """Whether a negative case only gave values another JSON type.
+
+    Pydantic reads a value of another type where it can, such as ``0`` for
+    ``false`` or ``"5"`` for ``5``, so such a request may be accepted; the
+    schema names the types Overture writes and asks for.
+    """
+    data = case.meta.phase.data
+    if isinstance(data, CoveragePhaseData) and (
+        data.scenario is CoverageScenario.INCORRECT_TYPE
+    ):
+        return True
+    mutations = data.mutations if isinstance(data, FuzzingPhaseData) else ()
+    return bool(mutations) and all(
+        mutation.operator is OperatorKind.CHANGE_TYPE for mutation in mutations
+    )
+
+
 def _answers_as_its_schema_says(
     case: Any, running_client: TestClient, auth_headers: dict[str, str]
 ) -> None:
@@ -110,7 +135,13 @@ def _answers_as_its_schema_says(
         request["content"] = request.pop("data")
     response = running_client.request(**request)
 
-    case.validate_response(response, excluded_checks=NOT_CHECKED)
+    case.validate_response(
+        response,
+        excluded_checks=[
+            *NOT_CHECKED,
+            *([negative_data_rejection] if _changes_types_only(case) else []),
+        ],
+    )
     assert response.status_code != 500, response.text
     # Only a generated API key or password may be refused: any other 401
     # means an example signed the fuzzer out, and the rest prove nothing.

@@ -17,7 +17,7 @@
     toggleSelectedValue,
   } from "../utils/popupSelection";
   import { filterCatalogEntries } from "../utils/sidebarDomain";
-  import { ART_SOURCES, CATALOG_FILTER_KEYS, CATALOG_FILTER_LABELS, FILTERS, FILTER_GROUPS, type FilterGroup, type FilterKey, THEME_SOURCES, TMDB_FILTER_LABELS, defaultCatalogFilters, defaultTmdbFilters, filterSections, metadataIssuesFor, tmdbFilterKeysFor, withoutCatalogFilters } from "../utils/sidebarFilters";
+  import { ART_SLOT_LABELS, ART_SOURCES, CATALOG_FILTER_KEYS, CATALOG_FILTER_LABELS, FILTERS, FILTER_GROUPS, type FilterGroup, type FilterKey, THEME_SOURCES, TMDB_FILTER_LABELS, defaultCatalogFilters, defaultTmdbFilters, filterSections, metadataIssuesFor, tmdbFilterKeysFor, withoutCatalogFilters } from "../utils/sidebarFilters";
   import { METADATA_ISSUES, SELECTED_ART_SOURCE_LABELS, THEME_ID_SOURCE_LABELS } from "../../generated/settings";
   import BulkOperationsCard from "../components/BulkOperationsCard.svelte";
   import CardColumn from "../components/CardColumn.svelte";
@@ -33,6 +33,7 @@
   import { setSectionView } from "../stores/sectionState.svelte";
   import { settingsState } from "../stores/settingsState.svelte";
   import { alphabetical } from "../utils/alphabetical";
+  import { keysOf } from "../utils/records";
   import { COLLECTION_POSTER_OPTIONS } from "../utils/collectionPosters";
 
   setSectionView("filters");
@@ -62,15 +63,17 @@
     ["present", "Present"],
     ["missing", "Missing"],
   ] as const;
-  const RESOLUTION_ART_OPTIONS = [
-    ["poster", "Poster"],
-    ["background", "Background"],
-  ] as const;
-  const ART_SOURCE_ART_OPTIONS = [
-    ["any", "Any art"],
-    ["poster", "Poster"],
-    ["background", "Background"],
-  ] as const;
+  /** The art the art filters can look at: season posters only a show's. */
+  let artSlots = $derived(
+    keysOf(ART_SLOT_LABELS)
+      .filter(
+        (slot) =>
+          slot !== "season_posters" ||
+          (uiState.sidebarMode === "items" && uiState.sidebarTab === "show"),
+      )
+      .map((slot) => [slot, ART_SLOT_LABELS[slot]] as const),
+  );
+  let artSourceSlots = $derived([["any", "Any art"] as const, ...artSlots]);
   const MEMBERS_OPTIONS = [
     ["all", "All"],
     ["managed", "Overture"],
@@ -118,6 +121,7 @@
     art: { options: COMPLETE_OPTIONS },
     aspectRatio: { options: ASPECT_RATIO_OPTIONS },
     theme: { options: COMPLETE_OPTIONS },
+    seasonPosters: { options: COMPLETE_OPTIONS },
     overtureDb: { options: COMPLETE_OPTIONS },
     themerrDb: { options: COMPLETE_OPTIONS },
     catalogPoster: { options: SELECTIONS_OPTIONS },
@@ -277,7 +281,7 @@
     <FieldRow {label}>
       <SegmentedControl
         label="Resolution art type"
-        options={RESOLUTION_ART_OPTIONS}
+        options={artSlots}
         bind:value={draft.resolution.artType}
       />
     </FieldRow>
@@ -292,7 +296,7 @@
     <FieldRow {label}>
       <SegmentedControl
         label="Art source art type"
-        options={ART_SOURCE_ART_OPTIONS}
+        options={artSourceSlots}
         bind:value={draft.artSource.artType}
       />
     </FieldRow>
@@ -497,7 +501,6 @@
           <CustomFilterCard
             bind:filterId={draft.customFilter}
             mediaType={uiState.sidebarTab}
-            libraryId={libraries[0]?.id ?? ""}
           />
         {/if}
       {/each}

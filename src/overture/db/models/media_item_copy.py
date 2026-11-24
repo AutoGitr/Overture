@@ -66,6 +66,10 @@ class MediaItemCopy(SQLModel, table=True):
     #: This server's metadata version the stored directors were read at, for
     #: servers whose listings omit directors (Jellyfin and Emby).
     director_etag: str | None = None
+    #: The version of the poster and background this server shows for the
+    #: title, from ``image_version``; null when it shows none.
+    poster_version: str | None = None
+    background_version: str | None = None
 
     media_item: Optional["MediaItem"] = Relationship(
         back_populates="copies", sa_relationship_kwargs={"lazy": "raise"}
@@ -84,6 +88,9 @@ class SeasonCopy(SQLModel, table=True):
         foreign_key="media_servers.id", ondelete="RESTRICT", primary_key=True
     )
     server_item_id: str
+    #: The version of the poster this server shows for the season, from
+    #: ``image_version``; null when it shows none.
+    poster_version: str | None = None
 
 
 typed_columns(MediaItemCopy)

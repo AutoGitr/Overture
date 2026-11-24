@@ -2,7 +2,6 @@
   import { ASSET_LABELS, MAX_IMAGE_BYTES } from "../../generated/settings";
   
   import { createMutation, createQuery } from "@tanstack/svelte-query";
-  import { onMount } from "svelte";
   import {
     getArtSourcesOptions,
     getCollectionArtSourcesOptions,
@@ -404,23 +403,20 @@
     await saveUrlText(text);
   }
 
-  // The header's "Paste URL & save as ..." button saves into whichever slot is shown.
-  const pasteTarget: ArtPasteTarget = {
-    get label() {
-      return artType.replace("_", " ");
-    },
-    get busy() {
-      return saving;
-    },
-    paste: pasteFromClipboard,
-    get upload() {
-      return slot.kind === "catalog" ? null : uploadFile;
-    },
-  };
-  onMount(() => {
-    artPasteState.target = pasteTarget;
+  // The header's paste and upload buttons save into whichever slot is shown.
+  // The panel publishes what they need as values, from an effect that runs
+  // only while it is shown, so nothing outside it ever reads its props.
+  let uploadable = $derived(slot.kind !== "catalog");
+  $effect(() => {
+    const target: ArtPasteTarget = {
+      label: artType.replace("_", " "),
+      busy: saving,
+      paste: pasteFromClipboard,
+      upload: uploadable ? uploadFile : null,
+    };
+    artPasteState.target = target;
     return () => {
-      if (artPasteState.target === pasteTarget) artPasteState.target = null;
+      if (artPasteState.target === target) artPasteState.target = null;
     };
   });
 
@@ -435,9 +431,9 @@
     const image = [...(event.clipboardData?.files ?? [])].find((file) =>
       ["image/jpeg", "image/png"].includes(file.type),
     );
-    if (image && pasteTarget.upload) {
+    if (image && uploadable) {
       event.preventDefault();
-      void pasteTarget.upload(image);
+      void uploadFile(image);
       return;
     }
     const url = parseArtUrl(event.clipboardData?.getData("text") ?? "");

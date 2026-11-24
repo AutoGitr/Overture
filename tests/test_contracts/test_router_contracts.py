@@ -15,6 +15,7 @@ lazy from overture.db.ledger import place_local, select_theme
 lazy from overture.db.models.catalog import CatalogCollection
 lazy from overture.db.models.media_collection import MediaCollection
 lazy from overture.db.models.media_item import MediaItem
+lazy from overture.db.models.media_item_copy import SeasonCopy
 lazy from overture.db.models.season import Season
 lazy from overture.db.session import Database
 lazy from overture.domain import (
@@ -315,7 +316,7 @@ class TestLibraryResponseMappers:
             url="https://x/s.jpg",
             file_hash=file_hash,
         )
-        assert season_read_from_model(season).poster.status is status
+        assert season_read_from_model(season, None).poster.status is status
 
     def test_library_collection_mappers_build_stable_response_models(
         self, media_item_factory: MediaItemFactory, season_factory: SeasonFactory
@@ -331,7 +332,10 @@ class TestLibraryResponseMappers:
                 season_num=1,
                 file_count=3,
                 art={"season_poster": {"url": "https://images.test/s.jpg"}},
-            )
+            ),
+            SeasonCopy(
+                season_id=2, server_id=1, server_item_id="x2", poster_version="v"
+            ),
         )
 
         assert MediaItemListResponse(items=[item], total=1).total == 1
@@ -346,6 +350,10 @@ class TestLibraryResponseMappers:
         assert folder_roots_response({"movies": ["/movies"]}).shows == []
         assert season.file_count == 3
         assert season.poster.url == "https://images.test/s.jpg"
+        # The lead server's poster is named by its version; a title without a
+        # copy shows none.
+        assert season.server_poster_version == "v"
+        assert item.server_poster_version is None
 
 
 class TestCollectionResponseMappers:

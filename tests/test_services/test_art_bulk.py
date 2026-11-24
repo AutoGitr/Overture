@@ -39,6 +39,7 @@ lazy from tests.bulk_helpers import (
     enable_catalog,
     make_bulk_downloads,
     movie_item,
+    planned_event,
     progress_logs,
     public_index,
     use_art_work,
@@ -238,7 +239,7 @@ async def test_bulk_art_targets_without_catalog_art_are_counted_in_one_step(
     assert progress_logs(context) == [
         f"No match {line} - OvertureDB has no entry for it"
     ]
-    planned = context.events[1][1]
+    planned = planned_event(context)
     assert planned["total"] == movies * 2
     assert planned["done"] == 0
     completed = context.events[-1][1]

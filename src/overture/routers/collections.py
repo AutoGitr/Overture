@@ -155,11 +155,12 @@ async def get_collection_arr_options(
 async def list_collection_field_values(
     discovery: CollectionDiscoveryDep,
     media_type: MediaTypeQuery,
-    library_id: Annotated[str, Query(min_length=1, max_length=200)],
     field: FilterField,
+    library_id: Annotated[str | None, Query(min_length=1, max_length=200)] = None,
     query: Annotated[str | None, Query(max_length=200)] = None,
 ) -> list[CollectionFieldValue]:
-    """List a criteria field's values in a library, most common first."""
+    """List a criteria field's values in a library, or in every library of the
+    media type, most common first."""
     return await discovery.field_values(media_type, library_id, field, query)
 
 

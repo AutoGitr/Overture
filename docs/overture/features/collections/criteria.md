@@ -15,9 +15,16 @@ nest.
 
 ## Values
 
-Values are typed, with the library's most common values suggested first; a
-TMDB keyword also suggests the keywords TMDB knows, so one no title has yet
-can be used too. A TMDB person or franchise is one field: type a name and
+A field with a fixed set of values, such as Show status, offers them in a
+list. Any other value is typed, and the values the library holds are listed
+as you type, most common first, to pick with the mouse or the arrow keys and
+Enter; a TMDB keyword also lists the keywords TMDB knows, so one no title has
+yet can be used too. A collection is picked by its title, and only a listed
+one is kept.
+
+**Resolution** holds each resolution a title comes in: every version of a
+movie, and every episode of a show, so **Resolution is 4K** matches a show
+with any 4K episode, as Plex does. A TMDB person or franchise is one field: type a name and
 search, then pick a result, whose ID takes its place, or type the ID.
 
 Radarr tags and TMDB franchises are offered for movie collections only, Sonarr

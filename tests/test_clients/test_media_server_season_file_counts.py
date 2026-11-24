@@ -14,7 +14,7 @@ lazy from overture.domain import ServerType
 lazy from overture.media_servers.emby import EmbyProvider
 lazy from overture.media_servers.emby.client import EmbyClient
 lazy from overture.media_servers.errors import MediaServerError
-lazy from overture.media_servers.jellyfin.client import JellyfinClient
+lazy from overture.media_servers.jellyfin.client import EpisodeTally, JellyfinClient
 lazy from overture.media_servers.jellyfin.provider import JellyfinProvider
 lazy from overture.media_servers.plex.client import PlexClient
 lazy from overture.media_servers.plex.provider import PlexProvider
@@ -50,6 +50,36 @@ _PLEX_SEASONS = (
 )
 
 
+def _plex_show_section(
+    request: httpx2.Request, show_updated_at: int | None
+) -> httpx2.Response:
+    """Serve the show section: its shows, and its episodes' resolutions."""
+    path, params = request.url.path, request.url.params
+    if path == "/library/sections/1/all" and params.get("type") == "4":
+        return httpx2.Response(200, json={"MediaContainer": {"size": 0}})
+    # A show section lists its episodes' resolutions, and filters shows by them.
+    if path == "/library/sections/1/resolution" and params.get("type") == "4":
+        directory = [{"key": "4k", "title": "4K"}, {"key": "720", "title": "720p"}]
+        return httpx2.Response(200, json={"MediaContainer": {"Directory": directory}})
+    if path == "/library/sections/1/all" and "episode.resolution" in params:
+        assert params.get("type") == "2"
+        return httpx2.Response(
+            200, json={"MediaContainer": {"Metadata": [{"ratingKey": "100"}]}}
+        )
+    assert path == "/library/sections/1/all"
+    shows: list[dict[str, Any]] = [
+        {
+            "ratingKey": "100",
+            "title": "Show",
+            "Guid": [],
+            "addedAt": 1_000,
+            "updatedAt": show_updated_at,
+        },
+        {"ratingKey": "101", "title": "Empty", "addedAt": 1_000},
+    ]
+    return httpx2.Response(200, json={"MediaContainer": {"Metadata": shows}})
+
+
 def _plex_handler(
     *,
     show_updated_at: int | None = None,
@@ -73,7 +103,14 @@ def _plex_handler(
         "title": "Movie",
         "Guid": [],
         "addedAt": 1_000,
-        "Media": [{"Part": [{"file": "/media/movies/Movie/Movie.mkv"}]}],
+        "Media": [
+            {
+                "videoResolution": "1080",
+                "Part": [{"file": "/media/movies/Movie/Movie.mkv"}],
+            },
+            {"videoResolution": "4k", "Part": [{"file": "/media/movies/4K.mkv"}]},
+            {"videoResolution": "1080", "Part": [{"file": "/media/movies/Cut.mkv"}]},
+        ],
     }
 
     def handler(request: httpx2.Request) -> httpx2.Response:
@@ -100,26 +137,8 @@ def _plex_handler(
             )
         if path == "/library/sections/2/all":
             return httpx2.Response(200, json={"MediaContainer": {"Metadata": [movie]}})
-        if path == "/library/sections/1/all" and params.get("type") == "4":
-            return httpx2.Response(200, json={"MediaContainer": {"size": 0}})
-        if path == "/library/sections/1/all":
-            return httpx2.Response(
-                200,
-                json={
-                    "MediaContainer": {
-                        "Metadata": [
-                            {
-                                "ratingKey": "100",
-                                "title": "Show",
-                                "Guid": [],
-                                "addedAt": 1_000,
-                                "updatedAt": show_updated_at,
-                            },
-                            {"ratingKey": "101", "title": "Empty", "addedAt": 1_000},
-                        ]
-                    }
-                },
-            )
+        if path.startswith("/library/sections/1/"):
+            return _plex_show_section(request, show_updated_at)
         if path == "/library/metadata/50":
             assert "includeChildren" not in params
             return httpx2.Response(200, json={"MediaContainer": {"Metadata": [movie]}})
@@ -154,7 +173,7 @@ def _plex_provider(
     return provider, transport.requests
 
 
-async def test_plex_reads_show_folders_and_seasons_in_one_request_per_page(
+async def test_plex_reads_show_folders_seasons_and_resolutions_once_per_page(
     *,
     app_config: Settings,
 ) -> None:
@@ -173,6 +192,10 @@ async def test_plex_reads_show_folders_and_seasons_in_one_request_per_page(
     ]
     assert empty.folder_path is None
     assert empty.seasons == []
+    # A movie comes in each version's resolution, a show in its episodes'.
+    assert movie.resolutions == ("1080", "4k")
+    assert show.resolutions == ("4k", "720")
+    assert empty.resolutions == ()
     details = [r.url.path for r in requests if r.url.path.startswith("/library/meta")]
     assert details == ["/library/metadata/50", "/library/metadata/100,101"]
 
@@ -305,13 +328,22 @@ async def test_jellyfin_reads_seasons_and_episode_counts_once_per_library(
             if include_types == "Episode":
                 assert params.get("parentId") == "lib1"
                 assert params.get("limit") == "5000"
+                assert params.get("fields") == "Width"
                 seasons = ["s1", "s1", "s1", "s2", None]
+                widths = [1920, 3840, 1920, None, 640]
                 return httpx2.Response(
                     200,
                     json={
                         "Items": [
-                            {"Id": f"e{index}", "SeasonId": season}
-                            for index, season in enumerate(seasons)
+                            {
+                                "Id": f"e{index}",
+                                "SeasonId": season,
+                                "SeriesId": "show1",
+                                "Width": width,
+                            }
+                            for index, (season, width) in enumerate(
+                                zip(seasons, widths, strict=True)
+                            )
                         ]
                     },
                 )
@@ -383,6 +415,8 @@ async def test_jellyfin_reads_seasons_and_episode_counts_once_per_library(
     seasons = {season.num: season for season in items[1].seasons}
     assert seasons[1].file_count == 3
     assert seasons[2].file_count == 1
+    # A show comes in each resolution its episodes do.
+    assert items[1].resolutions == ("1080", "4k", "sd")
     listed = [r.url.params.get("includeItemTypes") for r in transport.requests]
     assert listed.count("Season") == listed.count("Episode") == 1
     assert await provider.get_directors(["movie1", "movie2"]) == {
@@ -417,9 +451,12 @@ async def test_jellyfin_poll_reads_seasons_of_changed_shows_only(
             }
         ]
 
-    async def episode_counts(parent_id: str) -> Counter[str]:
+    async def episode_counts(parent_id: str) -> EpisodeTally:
         count_parents.append(parent_id)
-        return Counter({f"{parent_id}-s1": 5})
+        return EpisodeTally(
+            per_season=Counter({f"{parent_id}-s1": 5}),
+            resolutions={parent_id: {"720"}},
+        )
 
     async def items(
         _section_id: str, _item_type: str
@@ -436,7 +473,7 @@ async def test_jellyfin_poll_reads_seasons_of_changed_shows_only(
 
     monkeypatch.setattr(provider.client, "get_sections", sections)
     monkeypatch.setattr(provider.client, "iter_seasons", seasons)
-    monkeypatch.setattr(provider.client, "count_episodes_by_season", episode_counts)
+    monkeypatch.setattr(provider.client, "tally_episodes", episode_counts)
     monkeypatch.setattr(provider.client, "iter_section_items", items)
 
     since = datetime(2026, 2, 1, tzinfo=UTC)
@@ -444,6 +481,7 @@ async def test_jellyfin_poll_reads_seasons_of_changed_shows_only(
 
     assert [item.id for item in result] == ["new"]
     assert [season.file_count for season in result[0].seasons] == [5]
+    assert result[0].resolutions == ("720",)
     assert season_parents == count_parents == ["new"]
 
 
@@ -468,8 +506,8 @@ async def test_jellyfin_leaves_out_seasons_without_a_number(
             {"Id": "unknown", "SeriesId": "show1", "Name": "Season Unknown"},
         ]
 
-    async def episode_counts(_parent_id: str) -> Counter[str]:
-        return Counter({"s1": 3, "s0": 6, "unknown": 1})
+    async def episode_counts(_parent_id: str) -> EpisodeTally:
+        return EpisodeTally(per_season=Counter({"s1": 3, "s0": 6, "unknown": 1}))
 
     async def items(
         _section_id: str, _item_type: str
@@ -478,7 +516,7 @@ async def test_jellyfin_leaves_out_seasons_without_a_number(
 
     monkeypatch.setattr(provider.client, "get_sections", sections)
     monkeypatch.setattr(provider.client, "iter_seasons", seasons)
-    monkeypatch.setattr(provider.client, "count_episodes_by_season", episode_counts)
+    monkeypatch.setattr(provider.client, "tally_episodes", episode_counts)
     monkeypatch.setattr(provider.client, "iter_section_items", items)
 
     result = [item async for page in provider.iter_items(["1:lib1"]) for item in page]

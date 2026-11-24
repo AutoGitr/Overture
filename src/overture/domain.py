@@ -53,6 +53,9 @@ class TermKind(StrEnum):
     #: Subscription services streaming the title in the configured region.
     STREAMING = "streaming"
     ORIGIN_COUNTRY = "origin_country"
+    #: The resolutions a title's video comes in: a movie's versions, a show's
+    #: episodes.
+    RESOLUTION = "resolution"
 
 
 class CatalogMediaType(StrEnum):
@@ -338,8 +341,10 @@ class FilterField(StrEnum):
     SEASON_POSTERS_STATUS = "season_posters_status"
     POSTER_SOURCE = "poster_source"
     BACKGROUND_SOURCE = "background_source"
+    SEASON_POSTERS_SOURCE = "season_posters_source"
     POSTER_WIDTH = "poster_width"
     BACKGROUND_WIDTH = "background_width"
+    SEASON_POSTERS_WIDTH = "season_posters_width"
     INCORRECT_ASPECT_RATIO = "incorrect_aspect_ratio"
     THEME_STATUS = "theme_status"
     THEME_SOURCE = "theme_source"

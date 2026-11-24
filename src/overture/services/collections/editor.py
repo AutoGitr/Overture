@@ -46,7 +46,7 @@ lazy from .access import CollectionAccess
 lazy from .copies import CopyKey, ServerCopy, copy_keys, copy_libraries
 lazy from .criteria import order_items
 lazy from .destinations import place_collection
-lazy from .display import DISPLAY_OVERRIDES, CollectionDisplay
+lazy from .display import DISPLAY_OVERRIDES, CollectionDisplay, resolved_order
 lazy from .membership import Membership, resolve_members
 lazy from .reader import CollectionReader
 lazy from .rules import (
@@ -191,8 +191,7 @@ class CollectionEditor:
                 session, await self._access.group(session, body.collection_group), rule
             )
         self._validator.rule(types, rule, policy)
-        if "order_type" not in body.model_fields_set:
-            body = body.model_copy(update={"order_type": policy.order_type})
+        body = body.model_copy(update={"order_type": resolved_order(body, policy)})
         async with self._access.asset_locks.acquire(COLLECTIONS_LOCK):
             async with self._access.database.read_session() as session:
                 existing = await CollectionRepository(session).list_listed()

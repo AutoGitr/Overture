@@ -144,11 +144,24 @@ _LIBRARY_STATUS: dict[
         _ALL_MEDIA,
         _ART_SOURCES,
     ),
+    FilterField.SEASON_POSTERS_SOURCE: (
+        "Season posters source",
+        FieldKind.TAG,
+        _SHOWS,
+        _ART_SOURCES,
+    ),
     FilterField.POSTER_WIDTH: ("Poster width", FieldKind.NUMBER, _ALL_MEDIA, ()),
     FilterField.BACKGROUND_WIDTH: (
         "Background width",
         FieldKind.NUMBER,
         _ALL_MEDIA,
+        (),
+    ),
+    # The narrowest bounds them all: any narrower, or every one at least as wide.
+    FilterField.SEASON_POSTERS_WIDTH: (
+        "Season posters width",
+        FieldKind.NUMBER,
+        _SHOWS,
         (),
     ),
     FilterField.INCORRECT_ASPECT_RATIO: (
@@ -341,7 +354,7 @@ FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
         FilterField.RESOLUTION: FieldSpec(
             "Resolution",
             FieldKind.TAG,
-            _MOVIES,
+            _ALL_MEDIA,
             _EVERY_SERVER,
             _media("resolution", "tag", negatable=False, keyed=True),
         ),

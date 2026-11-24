@@ -42,21 +42,28 @@ describe("art display URLs", () => {
     expect(itemPosterOriginalUrl(movie)).toBe("/api/library/items/1/local-image/poster?t=old-hash");
   });
 
-  it("asks the media server for a sized copy when local art is absent", () => {
-    const itemWithoutLocal = withoutFiles(movie);
+  it("asks the media server for the image it shows, named by its version", () => {
+    const itemWithoutLocal = {
+      ...withoutFiles(movie),
+      server_poster_version: "p1",
+      server_background_version: "b1",
+    };
     expect(itemArtDisplayUrl(itemWithoutLocal, "poster")).toBe(
-      "/api/library/items/1/provider-art?type=poster&t=0&size=display",
+      "/api/library/items/1/provider-art?type=poster&t=p1&size=display",
     );
     expect(itemArtDisplayUrl(itemWithoutLocal, "background")).toBe(
-      "/api/library/items/1/provider-art?type=background&t=0&size=display",
+      "/api/library/items/1/provider-art?type=background&t=b1&size=display",
     );
     expect(itemPosterOriginalUrl(itemWithoutLocal)).toBe(
-      "/api/library/items/1/provider-art?type=poster&t=0",
+      "/api/library/items/1/provider-art?type=poster&t=p1",
     );
     expect(itemPosterOriginalUrl(null)).toBeNull();
   });
 
-  it("returns null instead of remote URLs when neither local nor server art exists", () => {
+  it("asks the media server for nothing it shows none of", () => {
+    // The server holds the title but shows no background: no request is made.
+    const posterOnly = { ...withoutFiles(movie), server_poster_version: "p1" };
+    expect(itemArtDisplayUrl(posterOnly, "background")).toBeNull();
     const unmanagedItem = { ...withoutFiles(movie), copies: [] };
     expect(itemArtDisplayUrl(unmanagedItem, "poster")).toBeNull();
     expect(itemArtDisplayUrl(unmanagedItem, "background")).toBeNull();
@@ -90,12 +97,11 @@ describe("art display URLs", () => {
       media_item_id: show.id,
       season_num: 1,
       poster: { file: assetFile("season-hash"), url: "https://image.test/season.jpg" },
+      server_poster_version: "s20",
     });
     const localUrls = seasonPosterUrls(show, localSeason);
     expect(localUrls.src).toBe("/api/library/seasons/20/local-image?t=season-hash&size=display");
-    expect(localUrls.fallbackSrc).toBe(
-      "/api/library/seasons/20/provider-art?t=season-hash&size=display",
-    );
+    expect(localUrls.fallbackSrc).toBe("/api/library/seasons/20/provider-art?t=s20&size=display");
 
     // 2. Provider art fallback when local season poster is absent (server as primary, no fallback)
     const providerSeason = fixtureSeason({
@@ -103,19 +109,20 @@ describe("art display URLs", () => {
       media_item_id: show.id,
       season_num: 2,
       poster: { file: null, url: "https://image.test/season.jpg" },
+      server_poster_version: "s21",
     });
     const providerUrls = seasonPosterUrls(show, providerSeason);
     expect(providerUrls.src).toContain("/api/library/seasons/21/provider-art");
     expect(providerUrls.fallbackSrc).toBeNull();
 
-    // 3. Null when neither exists (never remote URL): no server holds the show
+    // 3. Null when neither exists (never remote URL): no server shows a poster
     const unmanagedSeason = fixtureSeason({
       id: 22,
       media_item_id: show.id,
       season_num: 3,
       poster: { file: null, url: "https://image.test/season.jpg" },
     });
-    const unmanagedUrls = seasonPosterUrls({ ...show, copies: [] }, unmanagedSeason);
+    const unmanagedUrls = seasonPosterUrls(show, unmanagedSeason);
     expect(unmanagedUrls.src).toBeNull();
     expect(unmanagedUrls.fallbackSrc).toBeNull();
     expect(seasonPosterUrls(null, localSeason)).toEqual({ src: null, fallbackSrc: null });

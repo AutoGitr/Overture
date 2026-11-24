@@ -148,6 +148,10 @@ class JobEnvelope(StrictBaseModel):
         default=None,
         description="Targets the run will report on; unset while it plans.",
     )
+    read: int | None = Field(
+        default=None,
+        description="Targets the run has read so far while it plans its work.",
+    )
     started_at: str | None = None
     finished_at: str | None = None
     log: JobLogEntry | None = Field(

@@ -480,7 +480,8 @@ export const getCollectionDefaults = <ThrowOnError extends boolean = false>(opti
 /**
  * List Collection Field Values
  *
- * List a criteria field's values in a library, most common first.
+ * List a criteria field's values in a library, or in every library of the
+ * media type, most common first.
  */
 export const listCollectionFieldValues = <ThrowOnError extends boolean = false>(options: Options<ListCollectionFieldValuesData, ThrowOnError>): RequestResult<ListCollectionFieldValuesResponses, ListCollectionFieldValuesErrors, ThrowOnError> => (options.client ?? client).get<ListCollectionFieldValuesResponses, ListCollectionFieldValuesErrors, ThrowOnError>({ url: '/api/collections/field-values', ...options });
 

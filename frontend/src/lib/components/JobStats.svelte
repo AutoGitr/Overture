@@ -11,6 +11,8 @@
   /** The progress and timing every run reports. */
   export interface JobProgressView {
     planning: boolean;
+    /** What the run has read while planning. */
+    read: number;
     done: number;
     total: number | null;
     started_at: string | null;
@@ -67,7 +69,9 @@
   <div class="stat">
     <dt>{unit}</dt>
     <dd class="stat-value progress">
-      {#if job.planning}
+      {#if job.planning && job.read}
+        {job.read}<span class="stat-total"> read</span>
+      {:else if job.planning}
         Planning...
       {:else}
         {job.done}<span class="stat-total">/{job.total ?? 0}</span>

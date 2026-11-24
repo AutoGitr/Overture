@@ -23,6 +23,7 @@ export interface SyncJobEvent {
   job: JobMetadata | null;
   done: number | null;
   total: number | null;
+  read: number | null;
   started_at: string | null;
   finished_at: string | null;
   log: JobLogEntry | null;
@@ -46,6 +47,7 @@ export interface BulkArtJobEvent {
   job: JobMetadata | null;
   done: number | null;
   total: number | null;
+  read: number | null;
   started_at: string | null;
   finished_at: string | null;
   log: JobLogEntry | null;
@@ -70,6 +72,7 @@ export interface BulkThemeJobEvent {
   job: JobMetadata | null;
   done: number | null;
   total: number | null;
+  read: number | null;
   started_at: string | null;
   finished_at: string | null;
   log: JobLogEntry | null;
@@ -111,6 +114,7 @@ export interface AssetScanProgressEvent {
   job: JobMetadata | null;
   done: number | null;
   total: number | null;
+  read: number | null;
   started_at: string | null;
   finished_at: string | null;
   log: JobLogEntry | null;
@@ -164,6 +168,7 @@ export interface ServerAuditProgressEvent {
   job: JobMetadata | null;
   done: number | null;
   total: number | null;
+  read: number | null;
   started_at: string | null;
   finished_at: string | null;
   log: JobLogEntry | null;
@@ -190,6 +195,7 @@ export interface ServerAuditFixEvent {
   job: JobMetadata | null;
   done: number | null;
   total: number | null;
+  read: number | null;
   started_at: string | null;
   finished_at: string | null;
   log: JobLogEntry | null;
@@ -223,6 +229,7 @@ export interface CatalogSyncEvent {
   job: JobMetadata | null;
   done: number | null;
   total: number | null;
+  read: number | null;
   started_at: string | null;
   finished_at: string | null;
   log: JobLogEntry | null;
@@ -247,6 +254,7 @@ export interface BackupJobEvent {
   job: JobMetadata | null;
   done: number | null;
   total: number | null;
+  read: number | null;
   started_at: string | null;
   finished_at: string | null;
   log: JobLogEntry | null;

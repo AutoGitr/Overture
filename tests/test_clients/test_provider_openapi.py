@@ -179,7 +179,8 @@ async def test_media_browser_consumed_operations(
         } == {"false"}
         seasons = client.iter_seasons("library")
         assert [item["Id"] async for page in seasons for item in page] == ["season"]
-        assert await client.count_episodes_by_season("library") == {"season": 1}
+        episodes = await client.tally_episodes("library")
+        assert episodes.per_season == {"season": 1}
         assert await client.find_season_id("show", 0) == "season"
         art = await client.get_art_candidates("movie", ArtType.POSTER)
         assert len(art) == 1

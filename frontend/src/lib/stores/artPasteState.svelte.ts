@@ -1,4 +1,7 @@
-/** The art slot currently on screen, so header controls can save into it. */
+/**
+ * What the art slot on screen offers the header's paste and upload buttons,
+ * published by the slot while it is shown.
+ */
 export type ArtPasteTarget = {
   /** Slot name for the button label, e.g. "poster" or "season poster". */
   readonly label: string;
@@ -9,7 +12,7 @@ export type ArtPasteTarget = {
 };
 
 class ArtPasteState {
-  // Raw: the slot exposes live getters that must not be snapshotted by a proxy.
+  // Raw: the slot replaces the whole value; its functions need no proxy.
   target = $state.raw<ArtPasteTarget | null>(null);
 }
 

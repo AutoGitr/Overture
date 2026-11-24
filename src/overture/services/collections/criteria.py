@@ -76,6 +76,7 @@ TERM_FIELDS: Mapping[FilterField, TermKind] = {
     FilterField.TMDB_KEYWORD: TermKind.TMDB_KEYWORD,
     FilterField.COMPANY: TermKind.COMPANY,
     FilterField.STREAMING: TermKind.STREAMING,
+    FilterField.RESOLUTION: TermKind.RESOLUTION,
 }
 
 
@@ -116,7 +117,6 @@ _GETTERS: dict[FilterField, _Getter] = {
     FilterField.STUDIO: lambda item: item.studio,
     FilterField.EDITION: lambda item: item.edition,
     FilterField.CONTENT_RATING: lambda item: _one(item.content_rating),
-    FilterField.RESOLUTION: lambda item: _one(item.resolution),
     FilterField.YEAR: lambda item: item.year,
     FilterField.DECADE: lambda item: item.year // 10 * 10 if item.year else None,
     FilterField.CRITIC_RATING: lambda item: item.critic_rating,

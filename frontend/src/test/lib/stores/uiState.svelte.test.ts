@@ -63,6 +63,7 @@ describe("uiState persisted filters", () => {
       collectionSync: "all",
       art: "complete",
       theme: "all",
+      seasonPosters: "all",
       overtureDb: "complete",
       themerrDb: "all",
       catalogPoster: "all",

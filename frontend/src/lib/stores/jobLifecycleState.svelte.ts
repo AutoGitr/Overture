@@ -9,6 +9,7 @@ export interface JobLifecycleEvent extends JobLogEvent {
   job?: { id?: string | null; error?: { message?: string | null } | null } | null;
   done?: number | null;
   total?: number | null;
+  read?: number | null;
   started_at?: string | null;
   finished_at?: string | null;
   schedule?: string | null;
@@ -33,6 +34,8 @@ export class JobLifecycleState<T extends JobLifecycleEvent> {
   done = $state(0);
   /** Every target the run will report on; `null` until the run has planned them. */
   total = $state<number | null>(null);
+  /** What the run has read while planning, which shows it working until the total is known. */
+  read = $state(0);
   readonly log = new JobLogFeed();
   started_at = $state<string | null>(null);
   finished_at = $state<string | null>(null);
@@ -127,6 +130,7 @@ export class JobLifecycleState<T extends JobLifecycleEvent> {
     this.status = "idle";
     this.done = 0;
     this.total = null;
+    this.read = 0;
     this.log.reset();
     this.started_at = null;
     this.finished_at = null;
@@ -147,6 +151,7 @@ export class JobLifecycleState<T extends JobLifecycleEvent> {
   private apply(data: T) {
     this.done = data.done ?? this.done;
     this.total = data.total ?? this.total;
+    this.read = data.read ?? this.read;
     this.started_at = data.started_at || this.started_at;
     this.schedule = data.schedule ?? this.schedule;
     this.absorb(data);

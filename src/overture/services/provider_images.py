@@ -10,6 +10,7 @@ lazy from ..integrations.proxy import ProxyClientManager
 lazy from ..media_servers.adapters import ProviderImageRequest
 lazy from ..utils.errors import PublicServiceError
 lazy from ..utils.image_fetch import (
+    ImageNotFoundError,
     RateLimitedError,
     RemoteImageError,
     fetch_image,
@@ -45,6 +46,8 @@ async def proxy_provider_image(
         )
     except RateLimitedError as exc:
         raise PublicServiceError(503, str(exc)) from exc
+    except ImageNotFoundError as exc:
+        raise PublicServiceError(404, "The media server shows no such image") from exc
     except RemoteImageError as exc:
         raise PublicServiceError(502, str(exc)) from exc
     except httpx2.HTTPError as exc:

@@ -2159,7 +2159,7 @@ export type CollectionCreate = {
      * Delete When Inactive
      */
     delete_when_inactive?: boolean | null;
-    order_type?: CollectionOrder;
+    order_type?: CollectionOrder | null;
     rule: CollectionRuleWriteInput;
     /**
      * Sort Title
@@ -3026,7 +3026,7 @@ export type CollectionOptions = {
      * Delete When Inactive
      */
     delete_when_inactive?: boolean | null;
-    order_type?: CollectionOrder;
+    order_type?: CollectionOrder | null;
     /**
      * Sort Title
      */
@@ -4054,7 +4054,7 @@ export type FieldKind = 'text' | 'tag' | 'number' | 'date' | 'boolean';
  *
  * Item metadata a collection condition tests.
  */
-export type FilterField = 'title' | 'tmdb_id' | 'tvdb_id' | 'imdb_id' | 'studio' | 'edition' | 'genre' | 'actor' | 'director' | 'writer' | 'producer' | 'country' | 'label' | 'collection' | 'content_rating' | 'network' | 'resolution' | 'audio_language' | 'subtitle_language' | 'hdr' | 'dolby_vision' | 'hdr10_plus' | 'atmos' | 'video_codec' | 'audio_codec' | 'subtitle_codec' | 'audio_layout' | 'file_size' | 'bitrate' | 'year' | 'decade' | 'critic_rating' | 'audience_rating' | 'user_rating' | 'age_rating' | 'duration' | 'plays' | 'added' | 'released' | 'last_played' | 'episode_added' | 'episode_last_played' | 'unplayed_episodes' | 'unplayed' | 'in_progress' | 'in_collection' | 'versions' | 'folder' | 'original_language' | 'origin_country' | 'tmdb_rating' | 'tmdb_votes' | 'tmdb_keyword' | 'company' | 'streaming' | 'show_status' | 'last_aired' | 'monitored' | 'art_status' | 'poster_status' | 'background_status' | 'season_posters_status' | 'poster_source' | 'background_source' | 'poster_width' | 'background_width' | 'incorrect_aspect_ratio' | 'theme_status' | 'theme_source' | 'theme_length' | 'metadata_issue' | 'overturedb_complete' | 'themerrdb_theme' | 'overturedb_poster' | 'overturedb_background' | 'overturedb_season_posters' | 'overturedb_theme';
+export type FilterField = 'title' | 'tmdb_id' | 'tvdb_id' | 'imdb_id' | 'studio' | 'edition' | 'genre' | 'actor' | 'director' | 'writer' | 'producer' | 'country' | 'label' | 'collection' | 'content_rating' | 'network' | 'resolution' | 'audio_language' | 'subtitle_language' | 'hdr' | 'dolby_vision' | 'hdr10_plus' | 'atmos' | 'video_codec' | 'audio_codec' | 'subtitle_codec' | 'audio_layout' | 'file_size' | 'bitrate' | 'year' | 'decade' | 'critic_rating' | 'audience_rating' | 'user_rating' | 'age_rating' | 'duration' | 'plays' | 'added' | 'released' | 'last_played' | 'episode_added' | 'episode_last_played' | 'unplayed_episodes' | 'unplayed' | 'in_progress' | 'in_collection' | 'versions' | 'folder' | 'original_language' | 'origin_country' | 'tmdb_rating' | 'tmdb_votes' | 'tmdb_keyword' | 'company' | 'streaming' | 'show_status' | 'last_aired' | 'monitored' | 'art_status' | 'poster_status' | 'background_status' | 'season_posters_status' | 'poster_source' | 'background_source' | 'season_posters_source' | 'poster_width' | 'background_width' | 'season_posters_width' | 'incorrect_aspect_ratio' | 'theme_status' | 'theme_source' | 'theme_length' | 'metadata_issue' | 'overturedb_complete' | 'themerrdb_theme' | 'overturedb_poster' | 'overturedb_background' | 'overturedb_season_posters' | 'overturedb_theme';
 
 /**
  * FilterGroup
@@ -4750,11 +4750,27 @@ export type MediaItemRead = {
      * Monitored
      */
     monitored: boolean;
+    /**
+     * Season Posters Sources
+     */
+    season_posters_sources: Array<ArtSource>;
     season_posters_status: AssetStatus;
+    /**
+     * Season Posters Width
+     */
+    season_posters_width: number | null;
     /**
      * Server Added At
      */
     server_added_at: string | null;
+    /**
+     * Server Background Version
+     */
+    server_background_version: string | null;
+    /**
+     * Server Poster Version
+     */
+    server_poster_version: string | null;
     /**
      * Server Removed At
      */
@@ -5373,6 +5389,10 @@ export type SeasonRead = {
      * Season Num
      */
     season_num: number;
+    /**
+     * Server Poster Version
+     */
+    server_poster_version: string | null;
     /**
      * Title
      */
@@ -8997,11 +9017,11 @@ export type ListCollectionFieldValuesData = {
          * Media type ('movie' or 'show')
          */
         media_type: MediaType;
+        field: FilterField;
         /**
          * Library Id
          */
-        library_id: string;
-        field: FilterField;
+        library_id?: string | null;
         /**
          * Query
          */

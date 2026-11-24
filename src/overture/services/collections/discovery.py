@@ -35,6 +35,7 @@ lazy from ...utils.collection_fields import (
     field_available,
     field_label,
     labelled_field,
+    library_field_available,
     plex_tests,
     smart_only_dimension,
 )
@@ -117,7 +118,7 @@ class CollectionDiscovery:
             smart_orders=available_orders(ServerType.PLEX, media_type, smart=True)
             if plex
             else [],
-            fields=sorted(self._fields(media_type, servers), key=_by_label),
+            fields=self.fields(media_type, servers),
             sources=sorted(
                 (
                     CollectionSourceRead(
@@ -167,25 +168,27 @@ class CollectionDiscovery:
             ),
         )
 
-    def _fields(
+    def fields(
         self, media_type: MediaType, servers: Sequence[ServerType]
     ) -> list[CollectionFieldRead]:
-        """The fields collections of the media type can test on any of *servers*."""
+        """The fields collections of the media type can test on any of *servers*.
+
+        Overture tests synced metadata; Plex smart collections also test what
+        Plex itself filters on.
+        """
         tmdb = self._app_config.tmdb_configured
+        plex = ServerType.PLEX in servers
         found: list[CollectionFieldRead] = []
         for field, spec in FIELDS.items():
+            if spec.tmdb and not tmdb:
+                continue
             local_on = [
                 server
                 for server in servers
                 if field_available(field, server, media_type, smart=False)
-                and (tmdb or not spec.tmdb)
             ]
-            tested = ServerType.PLEX in servers and plex_tests(
-                field, ServerType.PLEX, media_type
-            )
-            smart = ServerType.PLEX in servers and (
-                ServerType.PLEX in local_on or tested
-            )
+            tested = plex and plex_tests(field, ServerType.PLEX, media_type)
+            smart = plex and (ServerType.PLEX in local_on or tested)
             if not (local_on or smart):
                 continue
             found.append(
@@ -197,7 +200,29 @@ class CollectionDiscovery:
                     labelled=smart and not tested,
                 )
             )
-        return found
+        return sorted(found, key=_by_label)
+
+    def filter_fields(
+        self, media_type: MediaType, servers: Sequence[ServerType]
+    ) -> list[CollectionFieldRead]:
+        """The fields a library filter of the media type can test on any of
+        *servers*: synced metadata and each title's library status."""
+        tmdb = self._app_config.tmdb_configured
+        return sorted(
+            (
+                CollectionFieldRead.of(field, available[0])
+                for field, spec in FIELDS.items()
+                if (tmdb or not spec.tmdb)
+                and (
+                    available := [
+                        server
+                        for server in servers
+                        if library_field_available(field, server, media_type)
+                    ]
+                )
+            ),
+            key=_by_label,
+        )
 
     async def mdblist_lists(self, query: str) -> list[MdblistListRead]:
         """Find public MDBList lists to name in a source condition."""
@@ -214,59 +239,36 @@ class CollectionDiscovery:
     async def field_values(
         self,
         media_type: MediaType,
-        library_id: str,
+        library_id: str | None,
         field: FilterField,
         query: str | None = None,
     ) -> list[CollectionFieldValue]:
         """List a field's values in a library, most common first.
 
-        Overture counts what sync stored; fields only Plex knows are listed by
+        Without a library it lists them across every library of the media type,
+        which is what a library filter tests. Overture counts the titles holding
+        each value in what sync stored; fields only Plex knows are listed by
         Plex, without counts. *query* narrows them to values containing it,
         and for TMDB keywords adds those TMDB knows that no title has yet.
         """
-        server = self._access.server_type(library_id)
-        counts: Counter[str] = Counter()
-        if field_available(field, server, media_type, smart=False):
-            if (kind := TERM_FIELDS.get(field)) is not None:
-                counts.update(
-                    await self._access.term_counts(library_id, media_type, kind)
-                )
-            else:
-                items = await self._access.library_items(library_id, media_type)
-                collections = (
-                    await self._access.memberships(library_id, None)
-                    if field is FilterField.COLLECTION
-                    else {}
-                )
-                for item in items:
-                    value = field_value(item, field, collections.get(item.id, ()))
-                    if isinstance(value, str):
-                        counts[value] += 1
-                    elif isinstance(value, list | tuple):
-                        counts.update({str(entry) for entry in value})
-        else:
-            plex = FIELDS[field].plex
-            if (
-                not field_available(field, server, media_type, smart=True)
-                or plex is None
-            ):
-                raise PublicServiceError(
-                    422,
-                    f"{self._access.library_provider(library_id).server.title} "
-                    f"cannot list the {field_label(field, server)} values of its "
-                    f"{media_type.plural}",
-                )
-            counts.update(
-                dict.fromkeys(
-                    (
-                        plex.value_of(key, title)
-                        for key, title in await self._access.filter_choices(
-                            library_id, media_type, plex.key_for(media_type)
-                        )
-                    ),
-                    0,
-                )
+        if library_id is None:
+            counts = await self._synced_counts(
+                media_type,
+                [
+                    each
+                    for each in await self._access.libraries_of(media_type)
+                    if field_available(
+                        field, self._access.server_type(each), media_type, smart=False
+                    )
+                ],
+                field,
             )
+        elif field_available(
+            field, self._access.server_type(library_id), media_type, smart=False
+        ):
+            counts = await self._synced_counts(media_type, [library_id], field)
+        else:
+            counts = await self._plex_values(media_type, library_id, field)
         labels = (
             {
                 str(collection_id): title
@@ -296,6 +298,64 @@ class CollectionDiscovery:
                 values.items(), key=lambda pair: (-pair[1], labels[pair[0]].casefold())
             )
         ]
+
+    async def _synced_counts(
+        self, media_type: MediaType, library_ids: Sequence[str], field: FilterField
+    ) -> Counter[str]:
+        """How many titles of the libraries hold each value sync stored."""
+        if (kind := TERM_FIELDS.get(field)) is not None:
+            return Counter(
+                await self._access.term_counts(library_ids, media_type, kind)
+            )
+        counts: Counter[str] = Counter()
+        # A title several libraries hold counts once, and holds the same values.
+        seen: set[int] = set()
+        for library_id in library_ids:
+            items = await self._access.library_items(library_id, media_type)
+            collections = (
+                await self._access.memberships(library_id, None)
+                if field is FilterField.COLLECTION
+                else {}
+            )
+            for item in items:
+                if item.id in seen:
+                    continue
+                seen.add(item.id)
+                value = field_value(item, field, collections.get(item.id, ()))
+                if isinstance(value, str):
+                    counts[value] += 1
+                elif isinstance(value, list | tuple):
+                    counts.update({str(entry) for entry in value})
+        return counts
+
+    async def _plex_values(
+        self, media_type: MediaType, library_id: str, field: FilterField
+    ) -> Counter[str]:
+        """The values Plex lists for a field only its smart collections test.
+
+        Raises:
+            PublicServiceError: 422 when the library's server cannot test it.
+        """
+        server = self._access.server_type(library_id)
+        plex = FIELDS[field].plex
+        if not field_available(field, server, media_type, smart=True) or plex is None:
+            raise PublicServiceError(
+                422,
+                f"{self._access.library_provider(library_id).server.title} "
+                f"cannot list the {field_label(field, server)} values of its "
+                f"{media_type.plural}",
+            )
+        return Counter(
+            dict.fromkeys(
+                (
+                    plex.value_of(key, title)
+                    for key, title in await self._access.filter_choices(
+                        library_id, media_type, plex.key_for(media_type)
+                    )
+                ),
+                0,
+            )
+        )
 
     async def recommend(self, body: CollectionKindRequest) -> KindRecommendation | None:
         """Return the collection kind that suits a rule, as it is being edited.

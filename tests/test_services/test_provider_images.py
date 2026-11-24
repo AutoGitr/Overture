@@ -9,7 +9,11 @@ lazy from overture.media_servers.adapters import ProviderImageRequest
 lazy from overture.services import provider_images as module
 lazy from overture.utils import image_fetch
 lazy from overture.utils.errors import PublicServiceError
-lazy from overture.utils.image_fetch import FetchedImage, RemoteImageError
+lazy from overture.utils.image_fetch import (
+    FetchedImage,
+    ImageNotFoundError,
+    RemoteImageError,
+)
 
 
 class FakeProxyClients:
@@ -57,11 +61,19 @@ async def test_proxy_provider_image_fetches_with_resolved_client_and_auth(
     assert captured["allow_private"] is True
 
 
-async def test_proxy_provider_image_wraps_remote_image_error(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize(
+    ("error", "status"),
+    [
+        (RemoteImageError("plex.example returned HTTP 500"), 502),
+        # The server shows no such image, which is no failure of the server.
+        (ImageNotFoundError("plex.example returned HTTP 404"), 404),
+    ],
+)
+async def test_proxy_provider_image_answers_for_what_the_server_answered(
+    monkeypatch: pytest.MonkeyPatch, error: RemoteImageError, status: int
 ) -> None:
     async def fake_fetch_image(*_args: object, **_kwargs: object):
-        raise RemoteImageError("upstream refused")
+        raise error
 
     monkeypatch.setattr(module, "fetch_image", fake_fetch_image)
 
@@ -71,7 +83,7 @@ async def test_proxy_provider_image_wraps_remote_image_error(
             proxy_clients=cast("Any", FakeProxyClients(httpx2.AsyncClient())),
         )
 
-    assert exc_info.value.status_code == 502
+    assert exc_info.value.status_code == status
 
 
 async def test_proxy_provider_image_refuses_a_paused_host_at_once(

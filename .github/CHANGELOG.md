@@ -11,6 +11,7 @@
 - **API:** a missing TMDB, Radarr, Sonarr or MDBList setting is answered with 409, as a missing media server is, instead of 503 or 400; season artwork asked of a title without a season, and clearing a kind of result that cannot be cleared, are answered with 422.
 - **API:** IDs in paths and bodies are at most 9007199254740991, the largest a JSON client reads exactly.
 - **API:** the `collection.theme.updated` event is removed; `collection.updated` reports a theme change.
+- **Library:** Overture shows a title's or season's poster and background from the media server only once a full **Sync** has read which images the server shows; run one after upgrading.
 - **Operations:** **Replace existing** is gone from Assets; each art and theme source list holds **Current selection** instead, which you drag to decide which sources may replace what a slot already holds: those above it replace, those below only fill empty slots. Saved schedules keep what they did: Current selection first where Replace existing was off, last where it was on. In the API, `overwrite_existing` is removed and `source_order` must include `current_selection`.
 
 ### 🔒 Security
@@ -20,10 +21,15 @@
 ### 🚀 Features
 
 - **API:** criteria fields say whether they match values ignoring case (`ignores_case`), and routes that need signing in document their 401 and 403 answers.
+- **API:** `GET /api/collections/field-values` without a `library_id` lists the values of every library of the media type; titles and seasons name the version of the image their lead server shows (`server_poster_version`, `server_background_version`); job events count what a run has `read` while it plans; and a collection's `order_type` may be `null` to inherit.
 - **API:** the schema documents every answer a route can give: 404 for a path that names nothing, 400 for a body that is not text, 409, 502 and 503 from a route that needs a media server, and a 422 that either lists each issue or says which rule was broken.
+- **Collections:** **Resolution** criteria test shows on every server: a show holds each resolution its episodes come in, and a movie each of its versions', so **Resolution is 4K** matches as Plex's smart collections do. Shows gain theirs at the next full **Sync**.
+- **Collections:** **Set sort** in Collection operations can return the filtered collections to **Inherit group or global default**, as **Set visibility** can.
 - **Collections:** each library's criteria are headed by its server's badge and edged in its colour when several servers are configured.
 - **Interface:** hovering a title's or collection's **Poster** or **Background** tab names the servers, or the folder, that do not yet show Overture's image.
 - **Interface:** every list of libraries, art sources, theme sources and metadata issues offers **Select all** and **Deselect all** beside the list's name, partly ticked while only some are chosen.
+- **Interface:** show filters take in season posters: **Season posters complete**, season posters in **Art resolution** and **Art source**, and season poster source and width in custom filters.
+- **Operations:** Sync, Assets, Renamer and Server audit count what they have read while they plan, instead of showing **Planning...** until the total is known.
 
 ### 🌟 Enhancements
 
@@ -31,11 +37,12 @@
 - **Collections:** a sync checks the art and theme of every server copy, not just the first, and a collection is complete only once every copy shows them.
 - **Collections:** a chosen theme stays chosen when a server plays another; the collection's next sync or an Assets run sends it again.
 - **Interface:** saving a collection reads the library's titles again only when its members or TMDB collection change, so editing collections one after another stays quick instead of slowing every page.
+- **Interface:** a criteria value is typed, with the values the libraries hold listed as you type, however many there are, such as every actor; a collection is picked by its title from the same list.
 - **Interface:** an image larger than 20 MB is refused before it uploads, saying so.
 - **Interface:** a database record names an asset's copy by its server and file, such as `Background on Jellyfin`, and other rows by what they are, such as `Collection rule 19`.
 - **Library:** auto-unmonitor counts a title's theme as complete when OvertureDB says it has none and Overture trusts that flag.
 - **Operations:** Server audit compares and fixes collection images and themes exactly as a sync does, and records what it finds on a collection's copies, so the collection's status follows the audit.
-- **Operations:** Assets runs decide titles and collections by the same rules: a saved choice is restored wherever a place lacks it, OvertureDB art replaces a different image only with Replace existing, Replace existing skips a theme already in place as it does art, and planning lines count `assets` and `collection assets`.
+- **Operations:** Assets runs decide titles and collections by the same rules: a saved choice is restored wherever a place lacks it, a source replaces a different image or theme only when ranked above **Current selection**, and planning lines count `assets` and `collection assets`.
 - **Operations:** a sync logs each collection on each server, in each library: created, how many titles were added and removed, unchanged, deleted and why (such as a library leaving it), or left alone and why, so a run's totals count collections too. Reading the servers logs how many collections each lists, each new one and each one gone.
 - **Renovate:** Overture and OvertureDB share one preset, so a dependency both use updates alike in each.
 - **Statistics:** the images Overture uploads to collections count in the image cache, not in the artwork sizes.
@@ -52,11 +59,13 @@
 - **Collections:** a collection a server made while failing the request is found by its title at the next sync instead of made again, and a server collection belongs to one Overture collection only, even when Jellyfin gives one made again the ID of one it deleted.
 - **Collections:** one server refusing a collection no longer stops the others: its error is logged for that server, the others sync, and a collection made on another server before the refusal is kept instead of made again by every sync. A timed-out membership or details write to Jellyfin or Emby is retried.
 - **Collections:** adopting a collection of more than 1,000 titles works; it failed with an internal server error.
-- **Collections:** a criteria value spelt in another case, such as `united kingdom`, shows as the library's value it matches instead of "no title has it".
 - **Collections:** a sync keeps the art Overture uploaded while the server still shows it. Plex changes a collection's image link whenever the collection is edited, which a sync took for a replaced image, so collections lost their complete art and the next Assets run uploaded it again.
 - **Interface:** removing one season's poster from a title's record works; it was always refused.
 - **Interface:** an OvertureDB entry's art panel stays usable after a choice it cannot save, such as an upload.
 - **Interface:** a collection offers to remove its theme only when it has one.
+- **Library:** opening a show's season, stepping between seasons and going back to them no longer fails with "Something went wrong".
+- **Library:** titles and seasons without a poster or background on the media server no longer ask the server for one, which filled the log with `provider-art -> 502` errors; one the server no longer has is answered with 404.
+- **Library:** custom filter conditions offer the values of every library they test, so Collection and other lists are no longer empty when the first library holds none.
 - **Operations:** an Assets run that may replace a saved choice downloads it again when its file is missing and no source finds anything, instead of leaving the slot empty.
 - **Operations:** a run's log offers its media server filters when it is about more than one server; the log covered them.
 - **Operations:** a run's log shows every line it has counted, even while the run is quiet, instead of empty placeholder rows when opened or reconnected mid-run.

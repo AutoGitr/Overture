@@ -1,6 +1,8 @@
 import { goToCatalog, goToCollectionsList, goToLibrary, routeScope } from "../router/routes";
 import {
+  ART_SLOT_LABELS,
   ART_SOURCE_SLOTS,
+  type ArtSlot,
   ART_SOURCES,
   METADATA_ISSUE_FLAGS,
   THEME_SOURCES,
@@ -65,6 +67,7 @@ export interface FilterState extends Record<CatalogSelectionFilter, SelectionAgr
   collectionSync: "all" | "synced" | "failed";
   art: Completeness;
   theme: Completeness;
+  seasonPosters: Completeness;
   overtureDb: Completeness;
   themerrDb: Completeness;
   aspectRatio: "all" | "correct" | "incorrect";
@@ -76,7 +79,7 @@ export interface FilterState extends Record<CatalogSelectionFilter, SelectionAgr
   themeSources: ThemeIdSource[];
   artSource: { sources: ArtSource[]; artType: ArtSourceSlot };
   metadataIssues: { flags: MetadataIssue[]; mode: "all" | "any" };
-  resolution: NumberRange & { artType: "poster" | "background" };
+  resolution: NumberRange & { artType: ArtSlot };
   themeLength: NumberRange;
 }
 
@@ -90,6 +93,7 @@ const DEFAULT_FILTERS: FilterState = {
   collectionSync: "all",
   art: "all",
   theme: "all",
+  seasonPosters: "all",
   overtureDb: "all",
   themerrDb: "all",
   ...(Object.fromEntries(keysOf(CATALOG_SELECTION_FILTERS).map((key) => [key, "all"])) as Record<
@@ -117,7 +121,7 @@ const COMPLETENESS_FILTERS = ["all", "complete", "incomplete"] as const;
 const ASPECT_RATIO_FILTERS = ["all", "correct", "incorrect"] as const;
 const MEDIA_SERVER_FILTERS = ["all", "present", "missing"] as const;
 const METADATA_ISSUE_MODES = ["all", "any"] as const;
-const RESOLUTION_ART_TYPES = ["poster", "background"] as const;
+const RESOLUTION_ART_TYPES = keysOf(ART_SLOT_LABELS);
 const ART_SOURCE_ART_TYPES = Object.keys(ART_SOURCE_SLOTS) as ArtSourceSlot[];
 
 function record(value: unknown): Record<string, unknown> {
@@ -200,6 +204,7 @@ function normalizeFilters(value: unknown): FilterState {
     ),
     art: stringOption(source.art, COMPLETENESS_FILTERS, defaults.art),
     theme: stringOption(source.theme, COMPLETENESS_FILTERS, defaults.theme),
+    seasonPosters: stringOption(source.seasonPosters, COMPLETENESS_FILTERS, defaults.seasonPosters),
     overtureDb: stringOption(source.overtureDb, COMPLETENESS_FILTERS, defaults.overtureDb),
     themerrDb: stringOption(source.themerrDb, COMPLETENESS_FILTERS, defaults.themerrDb),
     ...(Object.fromEntries(

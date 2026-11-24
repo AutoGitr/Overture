@@ -24,6 +24,9 @@ The sidebar offers search, sorting and completeness filters. An artwork slot
 is complete when a choice is saved and its file exists; a show also needs a
 poster for every season with videos.
 
+A title, season or collection shows its local artwork, else the image its
+lead media server shows, as the last sync read it.
+
 For titles outside your library, switch the search field to one under **TMDB**
 (requires `TMDB_READ_ACCESS_TOKEN`): **Title or ID**, or the titles of a **Person**
 (everything they acted in or worked on), a **Company** or a **Keyword** (their
@@ -35,7 +38,11 @@ by default and sort by title or year; the filters then choose whether titles
 your library or OvertureDB holds are listed.
 
 Every section of the filters popup collapses, and stays as you left it. The
-item filters can also show only the titles of one **Collection**. While
+item filters can also show only the titles of one **Collection**. For shows,
+**Season posters complete** lists the shows with every season poster saved,
+and **Art resolution** and **Art source** can look at the season posters: a
+show's season posters are as wide as the narrowest of them, and come from
+each of their sources. While
 OvertureDB is on, **OvertureDB poster**, **OvertureDB background** and (for
 shows) **OvertureDB season posters** under Art, and **OvertureDB theme** under
 Theme music, list the titles and collections whose choice for that slot
@@ -52,12 +59,14 @@ the same metadata collection criteria test (genre, actor, director, studio,
 resolution, HDR, codecs, ratings, runtime, keywords, streaming services and
 more), TMDB lists, people, charts and MDBList lists, and each title's status
 in the library: monitored, art, poster, background, season poster and theme
-status, art and theme source, poster and background width, aspect ratio,
-theme length, metadata issues, OvertureDB coverage and how each choice
-compares with OvertureDB's. A condition on a field with a fixed set of values,
-or with values your library holds, offers them in a list; IDs, TMDB keywords
-and labels, which can name values no title has yet, are typed, with what the
-library holds suggested. Conditions match together (**all**) or apart
+status, art and theme source (season posters included), poster, background
+and season poster width, aspect ratio, theme length, metadata issues,
+OvertureDB coverage and how each choice compares with OvertureDB's. The
+conditions are edited as in collection
+[criteria](collections/criteria.md#values), and suggest the values every
+library of the media type holds, as the filter tests them all. A filter offers
+what Overture stores and each title's status; a collection offers no status
+but, on Plex, what only smart collections test. Conditions match together (**all**) or apart
 (**any**), and groups nest for anything in between; **is not** and **does not
 contain** exclude.
 

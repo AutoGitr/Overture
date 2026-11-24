@@ -225,6 +225,7 @@ async def _sync_with_providers(
                         return
                     await reconciler.fill_deferred_directors(provider, batch)
                     await listing.append(batch)
+                    await job.read(len(batch))
                 listings.append((provider, listing))
             total = sum([await listing.count() for _, listing in listings])
             await job.planned(total + tmdb_count)

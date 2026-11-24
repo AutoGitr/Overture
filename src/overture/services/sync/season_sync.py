@@ -6,7 +6,7 @@ lazy from ...db.ledger import place_local
 lazy from ...db.models.media_item import MediaItem
 lazy from ...db.models.season import Season
 lazy from ...domain import ArtType, ServerAsset
-lazy from ...media_servers.adapters import ServerSeason
+lazy from ...media_servers.adapters import ServerSeason, image_version
 lazy from ...repositories.copies import CopyRepository
 lazy from ...repositories.seasons import SeasonRepository
 lazy from .art_urls import ResolvedArtUrls, apply_provider_art_url
@@ -79,10 +79,14 @@ class SeasonSynchronizer:
             )
 
         copies = CopyRepository(session)
-        server_ids = {s.num: s.server_item_id for s in season_data}
+        by_num = {s.num: s for s in season_data}
         for season_num, season in {**existing_seasons, **listed}.items():
-            await copies.set_season_id(
-                season.id or 0, server_id, server_ids.get(season_num)
+            found = by_num.get(season_num)
+            await copies.set_season_copy(
+                season.id or 0,
+                server_id,
+                found.server_item_id if found else None,
+                image_version(found.poster_url) if found else None,
             )
 
         if not lead:

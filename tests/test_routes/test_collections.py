@@ -184,7 +184,7 @@ async def test_collection_routes_delegate_to_service() -> None:
     service.discovery.field_values = AsyncMock(return_value=[])
     assert (
         await collections_router.list_collection_field_values(
-            service.discovery, MediaType.MOVIE, "movies", FilterField.GENRE
+            service.discovery, MediaType.MOVIE, FilterField.GENRE, "movies"
         )
         == []
     )

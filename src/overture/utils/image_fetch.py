@@ -75,6 +75,10 @@ class RemoteImageError(ValueError):
     """Raised when a remote image cannot be fetched or fails validation."""
 
 
+class ImageNotFoundError(RemoteImageError):
+    """Raised when the host holds no image at the URL."""
+
+
 class RateLimitedError(RemoteImageError):
     """Raised when an image host is rate-limiting Overture."""
 
@@ -210,6 +214,8 @@ async def _image_response(
                 raise RateLimitedError(
                     f"{host} is rate limiting requests; pausing them for {pause}s"
                 )
+            if status in {HTTPStatus.NOT_FOUND, HTTPStatus.GONE}:
+                raise ImageNotFoundError(f"{host} returned HTTP {status}")
             if response.is_error:
                 raise RemoteImageError(f"{host} returned HTTP {status}")
             IMAGE_HOST_PAUSES.succeeded(host)

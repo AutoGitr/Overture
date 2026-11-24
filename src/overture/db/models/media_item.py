@@ -66,7 +66,6 @@ class MediaItem(SQLModel, table=True):
     studio: str | None = None
     content_rating: str | None = None
     edition: str | None = None
-    resolution: str | None = None
     critic_rating: float | None = None
     audience_rating: float | None = None
     user_rating: float | None = None

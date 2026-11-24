@@ -7,7 +7,7 @@ that view is updated whenever the disk is read.
 """
 
 lazy from collections import defaultdict
-lazy from collections.abc import Collection, Mapping
+lazy from collections.abc import Awaitable, Callable, Collection, Mapping
 lazy from contextlib import aclosing
 lazy from pathlib import Path
 
@@ -170,8 +170,12 @@ class LocalAssets:
         item_ids: Collection[int] | None = None,
         roots_by_media_type: Mapping[MediaType, Collection[str | Path]] | None = None,
         folder_paths: Collection[str | Path] | None = None,
+        read: Callable[[int], Awaitable[None]] | None = None,
     ) -> None:
-        """Refresh every visible item in scope and publish each changed record."""
+        """Refresh every visible item in scope and publish each changed record.
+
+        *read* is told how many items each page refreshed, as it is refreshed.
+        """
         selected_ids = list(dict.fromkeys(item_ids)) if item_ids is not None else None
         selected_paths = (
             await owned_thread(_real_paths, folder_paths)
@@ -219,6 +223,8 @@ class LocalAssets:
             await emit_library_items_upserted(
                 changed, source, self._publisher, database=self._database
             )
+            if read is not None:
+                await read(len(work))
             if len(candidates) < PAGE_SIZE:
                 return
             after_id = max(item.id or 0 for item in candidates)

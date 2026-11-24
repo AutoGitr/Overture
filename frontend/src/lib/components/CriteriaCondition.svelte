@@ -15,6 +15,7 @@
   import { countOf } from "../utils/plural";
   import SourceFields from "./SourceFields.svelte";
   import DataStatus from "./DataStatus.svelte";
+  import ValueCombobox from "./ValueCombobox.svelte";
 
   let {
     condition = $bindable(),
@@ -33,7 +34,8 @@
     fields: CollectionFieldRead[];
     sources: CollectionSourceRead[];
     mediaType: MediaType;
-    libraryId: string;
+    /** The library whose values are suggested; null for every library of the media type. */
+    libraryId: string | null;
     /** What the criteria test, as a message names it, such as "Movies on Plex". */
     scope: string;
     /** Names the condition for assistive technology, such as "Criteria condition 2". */
@@ -47,7 +49,6 @@
     onremove: () => void;
   } = $props();
 
-  const listId = $props.id();
   let field = $derived(
     condition.kind === "field"
       ? fields.find((entry) => entry.field === condition.field)
@@ -56,14 +57,17 @@
   let subject = $derived(
     condition.kind === "field" ? `field:${condition.field}` : `source:${condition.source.type}`,
   );
-  let suggested = $derived(field?.kind === "tag" || field?.kind === "text");
-  let typed = $derived(condition.kind === "field" ? String(condition.value).trim() : "");
+  /** A field holding a fixed set of values offers just those. */
+  let fixed = $derived(field?.choices ?? []);
+  /** A tag or text field suggests the values the libraries hold, as it is typed. */
+  let suggested = $derived((field?.kind === "tag" || field?.kind === "text") && !fixed.length);
+  let current = $derived(condition.kind === "field" ? String(condition.value) : "");
   // TMDB knows keywords no title has yet, so a keyword condition asks it about
   // what is typed, once typing pauses.
   let searchesTmdb = $derived(condition.kind === "field" && condition.field === "tmdb_keyword");
   let asked = $state("");
   $effect(() => {
-    const query = searchesTmdb ? typed : "";
+    const query = searchesTmdb ? current.trim() : "";
     const timer = setTimeout(() => (asked = query), 300);
     return () => clearTimeout(timer);
   });
@@ -71,63 +75,29 @@
     ...listCollectionFieldValuesOptions({
       query: {
         media_type: mediaType,
-        library_id: libraryId,
+        // Without a library, the values every library of the media type holds.
+        ...(libraryId ? { library_id: libraryId } : {}),
         field: condition.kind === "field" ? condition.field : "title",
         ...(searchesTmdb && asked ? { query: asked } : {}),
       },
     }),
-    // A field with a fixed set of values offers them without asking.
-    enabled: suggested && !!libraryId && !field?.choices.length,
+    enabled: suggested,
     placeholderData: (previous) => previous,
   }));
-  let known = $derived(
-    field?.choices.length
-      ? field.choices.map((choice) => ({ ...choice, count: 0 }))
-      : (values.data ?? []),
-  );
-  let current = $derived(condition.kind === "field" ? String(condition.value) : "");
-  /** The listed value the condition holds, as its field's criteria match it. */
-  let listed = $derived.by(() => {
-    const exact = known.find((entry) => entry.value === current);
+  /** The fixed value the condition holds, as its field's criteria match it. */
+  let chosenFixed = $derived.by(() => {
+    const exact = fixed.find((entry) => entry.value === current);
     if (exact || !field?.ignores_case) return exact;
     const folded = current.toLocaleLowerCase();
-    return known.find((entry) => entry.value.toLocaleLowerCase() === folded);
-  });
-  /** Most values a list offers; a library holding more of them, such as actors, has them typed. */
-  const MAX_LISTED = 500;
-  // A fixed set, or the values a tag field holds in the library, is chosen
-  // from a list, and so is a field holding IDs however many there are; free
-  // values (IDs, TMDB keywords, labels) and text are typed, with what the
-  // library holds suggested.
-  let chosen = $derived(
-    !!field &&
-      (field.choices.length > 0 ||
-        field.by_id ||
-        (field.kind === "tag" &&
-          !field.free_values &&
-          values.isSuccess &&
-          known.length <= MAX_LISTED)),
-  );
-  /** Names what the condition holds when the list does not offer it. */
-  let missing = $derived.by(() => {
-    if (!current) return "Choose a value";
-    if (!field?.by_id) return `${current} (no title has it)`;
-    // An ID is named by the list, which may still be on its way.
-    return values.isLoading ? "Loading…" : `${fieldName} #${current} (holds no title)`;
+    return fixed.find((entry) => entry.value.toLocaleLowerCase() === folded);
   });
   /** The condition's field as people know it, whether or not these criteria offer it. */
   let fieldName = $derived(condition.kind === "field" ? FIELD_LABELS[condition.field] : "");
-
-  /** Suggestions shown at once; a library can hold thousands of values. */
-  const MAX_SUGGESTIONS = 50;
-  // Any value can be typed, such as a TMDB keyword no title has yet; the
-  // library's values are suggestions filtered to what is typed to keep the list short.
-  let suggestions = $derived.by(() => {
-    const lower = typed.toLocaleLowerCase();
-    const matching = lower
-      ? known.filter((entry) => entry.value.toLocaleLowerCase().includes(lower))
-      : known;
-    return matching.slice(0, MAX_SUGGESTIONS);
+  /** Names an ID the condition holds that no listed value names. */
+  let unlisted = $derived.by(() => {
+    if (!current) return "";
+    // An ID is named by the list, which may still be on its way.
+    return values.isLoading ? "Loading…" : `${fieldName} #${current} (holds no title)`;
   });
 
   function choose(value: string) {
@@ -204,22 +174,20 @@
         value={String(condition.value)}
         oninput={(event) => (condition.value = event.currentTarget.value)}
       />
-    {:else if chosen}
+    {:else if fixed.length}
       <select
         aria-label={`${label} value`}
         required
-        value={listed?.value ?? current}
+        value={chosenFixed?.value ?? current}
         onchange={(event) => (condition.value = event.currentTarget.value)}
       >
-        {#if !listed}
+        {#if !chosenFixed}
           <option value={current} disabled
-            >{missing}</option
+            >{current ? `${current} (not one of its values)` : "Choose a value"}</option
           >
         {/if}
-        {#each known as entry (entry.value)}
-          <option value={entry.value}
-            >{entry.count ? `${entry.label} (${entry.count})` : entry.label}</option
-          >
+        {#each fixed as entry (entry.value)}
+          <option value={entry.value}>{entry.label}</option>
         {/each}
       </select>
     {:else if kind === "number" || kind === "date"}
@@ -232,26 +200,15 @@
         oninput={(event) => (condition.value = event.currentTarget.valueAsNumber || 0)}
       />
     {:else}
-      <input
-        required
-        aria-label={`${label} value`}
-        list={suggested ? listId : undefined}
-        value={String(condition.value)}
-        oninput={(event) => (condition.value = event.currentTarget.value)}
+      <ValueCombobox
+        bind:value={() => current, (typed) => (condition.value = typed)}
+        options={values.data ?? []}
+        strict={field.by_id}
+        label={`${label} value`}
+        {unlisted}
+        describe={(entry) =>
+          entry.count ? countOf(entry.count, "title") : searchesTmdb ? "On TMDB, no title yet" : ""}
       />
-      {#if suggested}
-        <datalist id={listId}>
-          {#each suggestions as entry (entry.value)}
-            <option value={entry.value}
-              >{entry.count
-                ? countOf(entry.count, "title")
-                : searchesTmdb
-                  ? "On TMDB, no title yet"
-                  : ""}</option
-            >
-          {/each}
-        </datalist>
-      {/if}
     {/if}
   {:else}
     <span class="hint">{fieldName} cannot be tested for {scope}; choose another field.</span>
@@ -327,6 +284,7 @@
   }
 
   .condition > :global(.source-fields),
+  .condition > :global(.combobox),
   .condition > .hint,
   .condition > input,
   .condition > select:nth-of-type(3) {

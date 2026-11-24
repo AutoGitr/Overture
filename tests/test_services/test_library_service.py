@@ -29,6 +29,7 @@ lazy from overture.db.models.season import Season
 lazy from overture.db.models.settings import AppSettings
 lazy from overture.db.session import Database
 lazy from overture.domain import (
+    ArtSource,
     ArtType,
     AspectRatioTolerance,
     ImageSize,
@@ -623,6 +624,49 @@ async def test_show_rows_report_season_poster_completeness(
     assert rows["Arted Show"].art_status == "complete"
     assert rows["Unarted Show"].season_posters_status == "missing"
     assert rows["Unarted Show"].art_status == "partial"
+
+
+async def test_show_rows_name_their_season_posters_sources_and_narrowest_width(
+    tmp_path: Path,
+    db_session: AsyncSession,
+    *,
+    app_config: Settings,
+) -> None:
+    library_service = _library_service(
+        config_dir=tmp_path,
+        database=database_for(one_session(db_session)),
+        app_config=app_config,
+    )
+    db_session.add(MediaItem(id=1, media_type=MediaType.SHOW, title="Show"))
+    first = Season(id=10, media_item_id=1, season_num=1, file_count=3)
+    second = Season(id=11, media_item_id=1, season_num=2, file_count=3)
+    unknown = Season(id=12, media_item_id=1, season_num=3, file_count=3)
+    db_session.add_all([first, second, unknown])
+    await db_session.commit()
+    seed_asset(
+        first,
+        ArtType.SEASON_POSTER,
+        url="https://image.tmdb.org/t/p/original/a.jpg",
+        file_hash="a",
+        width=1000,
+        height=1500,
+    )
+    seed_asset(
+        second,
+        ArtType.SEASON_POSTER,
+        upload_hash="b",
+        file_hash="b",
+        width=600,
+        height=900,
+    )
+    seed_asset(unknown, ArtType.SEASON_POSTER, upload_hash="c")
+    db_session.add_all([first, second, unknown])
+    await db_session.commit()
+
+    (row,) = (await library_service.list_items()).items
+
+    assert row.season_posters_sources == [ArtSource.TMDB, ArtSource.UPLOAD]
+    assert row.season_posters_width == 600
 
 
 @pytest.mark.parametrize(

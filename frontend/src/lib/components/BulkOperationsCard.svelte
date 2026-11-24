@@ -315,7 +315,7 @@
   let template = $state("{title}");
   let visibility = $state<CollectionMode | null>(null);
   let home = $state(false);
-  let order = $state<CollectionOrder>("release.asc");
+  let order = $state<CollectionOrder | null>(null);
 
   const id = $props.id();
 
@@ -522,7 +522,7 @@
         hint={capabilities.data?.smart ? "Smart collections cannot use a custom order." : undefined}
       >
         <select id={`${id}-order`} bind:value={order} disabled={busy}
-          >{#each sortedOrders(capabilities.data?.orders ?? []) as entry (entry)}<option value={entry}
+          ><option value={null}>Inherit group or global default</option>{#each sortedOrders(capabilities.data?.orders ?? []) as entry (entry)}<option value={entry}
               >{ORDER_LABELS[entry]}</option
             >{/each}</select
         >

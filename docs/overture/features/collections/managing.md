@@ -62,5 +62,6 @@ own `overture:` labels carry conditions Plex has no filter for; see
 ## Bulk operations
 
 **Collection operations** in the sidebar act on the filtered collections:
-assign a group, adopt, orphan, delete, remove art or themes, and run Assets on
-**Current sidebar items**. Only collections Overture manages are touched.
+assign a group, set the sort or visibility, either one or back to **Inherit
+group or global default**, adopt, orphan, delete, remove art or themes, and
+run Assets on **Current sidebar items**. Only collections Overture manages are touched.

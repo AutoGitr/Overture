@@ -4,7 +4,10 @@ lazy import pytest
 lazy from sqlmodel import col, delete, func, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
+lazy from overture.db.models.library import Library
 lazy from overture.db.models.media_item import MediaItem
+lazy from overture.db.models.media_item_copy import MediaItemCopy
+lazy from overture.db.models.media_server import MediaServer
 lazy from overture.db.models.term import MediaItemTerm, Term
 lazy from overture.domain import MediaType, TermKind
 lazy from overture.repositories.collection_items import (
@@ -147,18 +150,47 @@ async def test_a_library_read_selects_values_and_unread_kinds_raise(
         first.values(TermKind.GENRE)
 
 
-async def test_term_counts_count_each_value_across_the_librarys_titles(
+async def test_term_counts_count_each_title_of_the_libraries_once(
     db_session: AsyncSession,
 ) -> None:
     await _library_with_titles(db_session)
+    # Another server holds the first title too, labelled its own way.
+    db_session.add(
+        MediaServer(id=2, key="other", title="Other", identity="jellyfin:other")
+    )
+    await db_session.flush()
+    db_session.add(
+        Library(id="2:movies", media_type=MediaType.MOVIE, server_id=2, title="Movies")
+    )
+    await db_session.flush()
+    db_session.add(
+        MediaItemCopy(
+            media_item_id=1,
+            server_id=2,
+            library_id="2:movies",
+            server_item_id="a",
+            media_type=MediaType.MOVIE,
+            labels=["Two", "Three"],
+        )
+    )
+    await db_session.flush()
+    repo = CollectionItemRepository(db_session)
 
-    assert await CollectionItemRepository(db_session).term_counts(
-        MediaType.MOVIE, "1:movies", TermKind.ACTOR
+    assert await repo.term_counts(MediaType.MOVIE, ["1:movies"], TermKind.ACTOR) == {
+        "Åsa Söderström": 1,
+        "Lead": 2,
+    }
+    assert await repo.term_counts(
+        MediaType.MOVIE, ["1:movies", "2:movies"], TermKind.ACTOR
     ) == {"Åsa Söderström": 1, "Lead": 2}
     # Labels are each server's own, as its copies hold them.
-    assert await CollectionItemRepository(db_session).term_counts(
-        MediaType.MOVIE, "1:movies", TermKind.LABEL
-    ) == {"One": 1, "Two": 2}
+    assert await repo.term_counts(MediaType.MOVIE, ["1:movies"], TermKind.LABEL) == {
+        "One": 1,
+        "Two": 2,
+    }
+    assert await repo.term_counts(
+        MediaType.MOVIE, ["1:movies", "2:movies"], TermKind.LABEL
+    ) == {"One": 1, "Two": 2, "Three": 1}
 
 
 async def test_assign_reports_only_the_kinds_that_changed(

@@ -2844,11 +2844,10 @@ class WriteCheck:
             return
         saved: object = None
         for _ in range(SETTLE_ROUNDS):
-            found = await self.direct.get(
-                "/Items", Ids=collection_id, Fields="DateLastSaved"
-            )
+            # Each save changes the Etag; Emby names no DateLastSaved.
+            found = await self.direct.get("/Items", Ids=collection_id, Fields="Etag")
             rows: list[dict[str, Any]] = found["Items"]
-            now = rows[0].get("DateLastSaved") if rows else None
+            now = rows[0].get("Etag") if rows else None
             if now is None or now == saved:
                 return
             saved = now

@@ -368,6 +368,7 @@ async def run_scan(
                 MediaType.SHOW: params.show_folders,
             },
             source="assets.scan",
+            read=job.read,
         )
         with operation_directory(config_dir) as directory:
             work_path = directory / "scan.sqlite"

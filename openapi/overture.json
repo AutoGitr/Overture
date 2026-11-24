@@ -4532,8 +4532,14 @@
             "title": "Delete When Inactive"
           },
           "order_type": {
-            "$ref": "#/components/schemas/CollectionOrder",
-            "default": "release.asc"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "rule": {
             "$ref": "#/components/schemas/CollectionRuleWrite-Input"
@@ -6807,8 +6813,14 @@
             "title": "Delete When Inactive"
           },
           "order_type": {
-            "$ref": "#/components/schemas/CollectionOrder",
-            "default": "release.asc"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "sort_title": {
             "anyOf": [
@@ -9385,8 +9397,10 @@
           "season_posters_status",
           "poster_source",
           "background_source",
+          "season_posters_source",
           "poster_width",
           "background_width",
+          "season_posters_width",
           "incorrect_aspect_ratio",
           "theme_status",
           "theme_source",
@@ -10620,9 +10634,27 @@
             "title": "Monitored",
             "type": "boolean"
           },
+          "season_posters_sources": {
+            "items": {
+              "$ref": "#/components/schemas/ArtSource"
+            },
+            "title": "Season Posters Sources",
+            "type": "array"
+          },
           "season_posters_status": {
             "$ref": "#/components/schemas/AssetStatus",
             "default": "missing"
+          },
+          "season_posters_width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season Posters Width"
           },
           "server_added_at": {
             "anyOf": [
@@ -10635,6 +10667,28 @@
               }
             ],
             "title": "Server Added At"
+          },
+          "server_background_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server Background Version"
+          },
+          "server_poster_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server Poster Version"
           },
           "server_removed_at": {
             "anyOf": [
@@ -10738,6 +10792,10 @@
           "assets",
           "art_status",
           "season_posters_status",
+          "server_poster_version",
+          "server_background_version",
+          "season_posters_sources",
+          "season_posters_width",
           "has_incorrect_aspect_ratio",
           "catalog_entry_key",
           "catalog_complete",
@@ -11777,6 +11835,17 @@
             "title": "Season Num",
             "type": "integer"
           },
+          "server_poster_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server Poster Version"
+          },
           "title": {
             "anyOf": [
               {
@@ -11797,6 +11866,7 @@
           "file_count",
           "folder_path",
           "poster",
+          "server_poster_version",
           "last_matched_at"
         ],
         "title": "SeasonRead",
@@ -19801,7 +19871,7 @@
     },
     "/api/collections/field-values": {
       "get": {
-        "description": "List a criteria field's values in a library, most common first.",
+        "description": "List a criteria field's values in a library, or in every library of the\nmedia type, most common first.",
         "operationId": "list_collection_field_values",
         "parameters": [
           {
@@ -19816,21 +19886,28 @@
           },
           {
             "in": "query",
-            "name": "library_id",
-            "required": true,
-            "schema": {
-              "maxLength": 200,
-              "minLength": 1,
-              "title": "Library Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
             "name": "field",
             "required": true,
             "schema": {
               "$ref": "#/components/schemas/FilterField"
+            }
+          },
+          {
+            "in": "query",
+            "name": "library_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Library Id"
             }
           },
           {

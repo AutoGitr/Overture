@@ -33,6 +33,8 @@ class FakePlexClient:
         #: Full metadata, which defaults to the listed rows themselves.
         self.details = details
         self.in_progress: set[str] = set()
+        #: Each show's episode resolutions, by its rating key.
+        self.resolutions: dict[str, set[str]] = {}
         self.art_fields: list[tuple[str, str]] = []
 
     async def get_machine_identifier(self) -> str:
@@ -64,6 +66,9 @@ class FakePlexClient:
 
     async def get_in_progress_shows(self, section_key: str) -> set[str]:
         return self.in_progress
+
+    async def get_show_resolutions(self, section_key: str) -> dict[str, set[str]]:
+        return self.resolutions
 
     async def get_collections(self, section_key: str) -> list[dict[str, Any]]:
         return [

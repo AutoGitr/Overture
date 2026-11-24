@@ -4,6 +4,7 @@ lazy import base64
 lazy import operator
 lazy from collections import Counter
 lazy from collections.abc import AsyncIterator
+lazy from dataclasses import dataclass, field
 lazy from itertools import batched
 lazy from pathlib import PurePath, PurePosixPath, PureWindowsPath
 lazy from typing import Any, ClassVar, override
@@ -16,7 +17,13 @@ lazy from ...catalog_contract.contract import canonical_art_url
 lazy from ...domain import ArtType, CollectionOrder, MediaType
 lazy from ...schemas.art import ArtCandidate
 lazy from ...utils.art_urls import art_preview_url, art_source_label
-lazy from ..adapters import CollectionDetails, ItemIdentity, MemberWrite, ServerTheme
+lazy from ..adapters import (
+    CollectionDetails,
+    ItemIdentity,
+    MemberWrite,
+    ServerTheme,
+    video_resolution,
+)
 lazy from ..errors import MediaServerError
 lazy from ..http_client import MediaServerHttpClient
 lazy from ..wire import (
@@ -47,6 +54,16 @@ COLLECTION_TYPES = frozendict({MediaType.MOVIE: "movies", MediaType.SHOW: "tvsho
 ITEM_TYPES = frozendict({MediaType.MOVIE: "Movie", MediaType.SHOW: "Series"})  # pyright: ignore[reportCallIssue] -- stale frozendict stub
 _ITEM = TypeAdapter(MediaBrowserItem)
 _IMAGES = TypeAdapter(list[MediaBrowserImage])
+
+
+@dataclass(slots=True)
+class EpisodeTally:
+    """What the episodes under a library or show say of their seasons and shows."""
+
+    #: How many episodes each season holds, by season ID.
+    per_season: Counter[str] = field(default_factory=Counter[str])
+    #: The resolutions each show's episodes come in, by show ID.
+    resolutions: dict[str, set[str]] = field(default_factory=dict[str, set[str]])
 
 
 def _server_path(path: str) -> PurePath:
@@ -158,6 +175,7 @@ class JellyfinClient(MediaServerHttpClient):
         return self.query_params(
             parentId=parent_id,
             includeItemTypes="Episode",
+            fields="Width",
             recursive="true",
             enableImages="false",
             enableUserData="false",
@@ -194,14 +212,19 @@ class JellyfinClient(MediaServerHttpClient):
         """Yield the season rows under a library or show, in one listing."""
         return self._item_pages(self._season_params(parent_id))
 
-    async def count_episodes_by_season(self, parent_id: str) -> Counter[str]:
-        """Count the episodes under a library or show by their season ID."""
-        counts: Counter[str] = Counter()
+    async def tally_episodes(self, parent_id: str) -> EpisodeTally:
+        """Count the episodes under a library or show by season, and name the
+        resolutions each show's episodes come in."""
+        tally = EpisodeTally()
         async for page in self._item_pages(self._episode_params(parent_id)):
-            counts.update(
-                season_id for episode in page if (season_id := episode.get("SeasonId"))
-            )
-        return counts
+            for episode in page:
+                if season_id := episode.get("SeasonId"):
+                    tally.per_season[season_id] += 1
+                if (show_id := episode.get("SeriesId")) and (
+                    resolution := video_resolution(episode.get("Width"))
+                ):
+                    tally.resolutions.setdefault(show_id, set()).add(resolution)
+        return tally
 
     async def get_boxsets(self) -> list[MediaBrowserItem]:
         """Return every collection (BoxSet) with its folder and provider IDs."""

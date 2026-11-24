@@ -913,16 +913,20 @@ async def run_server_audit(
                 for provider in await audit_context.provider_registry.reachable()
             ),
         )
-        targets: list[AuditWork] = [
-            *await plan_audit(
-                params, audit_context.local_assets, database=audit_context.database
-            ),
-            *(
-                await plan_collection_audit(params, database=audit_context.database)
-                if params.check_collections
-                else []
-            ),
-        ]
+        targets: list[AuditWork] = list(
+            await plan_audit(
+                params,
+                audit_context.local_assets,
+                database=audit_context.database,
+                read=job.read,
+            )
+        )
+        if params.check_collections:
+            collections = await plan_collection_audit(
+                params, database=audit_context.database
+            )
+            targets.extend(collections)
+            await job.read(len(collections))
         await job.planned(len(targets))
         async with aclosing(
             in_order(

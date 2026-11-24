@@ -19,6 +19,7 @@ test("sidebar row hit areas preserve selection, poster links, and badge actions"
       id: index + 1,
       title: `Movie ${String(index).padStart(3, "0")}`,
       server_item_id: "1",
+      server_poster_version: "v1",
     }),
   );
   await page.route("**/api/library/items?*", (route) =>

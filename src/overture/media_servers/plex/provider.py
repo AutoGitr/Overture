@@ -220,8 +220,7 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
         """
         rating_key = str(metadata.get("ratingKey", ""))
         movie = media_type is MediaType.MOVIE
-        media_list = metadata.get("Media") or []
-        first_media = media_list[0] if media_list else None
+        media = metadata.get("Media") or []
         duration_ms = metadata.get("duration")
         # Plex leaves out zero counts and offsets.
         plays = metadata.get("viewCount") or 0
@@ -251,8 +250,17 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
             labels=_plex_tags(metadata.get("Label")),
             content_rating=metadata.get("contentRating") or None,
             edition=(metadata.get("editionTitle") or None) if movie else None,
-            resolution=(first_media.get("videoResolution") if first_media else None)
-            or None,
+            # A movie comes in each of its versions' resolutions; a show's
+            # episodes are read for the whole section.
+            resolutions=tuple(
+                dict.fromkeys(
+                    resolution
+                    for version in media
+                    if (resolution := version.get("videoResolution"))
+                )
+            )
+            if movie
+            else (),
             critic_rating=_rating(metadata.get("rating")),
             audience_rating=_rating(metadata.get("audienceRating")),
             user_rating=_rating(metadata.get("userRating")),
@@ -269,7 +277,7 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
             if movie
             else rating_key in in_progress,
             release_date=metadata.get("originallyAvailableAt") or None,
-            versions=(len(metadata.get("Media") or ()) or None) if movie else None,
+            versions=(len(media) or None) if movie else None,
             server_added_at=parse_utc_datetime(metadata.get("addedAt")),
             server_updated_at=parse_utc_datetime(metadata.get("updatedAt")),
         )
@@ -290,6 +298,9 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
                 await self.client.get_in_progress_shows(section.key)
                 if show
                 else set[str]()
+            )
+            resolutions = (
+                await self.client.get_show_resolutions(section.key) if show else {}
             )
 
             item = partial(
@@ -320,6 +331,7 @@ class PlexProvider(BaseMediaServerProvider[PlexClient]):
                     full = item(row)
                     if show:
                         self._fill_show_details(full, row, plex_base)
+                        full.resolutions = tuple(sorted(resolutions.get(key, ())))
                     batch.append(full)
                 yield batch
 
