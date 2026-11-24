@@ -179,6 +179,14 @@ def _write(destination: Path, *, filled: bool) -> None:
     from overture.db import metadata  # noqa: PLC0415
     from overture.db.session import run_migrations  # noqa: PLC0415
 
+    refusals: tuple[type[Exception], ...] = (IntegrityError,)
+    try:
+        from overture.db.ledger import LedgerRefusalError  # noqa: PLC0415 -- the release's own, as above
+    except ImportError:
+        pass  # A release before the asset ledger refuses through constraints alone.
+    else:
+        refusals = (IntegrityError, LedgerRefusalError)
+
     models = _table_models(SQLModel)
     path = Path(tempfile.mkdtemp()) / "release.db"
     engine = create_engine(f"sqlite:///{path}")
@@ -188,7 +196,12 @@ def _write(destination: Path, *, filled: bool) -> None:
     with Session(engine) as session:
 
         def admitted(model: Any, fields: dict[str, object], *, keep: bool) -> Any:
-            """Insert a row of *fields*, kept or rolled back; ``None`` if refused."""
+            """Insert a row of *fields*, kept or rolled back; ``None`` if refused.
+
+            A release refuses a row through its constraints, and from the asset
+            ledger on also by refusing the flush of an asset whose stored status
+            its other rows contradict.
+            """
             try:
                 with session.begin_nested() as savepoint:
                     row = model(**fields)
@@ -196,7 +209,7 @@ def _write(destination: Path, *, filled: bool) -> None:
                     session.flush()
                     if not keep:
                         savepoint.rollback()
-            except IntegrityError:
+            except refusals:
                 return None
             return row
 

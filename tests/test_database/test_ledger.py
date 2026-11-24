@@ -4,13 +4,16 @@ lazy import pytest
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
 lazy from overture.db.ledger import (
+    LOCAL,
     ContentFacts,
     Destination,
     Evidence,
     FileFacts,
+    LedgerRefusalError,
     clear_selection,
     combined_status,
     confirm_delivery,
+    delivery,
     generation,
     item_art_status,
     local_file,
@@ -402,5 +405,47 @@ async def test_a_flush_refuses_a_status_written_outside_the_ledger(
 
     asset.status = AssetStatus.COMPLETE
 
-    with pytest.raises(RuntimeError, match="outside the ledger"):
+    with pytest.raises(LedgerRefusalError, match="outside the ledger"):
+        await db_session.flush()
+
+
+async def test_a_flush_refuses_a_delivery_written_by_its_assets_id_outside_the_ledger(
+    db_session: AsyncSession,
+) -> None:
+    item = MediaItem(media_type=MediaType.MOVIE, title="Alien", folder_path="/m")
+    place_local(item, (ServerAsset.POSTER,), folder=True)
+    db_session.add(item)
+    await db_session.flush()
+    asset = read_asset(item, ServerAsset.POSTER)
+    assert asset.status is AssetStatus.MISSING
+
+    # Something seen there would make the poster partial, which the asset does not say.
+    db_session.add(
+        AssetDelivery(
+            asset_id=asset.id or 0,
+            channel=DeliveryChannel.FILE,
+            required=False,
+            observed_hash="seen",
+        )
+    )
+
+    with pytest.raises(LedgerRefusalError, match="outside the ledger"):
+        await db_session.flush()
+
+
+async def test_a_flush_refuses_a_delivery_deleted_outside_the_ledger(
+    db_session: AsyncSession,
+) -> None:
+    item = MediaItem(media_type=MediaType.MOVIE, title="Alien", folder_path="/m")
+    place_local(item, (ServerAsset.POSTER,), folder=True)
+    observe(item, ServerAsset.POSTER, LOCAL, Evidence.DIFFERENT, ref="other")
+    db_session.add(item)
+    await db_session.flush()
+    asset = read_asset(item, ServerAsset.POSTER)
+    assert asset.status is AssetStatus.PARTIAL
+
+    # Without what was seen in the folder, the poster's rows give missing.
+    await db_session.delete(delivery(asset))
+
+    with pytest.raises(LedgerRefusalError, match="outside the ledger"):
         await db_session.flush()

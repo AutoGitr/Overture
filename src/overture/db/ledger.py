@@ -228,26 +228,32 @@ def holds_content(row: AssetDelivery, asset: Asset) -> bool:
     return asset.content_hash is not None and row.observed_hash == asset.content_hash
 
 
+def _missing(asset: Asset, deliveries: Iterable[AssetDelivery]) -> list[AssetDelivery]:
+    return [row for row in deliveries if row.required and not holds_content(row, asset)]
+
+
 def missing_deliveries(asset: Asset) -> list[AssetDelivery]:
     """Return the required deliveries that do not hold the asset's content."""
-    return [
-        row
-        for row in asset.deliveries
-        if row.required and not holds_content(row, asset)
-    ]
+    return _missing(asset, asset.deliveries)
 
 
-def settled_status(asset: Asset) -> AssetStatus:
-    """Return the status the asset's rows give it, by the module's one rule."""
+def settled_status(
+    asset: Asset, deliveries: Collection[AssetDelivery] | None = None
+) -> AssetStatus:
+    """Return the status the asset's rows give it, by the module's one rule.
+
+    *deliveries* are the ones to judge it by, when they are not yet its own.
+    """
+    held = asset.deliveries if deliveries is None else deliveries
     if not asset.needed:
         return AssetStatus.COMPLETE
     selected = selection(asset) is not None
-    if selected and not missing_deliveries(asset):
+    if selected and not _missing(asset, held):
         return AssetStatus.COMPLETE
     started = (
         selected
         or asset.content_hash is not None
-        or any(shows_something(row) for row in asset.deliveries)
+        or any(shows_something(row) for row in held)
     )
     return AssetStatus.PARTIAL if started else AssetStatus.MISSING
 
@@ -628,30 +634,48 @@ def item_art_status(item: MediaItem, seasons: Iterable[Season]) -> ItemArtStatus
     return ItemArtStatus(combined_status(parts), season_posters)
 
 
+class LedgerRefusalError(RuntimeError):
+    """A flush that would store an asset's status other than its rows give."""
+
+
+def _asset_of(session: OrmSession, row: AssetDelivery) -> Asset | None:
+    """The asset *row* delivers, though it was written by its asset's ID alone."""
+    if "asset" not in inspect(row).unloaded:
+        return row.asset
+    with session.no_autoflush:
+        return session.get(Asset, row.asset_id)
+
+
 def verify_flush(session: OrmSession, *_: object) -> None:
-    """Refuse a flush that stores an asset whose status its rows do not give.
+    """Refuse a flush that leaves an asset with a status its rows do not give.
 
     Every transition settles the status, so a mismatch means a write that
-    bypassed this module; it fails where it happens instead of drifting.
+    bypassed this module; it fails where it happens instead of drifting. Each
+    asset a new, changed or deleted asset or delivery touches is judged by the
+    deliveries it holds once the flush is done, however they were written.
 
     Raises:
-        RuntimeError: When an asset's stored status disagrees with its rows.
+        LedgerRefusalError: When an asset's stored status disagrees with its rows.
     """
-    touched = {
-        id(asset): asset
-        for row in (*session.new, *session.dirty)
-        if (
-            asset := row
-            if isinstance(row, Asset)
-            else row.asset
-            if isinstance(row, AssetDelivery) and "asset" not in inspect(row).unloaded
-            else None
-        )
-        is not None
-    }
-    for asset in touched.values():
-        if asset.status != (expected := settled_status(asset)):
-            raise RuntimeError(
+    touched: dict[int, Asset] = {}
+    added: dict[int, list[AssetDelivery]] = {}
+    for row in (*session.new, *session.dirty, *session.deleted):
+        if isinstance(row, Asset):
+            touched[id(row)] = row
+        elif isinstance(row, AssetDelivery) and (asset := _asset_of(session, row)):
+            touched[id(asset)] = asset
+            # Rows compare by their fields, so a row is found by its identity.
+            if row in session.new and all(held is not row for held in asset.deliveries):
+                added.setdefault(id(asset), []).append(row)
+    for key, asset in touched.items():
+        if asset in session.deleted:
+            continue
+        held = [
+            *(row for row in asset.deliveries if row not in session.deleted),
+            *added.get(key, ()),
+        ]
+        if asset.status != (expected := settled_status(asset, held)):
+            raise LedgerRefusalError(
                 f"Asset {asset.id} ({asset.kind}) stores {asset.status} where its "
                 f"rows give {expected}: it was written outside the ledger"
             )
