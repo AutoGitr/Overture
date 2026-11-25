@@ -61,10 +61,14 @@
   );
 </script>
 
+<!-- Its notes stay inside the field, so choosing a preset never moves the
+     fields beside it to another row. -->
 <FieldRow
   label="Presets"
   for={`${id}-preset`}
-  hint="Fills the form from an OvertureDB preset or an exported file; change anything before saving."
+  hint={draft.preset?.listing.preset
+    ? `${draft.preset.listing.preset.title}: ${draft.preset.listing.preset.description}`
+    : "Fills the form from an OvertureDB preset or an exported file; change anything before saving."}
 >
   <div class="preset-choice">
     <div class="preset-select">
@@ -95,22 +99,18 @@
         }}
       /></label
     >
+    {#if galleryError}<p class="hint" role="status">{galleryError}</p>{/if}
+    {#each draft.preset?.listing.setup ?? [] as setup (setup)}
+      <p class="hint" role="status">{setup}</p>
+    {/each}
+    {#if draft.presetGroup}
+      <p class="hint">
+        Saving gives the group "{draft.presetGroup.name}" the preset's defaults wherever it
+        leaves one at Default.
+      </p>
+    {/if}
   </div>
 </FieldRow>
-{#if galleryError}<p class="hint" role="status">{galleryError}</p>{/if}
-{#if draft.preset}
-  {@const preset = draft.preset.listing.preset}
-  {#if preset}<p class="hint">{preset.title}: {preset.description}</p>{/if}
-  {#each draft.preset.listing.setup as setup (setup)}
-    <p class="hint" role="status">{setup}</p>
-  {/each}
-  {#if draft.presetGroup}
-    <p class="hint">
-      Saving gives the group "{draft.presetGroup.name}" the preset's defaults wherever it leaves
-      one at Default.
-    </p>
-  {/if}
-{/if}
 
 <style>
   .preset-choice {
@@ -131,6 +131,7 @@
   }
 
   .hint {
+    flex-basis: 100%;
     margin: 0;
   }
 </style>

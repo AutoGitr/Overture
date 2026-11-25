@@ -1,4 +1,9 @@
 <script module lang="ts">
+  /** Room below the control that is enough to open there, in pixels. */
+  const MIN_ROOM = 180;
+  /** The least height a list takes however little room there is, in pixels. */
+  const MIN_HEIGHT = 96;
+
   export interface ListboxItem {
     key: string;
     label: string;
@@ -55,16 +60,18 @@
     const maxWidth = Math.max(0, vw - margin * 2);
     ul.style.minWidth = `${Math.min(rect.width, maxWidth)}px`;
     ul.style.maxWidth = `${maxWidth}px`;
+    // The list opens on the side with room for it, else the roomier side,
+    // and grows to the edge of the viewport there, as a native select does.
     const below = vh - rect.bottom - gap - margin;
     const above = rect.top - gap - margin;
-    if (below >= Math.min(ul.scrollHeight, 180) || below >= above) {
+    if (below >= Math.min(ul.scrollHeight, MIN_ROOM) || below >= above) {
       ul.style.top = `${rect.bottom + gap}px`;
       ul.style.bottom = "auto";
-      ul.style.maxHeight = `${Math.min(256, Math.max(96, below))}px`;
+      ul.style.maxHeight = `${Math.max(MIN_HEIGHT, below)}px`;
     } else {
       ul.style.bottom = `${vh - rect.top + gap}px`;
       ul.style.top = "auto";
-      ul.style.maxHeight = `${Math.min(256, Math.max(96, above))}px`;
+      ul.style.maxHeight = `${Math.max(MIN_HEIGHT, above)}px`;
     }
     ul.style.left = `${Math.max(margin, Math.min(rect.left, vw - margin - ul.offsetWidth))}px`;
   }
@@ -117,7 +124,7 @@
     position: absolute;
     inset-inline: 0;
     top: calc(100% + 2px);
-    max-height: 16rem;
+    max-height: 32rem;
     margin: 0;
     overflow-x: hidden;
     overflow-y: auto;
