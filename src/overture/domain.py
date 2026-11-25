@@ -622,6 +622,35 @@ class ArtGeneration:
     title_only: bool = False
 
 
+class Integration(StrEnum):
+    """An external service some criteria, sources and sets read from."""
+
+    TMDB = "tmdb"
+    MDBLIST = "mdblist"
+    RADARR = "radarr"
+    SONARR = "sonarr"
+
+
+class PresetCategory(StrEnum):
+    """What kind of collections an OvertureDB preset adds."""
+
+    CHARTS = "charts"
+    SEASONAL = "seasonal"
+    DECADES = "decades"
+    FRANCHISES = "franchises"
+    GENRES = "genres"
+    STUDIOS = "studios"
+    NETWORKS = "networks"
+    STREAMING = "streaming"
+    PEOPLE = "people"
+    LANGUAGES = "languages"
+    REGIONS = "regions"
+    RATINGS = "ratings"
+    TECHNICAL = "technical"
+    AWARDS = "awards"
+    OTHER = "other"
+
+
 class CollectionPosterStyle(StrEnum):
     """Which poster OvertureDB gives a TMDB collection.
 

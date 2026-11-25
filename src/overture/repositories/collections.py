@@ -8,6 +8,7 @@ lazy from sqlalchemy.sql.elements import ColumnElement
 lazy from sqlmodel import col, delete, or_, select, tuple_, update
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
+lazy from ..db.models.added_preset import AddedPreset
 lazy from ..db.models.collection_group import CollectionGroup
 lazy from ..db.models.collection_rule import CollectionRule
 lazy from ..db.models.media_collection import (
@@ -40,6 +41,29 @@ class CollectionRepository:
                 select(CollectionGroup).where(col(CollectionGroup.name) == name)
             )
         ).first()
+
+    async def added_presets(self) -> dict[str, AddedPreset]:
+        """Every preset added here, by its ID."""
+        rows = (await self.session.exec(select(AddedPreset))).all()
+        return {row.id: row for row in rows}
+
+    async def preset_collections(self, preset_id: str) -> dict[str, int]:
+        """The collections a preset added, by their item in it, casefolded."""
+        rows = await self.session.exec(
+            select(MediaCollection.id, MediaCollection.preset_item).where(
+                col(MediaCollection.preset_id) == preset_id
+            )
+        )
+        return {item.casefold(): row_id or 0 for row_id, item in rows if item}
+
+    async def preset_groups(self, preset_id: str) -> dict[str, str]:
+        """The groups a preset added, their names here by their item in it."""
+        rows = await self.session.exec(
+            select(CollectionGroup.name, CollectionGroup.preset_item).where(
+                col(CollectionGroup.preset_id) == preset_id
+            )
+        )
+        return {item.casefold(): name for name, item in rows if item}
 
     async def ensure_group(self, name: str) -> CollectionGroup:
         """Return the group named *name*, added without defaults if new."""

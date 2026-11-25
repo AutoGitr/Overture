@@ -611,6 +611,8 @@ export type ArtUploadResponse = {
     width: number;
 };
 
+export type ArtUrl = string;
+
 /**
  * AspectRatioTolerance
  *
@@ -3071,6 +3073,156 @@ export type CollectionOptions = {
 export type CollectionOrder = 'custom' | 'release.asc' | 'release.desc' | 'title.asc' | 'title.desc' | 'added.desc' | 'added.asc' | 'critic_rating.desc' | 'critic_rating.asc' | 'audience_rating.desc' | 'audience_rating.asc' | 'user_rating.desc' | 'user_rating.asc' | 'duration.desc' | 'duration.asc' | 'plays.desc' | 'plays.asc' | 'last_played.desc' | 'last_played.asc' | 'episode_added.desc' | 'episode_added.asc' | 'unplayed_episodes.desc' | 'unplayed_episodes.asc' | 'random';
 
 /**
+ * CollectionPolicyBase
+ *
+ * Shared policy and media server display configuration.
+ */
+export type CollectionPolicyBaseInput = {
+    active_end_mmdd?: SeasonalDate | null;
+    active_start_mmdd?: SeasonalDate | null;
+    arr_tag?: MemberTagFormat | null;
+    /**
+     * Auto Art
+     */
+    auto_art?: Array<AutoArtSource> | null;
+    /**
+     * Auto Match Theme
+     */
+    auto_match_theme?: boolean | null;
+    /**
+     * Backgrounds
+     */
+    backgrounds?: boolean | null;
+    collection_filtering?: CollectionFiltering | null;
+    collection_mode?: CollectionMode | null;
+    /**
+     * Delete Below Minimum
+     */
+    delete_below_minimum?: boolean | null;
+    /**
+     * Delete When Inactive
+     */
+    delete_when_inactive?: boolean | null;
+    generated_style?: ArtStyle | null;
+    /**
+     * Generated Title Only
+     */
+    generated_title_only?: boolean | null;
+    /**
+     * Home Order
+     */
+    home_order?: number | null;
+    member_label?: MemberTagFormat | null;
+    /**
+     * Minimum Items
+     */
+    minimum_items?: number | null;
+    order_type?: CollectionOrder | null;
+    /**
+     * Overturedb Posters
+     */
+    overturedb_posters?: Array<CollectionPosterStyle> | null;
+    /**
+     * Request Missing
+     */
+    request_missing?: boolean | null;
+    sort_title_format?: SortTitleFormat | null;
+    summary_format?: SummaryFormat | null;
+    sync_mode?: SyncMode | null;
+    /**
+     * Themes
+     */
+    themes?: boolean | null;
+    /**
+     * Visible Home
+     */
+    visible_home?: boolean | null;
+    /**
+     * Visible Library
+     */
+    visible_library?: boolean | null;
+    /**
+     * Visible Shared
+     */
+    visible_shared?: boolean | null;
+};
+
+/**
+ * CollectionPolicyBase
+ *
+ * Shared policy and media server display configuration.
+ */
+export type CollectionPolicyBaseOutput = {
+    active_end_mmdd: SeasonalDate | null;
+    active_start_mmdd: SeasonalDate | null;
+    arr_tag: MemberTagFormat | null;
+    /**
+     * Auto Art
+     */
+    auto_art: Array<AutoArtSource> | null;
+    /**
+     * Auto Match Theme
+     */
+    auto_match_theme: boolean | null;
+    /**
+     * Backgrounds
+     */
+    backgrounds: boolean | null;
+    collection_filtering: CollectionFiltering | null;
+    collection_mode: CollectionMode | null;
+    /**
+     * Delete Below Minimum
+     */
+    delete_below_minimum: boolean | null;
+    /**
+     * Delete When Inactive
+     */
+    delete_when_inactive: boolean | null;
+    generated_style: ArtStyle | null;
+    /**
+     * Generated Title Only
+     */
+    generated_title_only: boolean | null;
+    /**
+     * Home Order
+     */
+    home_order: number | null;
+    member_label: MemberTagFormat | null;
+    /**
+     * Minimum Items
+     */
+    minimum_items: number | null;
+    order_type: CollectionOrder | null;
+    /**
+     * Overturedb Posters
+     */
+    overturedb_posters: Array<CollectionPosterStyle> | null;
+    /**
+     * Request Missing
+     */
+    request_missing: boolean | null;
+    sort_title_format: SortTitleFormat | null;
+    summary_format: SummaryFormat | null;
+    sync_mode: SyncMode | null;
+    /**
+     * Themes
+     */
+    themes: boolean | null;
+    /**
+     * Visible Home
+     */
+    visible_home: boolean | null;
+    /**
+     * Visible Library
+     */
+    visible_library: boolean | null;
+    /**
+     * Visible Shared
+     */
+    visible_shared: boolean | null;
+};
+
+/**
  * CollectionPosterStyle
  *
  * Which poster OvertureDB gives a TMDB collection.
@@ -3079,6 +3231,48 @@ export type CollectionOrder = 'custom' | 'release.asc' | 'release.desc' | 'title
  * collection without one has no OvertureDB poster.
  */
 export type CollectionPosterStyle = 'individual' | 'matte' | 'overlay';
+
+/**
+ * CollectionPresetFile
+ *
+ * Collections, sets and groups that can be added to any install.
+ */
+export type CollectionPresetFileInput = {
+    /**
+     * Collections
+     */
+    collections?: Array<PortableCollectionInput>;
+    /**
+     * Groups
+     */
+    groups?: Array<PortableGroupInput>;
+    preset?: PresetMetadataInput | null;
+    /**
+     * Preset Version
+     */
+    preset_version?: number;
+};
+
+/**
+ * CollectionPresetFile
+ *
+ * Collections, sets and groups that can be added to any install.
+ */
+export type CollectionPresetFileOutput = {
+    /**
+     * Collections
+     */
+    collections: Array<PortableCollectionOutput>;
+    /**
+     * Groups
+     */
+    groups: Array<PortableGroupOutput>;
+    preset: PresetMetadataOutput | null;
+    /**
+     * Preset Version
+     */
+    preset_version: number;
+};
 
 /**
  * CollectionPreview
@@ -4224,6 +4418,13 @@ export type IncrementalSyncState = {
  */
 export type IncrementalThemeOrder = 'off' | 'overturedb_themerrdb' | 'themerrdb_overturedb';
 
+/**
+ * Integration
+ *
+ * An external service some criteria, sources and sets read from.
+ */
+export type Integration = 'tmdb' | 'mdblist' | 'radarr' | 'sonarr';
+
 export type ItemArtAsset = ArtType | 'art';
 
 /**
@@ -4981,6 +5182,678 @@ export type NotifyCompleted = 'never' | 'always' | 'changes' | 'errors';
  * A service ``NOTIFY_URL`` can name; ``apprise`` covers every other URL.
  */
 export type NotifyService = 'apprise' | 'discord' | 'slack' | 'telegram' | 'gotify' | 'ntfy';
+
+/**
+ * PortableCollection
+ *
+ * A collection, with criteria for each media type instead of each library.
+ *
+ * ``collection_group`` names a group of the file or one the install has.
+ */
+export type PortableCollectionInput = {
+    active_end_mmdd?: SeasonalDate | null;
+    active_start_mmdd?: SeasonalDate | null;
+    art?: PresetArtInput | null;
+    collection_filtering?: CollectionFiltering | null;
+    collection_group?: GroupName | null;
+    collection_mode?: CollectionMode | null;
+    /**
+     * Criteria
+     */
+    criteria: {
+        [key in MediaType]?: FilterGroupInput;
+    };
+    /**
+     * Delete When Inactive
+     */
+    delete_when_inactive?: boolean | null;
+    /**
+     * Limit
+     */
+    limit?: number | null;
+    order_type?: CollectionOrder | null;
+    policy?: CollectionPolicyBaseInput;
+    /**
+     * Smart
+     */
+    smart?: boolean;
+    /**
+     * Sort Title
+     */
+    sort_title?: string | null;
+    sort_title_format?: SortTitleFormat | null;
+    /**
+     * Summary
+     */
+    summary?: string | null;
+    summary_format?: SummaryFormat | null;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Tmdb Collection Id
+     */
+    tmdb_collection_id?: number | null;
+    /**
+     * Visible Home
+     */
+    visible_home?: boolean;
+    /**
+     * Visible Library
+     */
+    visible_library?: boolean;
+    /**
+     * Visible Shared
+     */
+    visible_shared?: boolean;
+};
+
+/**
+ * PortableCollection
+ *
+ * A collection, with criteria for each media type instead of each library.
+ *
+ * ``collection_group`` names a group of the file or one the install has.
+ */
+export type PortableCollectionOutput = {
+    active_end_mmdd: SeasonalDate | null;
+    active_start_mmdd: SeasonalDate | null;
+    art: PresetArtOutput | null;
+    collection_filtering: CollectionFiltering | null;
+    collection_group: GroupName | null;
+    collection_mode: CollectionMode | null;
+    /**
+     * Criteria
+     */
+    criteria: {
+        [key in MediaType]?: FilterGroupOutput;
+    };
+    /**
+     * Delete When Inactive
+     */
+    delete_when_inactive: boolean | null;
+    /**
+     * Limit
+     */
+    limit: number | null;
+    order_type: CollectionOrder | null;
+    policy: CollectionPolicyBaseOutput;
+    /**
+     * Smart
+     */
+    smart: boolean;
+    /**
+     * Sort Title
+     */
+    sort_title: string | null;
+    sort_title_format: SortTitleFormat | null;
+    /**
+     * Summary
+     */
+    summary: string | null;
+    summary_format: SummaryFormat | null;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Tmdb Collection Id
+     */
+    tmdb_collection_id: number | null;
+    /**
+     * Visible Home
+     */
+    visible_home: boolean;
+    /**
+     * Visible Library
+     */
+    visible_library: boolean;
+    /**
+     * Visible Shared
+     */
+    visible_shared: boolean;
+};
+
+/**
+ * PortableGroup
+ *
+ * A group's defaults, and the set it runs when it is one.
+ */
+export type PortableGroupInput = {
+    active_end_mmdd?: SeasonalDate | null;
+    active_start_mmdd?: SeasonalDate | null;
+    arr_tag?: MemberTagFormat | null;
+    /**
+     * Auto Art
+     */
+    auto_art?: Array<AutoArtSource> | null;
+    /**
+     * Auto Match Theme
+     */
+    auto_match_theme?: boolean | null;
+    /**
+     * Backgrounds
+     */
+    backgrounds?: boolean | null;
+    collection_filtering?: CollectionFiltering | null;
+    collection_mode?: CollectionMode | null;
+    /**
+     * Delete Below Minimum
+     */
+    delete_below_minimum?: boolean | null;
+    /**
+     * Delete When Inactive
+     */
+    delete_when_inactive?: boolean | null;
+    generated_style?: ArtStyle | null;
+    /**
+     * Generated Title Only
+     */
+    generated_title_only?: boolean | null;
+    generator?: PortableSetInput | null;
+    /**
+     * Home Order
+     */
+    home_order?: number | null;
+    member_label?: MemberTagFormat | null;
+    /**
+     * Minimum Items
+     */
+    minimum_items?: number | null;
+    name: GroupName;
+    order_type?: CollectionOrder | null;
+    /**
+     * Overturedb Posters
+     */
+    overturedb_posters?: Array<CollectionPosterStyle> | null;
+    /**
+     * Request Missing
+     */
+    request_missing?: boolean | null;
+    /**
+     * Separator
+     */
+    separator?: boolean;
+    sort_title_format?: SortTitleFormat | null;
+    summary_format?: SummaryFormat | null;
+    sync_mode?: SyncMode | null;
+    /**
+     * Themes
+     */
+    themes?: boolean | null;
+    /**
+     * Visible Home
+     */
+    visible_home?: boolean | null;
+    /**
+     * Visible Library
+     */
+    visible_library?: boolean | null;
+    /**
+     * Visible Shared
+     */
+    visible_shared?: boolean | null;
+};
+
+/**
+ * PortableGroup
+ *
+ * A group's defaults, and the set it runs when it is one.
+ */
+export type PortableGroupOutput = {
+    active_end_mmdd: SeasonalDate | null;
+    active_start_mmdd: SeasonalDate | null;
+    arr_tag: MemberTagFormat | null;
+    /**
+     * Auto Art
+     */
+    auto_art: Array<AutoArtSource> | null;
+    /**
+     * Auto Match Theme
+     */
+    auto_match_theme: boolean | null;
+    /**
+     * Backgrounds
+     */
+    backgrounds: boolean | null;
+    collection_filtering: CollectionFiltering | null;
+    collection_mode: CollectionMode | null;
+    /**
+     * Delete Below Minimum
+     */
+    delete_below_minimum: boolean | null;
+    /**
+     * Delete When Inactive
+     */
+    delete_when_inactive: boolean | null;
+    generated_style: ArtStyle | null;
+    /**
+     * Generated Title Only
+     */
+    generated_title_only: boolean | null;
+    generator: PortableSetOutput | null;
+    /**
+     * Home Order
+     */
+    home_order: number | null;
+    member_label: MemberTagFormat | null;
+    /**
+     * Minimum Items
+     */
+    minimum_items: number | null;
+    name: GroupName;
+    order_type: CollectionOrder | null;
+    /**
+     * Overturedb Posters
+     */
+    overturedb_posters: Array<CollectionPosterStyle> | null;
+    /**
+     * Request Missing
+     */
+    request_missing: boolean | null;
+    /**
+     * Separator
+     */
+    separator: boolean;
+    sort_title_format: SortTitleFormat | null;
+    summary_format: SummaryFormat | null;
+    sync_mode: SyncMode | null;
+    /**
+     * Themes
+     */
+    themes: boolean | null;
+    /**
+     * Visible Home
+     */
+    visible_home: boolean | null;
+    /**
+     * Visible Library
+     */
+    visible_library: boolean | null;
+    /**
+     * Visible Shared
+     */
+    visible_shared: boolean | null;
+};
+
+/**
+ * PortableSet
+ *
+ * A collection set, for media types instead of libraries.
+ */
+export type PortableSetInput = {
+    /**
+     * Aliases
+     */
+    aliases?: Array<SetValueAlias>;
+    criteria?: FilterGroupInput;
+    /**
+     * Custom Values
+     */
+    custom_values?: Array<CustomSetValueInput>;
+    dimension: SetDimension;
+    /**
+     * Exclude
+     */
+    exclude?: Array<string>;
+    /**
+     * Include
+     */
+    include?: Array<string>;
+    /**
+     * Media Types
+     */
+    media_types: Array<MediaType>;
+    /**
+     * Smart
+     */
+    smart?: boolean;
+    /**
+     * Strip Prefix
+     */
+    strip_prefix?: string;
+    /**
+     * Strip Suffix
+     */
+    strip_suffix?: string;
+    title_format?: SetTitleFormat;
+    /**
+     * Top
+     */
+    top?: number | null;
+};
+
+/**
+ * PortableSet
+ *
+ * A collection set, for media types instead of libraries.
+ */
+export type PortableSetOutput = {
+    /**
+     * Aliases
+     */
+    aliases: Array<SetValueAlias>;
+    criteria: FilterGroupOutput;
+    /**
+     * Custom Values
+     */
+    custom_values: Array<CustomSetValueOutput>;
+    dimension: SetDimension;
+    /**
+     * Exclude
+     */
+    exclude: Array<string>;
+    /**
+     * Include
+     */
+    include: Array<string>;
+    /**
+     * Media Types
+     */
+    media_types: Array<MediaType>;
+    /**
+     * Smart
+     */
+    smart: boolean;
+    /**
+     * Strip Prefix
+     */
+    strip_prefix: string;
+    /**
+     * Strip Suffix
+     */
+    strip_suffix: string;
+    title_format: SetTitleFormat;
+    /**
+     * Top
+     */
+    top: number | null;
+};
+
+/**
+ * PresetArt
+ *
+ * The art a collection starts with.
+ */
+export type PresetArtInput = {
+    background?: PresetImage | null;
+    poster?: PresetPosterInput | null;
+};
+
+/**
+ * PresetArt
+ *
+ * The art a collection starts with.
+ */
+export type PresetArtOutput = {
+    background: PresetImage | null;
+    poster: PresetPosterOutput | null;
+};
+
+/**
+ * PresetCategory
+ *
+ * What kind of collections an OvertureDB preset adds.
+ */
+export type PresetCategory = 'charts' | 'seasonal' | 'decades' | 'franchises' | 'genres' | 'studios' | 'networks' | 'streaming' | 'people' | 'languages' | 'regions' | 'ratings' | 'technical' | 'awards' | 'other';
+
+/**
+ * PresetExport
+ *
+ * An export, with what it left out and what an install adding it should know.
+ */
+export type PresetExport = {
+    file: CollectionPresetFileOutput | null;
+    issue: ContributionIssue | null;
+    /**
+     * Refused
+     */
+    refused: Array<PresetRefusal>;
+    /**
+     * Warnings
+     */
+    warnings: Array<string>;
+};
+
+/**
+ * PresetExportRequest
+ *
+ * What to export: collections, and groups with their sets and collections.
+ */
+export type PresetExportRequest = {
+    collection_ids?: CollectionIds | null;
+    groups?: GroupNames | null;
+    preset?: PresetMetadataInput | null;
+};
+
+/**
+ * PresetGallery
+ *
+ * The presets OvertureDB publishes.
+ */
+export type PresetGallery = {
+    error: PublicText | null;
+    /**
+     * Generated At
+     */
+    generated_at: string | null;
+    /**
+     * Presets
+     */
+    presets: Array<PresetListing>;
+};
+
+/**
+ * PresetImage
+ *
+ * A public image link.
+ */
+export type PresetImage = {
+    url: ArtUrl;
+};
+
+/**
+ * PresetImportPlan
+ *
+ * What adding a file does, item by item, before anything is saved.
+ */
+export type PresetImportPlan = {
+    /**
+     * Items
+     */
+    items: Array<PresetPlanItem>;
+    /**
+     * Warnings
+     */
+    warnings: Array<string>;
+};
+
+/**
+ * PresetImportRequest
+ *
+ * A file to add, the libraries for each media type, and what to change.
+ */
+export type PresetImportRequest = {
+    file: CollectionPresetFileInput;
+    /**
+     * Libraries
+     */
+    libraries: {
+        [key in MediaType]?: Array<LibraryId>;
+    };
+    /**
+     * Skip
+     */
+    skip?: Array<string>;
+};
+
+/**
+ * PresetImportResult
+ *
+ * What adding a file did, item by item.
+ */
+export type PresetImportResult = {
+    /**
+     * Collection Ids
+     */
+    collection_ids: Array<number>;
+    /**
+     * Items
+     */
+    items: Array<PresetPlanItem>;
+};
+
+export type PresetItemStatus = 'add' | 'update' | 'skip' | 'refused';
+
+/**
+ * PresetListing
+ *
+ * One OvertureDB preset in the gallery.
+ */
+export type PresetListing = {
+    /**
+     * Added At
+     */
+    added_at: string | null;
+    /**
+     * Changes
+     */
+    changes: Array<string>;
+    file: CollectionPresetFileOutput | null;
+    /**
+     * Id
+     */
+    id: string;
+    preset: PresetMetadataOutput | null;
+    /**
+     * Preview Url
+     */
+    preview_url: string | null;
+    /**
+     * Problem
+     */
+    problem: string | null;
+    /**
+     * Unavailable
+     */
+    unavailable: Array<Integration>;
+};
+
+/**
+ * PresetMetadata
+ *
+ * How a preset describes itself in the gallery.
+ */
+export type PresetMetadataInput = {
+    category: PresetCategory;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Media Types
+     */
+    media_types: Array<MediaType>;
+    /**
+     * Tags
+     */
+    tags?: Array<PresetTag>;
+    /**
+     * Title
+     */
+    title: string;
+};
+
+/**
+ * PresetMetadata
+ *
+ * How a preset describes itself in the gallery.
+ */
+export type PresetMetadataOutput = {
+    category: PresetCategory;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Media Types
+     */
+    media_types: Array<MediaType>;
+    /**
+     * Tags
+     */
+    tags: Array<PresetTag>;
+    /**
+     * Title
+     */
+    title: string;
+};
+
+/**
+ * PresetPlanItem
+ *
+ * What adding one collection or group of a file does.
+ */
+export type PresetPlanItem = {
+    /**
+     * Chosen
+     */
+    chosen: boolean;
+    /**
+     * Kind
+     */
+    kind: 'collection' | 'group';
+    /**
+     * Name
+     */
+    name: string;
+    reason: PublicText | null;
+    status: PresetItemStatus;
+};
+
+/**
+ * PresetPoster
+ *
+ * A public poster link, and which OvertureDB poster style it is.
+ */
+export type PresetPosterInput = {
+    style?: CollectionPosterStyle;
+    url: ArtUrl;
+};
+
+/**
+ * PresetPoster
+ *
+ * A public poster link, and which OvertureDB poster style it is.
+ */
+export type PresetPosterOutput = {
+    style: CollectionPosterStyle;
+    url: ArtUrl;
+};
+
+/**
+ * PresetRefusal
+ *
+ * Something left out of an export, and why.
+ */
+export type PresetRefusal = {
+    reason: PublicText;
+    /**
+     * Title
+     */
+    title: string;
+};
+
+export type PresetTag = string;
 
 /**
  * PublicError
@@ -9454,6 +10327,242 @@ export type SearchMdblistListsResponses = {
 };
 
 export type SearchMdblistListsResponse = SearchMdblistListsResponses[keyof SearchMdblistListsResponses];
+
+export type ListCollectionPresetsData = {
+    body?: never;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/collections/presets';
+};
+
+export type ListCollectionPresetsErrors = {
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type ListCollectionPresetsError = ListCollectionPresetsErrors[keyof ListCollectionPresetsErrors];
+
+export type ListCollectionPresetsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PresetGallery;
+};
+
+export type ListCollectionPresetsResponse = ListCollectionPresetsResponses[keyof ListCollectionPresetsResponses];
+
+export type ExportCollectionPresetData = {
+    body: PresetExportRequest;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/collections/presets/export';
+};
+
+export type ExportCollectionPresetErrors = {
+    /**
+     * The body is not text in the declared encoding
+     */
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type ExportCollectionPresetError = ExportCollectionPresetErrors[keyof ExportCollectionPresetErrors];
+
+export type ExportCollectionPresetResponses = {
+    /**
+     * Successful Response
+     */
+    200: PresetExport;
+};
+
+export type ExportCollectionPresetResponse = ExportCollectionPresetResponses[keyof ExportCollectionPresetResponses];
+
+export type ImportCollectionPresetData = {
+    body: PresetImportRequest;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/collections/presets/import';
+};
+
+export type ImportCollectionPresetErrors = {
+    /**
+     * The body is not text in the declared encoding
+     */
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type ImportCollectionPresetError = ImportCollectionPresetErrors[keyof ImportCollectionPresetErrors];
+
+export type ImportCollectionPresetResponses = {
+    /**
+     * Successful Response
+     */
+    200: PresetImportResult;
+};
+
+export type ImportCollectionPresetResponse = ImportCollectionPresetResponses[keyof ImportCollectionPresetResponses];
+
+export type PlanCollectionPresetData = {
+    body: PresetImportRequest;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/collections/presets/plan';
+};
+
+export type PlanCollectionPresetErrors = {
+    /**
+     * The body is not text in the declared encoding
+     */
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PlanCollectionPresetError = PlanCollectionPresetErrors[keyof PlanCollectionPresetErrors];
+
+export type PlanCollectionPresetResponses = {
+    /**
+     * Successful Response
+     */
+    200: PresetImportPlan;
+};
+
+export type PlanCollectionPresetResponse = PlanCollectionPresetResponses[keyof PlanCollectionPresetResponses];
 
 export type PreviewCollectionData = {
     body: CollectionPreviewRequest;

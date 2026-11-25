@@ -1367,6 +1367,12 @@
         "title": "ArtUploadResponse",
         "type": "object"
       },
+      "ArtUrl": {
+        "maxLength": 2000,
+        "minLength": 1,
+        "pattern": "^https://",
+        "type": "string"
+      },
       "AspectRatioTolerance": {
         "description": "How strictly artwork aspect ratios are enforced.",
         "enum": [
@@ -6938,6 +6944,597 @@
         "title": "CollectionOrder",
         "type": "string"
       },
+      "CollectionPolicyBase-Input": {
+        "additionalProperties": false,
+        "description": "Shared policy and media server display configuration.",
+        "properties": {
+          "active_end_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active_start_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "arr_tag": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberTagFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "auto_art": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AutoArtSource"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Art"
+          },
+          "auto_match_theme": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Match Theme"
+          },
+          "backgrounds": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backgrounds"
+          },
+          "collection_filtering": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionFiltering"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delete_below_minimum": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete Below Minimum"
+          },
+          "delete_when_inactive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete When Inactive"
+          },
+          "generated_style": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "generated_title_only": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated Title Only"
+          },
+          "home_order": {
+            "anyOf": [
+              {
+                "maximum": 999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Order"
+          },
+          "member_label": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberTagFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "minimum_items": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Items"
+          },
+          "order_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "overturedb_posters": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CollectionPosterStyle"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overturedb Posters"
+          },
+          "request_missing": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Missing"
+          },
+          "sort_title_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SortTitleFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SummaryFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sync_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SyncMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "themes": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Themes"
+          },
+          "visible_home": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Home"
+          },
+          "visible_library": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Library"
+          },
+          "visible_shared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Shared"
+          }
+        },
+        "title": "CollectionPolicyBase",
+        "type": "object"
+      },
+      "CollectionPolicyBase-Output": {
+        "additionalProperties": false,
+        "description": "Shared policy and media server display configuration.",
+        "properties": {
+          "active_end_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active_start_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "arr_tag": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberTagFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "auto_art": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AutoArtSource"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Art"
+          },
+          "auto_match_theme": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Match Theme"
+          },
+          "backgrounds": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backgrounds"
+          },
+          "collection_filtering": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionFiltering"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delete_below_minimum": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete Below Minimum"
+          },
+          "delete_when_inactive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete When Inactive"
+          },
+          "generated_style": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "generated_title_only": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated Title Only"
+          },
+          "home_order": {
+            "anyOf": [
+              {
+                "maximum": 999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Order"
+          },
+          "member_label": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberTagFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "minimum_items": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Items"
+          },
+          "order_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "overturedb_posters": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CollectionPosterStyle"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overturedb Posters"
+          },
+          "request_missing": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Missing"
+          },
+          "sort_title_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SortTitleFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SummaryFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sync_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SyncMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "themes": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Themes"
+          },
+          "visible_home": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Home"
+          },
+          "visible_library": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Library"
+          },
+          "visible_shared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Shared"
+          }
+        },
+        "required": [
+          "sync_mode",
+          "minimum_items",
+          "delete_below_minimum",
+          "auto_art",
+          "generated_style",
+          "generated_title_only",
+          "overturedb_posters",
+          "backgrounds",
+          "themes",
+          "auto_match_theme",
+          "delete_when_inactive",
+          "collection_mode",
+          "order_type",
+          "collection_filtering",
+          "visible_home",
+          "visible_shared",
+          "visible_library",
+          "sort_title_format",
+          "summary_format",
+          "active_start_mmdd",
+          "active_end_mmdd",
+          "request_missing",
+          "member_label",
+          "arr_tag",
+          "home_order"
+        ],
+        "title": "CollectionPolicyBase",
+        "type": "object"
+      },
       "CollectionPosterStyle": {
         "description": "Which poster OvertureDB gives a TMDB collection.\n\n``matte`` and ``overlay`` take the consistent poster in that layout; a\ncollection without one has no OvertureDB poster.",
         "enum": [
@@ -6947,6 +7544,94 @@
         ],
         "title": "CollectionPosterStyle",
         "type": "string"
+      },
+      "CollectionPresetFile-Input": {
+        "additionalProperties": false,
+        "description": "Collections, sets and groups that can be added to any install.",
+        "properties": {
+          "collections": {
+            "items": {
+              "$ref": "#/components/schemas/PortableCollection-Input"
+            },
+            "maxItems": 50,
+            "title": "Collections",
+            "type": "array"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/PortableGroup-Input"
+            },
+            "maxItems": 10,
+            "title": "Groups",
+            "type": "array"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PresetMetadata-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "preset_version": {
+            "default": 1,
+            "maximum": 1.0,
+            "minimum": 1.0,
+            "title": "Preset Version",
+            "type": "integer"
+          }
+        },
+        "title": "CollectionPresetFile",
+        "type": "object"
+      },
+      "CollectionPresetFile-Output": {
+        "additionalProperties": false,
+        "description": "Collections, sets and groups that can be added to any install.",
+        "properties": {
+          "collections": {
+            "items": {
+              "$ref": "#/components/schemas/PortableCollection-Output"
+            },
+            "maxItems": 50,
+            "title": "Collections",
+            "type": "array"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/PortableGroup-Output"
+            },
+            "maxItems": 10,
+            "title": "Groups",
+            "type": "array"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PresetMetadata-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "preset_version": {
+            "default": 1,
+            "maximum": 1.0,
+            "minimum": 1.0,
+            "title": "Preset Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "preset_version",
+          "preset",
+          "groups",
+          "collections"
+        ],
+        "title": "CollectionPresetFile",
+        "type": "object"
       },
       "CollectionPreview": {
         "additionalProperties": false,
@@ -9683,6 +10368,17 @@
         "title": "IncrementalThemeOrder",
         "type": "string"
       },
+      "Integration": {
+        "description": "An external service some criteria, sources and sets read from.",
+        "enum": [
+          "tmdb",
+          "mdblist",
+          "radarr",
+          "sonarr"
+        ],
+        "title": "Integration",
+        "type": "string"
+      },
       "ItemArtAsset": {
         "anyOf": [
           {
@@ -11097,6 +11793,1893 @@
           "ntfy"
         ],
         "title": "NotifyService",
+        "type": "string"
+      },
+      "PortableCollection-Input": {
+        "additionalProperties": false,
+        "description": "A collection, with criteria for each media type instead of each library.\n\n``collection_group`` names a group of the file or one the install has.",
+        "properties": {
+          "active_end_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active_start_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "art": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PresetArt-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_filtering": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionFiltering"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_group": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroupName"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "criteria": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FilterGroup-Input"
+            },
+            "minProperties": 1,
+            "propertyNames": {
+              "$ref": "#/components/schemas/MediaType"
+            },
+            "title": "Criteria",
+            "type": "object"
+          },
+          "delete_when_inactive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete When Inactive"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "order_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "policy": {
+            "$ref": "#/components/schemas/CollectionPolicyBase-Input"
+          },
+          "smart": {
+            "default": false,
+            "title": "Smart",
+            "type": "boolean"
+          },
+          "sort_title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Title"
+          },
+          "sort_title_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SortTitleFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "maxLength": 10000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "summary_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SummaryFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "tmdb_collection_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Collection Id"
+          },
+          "visible_home": {
+            "default": false,
+            "title": "Visible Home",
+            "type": "boolean"
+          },
+          "visible_library": {
+            "default": false,
+            "title": "Visible Library",
+            "type": "boolean"
+          },
+          "visible_shared": {
+            "default": false,
+            "title": "Visible Shared",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "title",
+          "criteria"
+        ],
+        "title": "PortableCollection",
+        "type": "object"
+      },
+      "PortableCollection-Output": {
+        "additionalProperties": false,
+        "description": "A collection, with criteria for each media type instead of each library.\n\n``collection_group`` names a group of the file or one the install has.",
+        "properties": {
+          "active_end_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active_start_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "art": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PresetArt-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_filtering": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionFiltering"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_group": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroupName"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "criteria": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FilterGroup-Output"
+            },
+            "minProperties": 1,
+            "propertyNames": {
+              "$ref": "#/components/schemas/MediaType"
+            },
+            "title": "Criteria",
+            "type": "object"
+          },
+          "delete_when_inactive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete When Inactive"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "order_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "policy": {
+            "$ref": "#/components/schemas/CollectionPolicyBase-Output"
+          },
+          "smart": {
+            "default": false,
+            "title": "Smart",
+            "type": "boolean"
+          },
+          "sort_title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Title"
+          },
+          "sort_title_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SortTitleFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "maxLength": 10000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "summary_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SummaryFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "tmdb_collection_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb Collection Id"
+          },
+          "visible_home": {
+            "default": false,
+            "title": "Visible Home",
+            "type": "boolean"
+          },
+          "visible_library": {
+            "default": false,
+            "title": "Visible Library",
+            "type": "boolean"
+          },
+          "visible_shared": {
+            "default": false,
+            "title": "Visible Shared",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "title",
+          "summary",
+          "summary_format",
+          "sort_title",
+          "sort_title_format",
+          "collection_group",
+          "tmdb_collection_id",
+          "collection_mode",
+          "order_type",
+          "collection_filtering",
+          "visible_home",
+          "visible_shared",
+          "visible_library",
+          "active_start_mmdd",
+          "active_end_mmdd",
+          "delete_when_inactive",
+          "policy",
+          "smart",
+          "limit",
+          "criteria",
+          "art"
+        ],
+        "title": "PortableCollection",
+        "type": "object"
+      },
+      "PortableGroup-Input": {
+        "additionalProperties": false,
+        "description": "A group's defaults, and the set it runs when it is one.",
+        "properties": {
+          "active_end_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active_start_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "arr_tag": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberTagFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "auto_art": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AutoArtSource"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Art"
+          },
+          "auto_match_theme": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Match Theme"
+          },
+          "backgrounds": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backgrounds"
+          },
+          "collection_filtering": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionFiltering"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delete_below_minimum": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete Below Minimum"
+          },
+          "delete_when_inactive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete When Inactive"
+          },
+          "generated_style": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "generated_title_only": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated Title Only"
+          },
+          "generator": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PortableSet-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "home_order": {
+            "anyOf": [
+              {
+                "maximum": 999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Order"
+          },
+          "member_label": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberTagFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "minimum_items": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Items"
+          },
+          "name": {
+            "$ref": "#/components/schemas/GroupName",
+            "minLength": 1
+          },
+          "order_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "overturedb_posters": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CollectionPosterStyle"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overturedb Posters"
+          },
+          "request_missing": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Missing"
+          },
+          "separator": {
+            "default": false,
+            "title": "Separator",
+            "type": "boolean"
+          },
+          "sort_title_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SortTitleFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SummaryFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sync_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SyncMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "themes": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Themes"
+          },
+          "visible_home": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Home"
+          },
+          "visible_library": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Library"
+          },
+          "visible_shared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Shared"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "PortableGroup",
+        "type": "object"
+      },
+      "PortableGroup-Output": {
+        "additionalProperties": false,
+        "description": "A group's defaults, and the set it runs when it is one.",
+        "properties": {
+          "active_end_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active_start_mmdd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeasonalDate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "arr_tag": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberTagFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "auto_art": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AutoArtSource"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Art"
+          },
+          "auto_match_theme": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Match Theme"
+          },
+          "backgrounds": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backgrounds"
+          },
+          "collection_filtering": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionFiltering"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collection_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delete_below_minimum": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete Below Minimum"
+          },
+          "delete_when_inactive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete When Inactive"
+          },
+          "generated_style": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "generated_title_only": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated Title Only"
+          },
+          "generator": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PortableSet-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "home_order": {
+            "anyOf": [
+              {
+                "maximum": 999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Order"
+          },
+          "member_label": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberTagFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "minimum_items": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Items"
+          },
+          "name": {
+            "$ref": "#/components/schemas/GroupName",
+            "minLength": 1
+          },
+          "order_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "overturedb_posters": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CollectionPosterStyle"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overturedb Posters"
+          },
+          "request_missing": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Missing"
+          },
+          "separator": {
+            "default": false,
+            "title": "Separator",
+            "type": "boolean"
+          },
+          "sort_title_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SortTitleFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary_format": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SummaryFormat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sync_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SyncMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "themes": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Themes"
+          },
+          "visible_home": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Home"
+          },
+          "visible_library": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Library"
+          },
+          "visible_shared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Shared"
+          }
+        },
+        "required": [
+          "sync_mode",
+          "minimum_items",
+          "delete_below_minimum",
+          "auto_art",
+          "generated_style",
+          "generated_title_only",
+          "overturedb_posters",
+          "backgrounds",
+          "themes",
+          "auto_match_theme",
+          "delete_when_inactive",
+          "collection_mode",
+          "order_type",
+          "collection_filtering",
+          "visible_home",
+          "visible_shared",
+          "visible_library",
+          "sort_title_format",
+          "summary_format",
+          "active_start_mmdd",
+          "active_end_mmdd",
+          "request_missing",
+          "member_label",
+          "arr_tag",
+          "home_order",
+          "name",
+          "generator",
+          "separator"
+        ],
+        "title": "PortableGroup",
+        "type": "object"
+      },
+      "PortableSet-Input": {
+        "additionalProperties": false,
+        "description": "A collection set, for media types instead of libraries.",
+        "properties": {
+          "aliases": {
+            "items": {
+              "$ref": "#/components/schemas/SetValueAlias"
+            },
+            "maxItems": 200,
+            "title": "Aliases",
+            "type": "array"
+          },
+          "criteria": {
+            "$ref": "#/components/schemas/FilterGroup-Input"
+          },
+          "custom_values": {
+            "items": {
+              "$ref": "#/components/schemas/CustomSetValue-Input"
+            },
+            "maxItems": 200,
+            "title": "Custom Values",
+            "type": "array"
+          },
+          "dimension": {
+            "$ref": "#/components/schemas/SetDimension"
+          },
+          "exclude": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Exclude",
+            "type": "array"
+          },
+          "include": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Include",
+            "type": "array"
+          },
+          "media_types": {
+            "items": {
+              "$ref": "#/components/schemas/MediaType"
+            },
+            "minItems": 1,
+            "title": "Media Types",
+            "type": "array"
+          },
+          "smart": {
+            "default": false,
+            "title": "Smart",
+            "type": "boolean"
+          },
+          "strip_prefix": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Strip Prefix",
+            "type": "string"
+          },
+          "strip_suffix": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Strip Suffix",
+            "type": "string"
+          },
+          "title_format": {
+            "$ref": "#/components/schemas/SetTitleFormat",
+            "default": "{value}"
+          },
+          "top": {
+            "anyOf": [
+              {
+                "maximum": 500.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top"
+          }
+        },
+        "required": [
+          "dimension",
+          "media_types"
+        ],
+        "title": "PortableSet",
+        "type": "object"
+      },
+      "PortableSet-Output": {
+        "additionalProperties": false,
+        "description": "A collection set, for media types instead of libraries.",
+        "properties": {
+          "aliases": {
+            "items": {
+              "$ref": "#/components/schemas/SetValueAlias"
+            },
+            "maxItems": 200,
+            "title": "Aliases",
+            "type": "array"
+          },
+          "criteria": {
+            "$ref": "#/components/schemas/FilterGroup-Output"
+          },
+          "custom_values": {
+            "items": {
+              "$ref": "#/components/schemas/CustomSetValue-Output"
+            },
+            "maxItems": 200,
+            "title": "Custom Values",
+            "type": "array"
+          },
+          "dimension": {
+            "$ref": "#/components/schemas/SetDimension"
+          },
+          "exclude": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Exclude",
+            "type": "array"
+          },
+          "include": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Include",
+            "type": "array"
+          },
+          "media_types": {
+            "items": {
+              "$ref": "#/components/schemas/MediaType"
+            },
+            "minItems": 1,
+            "title": "Media Types",
+            "type": "array"
+          },
+          "smart": {
+            "default": false,
+            "title": "Smart",
+            "type": "boolean"
+          },
+          "strip_prefix": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Strip Prefix",
+            "type": "string"
+          },
+          "strip_suffix": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Strip Suffix",
+            "type": "string"
+          },
+          "title_format": {
+            "$ref": "#/components/schemas/SetTitleFormat",
+            "default": "{value}"
+          },
+          "top": {
+            "anyOf": [
+              {
+                "maximum": 500.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top"
+          }
+        },
+        "required": [
+          "dimension",
+          "include",
+          "exclude",
+          "top",
+          "title_format",
+          "strip_prefix",
+          "strip_suffix",
+          "criteria",
+          "smart",
+          "custom_values",
+          "aliases",
+          "media_types"
+        ],
+        "title": "PortableSet",
+        "type": "object"
+      },
+      "PresetArt-Input": {
+        "additionalProperties": false,
+        "description": "The art a collection starts with.",
+        "properties": {
+          "background": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PresetImage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "poster": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PresetPoster-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "PresetArt",
+        "type": "object"
+      },
+      "PresetArt-Output": {
+        "additionalProperties": false,
+        "description": "The art a collection starts with.",
+        "properties": {
+          "background": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PresetImage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "poster": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PresetPoster-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "poster",
+          "background"
+        ],
+        "title": "PresetArt",
+        "type": "object"
+      },
+      "PresetCategory": {
+        "description": "What kind of collections an OvertureDB preset adds.",
+        "enum": [
+          "charts",
+          "seasonal",
+          "decades",
+          "franchises",
+          "genres",
+          "studios",
+          "networks",
+          "streaming",
+          "people",
+          "languages",
+          "regions",
+          "ratings",
+          "technical",
+          "awards",
+          "other"
+        ],
+        "title": "PresetCategory",
+        "type": "string"
+      },
+      "PresetExport": {
+        "additionalProperties": false,
+        "description": "An export, with what it left out and what an install adding it should know.",
+        "properties": {
+          "file": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionPresetFile-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "issue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContributionIssue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refused": {
+            "items": {
+              "$ref": "#/components/schemas/PresetRefusal"
+            },
+            "title": "Refused",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "file",
+          "refused",
+          "warnings",
+          "issue"
+        ],
+        "title": "PresetExport",
+        "type": "object"
+      },
+      "PresetExportRequest": {
+        "additionalProperties": false,
+        "description": "What to export: collections, and groups with their sets and collections.",
+        "properties": {
+          "collection_ids": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionIds"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "groups": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroupNames"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PresetMetadata-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "PresetExportRequest",
+        "type": "object"
+      },
+      "PresetGallery": {
+        "additionalProperties": false,
+        "description": "The presets OvertureDB publishes.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicText"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "generated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated At"
+          },
+          "presets": {
+            "items": {
+              "$ref": "#/components/schemas/PresetListing"
+            },
+            "title": "Presets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "generated_at",
+          "presets",
+          "error"
+        ],
+        "title": "PresetGallery",
+        "type": "object"
+      },
+      "PresetImage": {
+        "additionalProperties": false,
+        "description": "A public image link.",
+        "properties": {
+          "url": {
+            "$ref": "#/components/schemas/ArtUrl"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "PresetImage",
+        "type": "object"
+      },
+      "PresetImportPlan": {
+        "additionalProperties": false,
+        "description": "What adding a file does, item by item, before anything is saved.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PresetPlanItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "warnings"
+        ],
+        "title": "PresetImportPlan",
+        "type": "object"
+      },
+      "PresetImportRequest": {
+        "additionalProperties": false,
+        "description": "A file to add, the libraries for each media type, and what to change.",
+        "properties": {
+          "file": {
+            "$ref": "#/components/schemas/CollectionPresetFile-Input"
+          },
+          "libraries": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/LibraryId"
+              },
+              "maxItems": 20,
+              "minItems": 1,
+              "type": "array"
+            },
+            "minProperties": 1,
+            "propertyNames": {
+              "$ref": "#/components/schemas/MediaType"
+            },
+            "title": "Libraries",
+            "type": "object"
+          },
+          "skip": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Skip",
+            "type": "array"
+          }
+        },
+        "required": [
+          "file",
+          "libraries"
+        ],
+        "title": "PresetImportRequest",
+        "type": "object"
+      },
+      "PresetImportResult": {
+        "additionalProperties": false,
+        "description": "What adding a file did, item by item.",
+        "properties": {
+          "collection_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Collection Ids",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PresetPlanItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "collection_ids"
+        ],
+        "title": "PresetImportResult",
+        "type": "object"
+      },
+      "PresetItemStatus": {
+        "enum": [
+          "add",
+          "update",
+          "skip",
+          "refused"
+        ],
+        "type": "string"
+      },
+      "PresetListing": {
+        "additionalProperties": false,
+        "description": "One OvertureDB preset in the gallery.",
+        "properties": {
+          "added_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Added At"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "file": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionPresetFile-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PresetMetadata-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "preview_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview Url"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          },
+          "unavailable": {
+            "items": {
+              "$ref": "#/components/schemas/Integration"
+            },
+            "title": "Unavailable",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "preset",
+          "file",
+          "unavailable",
+          "problem",
+          "preview_url",
+          "added_at",
+          "changes"
+        ],
+        "title": "PresetListing",
+        "type": "object"
+      },
+      "PresetMetadata-Input": {
+        "additionalProperties": false,
+        "description": "How a preset describes itself in the gallery.",
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/PresetCategory"
+          },
+          "description": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 60,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "title": "Id",
+            "type": "string"
+          },
+          "media_types": {
+            "items": {
+              "$ref": "#/components/schemas/MediaType"
+            },
+            "minItems": 1,
+            "title": "Media Types",
+            "type": "array"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/PresetTag"
+            },
+            "maxItems": 10,
+            "title": "Tags",
+            "type": "array"
+          },
+          "title": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "description",
+          "category",
+          "media_types"
+        ],
+        "title": "PresetMetadata",
+        "type": "object"
+      },
+      "PresetMetadata-Output": {
+        "additionalProperties": false,
+        "description": "How a preset describes itself in the gallery.",
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/PresetCategory"
+          },
+          "description": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 60,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "title": "Id",
+            "type": "string"
+          },
+          "media_types": {
+            "items": {
+              "$ref": "#/components/schemas/MediaType"
+            },
+            "minItems": 1,
+            "title": "Media Types",
+            "type": "array"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/PresetTag"
+            },
+            "maxItems": 10,
+            "title": "Tags",
+            "type": "array"
+          },
+          "title": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "description",
+          "category",
+          "tags",
+          "media_types"
+        ],
+        "title": "PresetMetadata",
+        "type": "object"
+      },
+      "PresetPlanItem": {
+        "additionalProperties": false,
+        "description": "What adding one collection or group of a file does.",
+        "properties": {
+          "chosen": {
+            "default": true,
+            "title": "Chosen",
+            "type": "boolean"
+          },
+          "kind": {
+            "enum": [
+              "collection",
+              "group"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicText"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/PresetItemStatus"
+          }
+        },
+        "required": [
+          "kind",
+          "name",
+          "status",
+          "reason",
+          "chosen"
+        ],
+        "title": "PresetPlanItem",
+        "type": "object"
+      },
+      "PresetPoster-Input": {
+        "additionalProperties": false,
+        "description": "A public poster link, and which OvertureDB poster style it is.",
+        "properties": {
+          "style": {
+            "$ref": "#/components/schemas/CollectionPosterStyle",
+            "default": "individual"
+          },
+          "url": {
+            "$ref": "#/components/schemas/ArtUrl"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "PresetPoster",
+        "type": "object"
+      },
+      "PresetPoster-Output": {
+        "additionalProperties": false,
+        "description": "A public poster link, and which OvertureDB poster style it is.",
+        "properties": {
+          "style": {
+            "$ref": "#/components/schemas/CollectionPosterStyle",
+            "default": "individual"
+          },
+          "url": {
+            "$ref": "#/components/schemas/ArtUrl"
+          }
+        },
+        "required": [
+          "url",
+          "style"
+        ],
+        "title": "PresetPoster",
+        "type": "object"
+      },
+      "PresetRefusal": {
+        "additionalProperties": false,
+        "description": "Something left out of an export, and why.",
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/PublicText"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "reason"
+        ],
+        "title": "PresetRefusal",
+        "type": "object"
+      },
+      "PresetTag": {
+        "maxLength": 40,
+        "minLength": 1,
         "type": "string"
       },
       "PublicError": {
@@ -21035,6 +23618,637 @@
         "tags": [
           "collections"
         ]
+      }
+    },
+    "/api/collections/presets": {
+      "get": {
+        "description": "Return the presets OvertureDB publishes, and what each needs here.",
+        "operationId": "list_collection_presets",
+        "parameters": [
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetGallery"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not signed in, or the API key is not valid"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "An API key asked for a change, or the CSRF token is missing"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No media server is configured"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The request breaks the schema or a rule"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A media server failed the request"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A media server is unavailable"
+          }
+        },
+        "summary": "List Collection Presets",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/collections/presets/export": {
+      "post": {
+        "description": "Return collections and groups as a file any install can add.",
+        "operationId": "export_collection_preset",
+        "parameters": [
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresetExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetExport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The body is not text in the declared encoding"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not signed in, or the API key is not valid"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "An API key asked for a change, or the CSRF token is missing"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No media server is configured"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The request breaks the schema or a rule"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A media server failed the request"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A media server is unavailable"
+          }
+        },
+        "summary": "Export Collection Preset",
+        "tags": [
+          "collections"
+        ],
+        "x-reads-only": true
+      }
+    },
+    "/api/collections/presets/import": {
+      "post": {
+        "description": "Add a file's groups and collections to the chosen libraries, once.",
+        "operationId": "import_collection_preset",
+        "parameters": [
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresetImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetImportResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The body is not text in the declared encoding"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not signed in, or the API key is not valid"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "An API key asked for a change, or the CSRF token is missing"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No media server is configured"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The request breaks the schema or a rule"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A media server failed the request"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A media server is unavailable"
+          }
+        },
+        "summary": "Import Collection Preset",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/api/collections/presets/plan": {
+      "post": {
+        "description": "Return what adding a file to the chosen libraries would do.",
+        "operationId": "plan_collection_preset",
+        "parameters": [
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresetImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresetImportPlan"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The body is not text in the declared encoding"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not signed in, or the API key is not valid"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "An API key asked for a change, or the CSRF token is missing"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No media server is configured"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The request breaks the schema or a rule"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A media server failed the request"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A media server is unavailable"
+          }
+        },
+        "summary": "Plan Collection Preset",
+        "tags": [
+          "collections"
+        ],
+        "x-reads-only": true
       }
     },
     "/api/collections/preview": {

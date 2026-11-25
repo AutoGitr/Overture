@@ -24,6 +24,10 @@ class CollectionGroup(PolicyOverrides, table=True):
     generated_at: datetime | None = None
     #: An empty collection titled after the group heads its collections.
     separator: bool = Field(default=False, nullable=False)
+    #: The OvertureDB preset it was added from, which a newer version updates.
+    preset_id: str | None = None
+    #: Its title or name in that preset, which stays when it is renamed here.
+    preset_item: str | None = None
 
     collections: list["MediaCollection"] = Relationship(
         back_populates="group",

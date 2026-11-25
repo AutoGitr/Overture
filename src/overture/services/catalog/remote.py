@@ -12,6 +12,9 @@ OVERTUREDB_REPO_URL = "https://github.com/AutoGitr/OvertureDB"
 CATALOG_URL = "https://AutoGitr.github.io/OvertureDB/catalog.jsonl.gz"
 MAX_CATALOG_COMPRESSED_BYTES = 50 * 1024 * 1024
 MAX_CATALOG_UNCOMPRESSED_BYTES = 250 * 1024 * 1024
+#: The presets OvertureDB publishes beside the catalog, as one JSON file.
+PRESETS_URL = "https://AutoGitr.github.io/OvertureDB/presets.json"
+MAX_PRESETS_BYTES = 5 * 1024 * 1024
 #: Artwork hosts checked at once while a catalog is validated.
 _URL_CHECK_CONCURRENCY = 16
 

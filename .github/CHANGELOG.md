@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### 🚀 Features
+
+- **Collections:** **Presets** adds OvertureDB's ready-made collections and sets, such as Holidays, Decades, Franchises and TMDB charts, to the libraries you choose; each is yours to change, and when OvertureDB updates a preset you added, the gallery lists what changed and you choose what to take.
+- **Collections:** **Presets → Export** saves groups, sets and collections as a file another install can add from **Import file**, or that you can contribute to OvertureDB as a preset.
+
 ## 0.5.0 - 2026-11-24
 
 ### 🚨 Breaking Changes

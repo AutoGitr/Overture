@@ -31,6 +31,7 @@ lazy from .post_sync import (
     PostSync,
     RequestMissing,
 )
+lazy from .presets import CollectionPresets
 lazy from .reader import CollectionReader
 lazy from .rule_sync import RuleSync
 lazy from .saved_filters import SavedFilters
@@ -158,6 +159,14 @@ class CollectionsService:
             discovery=self.discovery,
         )
         self.saved_filters = SavedFilters(access=access, validator=validator)
+        self.presets = CollectionPresets(
+            access=access,
+            sources=self._sources,
+            reader=self.reader,
+            editor=self.editor,
+            groups=self.groups,
+            art=art,
+        )
 
     async def close(self) -> None:
         """Close the source clients."""

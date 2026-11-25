@@ -2,7 +2,8 @@
 
 Every file or setting the two repositories share is listed here, so one table
 says what must match. The catalog contract is checked byte for byte by
-``scripts.catalog_contract --check`` instead, which also copies it.
+``scripts.catalog_contract --check`` instead, which also copies it; the preset
+schema and vocabulary in it are generated from Overture's models.
 
 OvertureDB is read from ``OVERTUREDB_DIR`` or beside this checkout. Without
 it these tests skip, unless ``OVERTURE_REQUIRE_SIBLING`` is set, as CI sets it
@@ -16,6 +17,9 @@ lazy from pathlib import Path
 lazy from typing import Any
 
 lazy import pytest
+
+lazy from overture.schemas.collection_presets import CollectionPresetFile
+lazy from scripts.preset_contract import generated
 
 ROOT = Path(__file__).resolve().parents[2]
 #: The Renovate preset both repositories extend.
@@ -105,3 +109,19 @@ def test_a_dependency_both_pin_has_one_version(overturedb: Path) -> None:
     assert {name: theirs[name] for name in shared} == {
         name: ours[name] for name in shared
     }
+
+
+def test_overturedbs_preset_contract_is_generated_from_overtures_models(
+    overturedb: Path,
+) -> None:
+    for name, text in generated().items():
+        assert (overturedb / "schema" / name).read_text() == text, name
+
+
+def test_every_overturedb_preset_is_one_overture_can_add(overturedb: Path) -> None:
+    presets = sorted((overturedb / "data/presets").glob("*.json"))
+    assert presets
+    for path in presets:
+        preset = CollectionPresetFile.model_validate_json(path.read_text())
+        assert preset.preset is not None
+        assert preset.preset.id == path.stem

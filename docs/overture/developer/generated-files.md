@@ -16,6 +16,13 @@ description: What is generated, from what, and the command that regenerates it.
 - **OvertureDB contract.** Edit it in `../OvertureDB/schema/`, then copy it
   here with `uv run python -m scripts.catalog_contract ../OvertureDB`. CI
   fails while the copy differs.
+- **Preset schema and vocabulary.** `preset.schema.json` and
+  `preset-vocabulary.json` in the contract are generated from Overture's
+  collection models. After changing a criteria field, operator, source, set
+  dimension or the portable file models, run
+  `uv run python -m scripts.preset_contract ../OvertureDB`, then copy the
+  contract back with `scripts.catalog_contract`. CI in both repositories fails
+  while they differ, or while an OvertureDB preset is one Overture cannot add.
 - **Database migrations.** After changing a model in `src/overture/db/models/`,
   run `uv run alembic revision --autogenerate -m "<summary>"`, review the
   result and add a test in `tests/test_database/test_migrations.py`.

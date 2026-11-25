@@ -252,6 +252,13 @@ class FieldSpec:
     free: bool = False
     #: Its values are IDs, which criteria keep while what they name is renamed.
     by_id: bool = False
+    #: Its values name something on this install alone, such as a folder path.
+    local_values: bool = False
+
+    @property
+    def portable(self) -> bool:
+        """Whether criteria testing it mean the same on another install."""
+        return not (self.by_id or self.library_only or self.local_values)
 
 
 FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
@@ -570,7 +577,12 @@ FIELDS: frozendict[FilterField, FieldSpec] = frozendict(
             "Versions", FieldKind.NUMBER, _MOVIES, _PLEX, None, integer=True
         ),
         FilterField.FOLDER: FieldSpec(
-            "Folder", FieldKind.TEXT, _ALL_MEDIA, _EVERY_SERVER, None
+            "Folder",
+            FieldKind.TEXT,
+            _ALL_MEDIA,
+            _EVERY_SERVER,
+            None,
+            local_values=True,
         ),
         FilterField.ORIGINAL_LANGUAGE: FieldSpec(
             "Original language",

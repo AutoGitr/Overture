@@ -9,6 +9,8 @@ lazy from sqlmodel import col, select
 lazy from ...catalog_contract.contract import (
     ISSUE_FORM_FIELDS,
     ISSUE_FORMS,
+    PRESET_ISSUE_FORM,
+    PRESET_ISSUE_FORM_FIELDS,
     validate_entry,
 )
 lazy from ...db.models.media_collection import MediaCollection
@@ -17,6 +19,7 @@ lazy from ...db.models.season import Season
 lazy from ...db.session import Database
 lazy from ...repositories.catalog import CatalogRepository
 lazy from ...schemas.catalog import ContributionIssue
+lazy from ...schemas.collection_presets import PresetMetadata
 lazy from ...utils.errors import PublicServiceError
 lazy from .entries import catalog_collection_entry, catalog_item_entry
 lazy from .export import collection_entry, collection_refusals, item_entry, refusals
@@ -180,4 +183,24 @@ async def collection_issue(
         collection_entry(row, held),
         collection_refusals(row),
         current=catalog_collection_entry(held) if held else None,
+    )
+
+
+def preset_issue(metadata: PresetMetadata | None) -> ContributionIssue:
+    """Return the issue that contributes an exported file as a preset.
+
+    The link fills the description; the file itself is attached by hand.
+    """
+    query = {"template": PRESET_ISSUE_FORM, "title": "[Preset]: "}
+    if metadata is not None:
+        query |= {
+            "title": f"[Preset]: {metadata.title}",
+            PRESET_ISSUE_FORM_FIELDS["title"]: metadata.title,
+            PRESET_ISSUE_FORM_FIELDS["description"]: metadata.description,
+            PRESET_ISSUE_FORM_FIELDS["category"]: metadata.category.value,
+            PRESET_ISSUE_FORM_FIELDS["tags"]: ", ".join(metadata.tags),
+        }
+    return ContributionIssue(
+        url=f"{OVERTUREDB_REPO_URL}/issues/new?{urlencode(query)}",
+        notes=["Attach the exported file under Preset file"],
     )

@@ -68,6 +68,10 @@ class MediaCollection(SQLModel, table=True):
     active_end_mmdd: str | None = None
     delete_when_inactive: bool | None = None
     child_count: int = Field(default=0, nullable=False)
+    #: The OvertureDB preset it was added from, which a newer version updates.
+    preset_id: str | None = None
+    #: Its title or name in that preset, which stays when it is renamed here.
+    preset_item: str | None = None
     server_added_at: datetime | None = None
 
     # TMDB collection ID the server itself names, such as a BoxSet's.

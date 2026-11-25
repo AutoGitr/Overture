@@ -39,9 +39,13 @@ USED_UNSEEN = {
     # Enums the database models and schemas annotate their fields with.
     "AutoAdvance": "db/models/settings.py",
     "Workflow": "db/models/settings.py",
+    "PresetCategory": "schemas/collection_presets.py",
     # OvertureDB runs the vendored catalog contract with these.
     "validate_entries": "OvertureDB's scripts/catalog.py",
     "dump_catalog": "OvertureDB's scripts/catalog.py",
+    "dump_presets": "OvertureDB's scripts/catalog.py",
+    "preset_repo_path": "OvertureDB's scripts/catalog.py",
+    "preset_image_url": "OvertureDB's scripts/preset_contribution.py",
     # A structural interface's member, which the WebSocket implements.
     "send_json": "protocols.ClientConnection",
     # Seams that let tests run a scheduled job, or wait for one, at once.

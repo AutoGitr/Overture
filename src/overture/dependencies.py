@@ -27,6 +27,7 @@ lazy from .services.collections.discovery import CollectionDiscovery
 lazy from .services.collections.editor import CollectionEditor
 lazy from .services.collections.groups import CollectionGroups
 lazy from .services.collections.library_filters import LibraryFilters
+lazy from .services.collections.presets import CollectionPresets
 lazy from .services.collections.reader import CollectionReader
 lazy from .services.collections.saved_filters import SavedFilters
 lazy from .services.collections.set_runner import CollectionSets
@@ -146,6 +147,11 @@ def get_collection_bulk(runtime: RuntimeDep) -> CollectionBulk:
     return runtime.collections.bulk
 
 
+def get_collection_presets(runtime: RuntimeDep) -> CollectionPresets:
+    """Resolve the collections' presets component."""
+    return runtime.collections.presets
+
+
 def get_collection_themes(runtime: RuntimeDep) -> CollectionThemes:
     """Resolve the collections' themes component."""
     return runtime.collections.themes
@@ -257,6 +263,7 @@ CollectionAdoptionDep = Annotated[CollectionAdoption, Depends(get_collection_ado
 CollectionGroupsDep = Annotated[CollectionGroups, Depends(get_collection_groups)]
 CollectionSetsDep = Annotated[CollectionSets, Depends(get_collection_sets)]
 CollectionBulkDep = Annotated[CollectionBulk, Depends(get_collection_bulk)]
+CollectionPresetsDep = Annotated[CollectionPresets, Depends(get_collection_presets)]
 CollectionThemesDep = Annotated[CollectionThemes, Depends(get_collection_themes)]
 CollectionArrDep = Annotated[CollectionArr, Depends(get_collection_arr)]
 LibraryFiltersDep = Annotated[LibraryFilters, Depends(get_library_filters)]

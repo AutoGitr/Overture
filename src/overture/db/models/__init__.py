@@ -1,5 +1,6 @@
 """Database models package."""
 
+lazy from .added_preset import AddedPreset
 lazy from .api_key import ApiKey
 lazy from .asset import Asset, AssetDelivery
 lazy from .auth_session import AuthSession
@@ -37,6 +38,7 @@ lazy from .term import MediaItemTerm, Term
 __all__ = [
     "MAX_THEME_FORMAT_LENGTH",
     "SETTINGS_ROW_ID",
+    "AddedPreset",
     "ApiKey",
     "AppSettings",
     "AppSettingsBase",

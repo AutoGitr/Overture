@@ -1,6 +1,7 @@
 <script lang="ts">
   import Folders from "@lucide/svelte/icons/folders";
   import LayersPlus from "@lucide/svelte/icons/layers-plus";
+  import LibraryBig from "@lucide/svelte/icons/library-big";
   import type {
     CatalogEntryRow,
     CollectionRead,
@@ -269,6 +270,12 @@
         type="button"
         class="btn btn-secondary btn-sm"
         onclick={() => uiState.openCollectionGroups()}><Folders size={14} />Manage groups</button
+      >
+      <button
+        type="button"
+        class="btn btn-secondary btn-sm"
+        onclick={() => uiState.openPopupByName("collection-presets")}
+        ><LibraryBig size={14} />Presets</button
       >
     </div>
   {/if}

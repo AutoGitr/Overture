@@ -3,7 +3,7 @@
 lazy from collections.abc import Sequence
 
 lazy from ...config import Settings
-lazy from ...domain import FilterOperator, MediaType, SourceType
+lazy from ...domain import FilterOperator, Integration, MediaType, SourceType
 lazy from ...integrations.arr import ArrClient
 lazy from ...integrations.mdblist import MDBListClient, MdblistList
 lazy from ...integrations.tmdb import TMDBClient
@@ -45,6 +45,30 @@ SOURCE_LABEL_PREFIX = "overture:"
 
 _MOVIE_SOURCES = frozenset({SourceType.TMDB_COLLECTION, SourceType.RADARR_TAG})
 _SHOW_SOURCES = frozenset({SourceType.SONARR_TAG})
+
+#: What to set up before a source that reads an integration can be used.
+_SETUP: frozendict[Integration, str] = frozendict(
+    {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
+        Integration.TMDB: "Set TMDB_READ_ACCESS_TOKEN to use TMDB",
+        Integration.MDBLIST: "Set MDBLIST_API_KEY to use MDBList",
+        Integration.RADARR: "Set RADARR_URL and RADARR_API_KEY to use Radarr",
+        Integration.SONARR: "Set SONARR_URL and SONARR_API_KEY to use Sonarr",
+    }
+)
+
+
+def source_integration(source: SourceType) -> Integration | None:
+    """The integration a source reads its titles from, if any."""
+    if source is SourceType.MDBLIST:
+        return Integration.MDBLIST
+    if source is SourceType.RADARR_TAG:
+        return Integration.RADARR
+    if source is SourceType.SONARR_TAG:
+        return Integration.SONARR
+    # A title list names TMDB IDs that sync already stores, so it reads nothing.
+    if source is not SourceType.TMDB_ITEM and source.value.startswith("tmdb"):
+        return Integration.TMDB
+    return None
 
 
 def selects_media(source: SourceType, media_type: MediaType) -> bool:
@@ -135,20 +159,22 @@ class SourceResolver:
         if not selects_media(source, media_type):
             only = "movies" if source in _MOVIE_SOURCES else "shows"
             return f"{SOURCE_LABELS[source]} select {only} only"
-        if source is SourceType.MDBLIST and not self._config.mdblist_configured:
-            return "Set MDBLIST_API_KEY to use MDBList"
-        if source is SourceType.RADARR_TAG and not self._radarr.configured:
-            return "Set RADARR_URL and RADARR_API_KEY to use Radarr"
-        if source is SourceType.SONARR_TAG and not self._sonarr.configured:
-            return "Set SONARR_URL and SONARR_API_KEY to use Sonarr"
-        # A title list names TMDB IDs that sync already stores, so it reads nothing.
-        if (
-            source is not SourceType.TMDB_ITEM
-            and source.value.startswith("tmdb")
-            and not self._config.tmdb_configured
-        ):
-            return "Set TMDB_READ_ACCESS_TOKEN to use TMDB"
+        integration = source_integration(source)
+        if integration is not None and not self.configured(integration):
+            return _SETUP[integration]
         return None
+
+    def configured(self, integration: Integration) -> bool:
+        """Whether the integration is set up."""
+        match integration:
+            case Integration.TMDB:
+                return self._config.tmdb_configured
+            case Integration.MDBLIST:
+                return self._config.mdblist_configured
+            case Integration.RADARR:
+                return self._radarr.configured
+            case Integration.SONARR:
+                return self._sonarr.configured
 
     def require(self, source: SourceType, media_type: MediaType) -> None:
         """Reject a source that cannot select items of the media type."""

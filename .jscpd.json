@@ -8,6 +8,7 @@
   "gitignore": true,
   "ignore": [
     "**/generated/**",
+    "src/overture/catalog_contract/preset*.json",
     "**/migrations/versions/**",
     "**/test/**",
     "**/node_modules/**",

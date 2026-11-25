@@ -2404,6 +2404,43 @@ def test_server_copies_gain_image_versions_and_lose_them_on_downgrade() -> None:
         ).all() == [("x10",)]
 
 
+def test_preset_provenance_starts_empty_and_goes_on_downgrade() -> None:
+    with _at_revision("d2f8a4c6e913") as (conn, config):
+        conn.exec_driver_sql(
+            "INSERT INTO collection_groups (id, name, separator) VALUES (1, 'Sagas', 0)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO media_collections (id, title, kind, order_type, "
+            "visible_home, visible_shared, visible_library, child_count, monitored, "
+            "deselected, unsynced, group_id) VALUES "
+            "(1, 'Saga', 'regular', 'release.asc', 0, 0, 0, 0, 1, 0, 0, 1)"
+        )
+
+        command.upgrade(config, "e7c1a9b3f204")
+        # Nothing made before presets came from one.
+        assert conn.exec_driver_sql(
+            "SELECT title, preset_id, preset_item FROM media_collections"
+        ).all() == [("Saga", None, None)]
+        assert conn.exec_driver_sql(
+            "SELECT name, preset_id, preset_item FROM collection_groups"
+        ).all() == [("Sagas", None, None)]
+        conn.exec_driver_sql(
+            "INSERT INTO added_presets (id, file, added_at) "
+            "VALUES ('holidays', '{\"preset_version\": 1}', '2026-11-25 12:00:00')"
+        )
+        with pytest.raises(IntegrityError):
+            conn.exec_driver_sql(
+                "INSERT INTO added_presets (id, file, added_at) "
+                "VALUES ('broken', 'not json', '2026-11-25 12:00:00')"
+            )
+
+        command.downgrade(config, "d2f8a4c6e913")
+        assert conn.exec_driver_sql("SELECT title FROM media_collections").all() == [
+            ("Saga",)
+        ]
+        assert "added_presets" not in _sync_table_names(conn)
+
+
 def test_every_revision_has_a_test_here() -> None:
     """Each migration is exercised on rows as the app stores them, in this file."""
     tests = Path(__file__).read_text()

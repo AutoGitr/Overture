@@ -13,6 +13,7 @@ lazy from ..dependencies import (
     CollectionDiscoveryDep,
     CollectionEditorDep,
     CollectionGroupsDep,
+    CollectionPresetsDep,
     CollectionReaderDep,
     CollectionSetsDep,
     CollectionThemesDep,
@@ -30,6 +31,14 @@ lazy from ..schemas.art import (
     SaveCollectionArtRequest,
 )
 lazy from ..schemas.assets import AssetRead
+lazy from ..schemas.collection_presets import (
+    PresetExport,
+    PresetExportRequest,
+    PresetGallery,
+    PresetImportPlan,
+    PresetImportRequest,
+    PresetImportResult,
+)
 lazy from ..schemas.collections import (
     ArrTagRead,
     BulkCollectionMonitorUpdate,
@@ -241,6 +250,36 @@ async def list_radarr_tags(arr: CollectionArrDep) -> list[ArrTagRead]:
 async def list_sonarr_tags(arr: CollectionArrDep) -> list[ArrTagRead]:
     """Return available Sonarr tags when Sonarr is configured."""
     return await arr.sonarr_tags()
+
+
+@router.get("/presets")
+async def list_collection_presets(presets: CollectionPresetsDep) -> PresetGallery:
+    """Return the presets OvertureDB publishes, and what each needs here."""
+    return await presets.gallery()
+
+
+@router.post("/presets/export", openapi_extra=READS_ONLY)
+async def export_collection_preset(
+    presets: CollectionPresetsDep, body: PresetExportRequest
+) -> PresetExport:
+    """Return collections and groups as a file any install can add."""
+    return await presets.export(body)
+
+
+@router.post("/presets/plan", openapi_extra=READS_ONLY)
+async def plan_collection_preset(
+    presets: CollectionPresetsDep, body: PresetImportRequest
+) -> PresetImportPlan:
+    """Return what adding a file to the chosen libraries would do."""
+    return await presets.plan(body)
+
+
+@router.post("/presets/import")
+async def import_collection_preset(
+    presets: CollectionPresetsDep, body: PresetImportRequest
+) -> PresetImportResult:
+    """Add a file's groups and collections to the chosen libraries, once."""
+    return await presets.import_(body)
 
 
 @router.post("/bulk-operation")
