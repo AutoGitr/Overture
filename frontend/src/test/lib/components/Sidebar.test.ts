@@ -47,6 +47,7 @@ describe("Sidebar", () => {
     ]);
     uiState.closePopup();
     uiState.mobileShowDetail = false;
+    uiState.setCollectionView("groups");
     await navigate("/movies", { replace: true });
     uiState.searchQuery = "";
     filterState.clear();
@@ -62,16 +63,18 @@ describe("Sidebar", () => {
   it("hides grouped collections until the group is opened and keeps that group while opening art", async () => {
     client.setQueryData(listCollectionsOptions().queryKey, [
       collection({ id: 1, title: "Saga", collection_group: "Weekend", art_status: "complete" }),
-      collection({ id: 2, title: "Loose" }),
+      collection({ id: 2, title: "Elsewhere", collection_group: "Films" }),
     ]);
     await navigate("/collections");
     render(SidebarHarness, { props: { client, movies: [movie] } });
+    // Every collection is in a group, so the top level lists groups alone.
     expect(await screen.findByRole("button", { name: "Open group Weekend" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Open group Films" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Select collection Saga" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Select collection Loose" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Select collection Elsewhere" })).toBeNull();
     await fireEvent.click(screen.getByRole("button", { name: "Open group Weekend" }));
     expect(await screen.findByRole("button", { name: "Select collection Saga" })).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Select collection Loose" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Select collection Elsewhere" })).toBeNull();
     const art = screen.getByRole("button", { name: "Open art for Saga" });
     expect(art).toHaveAttribute("data-status", "success");
     await fireEvent.click(art);
@@ -82,16 +85,18 @@ describe("Sidebar", () => {
     expect(screen.queryByRole("button", { name: "Select collection Saga" })).toBeNull();
   });
 
-  it("lists every group, empty ones too, and the reserved groups only while they hold collections", async () => {
+  it("lists every group, empty ones too, and Unmanaged only while it holds collections", async () => {
     client.setQueryData(listCollectionsOptions().queryKey, [
       collection({ id: 1, title: "Saga", collection_group: "Weekend", kind: "smart" }),
     ]);
-    client.setQueryData(listCollectionGroupsOptions().queryKey, ["Empty", "Ungrouped", "Weekend"]);
+    client.setQueryData(
+      listCollectionGroupsOptions().queryKey,
+      ["Empty", "Weekend"].map((name) => ({ name, set: null })),
+    );
     await navigate("/collections");
     render(SidebarHarness, { props: { client, movies: [movie] } });
     expect(await screen.findByRole("button", { name: "Open group Empty" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Open group Weekend" })).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Open group Ungrouped" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Open group Unmanaged" })).toBeNull();
     await fireEvent.click(screen.getByRole("button", { name: "Open group Weekend" }));
     expect(await screen.findByText("Smart collection")).toBeInTheDocument();
@@ -113,6 +118,8 @@ describe("Sidebar", () => {
       client.setQueryData(listCollectionsOptions().queryKey, [
         collection({ id: 1, title: "Saga" }),
       ]);
+      // The flat list shows each collection's row without opening its group.
+      uiState.setCollectionView("collections");
       await navigate("/collections");
       render(SidebarHarness, { props: { client } });
       expect(await screen.findByRole("button", { name: "Open art for Saga" })).toBeVisible();
@@ -241,6 +248,7 @@ describe("Sidebar", () => {
         collections_supported: true,
       }),
     );
+    uiState.setCollectionView("collections");
     render(SidebarHarness, {
       props: { client, movies: [movie], totalMovies: 1, totalShows: 1, shows: [show] },
     });

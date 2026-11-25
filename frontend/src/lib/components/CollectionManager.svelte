@@ -3,6 +3,7 @@
   import { MEDIA_ICONS } from "../utils/mediaIcons";
   import Settings from "@lucide/svelte/icons/settings";
   import Unlink from "@lucide/svelte/icons/unlink";
+  import Download from "@lucide/svelte/icons/download";
   import type {
     CollectionDetail,
     CollectionRead,
@@ -18,6 +19,7 @@
   import { CollectionDraft } from "../utils/collectionDraft.svelte";
   import { CollectionEditor } from "../utils/collectionEditor.svelte";
   import { CollectionActions } from "../utils/collectionActions.svelte";
+  import { CollectionExport } from "../utils/collectionExport.svelte";
   import {
     goToCatalogEntry,
     goToCollectionView,
@@ -86,6 +88,7 @@
         );
   const actions =
     editor instanceof CollectionEditor ? new CollectionActions(current) : null;
+  const exporter = new CollectionExport();
   let view = $derived(routedCollectionView());
   let artType = $derived(routedCollectionArtType());
   let managing = $derived(!!editor && (editor.creating || view === "configure"));
@@ -187,6 +190,16 @@
           <button
             type="button"
             class="tab-item"
+            title="Export the collection as a file"
+            aria-label="Export collection"
+            disabled={exporter.busy}
+            onclick={() => void exporter.run({ collection_ids: [collection.id] }, collection.title)}
+          >
+            <Download size={16} />
+          </button>
+          <button
+            type="button"
+            class="tab-item"
             title={editor.orphanBlocker ?? "Orphan collection: stop managing it, keeping it on the server"}
             aria-label="Orphan collection"
             disabled={editor.busy || !!editor.orphanBlocker}
@@ -227,8 +240,8 @@
   {#snippet sectionLinks()}
     {#if detail && actions}<ConfigureNavigation
         {formId}
-        collection={detail}
         configuring={managing}
+        onopen={(target) => goToCollectionView(detail, "configure", "poster", target)}
       />{/if}
   {/snippet}
   {#snippet subtabActions()}{#if actions && view === "art"}<PasteArtButton /><UploadArtButton />{/if}{/snippet}

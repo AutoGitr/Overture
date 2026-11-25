@@ -1,6 +1,5 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it } from "vitest";
-import GroupSettingsHarness from "../../helpers/GroupSettingsHarness.svelte";
 import CollectionPage from "../../../lib/router/pages/CollectionPage.svelte";
 import { queryClient } from "../../../lib/rest/queryClient";
 import {
@@ -17,7 +16,6 @@ import { uiState } from "../../../lib/stores/uiState.svelte";
 import { mockFetchRoutes } from "../../helpers/fetch";
 import {
   appSettings,
-  collection,
   collectionCapabilities,
   collectionDetail,
   collectionRule,
@@ -185,7 +183,10 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/collections/groups": ["default-decades", "Weekend"],
+      "/api/collections/groups": [
+        { name: "default-decades", set: null },
+        { name: "Weekend", set: null },
+      ],
       "/api/collections/12": ({ init }: { init: RequestInit }) =>
         Response.json(init.method === "PUT" ? { ...detail, collection_group: "Weekend" } : detail),
     });
@@ -208,25 +209,33 @@ describe("collection management", () => {
     ).toMatchObject({ collection_group: "Weekend" });
   });
 
-  it("creates a group only through the groups popup, then assigns it", async () => {
-    mockFetchRoutes({
+  it("saves a typed group name, which makes a group of it", async () => {
+    const { calls } = mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/collections/groups": ["Weekend"],
-      "/api/collections/12": detail,
+      "/api/collections/groups": [{ name: "Weekend", set: null }],
+      "/api/collections/12": ({ init }: { init: RequestInit }) =>
+        Response.json(init.method === "PUT" ? { ...detail, collection_group: "Fresh" } : detail),
     });
     renderWithQueryClient(CollectionPage);
-    const group = await screen.findByLabelText("Group");
-    await fireEvent.click(group);
-    await screen.findByRole("option", { name: "Weekend" });
+    const group = await screen.findByRole("combobox", { name: "Group" });
+    await fireEvent.input(group, { target: { value: "Fresh" } });
+    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(calls.some((call) => call.init.method === "PUT" && !call.url.includes("/rule"))).toBe(
+        true,
+      ),
+    );
+    expect(
+      JSON.parse(
+        String(
+          calls.find((call) => call.init.method === "PUT" && !call.url.includes("/rule"))?.init
+            .body,
+        ),
+      ),
+    ).toMatchObject({ collection_group: "Fresh" });
     expect(screen.queryByRole("button", { name: "Collection groups" })).toBeNull();
-    await fireEvent.click(screen.getByRole("option", { name: "Create new group..." }));
-    expect(uiState.openPopup).toBe("collection-groups");
-    expect(group).toHaveTextContent("Ungrouped");
-    uiState.collectionGroupChanged("", "Fresh");
-    await waitFor(() => expect(group).toHaveTextContent("Fresh"));
-    uiState.closePopup();
   });
 
   it("only offers manual additions for manual and append collections", async () => {
@@ -447,6 +456,9 @@ describe("collection management", () => {
     await navigate("/collections/new");
     renderWithQueryClient(CollectionPage);
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "Saga" } });
+    await fireEvent.input(screen.getByRole("combobox", { name: "Group" }), {
+      target: { value: "Films" },
+    });
     await screen.findByRole("checkbox", { name: "Movies" });
     await onlyLibrary(screen, "Movies");
     await addTmdbTitles("11");
@@ -617,6 +629,9 @@ describe("collection management", () => {
     await screen.findByRole("checkbox", { name: "Movies" });
     await onlyLibrary(screen, "Movies");
     await addTmdbTitles("11");
+    await fireEvent.input(screen.getByRole("combobox", { name: "Group" }), {
+      target: { value: "Films" },
+    });
     const submit = screen.getByRole("button", { name: "Save and Sync" });
     expect(submit).toBeDisabled();
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "  Saga  " } });
@@ -677,6 +692,9 @@ describe("collection management", () => {
     await navigate("/collections/new");
     renderWithQueryClient(CollectionPage);
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "Saga" } });
+    await fireEvent.input(screen.getByRole("combobox", { name: "Group" }), {
+      target: { value: "Films" },
+    });
     await screen.findByRole("checkbox", { name: "Movies" });
     await onlyLibrary(screen, "Movies");
     await addTmdbTitles("11");
@@ -766,6 +784,7 @@ describe("collection management", () => {
       ).toEqual([
         "Open database record",
         "Unmonitored - click to monitor",
+        "Export the collection as a file",
         "Orphan collection: stop managing it, keeping it on the server",
         "Delete collection",
       ]);
@@ -858,7 +877,7 @@ describe("collection management", () => {
     const { calls } = mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
-      "/api/collections/groups": ["Ungrouped"],
+      "/api/collections/groups": [{ name: "Ungrouped", set: null }],
       "/api/collections/12": ({ init }: { init: RequestInit }) =>
         Response.json(init.method === "DELETE" ? { status: "deleted" } : detail),
       "/api/library/libraries": [],
@@ -879,7 +898,7 @@ describe("collection management", () => {
     const { calls } = mockFetchRoutes({
       "/api/collections/defaults": { visible_home: true, visible_library: true },
       "/api/collections/capabilities": capabilities,
-      "/api/collections/groups": ["Ungrouped"],
+      "/api/collections/groups": [{ name: "Ungrouped", set: null }],
       "/api/collections/12": detail,
       "/api/collections/12/rule": rule,
     });
@@ -918,122 +937,6 @@ describe("collection management", () => {
         summary_format: null,
       });
     });
-  });
-
-  it("loads and saves group defaults without submitting the collection", async () => {
-    const policy = {
-      sync_mode: null,
-      minimum_items: 3,
-      delete_below_minimum: null,
-      collection_mode: null,
-      sort_title_format: null,
-      auto_match_art: null,
-      auto_match_theme: null,
-    };
-    const { calls } = mockFetchRoutes({
-      "/api/collections/defaults": {},
-      "/api/collections/capabilities": capabilities,
-      "/api/collections/12/rule": rule,
-      "/api/collections/12": { ...detail, collection_group: "Weekend" },
-      "/api/collections/groups": ["Weekend"],
-      "/api/library/libraries": [],
-      "/api/library/items": { items: members, total: 2 },
-      "/api/collections/group-policy": ({ init }: { init: RequestInit }) =>
-        Response.json(init.method === "PUT" ? JSON.parse(String(init.body)) : policy),
-    });
-    renderWithQueryClient(GroupSettingsHarness, { group: "Weekend", mediaType: "movie" });
-    await fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
-    await fireEvent.input(await screen.findByLabelText("Minimum members"), {
-      target: { value: "2" },
-    });
-    await chooseOption(screen.getByLabelText("Below minimum"), "Keep on server");
-    await fireEvent.input(screen.getByRole("textbox", { name: "Sort title" }), {
-      target: { value: "+{title}" },
-    });
-    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() =>
-      expect(calls.some((call) => call.init.method === "PUT" && !call.url.includes("/rule"))).toBe(
-        true,
-      ),
-    );
-    const saved = calls.find((call) => call.init.method === "PUT");
-    expect(saved?.url).toContain("/api/collections/group-policy?");
-    expect(JSON.parse(String(saved?.init.body))).toMatchObject({
-      minimum_items: 2,
-      delete_below_minimum: false,
-      sort_title_format: "+{title}",
-    });
-  });
-
-  it("offers a separator for a Plex group and saves it with the group", async () => {
-    settingsState.load(
-      appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
-    );
-    const { calls } = mockFetchRoutes({
-      "/api/collections/defaults": {},
-      "/api/collections/capabilities": capabilities,
-      "/api/collections/groups": ["Weekend"],
-      "/api/library/libraries": [],
-      "/api/collections/group-policy": ({ init }: { init: RequestInit }) =>
-        Response.json(init.method === "PUT" ? JSON.parse(String(init.body)) : {}),
-    });
-    renderWithQueryClient(GroupSettingsHarness, { group: "Weekend", mediaType: "movie" });
-    await fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
-    await fireEvent.click(await screen.findByRole("checkbox", { name: "Separator" }));
-    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() =>
-      expect(
-        JSON.parse(String(calls.find((call) => call.init.method === "PUT")?.init.body)),
-      ).toMatchObject({ separator: true }),
-    );
-  });
-
-  it("keeps group edits when the group is fetched again", async () => {
-    let served = { sort_title_format: null as string | null, summary_format: null };
-    const { calls } = mockFetchRoutes({
-      "/api/collections/defaults": {},
-      "/api/collections/capabilities": capabilities,
-      "/api/collections/group-policy": () => Response.json(served),
-    });
-    renderWithQueryClient(GroupSettingsHarness, { group: "Weekend", mediaType: "movie" });
-    await fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
-    const sortTitle = await screen.findByRole("textbox", { name: "Sort title" });
-    await fireEvent.input(sortTitle, { target: { value: "+{title}" } });
-    await fireEvent.blur(sortTitle);
-    // A sync elsewhere refreshes the group, with data that differs from what was loaded.
-    served = { sort_title_format: "01_{title}", summary_format: null };
-    const fetched = calls.length;
-    await queryClient.invalidateQueries();
-    await waitFor(() =>
-      expect(calls.slice(fetched).some((call) => call.url.includes("group-policy"))).toBe(true),
-    );
-    expect(screen.getByRole("textbox", { name: "Sort title" })).toHaveValue("+{title}");
-  });
-
-  it("saves group defaults in Overture alone, leaving the server to the next sync", async () => {
-    const { calls } = mockFetchRoutes({
-      "/api/collections": [collection({ id: 12, collection_group: "Weekend" })],
-      "/api/collections/defaults": {},
-      "/api/collections/capabilities": capabilities,
-      "/api/collections/12/rule": rule,
-      "/api/collections/group-policy": ({ init }: { init: RequestInit }) =>
-        Response.json(
-          init.method === "PUT"
-            ? JSON.parse(String(init.body))
-            : { sort_title_format: "01_{title}", summary_format: null },
-        ),
-    });
-    renderWithQueryClient(GroupSettingsHarness, { group: "Weekend", mediaType: "movie" });
-    await screen.findByRole("button", { name: "Save and Sync" });
-    await waitFor(() => expect(calls.some((call) => call.url === "/api/collections")).toBe(true));
-    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
-    expect(
-      await screen.findByText("Saved. Its collections get it on the server with their next sync."),
-    ).toBeInTheDocument();
-    expect(
-      calls.filter((call) => call.init.method !== "GET").map((call) => call.init.method),
-    ).toEqual(["PUT"]);
   });
 
   it("lists the titles the lists hold beyond the library and requests them", async () => {

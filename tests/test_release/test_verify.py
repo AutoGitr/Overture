@@ -247,7 +247,7 @@ _FIXED: dict[str, Any] = {
     "/api/catalog/items/2/issue": _issue("show.yml", "Aliens"),
     "/api/collections/tags/radarr": [{"id": 1, "label": "requests"}],
     "/api/collections/arr-options": {"root_folders": [], "quality_profiles": []},
-    "/api/collections/groups": ["Charts"],
+    "/api/collections/groups": [{"name": "Charts", "set": None}],
     "/api/library/items/1/record": {
         "stored": [
             {"table": "media_items", "values": {"id": 1}},

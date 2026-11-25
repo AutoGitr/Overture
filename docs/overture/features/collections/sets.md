@@ -32,8 +32,9 @@ set preview names values whose title another collection already has.
 
 ## How a set behaves
 
-A set's collections take their criteria and titles from the set; edit it in
-**Collection groups**. A set runs on its schedule once it has been synced.
+A set's collections take their criteria and titles from the set; edit it on
+its group's page, which saving a new set opens. A set runs on its schedule once
+it has been synced.
 
 A collection whose value the set no longer selects, or the library no longer
 holds, leaves the server and stays in Overture until the set selects its value

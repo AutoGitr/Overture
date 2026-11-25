@@ -59,7 +59,13 @@ lazy from .base import PositiveId, PublicText, StrictBaseModel
 lazy from .catalog import CatalogSelections
 lazy from .common import StatusResponse
 lazy from .removal import AssetRemoval
-lazy from .validators import CollectionIds, GroupName, UniqueList, YouTubeId
+lazy from .validators import (
+    CollectionIds,
+    GroupName,
+    RequiredGroupName,
+    UniqueList,
+    YouTubeId,
+)
 
 type LibraryId = Annotated[str, Field(min_length=1, max_length=200)]
 
@@ -819,7 +825,7 @@ class CollectionDefaults(CollectionPolicyBase):
 class CollectionAdoption(StrictBaseModel):
     """The group a collection joins when Overture adopts it."""
 
-    group: GroupName | None = None
+    group: RequiredGroupName
 
 
 class CollectionAdoptionPlan(StrictBaseModel):
@@ -832,7 +838,7 @@ class CollectionAdoptionPlan(StrictBaseModel):
 class CollectionGroupRename(StrictBaseModel):
     """A replacement group name, scoped by the request."""
 
-    name: Annotated[GroupName, Field(min_length=1)]
+    name: RequiredGroupName
 
 
 type CollectionDeleteTarget = Literal["server", "both"]
@@ -841,18 +847,18 @@ type CollectionDeleteTarget = Literal["server", "both"]
 class CollectionGroupDelete(StrictBaseModel):
     """What happens to a deleted group's collections.
 
-    ``keep`` moves them to Ungrouped, ``move`` puts them in *group*,
-    ``orphan`` stops managing them, as orphaning one collection does, and
-    ``both`` deletes them from Overture and the server.
+    ``move`` puts them in *group*, ``orphan`` stops managing them, as
+    orphaning one collection does, and ``both`` deletes them from Overture and
+    the server. A group without collections needs no choice.
     """
 
-    collections: Literal["keep", "move", "orphan", "both"] = "keep"
-    group: GroupName | None = None
+    collections: Literal["move", "orphan", "both"] | None = None
+    group: RequiredGroupName | None = None
 
     @model_validator(mode="after")
     def validate_target(self) -> Self:
         """Moving needs a group to move to, and only moving takes one."""
-        if (self.collections == "move") != bool(self.group and self.group.strip()):
+        if (self.collections == "move") != (self.group is not None):
             raise ValueError("Name the group to move the collections to")
         return self
 
@@ -881,12 +887,18 @@ class CollectionSetEntry(StrictBaseModel):
     title_taken_by: int | None = None
 
 
-class CollectionSetSummary(StrictBaseModel):
-    """A group that is a set: what it splits by, and in which libraries."""
+class CollectionGroupSet(StrictBaseModel):
+    """What a set splits by, and in which libraries."""
 
-    group: str
     dimension: SetDimension
     library_ids: list[str]
+
+
+class CollectionGroupRead(StrictBaseModel):
+    """A collection group, and the set it runs when it is one."""
+
+    name: str
+    set: CollectionGroupSet | None = None
 
 
 class CollectionMissingTitle(StrictBaseModel):
@@ -1161,6 +1173,8 @@ class BulkCollectionOperation(StrictBaseModel):
         }
         if self.operation in required and required[self.operation] is None:
             raise ValueError("The operation requires a value")
+        if self.operation in {"set_group", "adopt"} and not self.collection_group:
+            raise ValueError("Choose a group")
         # A null order inherits the group's or the global default.
         if self.operation == "set_order" and "order_type" not in self.model_fields_set:
             raise ValueError("Choose a sort")

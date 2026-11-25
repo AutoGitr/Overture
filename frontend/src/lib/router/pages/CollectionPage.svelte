@@ -56,7 +56,7 @@
       creating ||
       (collection !== null && (!collection.managed || routedCollectionView() === "configure")),
   }));
-  let groups = $derived(groupsQuery.data ?? []);
+  let groups = $derived((groupsQuery.data ?? []).map((group) => group.name));
   $effect(() => {
     uiState.mobileShowDetail = creating || collectionId !== null;
   });

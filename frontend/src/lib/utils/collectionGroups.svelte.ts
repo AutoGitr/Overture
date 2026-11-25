@@ -7,7 +7,6 @@ import {
   renameCollectionGroupMutation,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type { CollectionGroupDelete } from "../../generated/rest/types.gen";
-import { UNGROUPED_GROUP } from "../../generated/settings";
 import { chooseAction, confirmAction, createNotifier } from "../stores/notificationState.svelte";
 import { syncSelection } from "../stores/syncSelection.svelte";
 import { renameAssetsGroup } from "./assetsForm.svelte";
@@ -15,19 +14,17 @@ import { errorMessage } from "./errors";
 import type { ChoosableCollection } from "./popupSelection";
 import { toOptions, type SelectOption } from "./selectOptions";
 
-/** The choice that opens Collection groups to create a group instead of joining one. */
-export const NEW_GROUP_OPTION = { value: "__new__", label: "Create new group..." } as const;
-
-/** The groups a collection can join, by name, with Ungrouped and *held* among them. */
+/** The groups a collection can join, by name, with the one it *held* among them. */
 export function groupOptions(groups: readonly string[], held = ""): SelectOption[] {
-  const names = [UNGROUPED_GROUP, ...groups, ...(held ? [held] : [])];
+  const names = [...groups, ...(held ? [held] : [])];
   return toOptions(
     names.filter((name, index) => names.indexOf(name) === index).sort((a, b) => a.localeCompare(b)),
   );
 }
 
-/** Actions for the selected group; the popup owns which group is selected. */
+/** Rename and delete the group a page shows. */
 export class CollectionGroupActions {
+  /** The name it is renamed to, starting as its own. */
   name = $derived.by(() => this.group());
   private readonly renameRequest = createMutation(() => renameCollectionGroupMutation());
   private readonly deleteRequest = createMutation(() => deleteCollectionGroupMutation());
@@ -49,10 +46,7 @@ export class CollectionGroupActions {
     if (this.busy || !this.name.trim()) return null;
     const name = this.name.trim();
     try {
-      await this.renameRequest.mutateAsync({
-        query: { name: this.group() },
-        body: { name },
-      });
+      await this.renameRequest.mutateAsync({ path: { name: this.group() }, body: { name } });
       syncSelection.renameGroup(this.group(), name);
       renameAssetsGroup(this.group(), name);
       this.feedback.success("Group renamed.");
@@ -68,10 +62,7 @@ export class CollectionGroupActions {
     const body = this.members() === 0 ? await this.confirmEmpty() : await this.chooseScope();
     if (!body) return false;
     try {
-      const result = await this.deleteRequest.mutateAsync({
-        query: { name: this.group() },
-        body,
-      });
+      const result = await this.deleteRequest.mutateAsync({ path: { name: this.group() }, body });
       const errors = Object.values(result.errors);
       if (errors.length) {
         this.feedback.error(
@@ -94,25 +85,21 @@ export class CollectionGroupActions {
       confirmLabel: "Delete group",
       destructive: true,
     });
-    return confirmed ? { collections: "keep", group: null } : null;
+    return confirmed ? {} : null;
   }
   private async chooseScope(): Promise<CollectionGroupDelete | null> {
-    // Keeping them is moving them to Ungrouped, so it is no move target of its own.
     const options: { body: CollectionGroupDelete; label: string; description?: string }[] = [
-      { body: { collections: "keep", group: null }, label: `Move them to ${UNGROUPED_GROUP}` },
-      ...this.others()
-        .filter((group) => group !== UNGROUPED_GROUP)
-        .map((group) => ({
-          body: { collections: "move" as const, group },
-          label: `Move them to ${group}`,
-        })),
+      ...this.others().map((group) => ({
+        body: { collections: "move" as const, group },
+        label: `Move them to ${group}`,
+      })),
       {
-        body: { collections: "orphan", group: null },
+        body: { collections: "orphan" },
         label: "Orphan them",
         description: "Overture stops managing them; the server keeps them, listed under Unmanaged.",
       },
       {
-        body: { collections: "both", group: null },
+        body: { collections: "both" },
         label: `Remove them from Overture and ${settingsState.media_server_name}`,
       },
     ];
@@ -131,10 +118,11 @@ export class CollectionGroupActions {
   }
 }
 
-/** Every collection group's name, as runs that choose groups by name list them. */
+/** Every collection group's name, as runs that choose groups list them. */
 export function collectionGroupNames(enabled: () => boolean): () => string[] {
   const query = createQuery(() => ({ ...listCollectionGroupsOptions(), enabled: enabled() }));
-  return () => query.data ?? [];
+  const names = $derived((query.data ?? []).map((group) => group.name));
+  return () => names;
 }
 
 /** The collections a run can choose one by one: those Overture manages, by title. */
@@ -142,12 +130,12 @@ export function choosableCollections(enabled: () => boolean): () => ChoosableCol
   const query = createQuery(() => ({ ...listCollectionsOptions(), enabled: enabled() }));
   const rows = $derived(
     (query.data ?? [])
-      .filter((row) => row.managed && row.kind !== "separator")
-      .map((row) => ({
-        id: row.id,
-        title: row.title,
-        group: row.collection_group ?? UNGROUPED_GROUP,
-      }))
+      .flatMap((row) =>
+        // Only a collection Overture manages is in a group, and every one is.
+        row.managed && row.kind !== "separator" && row.collection_group
+          ? [{ id: row.id, title: row.title, group: row.collection_group }]
+          : [],
+      )
       .sort((a, b) => a.title.localeCompare(b.title)),
   );
   return () => rows;

@@ -26,15 +26,17 @@
   import { sortedOrders } from "../utils/collectionCriteria";
   import { askRemoval, removedMessage } from "../utils/assetRemoval";
   import { errorMessage } from "../utils/errors";
-  import { ORDER_LABELS, TEXT_LIMITS, UNGROUPED_GROUP } from "../../generated/settings";
+  import { ORDER_LABELS, TEXT_LIMITS } from "../../generated/settings";
   import { CollectionMembers } from "../utils/collectionMembers.svelte";
   import { CustomFilterMatch } from "../utils/customFilterMatch.svelte";
   import DataStatus from "./DataStatus.svelte";
   import FieldRow from "./FieldRow.svelte";
   import PopupSection from "./PopupSection.svelte";
   import Select from "./Select.svelte";
+  import ValueCombobox from "./ValueCombobox.svelte";
   import type { SelectOption } from "../utils/selectOptions";
   import { groupOptions } from "../utils/collectionGroups.svelte";
+  import { CollectionExport } from "../utils/collectionExport.svelte";
   import {
     filterSidebarCollections,
     filterSidebarItems,
@@ -113,9 +115,10 @@
           searchField: uiState.searchField,
           sortField: "title",
           sortDir: "asc",
-        }).filter(
-          (collection) => sidebarGroup() === null || inCollectionGroup(collection, sidebarGroup()),
-        )
+        }).filter((collection) => {
+          const group = sidebarGroup();
+          return group === null || inCollectionGroup(collection, group);
+        })
       : [],
   );
   // Only adoption applies to collections Overture does not manage; everything else skips them.
@@ -138,7 +141,8 @@
   type ItemOperation = "artwork" | "themes" | "delete";
 
   const feedback = createNotifier();
-  let busy = $derived(itemsRequest.isPending || collectionsRequest.isPending);
+  const exporter = new CollectionExport();
+  let busy = $derived(itemsRequest.isPending || collectionsRequest.isPending || exporter.busy);
   let forItems = $derived(uiState.sidebarMode === "items");
   let records = $derived<{ monitored: boolean }[]>(forItems ? items : collections);
   let matchCount = $derived(records.length);
@@ -282,7 +286,9 @@
     }
   }
 
-  let collectionOperation = $state<BulkCollectionOperation["operation"]>("set_group");
+  /** A server-side operation, or exporting the collections as a file. */
+  type CollectionOperation = BulkCollectionOperation["operation"] | "export";
+  let collectionOperation = $state<CollectionOperation>("set_group");
   // A set's collections leave only with their set, which would make them again.
   let operationTargets = $derived(
     collectionOperation === "adopt"
@@ -294,7 +300,12 @@
           )
         : collections,
   );
-  let targetGroup = $state(UNGROUPED_GROUP);
+  /** The group Assign group and Adopt put them in; a new name makes a group of it. */
+  let targetGroup = $state("");
+  /** Assigning and adopting each name the group, as every managed collection has one. */
+  let needsGroup = $derived(
+    (collectionOperation === "set_group" || collectionOperation === "adopt") && !targetGroup.trim(),
+  );
   const INHERIT_LABEL = "Inherit group or global default";
   const VISIBILITY_OPTIONS: SelectOption<CollectionMode | null>[] = [
     { value: null, label: INHERIT_LABEL },
@@ -303,10 +314,11 @@
     { value: "default", label: "Library default" },
     { value: "show_items", label: "Show collection and items" },
   ];
-  let targetGroups = $derived(groupOptions(groupsQuery.data ?? []));
+  let targetGroups = $derived(groupOptions((groupsQuery.data ?? []).map((group) => group.name)));
   /** The operations, by label, each disabled while it has no collections to act on. */
   let collectionOperations = $derived.by(() => {
-    const operations: SelectOption<BulkCollectionOperation["operation"]>[] = [
+    const operations: SelectOption<CollectionOperation>[] = [
+        { value: "export", label: "Export as a file", disabled: !collections.length },
         { value: "adopt", label: "Adopt unmanaged", disabled: !unmanagedCollections.length },
         { value: "orphan", label: "Orphan managed", disabled: !collections.length },
         { value: "set_group", label: "Assign group", disabled: !collections.length },
@@ -380,6 +392,7 @@
     if (busy || !resultsReady || !operationTargets.length) return;
     const operation = collectionOperation;
     const ids = operationTargets.map((collection) => collection.id);
+    if (operation === "export") return exporter.run({ collection_ids: ids }, "collections");
     const answer = await confirmCollectionOperation(operation, ids.length);
     if (!answer) return;
     const body: BulkCollectionOperation = {
@@ -388,7 +401,7 @@
       operation,
     };
     if (operation === "set_group" || operation === "adopt") {
-      body.collection_group = targetGroup || null;
+      body.collection_group = targetGroup.trim();
     }
     if (operation === "apply_sort_title_format") body.sort_title_format = template;
     if (operation === "set_order") body.order_type = order;
@@ -512,9 +525,10 @@
     </FieldRow>
     {#if collectionOperation === "set_group" || collectionOperation === "adopt"}
       <FieldRow label="Target group" for={`${id}-group`}>
-        <Select
+        <ValueCombobox
           id={`${id}-group`}
-          disabled={busy}
+          maxlength={TEXT_LIMITS.groupName}
+          placeholder="e.g. Franchises"
           options={targetGroups}
           bind:value={targetGroup}
         />
@@ -568,7 +582,7 @@
     <button
       type="button"
       class={["btn btn-sm self-end", collectionOperation === "delete" ? "btn-danger" : "btn-secondary"]}
-      disabled={busy || !resultsReady || !operationTargets.length}
+      disabled={busy || !resultsReady || !operationTargets.length || needsGroup}
       onclick={() => void runCollectionOperation()}
       >Apply to <span class="operation-count">{operationTargets.length}</span> collections</button
     >

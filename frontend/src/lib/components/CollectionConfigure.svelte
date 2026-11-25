@@ -8,17 +8,21 @@
   import { revealSection } from "../utils/revealSection";
   import { CollectionDraft } from "../utils/collectionDraft.svelte";
   import { CollectionEditor } from "../utils/collectionEditor.svelte";
+  import { CollectionGroupEditor } from "../utils/collectionGroupEditor.svelte";
+  import { settingsState } from "../stores/settingsState.svelte";
   import CollectionDefinition from "./CollectionDefinition.svelte";
+  import CollectionGroupDefinition from "./CollectionGroupDefinition.svelte";
+  import CollectionGroupMembers from "./CollectionGroupMembers.svelte";
   import CollectionRulePanel from "./CollectionRulePanel.svelte";
   import CollectionSettings from "./CollectionSettings.svelte";
   import CollectionMissing from "./CollectionMissing.svelte";
   import CollectionPolicyFields from "./CollectionPolicyFields.svelte";
   import CollectionScheduleFields from "./CollectionScheduleFields.svelte";
-  import { availableOrders } from "../utils/collectionCriteria";
   import CollectionSchedule from "./CollectionSchedule.svelte";
   import CollectionSetEditor from "./CollectionSetEditor.svelte";
   import CollectionMembers from "./CollectionMembers.svelte";
   import DetailForm from "./DetailForm.svelte";
+  import FieldRow from "./FieldRow.svelte";
   import WorkflowSections from "./WorkflowSections.svelte";
   import PendingButton from "./PendingButton.svelte";
   import DataStatus from "./DataStatus.svelte";
@@ -27,15 +31,16 @@
   let {
     collection,
     editor,
-    libraryItems,
-    groups,
+    libraryItems = [],
+    groups = [],
     formId,
     libraries,
   }: {
     collection?: CollectionDetail;
-    editor: CollectionEditor | CollectionDraft;
-    libraryItems: MediaItemRead[];
-    groups: string[];
+    /** A collection, a new collection or set, or a group. */
+    editor: CollectionEditor | CollectionDraft | CollectionGroupEditor;
+    libraryItems?: MediaItemRead[];
+    groups?: string[];
     formId: string;
     libraries: LibrarySectionRead[];
   } = $props();
@@ -43,12 +48,22 @@
   // Each visit opens with only Setup and Content expanded.
   sectionState.forget(getSectionView());
 
-  let set = $derived(editor instanceof CollectionDraft && editor.kind === "set" ? editor : null);
+  let groupEditor = $derived(editor instanceof CollectionGroupEditor ? editor : null);
+  /** A collection, saved or new. */
+  let collectionEditor = $derived(editor instanceof CollectionGroupEditor ? null : editor);
+  let draft = $derived(editor instanceof CollectionDraft ? editor : null);
+  let noun = $derived(groupEditor ? "Group" : "Collection");
+  /** What a group page and a new set edit alike: a group's defaults, and its set. */
+  let group = $derived.by(() => {
+    if (groupEditor) return { form: groupEditor.form, name: groupEditor.name };
+    if (draft?.kind === "set") return { form: draft.set, name: draft.setGroup };
+    return null;
+  });
   /** Which save is running, for its pending label. */
   let syncing = $state(false);
   let syncTitle = $derived(
-    set
-      ? "Save, then open Sync in Operations with only this set's group chosen"
+    group
+      ? "Save, then open Sync in Operations with only this group chosen"
       : "Save, then open Sync in Operations with only this collection chosen",
   );
 
@@ -75,7 +90,7 @@
   />
   <form
     id={formId}
-    aria-label="Configure collection"
+    aria-label={`Configure ${noun.toLowerCase()}`}
     onsubmit={(event) => {
       event.preventDefault();
       // Enter submits with the first button, Save.
@@ -84,83 +99,112 @@
       void editor.save(syncing);
     }}
   >
-    <section id={`${formId}-setup`} aria-label="Collection setup" tabindex="-1">
-      <CollectionDefinition {editor} {groups} {libraries} />
+    <section id={`${formId}-setup`} aria-label={`${noun} setup`} tabindex="-1">
+      {#if groupEditor}
+        <CollectionGroupDefinition editor={groupEditor} {libraries} />
+      {:else if collectionEditor}
+        <CollectionDefinition editor={collectionEditor} {groups} {libraries} />
+      {/if}
     </section>
 
-    <section id={`${formId}-content`} aria-label="Collection content" tabindex="-1">
-      {#if set}
+    {#if group?.form.generator}
+      {@const form = group.form}
+      <section id={`${formId}-content`} aria-label={`${noun} content`} tabindex="-1">
         <DetailForm
           collapsible
           expanded
           title="Content"
           description="What the set makes a collection for, and what every one needs."
-          busy={set.busy}
-          disabled={!set.libraryIds.length}
+          busy={editor.busy}
+          disabled={!form.libraryIds.length}
         >
           <CollectionSetEditor
-            bind:generator={set.generator}
-            libraryIds={set.libraryIds}
+            bind:generator={form.current.generator!}
+            libraryIds={form.libraryIds}
             {libraries}
-            capabilities={set.setCapabilities}
-            group={set.setGroup}
-            minimum={set.setPolicy.minimum_items ?? null}
+            capabilities={form.capabilities}
+            group={group.name}
+            minimum={form.current.minimum_items ?? null}
           />
+          {#if groupEditor}
+            <div class="actions-row">
+              <button
+                type="button"
+                class="btn btn-secondary"
+                title="Its collections stay in the group; save to stop the set creating and updating them"
+                onclick={() => (form.generator = null)}>Stop creating collections</button
+              >
+            </div>
+          {/if}
         </DetailForm>
-      {:else}
-        <CollectionRulePanel {editor} {libraries} />
-      {/if}
-    </section>
+      </section>
+    {:else if !group && collectionEditor}
+      <section id={`${formId}-content`} aria-label={`${noun} content`} tabindex="-1">
+        <CollectionRulePanel editor={collectionEditor} {libraries} />
+      </section>
+    {/if}
 
-    {#if collection && editor instanceof CollectionEditor}
-      <section id={`${formId}-members`} aria-label="Collection members" tabindex="-1">
-        <CollectionMembers {editor} {libraryItems} {libraries} />
+    {#if groupEditor}
+      <section id={`${formId}-members`} aria-label={`${noun} members`} tabindex="-1">
+        <CollectionGroupMembers members={groupEditor.members} set={!!groupEditor.form.generator} />
+      </section>
+    {:else if collection && collectionEditor instanceof CollectionEditor}
+      <section id={`${formId}-members`} aria-label={`${noun} members`} tabindex="-1">
+        <CollectionMembers editor={collectionEditor} {libraryItems} {libraries} />
         {#if collection.lists_missing}<CollectionMissing {collection} />{/if}
       </section>
     {/if}
 
-    <section id={`${formId}-settings`} aria-label="Collection settings" tabindex="-1">
-      {#if set}
+    <section id={`${formId}-settings`} aria-label={`${noun} settings`} tabindex="-1">
+      {#if group}
+        {@const form = group.form}
         <DetailForm
           collapsible
           title="Settings"
-          description="The set's group defaults, which each of its collections inherits."
-          busy={set.busy}
-          disabled={!set.libraryIds.length}
+          description="The group's defaults, which each of its collections inherits unless it sets its own."
+          busy={editor.busy}
         >
           <CollectionPolicyFields
-            bind:policy={set.setPolicy}
+            bind:policy={form.current}
             level="group"
-            defaults={set.defaults.data}
-            plex={set.capabilities.data?.visibility ?? false}
-            orders={availableOrders(set.setCapabilities, !!set.generator.smart)}
-            arr={set.arr}
-            memberLabels={set.capabilities.data?.member_labels ?? false}
-            filtering={!!set.generator.smart}
+            defaults={form.defaults.data}
+            plex={form.capabilities?.visibility ?? false}
+            orders={form.orders}
+            arr={form.arr}
+            memberLabels={form.capabilities?.member_labels ?? false}
+            filtering={!!form.generator?.smart}
           />
+          <!-- Only Plex keeps empty collections, which a separator is. -->
+          {#if settingsState.hasServerType("plex")}
+            <FieldRow
+              label="Separator"
+              hint="An empty collection titled after the group, with generated art, sorted right before the group's collections. Without a sort title set anywhere, they sort as {'{group} {title}'}; one that puts the group first keeps it there."
+            >
+              <input type="checkbox" aria-label="Separator" bind:checked={form.current.separator} />
+            </FieldRow>
+          {/if}
         </DetailForm>
-      {:else}
-        <CollectionSettings {editor} />
+      {:else if collectionEditor}
+        <CollectionSettings editor={collectionEditor} />
       {/if}
     </section>
 
-    <section id={`${formId}-schedule`} aria-label="Collection schedule" tabindex="-1">
-      {#if set}
+    <section id={`${formId}-schedule`} aria-label={`${noun} schedule`} tabindex="-1">
+      {#if group}
         <DetailForm
           collapsible
           title="Active dates"
-          description="When the set's collections are on the server each year."
-          busy={set.busy}
-          disabled={!set.libraryIds.length}
+          description="When the group's collections are on the server each year."
+          busy={editor.busy}
         >
           <CollectionScheduleFields
-            bind:policy={set.setPolicy}
+            bind:policy={group.form.current}
             level="group"
-            defaults={set.defaults.data}
+            defaults={group.form.defaults.data}
           />
         </DetailForm>
-      {:else}
-        <CollectionSchedule {editor} />
+      {:else if collectionEditor}
+        <CollectionSchedule editor={collectionEditor} />
       {/if}
     </section>
     <div class="actions-row" role="group" aria-label="Save">
@@ -192,7 +236,7 @@
 </WorkflowSections>
 
 <style>
-  /* Enter submits with the first button, so Save comes first and sits last, in the corner. */
+  /* Enter submits with the first button, Save, so it comes first and sits last, in the corner. */
   .actions-row :global(.default-submit) {
     order: 1;
   }

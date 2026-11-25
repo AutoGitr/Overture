@@ -1,6 +1,6 @@
 import { fireEvent, waitFor, within } from "@testing-library/svelte";
 import { storeCatalogStatus } from "../../../lib/realtime/cache";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   listCatalogEntriesOptions,
   listCollectionsOptions,
@@ -459,7 +459,10 @@ describe("FiltersPopup edits one draft of the filter set", () => {
       "/api/library/libraries": [],
       "/api/collections/capabilities": collectionCapabilities(),
       "/api/collections/bulk-operation": { collection_ids: [1], errors: {} },
-      "/api/collections/groups": ["Ungrouped", "Weekend"],
+      "/api/collections/groups": [
+        { name: "Ungrouped", set: null },
+        { name: "Weekend", set: null },
+      ],
     });
     const view = renderWithQueryClient(FiltersPopup);
     // Plex offers smart collections, so the server's options have loaded.
@@ -499,6 +502,39 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     ).toEqual({ collection_ids: [1], operation, ...expected });
   });
 
+  it("exports the collections the filters match as a file", async () => {
+    const createObjectURL = vi.fn(() => "blob:file");
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() }));
+    await navigate("/collections");
+    settingsState.load(
+      appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
+    );
+    queryClient.setQueryData(listCollectionsOptions().queryKey, [
+      collection({ id: 1, title: "Saga" }),
+      collection({ id: 2, title: "Epic" }),
+    ]);
+    const { calls } = mockFetchRoutes({
+      "/api/library/libraries": [],
+      "/api/collections/capabilities": collectionCapabilities(),
+      "/api/collections/groups": [{ name: "Ungrouped", set: null }],
+      "/api/collections/presets/export": {
+        file: { preset_version: 1, preset: null, groups: [], collections: [] },
+        refused: [],
+        warnings: [],
+        issue: null,
+      },
+    });
+    const view = renderWithQueryClient(FiltersPopup);
+    await view.findByRole("radiogroup", { name: "Kind" });
+    await chooseOption(view.getByLabelText("Operation"), "Export as a file");
+    await fireEvent.click(view.getByRole("button", { name: "Apply to 2 collections" }));
+    await waitFor(() => expect(createObjectURL).toHaveBeenCalledOnce());
+    // Matches go by title: Epic, then Saga.
+    const exported = calls.find((call) => call.url === "/api/collections/presets/export");
+    expect(JSON.parse(String(exported?.init.body))).toEqual({ collection_ids: [2, 1] });
+    vi.unstubAllGlobals();
+  });
+
   it("lists collection operations and target groups alphabetically, without group actions", async () => {
     await navigate("/collections");
     openSidebarGroup("Weekend");
@@ -511,7 +547,11 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     mockFetchRoutes({
       "/api/library/libraries": [],
       "/api/collections/capabilities": collectionCapabilities(),
-      "/api/collections/groups": ["Weekend", "Anime", "Ungrouped"],
+      "/api/collections/groups": [
+        { name: "Weekend", set: null },
+        { name: "Anime", set: null },
+        { name: "Ungrouped", set: null },
+      ],
     });
     const view = renderWithQueryClient(FiltersPopup);
     await view.findByRole("radiogroup", { name: "Kind" });
@@ -523,6 +563,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
       "Adopt unmanaged",
       "Assign group",
       "Delete collections",
+      "Export as a file",
       "Format sort titles",
       "Orphan managed",
       "Set sort",
@@ -538,7 +579,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
       ).toEqual(["Anime", "Ungrouped", "Weekend"]),
     );
     await fireEvent.keyDown(view.getByLabelText("Target group"), { key: "Escape" });
-    // Groups are renamed and deleted in Collection groups, not among the filters.
+    // Groups are renamed and deleted on their own page, not among the filters.
     expect(view.queryByRole("button", { name: /rename/i })).toBeNull();
     expect(view.queryByRole("button", { name: /delete group/i })).toBeNull();
   });

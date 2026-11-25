@@ -57,10 +57,4 @@ describe("inCollectionGroup", () => {
     expect(inCollectionGroup(imported, "Weekend")).toBe(false);
     expect(inCollectionGroup(managed, "Weekend")).toBe(true);
   });
-
-  it("lists only managed collections without a group at the top level", () => {
-    expect(inCollectionGroup({ collection_group: null, managed: true }, null)).toBe(true);
-    expect(inCollectionGroup({ collection_group: null, managed: false }, null)).toBe(false);
-    expect(inCollectionGroup({ collection_group: "Weekend", managed: true }, null)).toBe(false);
-  });
 });

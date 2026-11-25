@@ -4,7 +4,6 @@ lazy from ...db.models.collection_group import CollectionGroup
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...domain import (
     SMART_CUSTOM_ORDER,
-    UNGROUPED_GROUP,
     CollectionKind,
     CollectionOrder,
     MediaType,
@@ -16,11 +15,11 @@ lazy from ...schemas.collections import (
     BulkCollectionOperationResult,
     CollectionGroupDelete,
     CollectionGroupPolicy,
-    CollectionSetSummary,
+    CollectionGroupRead,
+    CollectionGroupSet,
 )
 lazy from ...schemas.common import Status, StatusResponse
 lazy from ...utils.collection_fields import DIMENSIONS
-lazy from ...utils.collection_groups import collection_group
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
 lazy from ..needs import apply_needs
@@ -58,18 +57,12 @@ class CollectionGroups:
         self._separators = separators
 
     async def names(self) -> list[str]:
-        """Return the groups, Ungrouped always among them."""
-        async with self._access.database.read_session() as session:
-            groups = await CollectionRepository(session).groups()
-        return sorted({UNGROUPED_GROUP} | {group.name for group in groups})
+        """Return the groups' names, as :meth:`list` orders them."""
+        return [group.name for group in await self.list()]
 
     async def rename(self, name: str, replacement: str) -> StatusResponse:
         """Rename a group; its collections hold it by key, so they follow."""
         name, replacement = name.strip(), group_name(replacement)
-        if UNGROUPED_GROUP.casefold() in {name.casefold(), replacement.casefold()}:
-            raise PublicServiceError(
-                422, "The Ungrouped group cannot be renamed or replaced"
-            )
         async with (
             self._access.asset_locks.acquire(COLLECTIONS_LOCK),
             self._access.database.write_session() as session,
@@ -99,13 +92,11 @@ class CollectionGroups:
         """Remove a group only after each selected collection operation succeeds.
 
         Raises:
-            PublicServiceError: 422 for the reserved fallback or a move into itself.
+            PublicServiceError: 422 for a move into itself, or for a group
+                holding collections when nothing says what happens to them.
         """
         name = name.strip()
-        if name.casefold() == UNGROUPED_GROUP.casefold():
-            raise PublicServiceError(422, "The Ungrouped group cannot be deleted")
-        target = collection_group(body.group)
-        if target.casefold() == name.casefold():
+        if body.group is not None and body.group.casefold() == name.casefold():
             raise PublicServiceError(422, "Move the collections to another group")
         result = BulkCollectionOperationResult()
         async with self._access.asset_locks.acquire(COLLECTIONS_LOCK):
@@ -116,6 +107,10 @@ class CollectionGroups:
             if group is None:
                 raise PublicServiceError(404, "Collection group not found")
             rows = await self._separators.discard(rows)
+            if rows and body.collections is None:
+                raise PublicServiceError(
+                    422, "Choose what happens to the group's collections"
+                )
             if body.collections in {"orphan", "both"}:
                 for row in rows:
                     identity = row.id or 0
@@ -139,31 +134,37 @@ class CollectionGroups:
                     repo = CollectionRepository(session)
                     group = await repo.group(name)
                     if group is not None:
-                        moved_to = await repo.ensure_group(target)
                         members = await repo.group_members(group)
-                        for row in members:
-                            row.group = moved_to
-                            row.generated_value = None
-                            row.updated_at = utc_now()
-                            session.add(row)
-                        await session.flush()
-                        await apply_needs(session, collections=members)
+                        if body.group is not None:
+                            moved_to = await repo.ensure_group(body.group)
+                            for row in members:
+                                row.group = moved_to
+                                row.generated_value = None
+                                row.updated_at = utc_now()
+                                session.add(row)
+                            await session.flush()
+                            await apply_needs(session, collections=members)
                         await session.delete(group)
         await self._access.changed()
         return result
 
-    async def sets(self) -> list[CollectionSetSummary]:
-        """Return the groups that are sets, by name."""
+    async def list(self) -> list[CollectionGroupRead]:
+        """Return the groups by name, each with its set."""
         async with self._access.database.read_session() as session:
-            policies = await CollectionRepository(session).groups()
+            rows = {
+                group.name: group
+                for group in await CollectionRepository(session).groups()
+            }
         return [
-            CollectionSetSummary(
-                group=group.name,
-                dimension=saved.dimension,
-                library_ids=saved.library_ids,
+            CollectionGroupRead(
+                name=name,
+                set=CollectionGroupSet(
+                    dimension=saved.dimension, library_ids=saved.library_ids
+                )
+                if (saved := generator(rows.get(name))) is not None
+                else None,
             )
-            for group in sorted(policies, key=lambda group: group.name.casefold())
-            if (saved := generator(group)) is not None
+            for name in sorted(rows, key=lambda name: name.casefold())
         ]
 
     async def policy(self, name: str) -> CollectionGroupPolicy:
@@ -212,12 +213,6 @@ class CollectionGroups:
             or self._access.configured_types(),
         )
         if body.generator is not None:
-            if name.casefold() == UNGROUPED_GROUP.casefold():
-                raise PublicServiceError(
-                    422,
-                    f"{UNGROUPED_GROUP} holds collections without a group, "
-                    "so it cannot be a set",
-                )
             types = await self._access.library_types(body.generator.library_ids)
             self._validator.smart_set(types, smart=body.generator.smart)
             for library_id, media_type in types.items():

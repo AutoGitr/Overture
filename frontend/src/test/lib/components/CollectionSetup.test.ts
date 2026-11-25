@@ -33,7 +33,7 @@ function mockPage(overrides: Record<string, unknown> = {}) {
   return mockFetchRoutes({
     "/api/library/libraries": libraries,
     "/api/library/items": { items: [member], total: 1 },
-    "/api/collections/groups": ["Franchises"],
+    "/api/collections/groups": [{ name: "Franchises", set: null }],
     "/api/collections/defaults": {
       minimum_items: 1,
       sort_title_format: "01_{title}",
@@ -43,7 +43,6 @@ function mockPage(overrides: Record<string, unknown> = {}) {
     "/api/collections/12": detail,
     "/api/collections": ({ init }: { init: RequestInit }) =>
       Response.json(init.method === "POST" ? detail : []),
-    "/api/collections/sets": [],
     "/api/collections/12/rule": collectionRule(),
     "/api/collections/presets": { generated_at: null, presets: [], error: null },
     ...overrides,
@@ -149,7 +148,7 @@ describe("collection setup flow", () => {
 
     await fireEvent.click(setup.getByLabelText("One per value"));
     expect(setup.queryByLabelText("Title")).toBeNull();
-    expect(setup.getByRole("combobox", { name: /^Group/ })).not.toBeRequired();
+    expect(setup.getByRole("combobox", { name: /^Group/ })).toBeRequired();
     // Both kinds share their sections; a set's Title is a template.
     for (const name of ["Collection content", "Collection settings", "Collection schedule"])
       expect(screen.getByRole("region", { name })).toBeInTheDocument();
@@ -174,7 +173,7 @@ describe("collection setup flow", () => {
         { id: "jf-shows", title: "Shows", media_type: "show", server_id: 2, count: 1 },
       ],
       "/api/collections/presets": { generated_at: null, presets: [SEASONAL], error: null },
-      "/api/collections/group-policy": ({ init }: { init: RequestInit }) =>
+      "/api/collections/groups/Decades": ({ init }: { init: RequestInit }) =>
         Response.json(init.method === "PUT" ? JSON.parse(String(init.body)) : {}),
     });
     await navigate("/collections/new");
@@ -197,7 +196,7 @@ describe("collection setup flow", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(sidebarGroup()).toBe("Decades"));
-    expect(postedBody(calls, "/api/collections/group-policy?")).toMatchObject({
+    expect(postedBody(calls, "/api/collections/groups/Decades")).toMatchObject({
       minimum_items: 3,
       generator: { dimension: "decade", library_ids: ["movies", "other", "jf-movies"] },
     });
@@ -206,7 +205,7 @@ describe("collection setup flow", () => {
   it("fills a collection from a preset, its group's missing defaults and its art", async () => {
     const { calls } = mockPage({
       "/api/collections/presets": { generated_at: null, presets: [SEASONAL], error: null },
-      "/api/collections/group-policy": ({ init }: { init: RequestInit }) =>
+      "/api/collections/groups/Holidays": ({ init }: { init: RequestInit }) =>
         Response.json(
           init.method === "PUT"
             ? JSON.parse(String(init.body))
@@ -227,7 +226,7 @@ describe("collection setup flow", () => {
       expect(calls.some((call) => call.url === "/api/collections/12/art/poster")).toBe(true),
     );
     // The group keeps what it set; only what it leaves at Default is filled.
-    expect(postedBody(calls, "/api/collections/group-policy?")).toEqual({
+    expect(postedBody(calls, "/api/collections/groups/Holidays")).toEqual({
       auto_art: ["generate"],
       delete_when_inactive: true,
     });
@@ -288,11 +287,28 @@ describe("collection setup flow", () => {
     expect(screen.getByRole("region", { name: "Collection settings" })).toHaveFocus();
   });
 
+  it("saves a collection only once it names a group", async () => {
+    mockPage();
+    await createPage();
+    await onlyLibrary(screen, "Movies");
+    await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "Draft" } });
+    const save = screen.getByRole("button", { name: "Save" });
+    expect(save).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent("Choose a group");
+    await fireEvent.input(screen.getByRole("combobox", { name: "Group" }), {
+      target: { value: "Brand new" },
+    });
+    expect(save).toBeEnabled();
+  });
+
   it("saves a new collection on Enter, without opening Sync", async () => {
     const { calls } = mockPage();
     await createPage();
     await onlyLibrary(screen, "Movies");
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "Draft" } });
+    await fireEvent.input(screen.getByRole("combobox", { name: "Group" }), {
+      target: { value: "Films" },
+    });
     await fireEvent.click(screen.getByRole("button", { name: "Condition" }));
     await fireEvent.submit(screen.getByRole("form", { name: "Configure collection" }));
     await waitFor(() =>
@@ -319,6 +335,9 @@ describe("collection setup flow", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Condition" }));
     await chooseOption(screen.getByLabelText("Criteria condition 2 field"), "Unplayed");
     await chooseOption(screen.getByLabelText("Criteria condition 2 value"), "false");
+    await fireEvent.input(screen.getByRole("combobox", { name: "Group" }), {
+      target: { value: "Films" },
+    });
     await fireEvent.click(screen.getByRole("button", { name: "Save and Sync" }));
     await waitFor(() =>
       expect(
@@ -345,7 +364,7 @@ describe("collection setup flow", () => {
 
   it("creates a set split by a dimension into a group that keeps its other defaults", async () => {
     const { calls } = mockPage({
-      "/api/collections/group-policy": ({ init }: { init: RequestInit }) =>
+      "/api/collections/groups/Decades": ({ init }: { init: RequestInit }) =>
         Response.json(
           init.method === "PUT" ? JSON.parse(String(init.body)) : { visible_home: true },
         ),
@@ -376,7 +395,7 @@ describe("collection setup flow", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Save and Sync" }));
 
     await waitFor(() => expect(sidebarGroup()).toBe("Decades"));
-    expect(postedBody(calls, "/api/collections/group-policy?")).toMatchObject({
+    expect(postedBody(calls, "/api/collections/groups/Decades")).toMatchObject({
       visible_home: true,
       generator: {
         dimension: "decade",
@@ -395,9 +414,9 @@ describe("collection setup flow", () => {
 
   it("refuses a group that already is a set, and warns of another set splitting alike", async () => {
     mockPage({
-      "/api/collections/sets": [
-        { group: "Decades", dimension: "decade", library_ids: ["other"] },
-        { group: "Genres", dimension: "genre", library_ids: ["other"] },
+      "/api/collections/groups": [
+        { name: "Decades", set: { dimension: "decade", library_ids: ["other"] } },
+        { name: "Genres", set: { dimension: "genre", library_ids: ["other"] } },
       ],
     });
     await createPage();
@@ -432,7 +451,8 @@ describe("collection setup flow", () => {
     goToCollectionView(imported, "configure");
     renderWithQueryClient(CollectionPage);
     const adopt = await screen.findByRole("button", { name: "Adopt" });
-    expect(adopt).toBeEnabled();
+    // Every collection Overture manages joins a group.
+    expect(adopt).toBeDisabled();
     for (const name of ["Collection setup", "Collection content", "Collection settings"])
       expect(screen.queryByRole("region", { name })).toBeNull();
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
@@ -495,6 +515,9 @@ describe("collection setup flow", () => {
     await fireEvent.click(screen.getByRole("checkbox", { name: "Other movies" }));
     expect(screen.getByText(/each gets its own, kept alike/)).toBeInTheDocument();
     await fireEvent.input(screen.getByLabelText("Title"), { target: { value: "Attenborough" } });
+    await fireEvent.input(screen.getByRole("combobox", { name: "Group" }), {
+      target: { value: "Films" },
+    });
     const boxes = screen.getAllByRole("button", { name: "Condition" });
     await fireEvent.click(boxes[1] as HTMLElement);
     await chooseOption(screen.getByLabelText("Other movies criteria condition 1 field"), "Year");

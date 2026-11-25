@@ -89,7 +89,11 @@ class CollectionBulk:
             "remove_artwork": lambda i, body: art.remove(i, None, body.removal),
             "remove_themes": lambda i, body: themes.remove(i, body.removal),
             "adopt": lambda i, body: adoption.adopt(
-                i, CollectionAdoptionRequest(group=body.collection_group)
+                # The operation is refused without a group, so one is named.
+                i,
+                CollectionAdoptionRequest.model_validate(
+                    {"group": body.collection_group}
+                ),
             ),
             "orphan": lambda i, _: adoption.orphan(i),
             "set_monitored": lambda i, body: editor.set_monitored(

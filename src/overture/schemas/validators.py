@@ -2,7 +2,7 @@
 
 lazy from typing import Annotated, TypeVar
 
-lazy from pydantic import AfterValidator, Field
+lazy from pydantic import AfterValidator, Field, StringConstraints
 
 lazy from ..catalog_contract.contract import YOUTUBE_ID_PATTERN
 lazy from ..domain import UNMANAGED_GROUP
@@ -58,8 +58,15 @@ def check_group_name(name: str) -> str:
     return name
 
 
-#: A collection group name other than the reserved Unmanaged.
-type GroupName = Annotated[str, Field(max_length=200), AfterValidator(check_group_name)]
+#: A collection group name other than the reserved Unmanaged, without outer spaces.
+type GroupName = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, max_length=200),
+    AfterValidator(check_group_name),
+]
+
+#: The group a managed collection belongs to: every one names a group.
+type RequiredGroupName = Annotated[GroupName, Field(min_length=1)]
 
 #: Collection groups a run covers, without repeats; at least one when given.
 type GroupNames = Annotated[

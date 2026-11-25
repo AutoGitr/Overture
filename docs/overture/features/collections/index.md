@@ -29,8 +29,8 @@ either or to collections of both; **Made as** narrows it to collections made
 one at a time (**One collection**) or by a set (**One per value**). In the
 OvertureDB catalog, the same icon beside Movies opens its collections.
 
-**Groups** lists every group, empty ones too; **Ungrouped** and **Unmanaged**
-appear only while they hold a collection. A sparkle marks smart collections.
+**Groups** lists every group, empty ones too, and **Unmanaged** while it holds
+a collection. A sparkle marks smart collections.
 The sort menu of **Groups** sorts the groups themselves, by name, collections,
 items, date added or last synced.
 
@@ -71,9 +71,8 @@ order:
    server. An inactive collection's art and theme can still be chosen:
    Overture keeps them, and the sync that puts the collection back sends them.
 
-A collection's page opens with Setup and Content expanded and the rest closed,
-and a group in **Collection groups** with every section closed, each time;
-neither remembers what was open.
+A collection's or a group's page opens with Setup and Content expanded and the
+rest closed, each time; neither remembers what was open.
 
 ## Saving and syncing
 

@@ -125,6 +125,7 @@ async def test_an_export_is_a_file_another_install_can_add(
     )
     local = await service.editor.create(
         CollectionCreate(
+            collection_group="Films",
             title="Local",
             rule=library_rule(
                 criteria=where(FilterField.FOLDER, FilterOperator.CONTAINS, "/media")
@@ -133,6 +134,7 @@ async def test_an_export_is_a_file_another_install_can_add(
     )
     labelled = await service.editor.create(
         CollectionCreate(
+            collection_group="Films",
             title="Labelled",
             rule=library_rule(
                 criteria=where(FilterField.LABEL, FilterOperator.IS, "x")
@@ -310,7 +312,8 @@ def _form_bodies(
     """The groups and collections the create form saves for each item of *file*.
 
     A set and a group's defaults are saved as the group; each collection takes
-    every library of the media types it has criteria for.
+    every library of the media types it has criteria for, and its group, or
+    one picked when it names none.
     """
     groups = [
         (
@@ -333,8 +336,11 @@ def _form_bodies(
     collections = [
         CollectionCreate(
             **collection.model_dump(
-                include=set(CollectionOptions.model_fields), exclude_unset=True
+                include=set(CollectionOptions.model_fields) - {"collection_group"},
+                exclude_unset=True,
             ),
+            # A preset may leave the group to the person adding it, who picks one.
+            collection_group=collection.collection_group or "Picked",
             rule=CollectionRuleWrite(
                 **collection.policy.model_dump(exclude_unset=True),
                 smart=collection.smart,

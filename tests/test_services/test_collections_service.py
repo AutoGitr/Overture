@@ -581,6 +581,7 @@ async def test_every_bulk_operation_has_a_handler(
             "monitored": True,
             "sort_title_format": "{title}",
             "visible_home": True,
+            "collection_group": "Films",
         }
     )
     result = await _service(app_config=app_config, database=database).bulk.run(body)

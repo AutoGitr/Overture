@@ -2,7 +2,7 @@
 
 lazy from typing import Annotated
 
-lazy from fastapi import Query
+lazy from fastapi import Path, Query
 lazy from fastapi.responses import Response
 
 lazy from ..dependencies import (
@@ -54,6 +54,7 @@ lazy from ..schemas.collections import (
     CollectionFieldValue,
     CollectionGroupDelete,
     CollectionGroupPolicy,
+    CollectionGroupRead,
     CollectionGroupRename,
     CollectionKindRequest,
     CollectionMembersUpdate,
@@ -68,7 +69,6 @@ lazy from ..schemas.collections import (
     CollectionRuleWrite,
     CollectionSetEntry,
     CollectionSetPreview,
-    CollectionSetSummary,
     DeleteCollectionThemeResponse,
     KindRecommendation,
     MdblistListRead,
@@ -96,6 +96,8 @@ lazy from .responses import NOT_CONFIGURED, UPLOAD_GONE, errors
 
 router = media_server_router(prefix="/collections", tags=["collections"])
 _NO_GROUP = errors({404: "No collection group has that name"})
+#: A group's name in a path; a name may hold slashes.
+type GroupPath = Annotated[str, Path(min_length=1, max_length=200)]
 
 
 @router.get("")
@@ -105,9 +107,11 @@ async def list_collections(reader: CollectionReaderDep) -> list[CollectionRead]:
 
 
 @router.get("/groups")
-async def list_collection_groups(groups: CollectionGroupsDep) -> list[str]:
-    """Return default and custom collection groups."""
-    return await groups.names()
+async def list_collection_groups(
+    groups: CollectionGroupsDep,
+) -> list[CollectionGroupRead]:
+    """Return the collection groups, each with its set."""
+    return await groups.list()
 
 
 @router.get("/defaults")
@@ -181,14 +185,6 @@ async def search_mdblist_lists(
     return await discovery.mdblist_lists(query)
 
 
-@router.get("/sets")
-async def list_collection_sets(
-    groups: CollectionGroupsDep,
-) -> list[CollectionSetSummary]:
-    """List the groups that are sets, with what each splits by."""
-    return await groups.sets()
-
-
 @router.post("/sets/preview", openapi_extra=READS_ONLY)
 async def preview_collection_set(
     body: CollectionSetPreview, sets: CollectionSetsDep
@@ -197,39 +193,34 @@ async def preview_collection_set(
     return await sets.preview(body)
 
 
-@router.patch("/groups", responses=_NO_GROUP)
+@router.patch("/groups/{name:path}", responses=_NO_GROUP)
 async def rename_collection_group(
-    body: CollectionGroupRename,
-    groups: CollectionGroupsDep,
-    name: Annotated[str, Query(min_length=1, max_length=200)],
+    body: CollectionGroupRename, groups: CollectionGroupsDep, name: GroupPath
 ) -> StatusResponse:
     """Rename a group and all its collection assignments."""
     return await groups.rename(name, body.name)
 
 
-@router.delete("/groups", responses=_NO_GROUP)
+@router.delete("/groups/{name:path}", responses=_NO_GROUP)
 async def delete_collection_group(
-    body: CollectionGroupDelete,
-    groups: CollectionGroupsDep,
-    name: Annotated[str, Query(min_length=1, max_length=200)],
+    body: CollectionGroupDelete, groups: CollectionGroupsDep, name: GroupPath
 ) -> BulkCollectionOperationResult:
     """Delete a group, optionally deleting its collections in either application."""
     return await groups.delete(name, body)
 
 
-@router.get("/group-policy")
+@router.get("/groups/{name:path}")
 async def get_collection_group_policy(
-    groups: CollectionGroupsDep,
-    name: Annotated[str, Query(min_length=1, max_length=200)],
+    groups: CollectionGroupsDep, name: GroupPath
 ) -> CollectionGroupPolicy:
     """Read a group's nullable overrides for the active media server."""
     return await groups.policy(name)
 
 
-@router.put("/group-policy")
+@router.put("/groups/{name:path}")
 async def save_collection_group_policy(
     groups: CollectionGroupsDep,
-    name: Annotated[str, Query(min_length=1, max_length=200)],
+    name: GroupPath,
     body: CollectionGroupPolicy,
     new_set: Annotated[
         bool, Query(description="Create a set; refuse a group that already is one")

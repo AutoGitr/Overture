@@ -12,32 +12,39 @@
     { key: "settings", label: "Settings", icon: SlidersHorizontal },
     { key: "schedule", label: "Schedule", icon: Calendar },
   ] as const;
+
+  /** A section of a collection's or a group's configuration. */
+  export type ConfigureSection = (typeof SECTIONS)[number]["key"];
 </script>
 
 <script lang="ts">
-  import type { CollectionDetail } from "../../generated/rest/types.gen";
-  import { goToCollectionView, route } from "../router/routes";
+  import { route } from "../router/routes";
   import { revealSection } from "../utils/revealSection";
 
   let {
     formId,
-    collection,
     configuring,
+    sections = SECTIONS.map((section) => section.key),
+    onopen,
   }: {
     formId: string;
-    collection: CollectionDetail;
     /** The configure view is open, so one section is the current one. */
     configuring: boolean;
+    /** The sections the form holds. */
+    sections?: readonly ConfigureSection[];
+    /** Open the configure view at the section the target names. */
+    onopen: (target: string) => void;
   } = $props();
 
+  let shown = $derived(SECTIONS.filter((section) => sections.includes(section.key)));
   let active = $derived(
     configuring
-      ? (SECTIONS.find((section) => route.hash === `#${formId}-${section.key}`)?.key ?? "setup")
+      ? (shown.find((section) => route.hash === `#${formId}-${section.key}`)?.key ?? "setup")
       : null,
   );
 </script>
 
-{#each SECTIONS as section (section.key)}
+{#each shown as section (section.key)}
   <a
     class={["tab-item", { active: active === section.key }]}
     href={`#${formId}-${section.key}`}
@@ -46,7 +53,7 @@
       const target = `${formId}-${section.key}`;
       // The URL already names it, so no navigation follows: jump again directly.
       if (configuring && route.hash === `#${target}`) void revealSection(target);
-      else goToCollectionView(collection, "configure", "poster", target);
+      else onopen(target);
     }}
     aria-current={active === section.key ? "location" : undefined}
     aria-label={section.label}

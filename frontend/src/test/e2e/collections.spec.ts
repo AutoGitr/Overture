@@ -45,13 +45,10 @@ test("a collection set previews and creates its collections without horizontal o
     }),
   );
   let saved: unknown = null;
-  await page.route("**/api/collections/group-policy{,?*}", (route) => {
+  await page.route("**/api/collections/groups/*", (route) => {
     if (route.request().method() === "PUT") saved = route.request().postDataJSON();
     return route.fulfill({ json: saved ?? {} });
   });
-  await page.route("**/api/collections/group-policy/sync{,?*}", (route) =>
-    route.fulfill({ json: { created: [13], removed: [], synced: 0, errors: {} } }),
-  );
   await logIn(page, "/collections/new");
   await expect(page.getByRole("button", { name: "Setup", exact: true })).toHaveAttribute(
     "aria-expanded",
@@ -79,7 +76,8 @@ test("a collection set previews and creates its collections without horizontal o
   await expect
     .poll(() => saved)
     .toMatchObject({ generator: { dimension: "decade", library_ids: ["movies"] } });
-  await expect(page).toHaveURL(/\/collections(\?|$)/);
+  // A saved set opens as its group.
+  await expect(page).toHaveURL(/\/collections\/groups\/Decades\?/);
 });
 
 test("collection members, metadata and rule views work on desktop and mobile", async ({ page }) => {
@@ -114,7 +112,12 @@ test("collection members, metadata and rule views work on desktop and mobile", a
     await route.fulfill({ json: detail });
   });
   await page.route("**/api/collections/groups{,?*}", (route) =>
-    route.fulfill({ json: ["default-decades", "Weekend"] }),
+    route.fulfill({
+      json: [
+        { name: "default-decades", set: null },
+        { name: "Weekend", set: null },
+      ],
+    }),
   );
   await page.route("**/api/collections/12/rule{,?*}", (route) => route.fulfill({ json: rule }));
   await page.route("**/api/collections/12/art/*/sources?*", (route) =>
@@ -165,7 +168,8 @@ test("collection members, metadata and rule views work on desktop and mobile", a
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
   const modes = page.getByRole("tablist", { name: "Detail modes", exact: true });
   const actions = page.getByRole("group", { name: "Record actions", exact: true });
-  await expect(actions.getByRole("button")).toHaveCount(4);
+  await expect(actions.getByRole("button")).toHaveCount(5);
+  await expect(actions.getByRole("button", { name: "Export collection" })).toBeVisible();
   await expect(actions.getByRole("button", { name: "Orphan collection" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Danger Zone", exact: true })).toHaveCount(0);
   const sections = page.locator(".detail-sections");
@@ -187,7 +191,7 @@ test("collection members, metadata and rule views work on desktop and mobile", a
   await expect(boxes).toHaveCount(2);
   expect((await boxes.nth(1).boundingBox())?.height).toBe(lowerBox?.height);
   await expect(page.getByRole("button", { name: /^Paste URL/ })).toHaveCount(0);
-  await expect(actions.getByRole("button")).toHaveCount(4);
+  await expect(actions.getByRole("button")).toHaveCount(5);
   await modes.getByRole("tab", { name: "Configure", exact: true }).click();
   await views.getByRole("link", { name: "Content", exact: true }).click();
   await expect(page.getByLabel("Criteria condition 2 value", { exact: true })).toHaveValue("1990");
@@ -255,6 +259,7 @@ test("collection creation uses the selected library and TMDB list sources", asyn
   // Setup starts with what to create.
   await expect(page.getByText("One collection", { exact: true })).toBeInViewport();
   await page.getByLabel("Title", { exact: true }).fill("New collection");
+  await page.getByRole("combobox", { name: "Group", exact: true }).fill("Films");
   await page.getByRole("button", { name: "Condition", exact: true }).click();
   await chooseOption(page.getByLabel("Criteria condition 1 field", { exact: true }), "TMDB list");
   await page.getByLabel("Criteria condition 1 TMDB list IDs", { exact: true }).fill("123");
@@ -278,8 +283,8 @@ test("items and collections share record actions and fit a narrow viewport", asy
   await logIn(page);
   for (const [path, deleteLabel, count] of [
     ["/movies/1-alien/art/poster", "Delete item from database", 3],
-    // A collection can also be orphaned.
-    ["/collections/12-saga", "Delete collection", 4],
+    // A collection can also be exported and orphaned.
+    ["/collections/12-saga", "Delete collection", 5],
   ] as const) {
     await page.goto(path);
     const actions = page.getByRole("group", { name: "Record actions", exact: true });
@@ -422,7 +427,7 @@ test("a franchise set shares Setup and saves its library, group and schedule", a
   await page.route("**/api/collections/groups{,?*}", (route) => route.fulfill({ json: [] }));
   await page.route("**/api/collections{,?*}", (route) => route.fulfill({ json: [] }));
   let saves = 0;
-  await page.route("**/api/collections/group-policy{,?*}", (route) => {
+  await page.route("**/api/collections/groups/*", (route) => {
     if (route.request().method() === "PUT") {
       const body = route.request().postDataJSON();
       expect(body).toMatchObject({
@@ -436,7 +441,7 @@ test("a franchise set shares Setup and saves its library, group and schedule", a
           exclude: ["10", "20"],
         },
       });
-      expect(new URL(route.request().url()).searchParams.get("name")).toBe("Franchises");
+      expect(new URL(route.request().url()).pathname).toBe("/api/collections/groups/Franchises");
       saves++;
       return route.fulfill({ json: body });
     }
@@ -467,7 +472,7 @@ test("a franchise set shares Setup and saves its library, group and schedule", a
     await page.locator("body").evaluate((element) => element.clientWidth),
   );
   await submit.click();
-  await expect.poll(() => new URL(page.url()).pathname).toBe("/collections");
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/collections/groups/Franchises");
   await expect
     .poll(() => new URL(page.url()).searchParams.get("collection_group"))
     .toBe("group:Franchises");
@@ -529,6 +534,7 @@ test("smart collections combine list sources and live criteria", async ({ page }
   await page.route("**/api/collections/12{,?*}", (route) => route.fulfill({ json: detail }));
   await logIn(page, "/collections/new");
   await page.getByLabel("Title", { exact: true }).fill("Unwatched favorites");
+  await page.getByRole("combobox", { name: "Group", exact: true }).fill("Films");
   await page.getByText("Smart", { exact: true }).click();
   await page.getByRole("button", { name: "Condition", exact: true }).click();
   await chooseOption(page.getByLabel("Criteria condition 1 field", { exact: true }), "MDBList");
@@ -559,7 +565,7 @@ test("smart collections combine list sources and live criteria", async ({ page }
   expect(created).toBe(true);
 });
 
-test("group management saves and sends defaults apart from an unsaved collection", async ({
+test("a group opens from the sidebar as a page, and saves its defaults apart from its collections", async ({
   page,
 }) => {
   await page.route("**/api/settings", (route) =>
@@ -568,46 +574,46 @@ test("group management saves and sends defaults apart from an unsaved collection
     }),
   );
   await page.route("**/api/collections/groups{,?*}", (route) =>
-    route.fulfill({ json: ["Weekend"] }),
+    route.fulfill({ json: [{ name: "Weekend", set: null }] }),
   );
-  await page.route("**/api/collections/group-policy{,?*}", (route) =>
+  let saved: unknown = null;
+  await page.route("**/api/collections/groups/*", (route) => {
+    if (route.request().method() === "PUT") saved = route.request().postDataJSON();
+    return route.fulfill({
+      json: saved ?? { sort_title_format: "01_{title}", summary_format: null },
+    });
+  });
+  await page.route("**/api/collections{,?*}", (route) =>
     route.fulfill({
-      json:
-        route.request().method() === "PUT"
-          ? route.request().postDataJSON()
-          : { sort_title_format: "01_{title}", summary_format: null },
+      json: [collectionDetail({ id: 12, title: "Grouped saga", collection_group: "Weekend" })],
     }),
   );
-  await page.route("**/api/collections{,?*}", (route) =>
-    route.fulfill({ json: [collectionDetail({ id: 12, collection_group: "Weekend" })] }),
-  );
-  await logIn(page, "/collections/new");
-  await page.getByLabel("Title", { exact: true }).fill("Unsaved collection");
-  const setup = page.getByRole("region", { name: "Collection setup", exact: true });
-  await chooseOption(setup.getByLabel("Group", { exact: true }), "Weekend");
-  // Groups are created and edited only in the popup.
-  await chooseOption(setup.getByLabel("Group", { exact: true }), "Create new group...");
-  await expect(setup.getByLabel("Group", { exact: true })).toHaveText("Weekend");
-  const dialog = page.getByRole("dialog", { name: "Collection groups" });
-  await chooseOption(dialog.getByRole("combobox", { name: "Group", exact: true }), "Weekend");
-  await dialog.getByRole("button", { name: "Settings", exact: true }).click();
-  await dialog.getByRole("textbox", { name: "Sort title", exact: true }).fill("02_{title}");
+  await logIn(page, "/collections");
+  await page.getByRole("button", { name: "Open group Weekend" }).click();
+  await expect(page).toHaveURL(/\/collections\/groups\/Weekend\?collection_group=group%3AWeekend/);
+  // The sidebar opens the group, listing its collections; on a phone it stays in front.
+  await expect(page.getByRole("button", { name: "Select collection Grouped saga" })).toBeVisible();
+  await page.getByRole("button", { name: "Configure group Weekend" }).click();
+  const members = page.getByRole("list", { name: "Collections in the group" });
+  await expect(members.getByRole("button", { name: /Grouped saga/ })).toBeVisible();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("textbox", { name: "Sort title", exact: true }).fill("02_{title}");
   await expect(page.locator("body")).toHaveJSProperty(
     "scrollWidth",
     await page.locator("body").evaluate((element) => element.clientWidth),
   );
-  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await page
+    .getByRole("group", { name: "Save", exact: true })
+    .getByRole("button", { name: "Save", exact: true })
+    .click();
   // Saving writes in Overture alone; the group's next sync sends it.
   await expect(
-    page.getByText("Saved. Its collections get it on the server with their next sync."),
+    page.getByText('Saved "Weekend". Its collections get it with their next sync.'),
   ).toBeVisible();
-  await dialog.getByRole("button", { name: "Close popup", exact: true }).click();
-  await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Unsaved collection");
+  await expect.poll(() => saved).toMatchObject({ sort_title_format: "02_{title}" });
 });
 
-test("deleting a group from the groups popup asks what happens to its collections", async ({
-  page,
-}) => {
+test("deleting a group from its page asks what happens to its collections", async ({ page }) => {
   const grouped = collectionDetail({ id: 12, title: "Grouped saga", collection_group: "Weekend" });
   await page.route("**/api/settings", (route) =>
     route.fulfill({
@@ -615,18 +621,20 @@ test("deleting a group from the groups popup asks what happens to its collection
     }),
   );
   await page.route("**/api/collections{,?*}", (route) => route.fulfill({ json: [grouped] }));
-  // The reserved fallback is always listed, and is where kept collections go.
+  // Its collections can move to any other group.
   await page.route("**/api/collections/groups{,?*}", (route) =>
-    route.fulfill({ json: ["Ungrouped", "Weekend"] }),
+    route.fulfill({
+      json: [
+        { name: "Films", set: null },
+        { name: "Weekend", set: null },
+      ],
+    }),
   );
-  await page.route("**/api/collections/group-policy{,?*}", (route) => route.fulfill({ json: {} }));
-  await logIn(page, "/collections");
-  await page.getByRole("button", { name: "Collection groups" }).click();
-  const popup = page.getByRole("dialog", { name: "Collection groups" });
-  await chooseOption(popup.getByRole("combobox", { name: "Group" }), "Weekend");
-  await popup.getByRole("button", { name: "Rename or delete" }).click();
-  await popup.getByRole("button", { name: "Delete group" }).click();
+  await logIn(page, "/collections/groups/Weekend");
+  // A group's link opens it in the sidebar too, whose heading shows its page on a phone.
+  await page.getByRole("button", { name: "Configure group Weekend" }).click();
+  await page.getByRole("button", { name: "Delete group" }).click();
 
   const confirm = page.getByRole("dialog", { name: 'Delete group "Weekend"?' });
-  await expect(confirm.getByRole("radio", { name: "Move them to Ungrouped" })).toHaveCount(1);
+  await expect(confirm.getByRole("radio", { name: "Move them to Films" })).toHaveCount(1);
 });

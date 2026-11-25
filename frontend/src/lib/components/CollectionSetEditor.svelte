@@ -7,7 +7,7 @@
     CollectionCapabilities,
     LibrarySectionRead,
   } from "../../generated/rest/types.gen";
-  import { withDimension, type SetGenerator } from "../utils/collectionFormShared.svelte";
+  import type { SetGenerator } from "../utils/collectionFormShared.svelte";
   import { emptyGroup, splitList } from "../utils/collectionCriteria";
   import { errorMessage } from "../utils/errors";
   import { inLibraryOrder, libraryScope } from "../utils/libraries.svelte";
@@ -16,7 +16,6 @@
   import LibraryName from "./LibraryName.svelte";
   import PendingButton from "./PendingButton.svelte";
   import SegmentedControl from "./SegmentedControl.svelte";
-  import SetDimensionField from "./SetDimensionField.svelte";
 
   let {
     generator = $bindable(),
@@ -25,7 +24,6 @@
     capabilities,
     group,
     minimum,
-    standalone = false,
   }: {
     generator: SetGenerator;
     /** The libraries the set creates its collections in. */
@@ -35,8 +33,6 @@
     /** The group the set saves into, whose collections the preview matches. */
     group: string;
     minimum: number | null;
-    /** Edit the dimension and title template here, where no Setup section holds them. */
-    standalone?: boolean;
   } = $props();
 
   const id = $props.id();
@@ -84,27 +80,6 @@
   }
 
 </script>
-
-{#if standalone}
-  <SetDimensionField
-    value={generator.dimension}
-    {dimensions}
-    onchoose={(chosen) => Object.assign(generator, withDimension(generator, chosen, dimension))}
-  />
-  <FieldRow
-    label="Title template"
-    for={`${id}-title`}
-    hint={"{value} becomes each value, such as 1990 or Action."}
-  >
-    <input
-      id={`${id}-title`}
-      required
-      maxlength={TEXT_LIMITS.setTitleFormat}
-      bind:value={generator.title_format}
-      placeholder={"{value}"}
-    />
-  </FieldRow>
-{/if}
 
 {#if !custom}
   <FieldRow

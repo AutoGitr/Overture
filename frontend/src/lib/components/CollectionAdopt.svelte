@@ -4,20 +4,21 @@
   import type { CollectionRead } from "../../generated/rest/types.gen";
   import { storeCollectionDetail } from "../rest/cache";
   import { createNotifier } from "../stores/notificationState.svelte";
-  import { UNGROUPED_GROUP } from "../../generated/settings";
+  import { TEXT_LIMITS } from "../../generated/settings";
   import { groupOptions } from "../utils/collectionGroups.svelte";
   import { errorMessage } from "../utils/errors";
   import DetailForm from "./DetailForm.svelte";
   import FieldRow from "./FieldRow.svelte";
   import PendingButton from "./PendingButton.svelte";
-  import Select from "./Select.svelte";
+  import ValueCombobox from "./ValueCombobox.svelte";
 
   let { collection, groups }: { collection: CollectionRead; groups: string[] } = $props();
 
   const id = $props.id();
   const request = createMutation(() => adoptCollectionMutation());
   const feedback = createNotifier();
-  let group = $state(UNGROUPED_GROUP);
+  /** The group it joins: every collection Overture manages belongs to one. */
+  let group = $state("");
 
   async function adopt() {
     feedback.clear();
@@ -25,7 +26,7 @@
       storeCollectionDetail(
         await request.mutateAsync({
           path: { collection_id: collection.id },
-          body: { group: group || null },
+          body: { group },
         }),
       );
       feedback.success(`Overture now manages ${collection.title}.`);
@@ -46,8 +47,14 @@
       ? ", and the smart collection keeps its filter"
       : ""}. It can then be edited, synced and given art and a theme like any other.
   </p>
-  <FieldRow label="Group" for={`${id}-group`}>
-    <Select id={`${id}-group`} options={groupOptions(groups)} bind:value={group} />
+  <FieldRow label="Group" for={`${id}-group`} hint="A new name makes a group of it.">
+    <ValueCombobox
+      id={`${id}-group`}
+      maxlength={TEXT_LIMITS.groupName}
+      placeholder="e.g. Franchises"
+      options={groupOptions(groups)}
+      bind:value={group}
+    />
   </FieldRow>
   <div class="actions-row">
     <PendingButton
@@ -55,6 +62,8 @@
       class="btn btn-primary"
       pending={request.isPending}
       pendingLabel="Adopting..."
+      disabled={!group.trim()}
+      title={group.trim() ? undefined : "Choose a group"}
       onclick={() => void adopt()}>Adopt</PendingButton
     >
   </div>

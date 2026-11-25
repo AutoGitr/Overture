@@ -173,7 +173,6 @@ ARR_ADDED_TAG = "overture"
 SEPARATED_SORT_TITLE = "{group} {title}"
 #: The virtual group of collections without rules; no stored group may use it.
 UNMANAGED_GROUP = "Unmanaged"
-UNGROUPED_GROUP = "Ungrouped"
 
 #: Each collection policy setting with a global default, and the application
 #: setting that holds it; the others are set per group or collection only.

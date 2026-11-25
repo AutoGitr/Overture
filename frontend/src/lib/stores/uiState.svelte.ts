@@ -16,7 +16,6 @@ export type OperationsTab = "assets" | "sync" | "renamer" | "audit";
 export type PopupType =
   | null
   | "api-keys"
-  | "collection-groups"
   | "filters"
   | "notifications"
   | "operations"
@@ -53,24 +52,6 @@ class UiState {
   }
 
   operationsTab = $state<OperationsTab>("assets");
-  collectionGroupToEdit = $state("");
-  private collectionGroupChange: ((name: string, replacement: string) => void) | null = null;
-
-  openCollectionGroups(group = "", onchange?: (name: string, replacement: string) => void) {
-    this.collectionGroupToEdit = group;
-    this.collectionGroupChange = onchange ?? null;
-    this.#openPopup = "collection-groups";
-  }
-
-  collectionGroupChanged(name: string, replacement: string) {
-    this.collectionGroupChange?.(name, replacement);
-  }
-
-  /** The groups popup was opened to pick a group for a collection form. */
-  get pickingCollectionGroup(): boolean {
-    return this.collectionGroupChange !== null;
-  }
-
   /**
    * Which popup overlay is open.
    *
@@ -96,7 +77,6 @@ class UiState {
 
   closePopup() {
     this.#openPopup = null;
-    this.collectionGroupChange = null;
   }
 
   /** What the search looks up on TMDB, or null while it filters the list. */

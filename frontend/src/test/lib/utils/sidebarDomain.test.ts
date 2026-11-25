@@ -839,7 +839,7 @@ describe("sidebar registry", () => {
     const collections = [
       collection({ id: 1, title: "B", home_order: 2, collection_group: "Studios" }),
       collection({ id: 2, title: "A", home_order: null, collection_group: "Sagas" }),
-      collection({ id: 3, title: "C", home_order: 1 }),
+      collection({ id: 3, title: "C", home_order: 1, collection_group: "Westerns" }),
     ];
     expect(filterCollections(collections, { sortField: "home_order" })).toEqual(["C", "B", "A"]);
     expect(filterCollections(collections, { sortField: "group" })).toEqual(["A", "B", "C"]);

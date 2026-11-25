@@ -4288,16 +4288,12 @@
         "description": "The group a collection joins when Overture adopts it.",
         "properties": {
           "group": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/GroupName"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/RequiredGroupName"
           }
         },
+        "required": [
+          "group"
+        ],
         "title": "CollectionAdoption",
         "type": "object"
       },
@@ -5858,23 +5854,28 @@
       },
       "CollectionGroupDelete": {
         "additionalProperties": false,
-        "description": "What happens to a deleted group's collections.\n\n``keep`` moves them to Ungrouped, ``move`` puts them in *group*,\n``orphan`` stops managing them, as orphaning one collection does, and\n``both`` deletes them from Overture and the server.",
+        "description": "What happens to a deleted group's collections.\n\n``move`` puts them in *group*, ``orphan`` stops managing them, as\norphaning one collection does, and ``both`` deletes them from Overture and\nthe server. A group without collections needs no choice.",
         "properties": {
           "collections": {
-            "default": "keep",
-            "enum": [
-              "keep",
-              "move",
-              "orphan",
-              "both"
+            "anyOf": [
+              {
+                "enum": [
+                  "move",
+                  "orphan",
+                  "both"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Collections",
-            "type": "string"
+            "title": "Collections"
           },
           "group": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/GroupName"
+                "$ref": "#/components/schemas/RequiredGroupName"
               },
               {
                 "type": "null"
@@ -6508,19 +6509,66 @@
         "title": "CollectionGroupPolicy",
         "type": "object"
       },
+      "CollectionGroupRead": {
+        "additionalProperties": false,
+        "description": "A collection group, and the set it runs when it is one.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "set": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionGroupSet"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "set"
+        ],
+        "title": "CollectionGroupRead",
+        "type": "object"
+      },
       "CollectionGroupRename": {
         "additionalProperties": false,
         "description": "A replacement group name, scoped by the request.",
         "properties": {
           "name": {
-            "$ref": "#/components/schemas/GroupName",
-            "minLength": 1
+            "$ref": "#/components/schemas/RequiredGroupName"
           }
         },
         "required": [
           "name"
         ],
         "title": "CollectionGroupRename",
+        "type": "object"
+      },
+      "CollectionGroupSet": {
+        "additionalProperties": false,
+        "description": "What a set splits by, and in which libraries.",
+        "properties": {
+          "dimension": {
+            "$ref": "#/components/schemas/SetDimension"
+          },
+          "library_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Library Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dimension",
+          "library_ids"
+        ],
+        "title": "CollectionGroupSet",
         "type": "object"
       },
       "CollectionIds": {
@@ -9242,33 +9290,6 @@
           "generator"
         ],
         "title": "CollectionSetPreview",
-        "type": "object"
-      },
-      "CollectionSetSummary": {
-        "additionalProperties": false,
-        "description": "A group that is a set: what it splits by, and in which libraries.",
-        "properties": {
-          "dimension": {
-            "$ref": "#/components/schemas/SetDimension"
-          },
-          "group": {
-            "title": "Group",
-            "type": "string"
-          },
-          "library_ids": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Library Ids",
-            "type": "array"
-          }
-        },
-        "required": [
-          "group",
-          "dimension",
-          "library_ids"
-        ],
-        "title": "CollectionSetSummary",
         "type": "object"
       },
       "CollectionSource-Input": {
@@ -13852,6 +13873,10 @@
         ],
         "title": "RenameStatus",
         "type": "string"
+      },
+      "RequiredGroupName": {
+        "$ref": "#/components/schemas/GroupName",
+        "minLength": 1
       },
       "SaveArtRequest": {
         "additionalProperties": false,
@@ -22463,22 +22488,11 @@
         ]
       }
     },
-    "/api/collections/group-policy": {
+    "/api/collections/groups": {
       "get": {
-        "description": "Read a group's nullable overrides for the active media server.",
-        "operationId": "get_collection_group_policy",
+        "description": "Return the collection groups, each with its set.",
+        "operationId": "list_collection_groups",
         "parameters": [
-          {
-            "in": "query",
-            "name": "name",
-            "required": true,
-            "schema": {
-              "maxLength": 200,
-              "minLength": 1,
-              "title": "Name",
-              "type": "string"
-            }
-          },
           {
             "description": "Read-only API key",
             "in": "header",
@@ -22525,7 +22539,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CollectionGroupPolicy-Output"
+                  "items": {
+                    "$ref": "#/components/schemas/CollectionGroupRead"
+                  },
+                  "title": "Response List Collection Groups",
+                  "type": "array"
                 }
               }
             },
@@ -22599,206 +22617,19 @@
             "description": "A media server is unavailable"
           }
         },
-        "summary": "Get Collection Group Policy",
-        "tags": [
-          "collections"
-        ]
-      },
-      "put": {
-        "description": "Save defaults inherited by collections assigned to this group.",
-        "operationId": "save_collection_group_policy",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "name",
-            "required": true,
-            "schema": {
-              "maxLength": 200,
-              "minLength": 1,
-              "title": "Name",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Create a set; refuse a group that already is one",
-            "in": "query",
-            "name": "new_set",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "Create a set; refuse a group that already is one",
-              "title": "New Set",
-              "type": "boolean"
-            }
-          },
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CollectionGroupPolicy-Input"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollectionGroupPolicy-Output"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "The body is not text in the declared encoding"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not signed in, or the API key is not valid"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "An API key asked for a change, or the CSRF token is missing"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "No media server is configured"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              },
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "description": "The body is larger than the route accepts"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "$ref": "#/components/schemas/ValidationErrorResponse"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "The request breaks the schema or a rule"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "A media server failed the request"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "A media server is unavailable"
-          }
-        },
-        "summary": "Save Collection Group Policy",
+        "summary": "List Collection Groups",
         "tags": [
           "collections"
         ]
       }
     },
-    "/api/collections/groups": {
+    "/api/collections/groups/{name}": {
       "delete": {
         "description": "Delete a group, optionally deleting its collections in either application.",
         "operationId": "delete_collection_group",
         "parameters": [
           {
-            "in": "query",
+            "in": "path",
             "name": "name",
             "required": true,
             "schema": {
@@ -22979,9 +22810,20 @@
         ]
       },
       "get": {
-        "description": "Return default and custom collection groups.",
-        "operationId": "list_collection_groups",
+        "description": "Read a group's nullable overrides for the active media server.",
+        "operationId": "get_collection_group_policy",
         "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            }
+          },
           {
             "description": "Read-only API key",
             "in": "header",
@@ -23028,11 +22870,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "title": "Response List Collection Groups",
-                  "type": "array"
+                  "$ref": "#/components/schemas/CollectionGroupPolicy-Output"
                 }
               }
             },
@@ -23057,6 +22895,16 @@
               }
             },
             "description": "An API key asked for a change, or the CSRF token is missing"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Nothing has the ID or key the path names"
           },
           "409": {
             "content": {
@@ -23106,7 +22954,7 @@
             "description": "A media server is unavailable"
           }
         },
-        "summary": "List Collection Groups",
+        "summary": "Get Collection Group Policy",
         "tags": [
           "collections"
         ]
@@ -23116,7 +22964,7 @@
         "operationId": "rename_collection_group",
         "parameters": [
           {
-            "in": "query",
+            "in": "path",
             "name": "name",
             "required": true,
             "schema": {
@@ -23292,6 +23140,203 @@
           }
         },
         "summary": "Rename Collection Group",
+        "tags": [
+          "collections"
+        ]
+      },
+      "put": {
+        "description": "Save defaults inherited by collections assigned to this group.",
+        "operationId": "save_collection_group_policy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Create a set; refuse a group that already is one",
+            "in": "query",
+            "name": "new_set",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Create a set; refuse a group that already is one",
+              "title": "New Set",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Read-only API key",
+            "in": "header",
+            "name": "X-Api-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read-only API key",
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "description": "Session token",
+            "in": "cookie",
+            "name": "overture_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Session token",
+              "title": "Overture Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionGroupPolicy-Input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionGroupPolicy-Output"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The body is not text in the declared encoding"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not signed in, or the API key is not valid"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "An API key asked for a change, or the CSRF token is missing"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Nothing has the ID or key the path names"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No media server is configured"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The body is larger than the route accepts"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The request breaks the schema or a rule"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A media server failed the request"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A media server is unavailable"
+          }
+        },
+        "summary": "Save Collection Group Policy",
         "tags": [
           "collections"
         ]
@@ -24248,141 +24293,6 @@
           "collections"
         ],
         "x-reads-only": true
-      }
-    },
-    "/api/collections/sets": {
-      "get": {
-        "description": "List the groups that are sets, with what each splits by.",
-        "operationId": "list_collection_sets",
-        "parameters": [
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/CollectionSetSummary"
-                  },
-                  "title": "Response List Collection Sets",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not signed in, or the API key is not valid"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "An API key asked for a change, or the CSRF token is missing"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "No media server is configured"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "$ref": "#/components/schemas/ValidationErrorResponse"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "The request breaks the schema or a rule"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "A media server failed the request"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "A media server is unavailable"
-          }
-        },
-        "summary": "List Collection Sets",
-        "tags": [
-          "collections"
-        ]
       }
     },
     "/api/collections/sets/preview": {

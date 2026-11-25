@@ -744,6 +744,7 @@ async def create(manager: Manager, ids: list[int] | None = None) -> int:
     result = await created(
         manager.service,
         CollectionCreate(
+            collection_group="Films",
             title="Saga",
             rule=chosen(manager, ids),
         ),
@@ -822,7 +823,7 @@ async def test_delete_from_server_preserves_configuration(
         assert copy_id(row) is not None
 
 
-@pytest.mark.parametrize("target", ["keep", "move", "orphan", "both"])
+@pytest.mark.parametrize("target", ["move", "orphan", "both"])
 async def test_group_deletion_targets(
     manager: Manager, database: Database, target: str
 ) -> None:
@@ -842,8 +843,9 @@ async def test_group_deletion_targets(
     )
     assert not result.errors
     assert manager.provider.deleted == (["1"] if target == "both" else [])
+    # The collection was made in Films, which stays, empty.
     assert await manager.service.groups.names() == (
-        ["Evenings", "Ungrouped"] if target == "move" else ["Ungrouped"]
+        ["Evenings", "Films"] if target == "move" else ["Films"]
     )
     async with database.read_session() as session:
         row = await CollectionRepository(session).get(identity)
@@ -856,10 +858,10 @@ async def test_group_deletion_targets(
         assert rule is None
     else:
         assert row is not None
-        assert row.group_name == ("Evenings" if target == "move" else "Ungrouped")
+        assert row.group_name == "Evenings"
 
 
-async def test_group_deletion_never_leaves_collections_without_a_required_group(
+async def test_a_group_holding_collections_is_deleted_only_with_a_choice_for_them(
     manager: Manager, database: Database
 ) -> None:
     identity = await create(manager)
@@ -867,15 +869,8 @@ async def test_group_deletion_never_leaves_collections_without_a_required_group(
         identity,
         CollectionOptions(title="Saga", collection_group="Weekend"),
     )
-    await manager.service.groups.delete(
-        "Weekend", CollectionGroupDelete(collections="keep")
-    )
-    detail = await manager.service.reader.get(identity)
-    assert detail.collection_group == "Ungrouped"
-    with pytest.raises(PublicServiceError, match="cannot be deleted"):
-        await manager.service.groups.delete("Ungrouped", CollectionGroupDelete())
-    with pytest.raises(PublicServiceError, match="cannot be renamed"):
-        await manager.service.groups.rename("Ungrouped", "Other")
+    with pytest.raises(PublicServiceError, match="Choose what happens"):
+        await manager.service.groups.delete("Weekend", CollectionGroupDelete())
     with pytest.raises(PublicServiceError, match="another group"):
         await manager.service.groups.delete(
             "Weekend",
@@ -883,6 +878,13 @@ async def test_group_deletion_never_leaves_collections_without_a_required_group(
         )
     with pytest.raises(ValidationError, match="Name the group"):
         CollectionGroupDelete(collections="move")
+    # A group without collections goes without a choice, as any group can.
+    await manager.service.groups.delete("Films", CollectionGroupDelete())
+    assert await manager.service.groups.names() == ["Weekend"]
+    # No collection Overture manages is left without a group.
+    with pytest.raises(PublicServiceError, match="Choose a group"):
+        await manager.service.editor.update(identity, CollectionOptions(title="Saga"))
+    assert (await manager.service.reader.get(identity)).collection_group == "Weekend"
 
 
 async def test_group_delete_failure_preserves_group_for_retry(
@@ -902,10 +904,7 @@ async def test_group_delete_failure_preserves_group_for_retry(
         "Weekend", CollectionGroupDelete(collections="both")
     )
     assert identity in result.errors
-    assert await manager.service.groups.names() == [
-        "Ungrouped",
-        "Weekend",
-    ]
+    assert await manager.service.groups.names() == ["Films", "Weekend"]
 
 
 async def test_group_rename_preserves_defaults_and_rejects_collisions(
@@ -985,7 +984,10 @@ async def test_a_new_set_never_replaces_another_and_names_taken_titles(
         dimension=SetDimension.DECADE, library_ids=["1:movies"], title_format="{value}s"
     )
     taken = await created(
-        manager.service, CollectionCreate(title="1990s", rule=chosen(manager, None))
+        manager.service,
+        CollectionCreate(
+            collection_group="Films", title="1990s", rule=chosen(manager, None)
+        ),
     )
 
     preview = await manager.service.sets.preview(
@@ -1000,9 +1002,12 @@ async def test_a_new_set_never_replaces_another_and_names_taken_titles(
         "Decades", CollectionGroupPolicy(generator=decades), new_set=True
     )
     assert [
-        (found.group, found.dimension, found.library_ids)
-        for found in await manager.service.groups.sets()
-    ] == [("Decades", SetDimension.DECADE, ["1:movies"])]
+        (found.name, found.set and (found.set.dimension, found.set.library_ids))
+        for found in await manager.service.groups.list()
+    ] == [
+        ("Decades", (SetDimension.DECADE, ["1:movies"])),
+        ("Films", None),
+    ]
     with pytest.raises(PublicServiceError, match="already splits by Decades"):
         await manager.service.groups.save_policy(
             "Decades", CollectionGroupPolicy(generator=decades), new_set=True
@@ -1117,7 +1122,9 @@ async def test_sets_create_update_and_withhold_their_collections(
             library_rule(criteria=where(FilterField.YEAR, FilterOperator.IS, 1)),
         )
     with pytest.raises(PublicServiceError, match="edit the set"):
-        await manager.service.editor.update(second, CollectionOptions(title="Renamed"))
+        await manager.service.editor.update(
+            second, CollectionOptions(collection_group="Films", title="Renamed")
+        )
     kept = await manager.service.sets.preview(
         CollectionSetPreview(generator=decades, group="Decades")
     )
@@ -1139,6 +1146,7 @@ async def test_sets_skip_titles_other_collections_hold(manager: Manager) -> None
     await created(
         manager.service,
         CollectionCreate(
+            collection_group="Films",
             title="Action",
             rule=chosen(manager),
         ),
@@ -1212,6 +1220,7 @@ async def test_create_edit_order_and_delete_preserve_media(
     detail = await manager.service.editor.update(
         identity,
         CollectionOptions(
+            collection_group="Films",
             title="Renamed",
             sort_title="!Saga",
             summary="Summary",
@@ -1275,7 +1284,9 @@ async def test_edits_say_whether_the_titles_a_collection_links_changed(
         assert event == "collection.updated"
         return payload["titles"]
 
-    await manager.service.editor.update(identity, CollectionOptions(title="Renamed"))
+    await manager.service.editor.update(
+        identity, CollectionOptions(collection_group="Films", title="Renamed")
+    )
     assert not titles()
     await manager.service.editor.set_members(
         identity,
@@ -1310,6 +1321,7 @@ async def test_create_validates_library_and_duplicate_titles(manager: Manager) -
         await created(
             manager.service,
             CollectionCreate(
+                collection_group="Films",
                 title="Saga",
                 rule=library_rule(
                     criteria=sources(TmdbItemSource(tmdb_ids=[11])),
@@ -1573,14 +1585,14 @@ async def test_custom_group_round_trips_and_joins_group_choices(
     )
     assert detail.collection_group == "Weekend"
     groups = await manager.service.groups.names()
-    assert groups == ["Ungrouped", "Weekend"]
+    assert groups == ["Films", "Weekend"]
     listed = await manager.service.reader.listed()
     assert listed[0].collection_group == "Weekend"
-    detail = await manager.service.editor.update(
-        identity,
-        CollectionOptions(title="Saga", collection_group=" "),
-    )
-    assert detail.collection_group == "Ungrouped"
+    # A blank group is no group, which a collection Overture manages must name.
+    with pytest.raises(PublicServiceError, match="Choose a group"):
+        await manager.service.editor.update(
+            identity, CollectionOptions(title="Saga", collection_group=" ")
+        )
 
 
 async def test_explicit_identity_survives_membership_changes(manager: Manager) -> None:
@@ -1589,7 +1601,9 @@ async def test_explicit_identity_survives_membership_changes(manager: Manager) -
     assert detail.tmdb_collection_id is None
     await manager.service.editor.update(
         identity,
-        CollectionOptions(title="Saga", tmdb_collection_id=99),
+        CollectionOptions(
+            collection_group="Films", title="Saga", tmdb_collection_id=99
+        ),
     )
     detail = await manager.service.editor.set_members(
         identity,
@@ -1599,12 +1613,14 @@ async def test_explicit_identity_survives_membership_changes(manager: Manager) -
     )
     assert detail.tmdb_collection_id == 99
     detail = await manager.service.editor.update(
-        identity, CollectionOptions(title="Renamed")
+        identity, CollectionOptions(collection_group="Films", title="Renamed")
     )
     assert detail.tmdb_collection_id == 99
     detail = await manager.service.editor.update(
         identity,
-        CollectionOptions(title="Renamed", tmdb_collection_id=None),
+        CollectionOptions(
+            collection_group="Films", title="Renamed", tmdb_collection_id=None
+        ),
     )
     assert detail.tmdb_collection_id is None
 
@@ -1615,6 +1631,7 @@ async def test_creation_resolves_a_dynamic_rule_and_saves_it_with_identity(
     detail = await created(
         manager.service,
         CollectionCreate(
+            collection_group="Films",
             title="Dynamic",
             rule=library_rule(criteria=sources(TmdbCollectionSource(collection_id=10))),
         ),
@@ -1784,6 +1801,7 @@ async def test_smart_collections_label_sources_and_filter_by_plex_keys(
     detail = await created(
         manager.service,
         CollectionCreate(
+            collection_group="Films",
             title="Requests",
             collection_filtering=CollectionFiltering.USER,
             rule=library_rule(
@@ -1866,6 +1884,7 @@ async def test_smart_collections_test_fields_plex_lacks_through_labels(
     detail = await created(
         manager.service,
         CollectionCreate(
+            collection_group="Films",
             title="Japanese",
             rule=library_rule(
                 smart=True,
@@ -1924,6 +1943,7 @@ async def test_seasonal_inactive_withholds_and_deletes_server_collection(
     detail = await created(
         manager.service,
         CollectionCreate(
+            collection_group="Films",
             title="Holiday",
             active_start_mmdd="01-01",
             active_end_mmdd="01-02",
@@ -1940,6 +1960,7 @@ async def test_seasonal_inactive_withholds_and_deletes_server_collection(
     active = await created(
         manager.service,
         CollectionCreate(
+            collection_group="Films",
             title="Active Seasonal",
             active_start_mmdd="01-01",
             active_end_mmdd="12-31",
@@ -1955,6 +1976,7 @@ async def test_seasonal_inactive_withholds_and_deletes_server_collection(
     await manager.service.editor.update(
         active.id,
         CollectionOptions(
+            collection_group="Films",
             title="Active Seasonal",
             active_start_mmdd="01-01",
             active_end_mmdd="01-02",
@@ -1996,6 +2018,7 @@ async def test_non_plex_option_validation(
         await created(
             jellyfin_service,
             CollectionCreate(
+                collection_group="Films",
                 title="Box set",
                 rule=chosen(manager),
             ),
@@ -2011,38 +2034,54 @@ async def test_non_plex_option_validation(
     with pytest.raises(PublicServiceError, match="can order collections"):
         await jellyfin_service.editor.update(
             identity,
-            CollectionOptions(title="Rated", order_type=CollectionOrder.PLAYS_DESC),
-        )
-
-    with pytest.raises(PublicServiceError, match="Visibility and home promotion"):
-        await jellyfin_service.editor.update(
-            identity,
-            CollectionOptions(title="Home", visible_home=True),
-        )
-
-    with pytest.raises(PublicServiceError, match="Visibility and home promotion"):
-        await jellyfin_service.editor.update(
-            identity,
-            CollectionOptions(title="Shared", visible_shared=True),
-        )
-
-    with pytest.raises(PublicServiceError, match="Visibility and home promotion"):
-        await jellyfin_service.editor.update(
-            identity,
-            CollectionOptions(title="Lib", visible_library=True),
-        )
-
-    with pytest.raises(PublicServiceError, match="Visibility and home promotion"):
-        await jellyfin_service.editor.update(
-            identity,
-            CollectionOptions(title="Mode", collection_mode=CollectionMode.HIDE),
+            CollectionOptions(
+                collection_group="Films",
+                title="Rated",
+                order_type=CollectionOrder.PLAYS_DESC,
+            ),
         )
 
     with pytest.raises(PublicServiceError, match="Visibility and home promotion"):
         await jellyfin_service.editor.update(
             identity,
             CollectionOptions(
-                title="Filter", collection_filtering=CollectionFiltering.ADMIN
+                collection_group="Films", title="Home", visible_home=True
+            ),
+        )
+
+    with pytest.raises(PublicServiceError, match="Visibility and home promotion"):
+        await jellyfin_service.editor.update(
+            identity,
+            CollectionOptions(
+                collection_group="Films", title="Shared", visible_shared=True
+            ),
+        )
+
+    with pytest.raises(PublicServiceError, match="Visibility and home promotion"):
+        await jellyfin_service.editor.update(
+            identity,
+            CollectionOptions(
+                collection_group="Films", title="Lib", visible_library=True
+            ),
+        )
+
+    with pytest.raises(PublicServiceError, match="Visibility and home promotion"):
+        await jellyfin_service.editor.update(
+            identity,
+            CollectionOptions(
+                collection_group="Films",
+                title="Mode",
+                collection_mode=CollectionMode.HIDE,
+            ),
+        )
+
+    with pytest.raises(PublicServiceError, match="Visibility and home promotion"):
+        await jellyfin_service.editor.update(
+            identity,
+            CollectionOptions(
+                collection_group="Films",
+                title="Filter",
+                collection_filtering=CollectionFiltering.ADMIN,
             ),
         )
 
@@ -2055,6 +2094,7 @@ async def test_rules_accept_only_what_the_server_and_library_offer(
         await created(
             manager.service,
             CollectionCreate(
+                collection_group="Films",
                 title="Anime",
                 rule=library_rule(
                     criteria=sources(TmdbItemSource(tmdb_ids=[11])),
@@ -2092,6 +2132,7 @@ async def test_rules_accept_only_what_the_server_and_library_offer(
         await created(
             jellyfin,
             CollectionCreate(
+                collection_group="Films",
                 title="Box set",
                 rule=chosen(manager),
             ),
@@ -2276,6 +2317,7 @@ async def test_formatted_options(manager: Manager) -> None:
     updated_summary = await manager.service.editor.update(
         identity,
         CollectionOptions(
+            collection_group="Films",
             title="Star Wars",
             summary_format="{title} complete saga",
         ),
@@ -2287,6 +2329,7 @@ async def test_formatted_options(manager: Manager) -> None:
         await manager.service.editor.update(
             identity,
             CollectionOptions(
+                collection_group="Films",
                 title="A" * 200,
                 summary_format="X" * 9900 + "{title}",
             ),
@@ -2298,6 +2341,7 @@ async def test_radarr_and_sonarr_tag_builder_sync(manager: Manager) -> None:
     radarr_col = await created(
         manager.service,
         CollectionCreate(
+            collection_group="Films",
             title="4K Movies",
             rule=library_rule(
                 criteria=sources(RadarrTagSource(tags=["4k"])),
@@ -2312,6 +2356,7 @@ async def test_radarr_and_sonarr_tag_builder_sync(manager: Manager) -> None:
     sonarr_col = await created(
         manager.service,
         CollectionCreate(
+            collection_group="Films",
             title="Anime Shows",
             rule=library_rule(
                 criteria=sources(SonarrTagSource(tags=["anime"])),
@@ -2329,6 +2374,7 @@ async def test_create_collection_custom_order(manager: Manager) -> None:
     col = await created(
         manager.service,
         CollectionCreate(
+            collection_group="Films",
             title="Custom Order",
             order_type=CollectionOrder.CUSTOM,
             rule=chosen(manager),
@@ -2341,7 +2387,9 @@ async def test_a_sync_that_fails_midway_keeps_its_copy_for_the_next(
     manager: Manager,
 ) -> None:
     saved = await manager.service.editor.create(
-        CollectionCreate(title="Half made", rule=chosen(manager))
+        CollectionCreate(
+            collection_group="Films", title="Half made", rule=chosen(manager)
+        )
     )
     manager.provider.rejected_updates.add("1")
     with pytest.raises(ValueError, match="refused"):
@@ -2378,6 +2426,7 @@ async def test_seasonal_smart_collection_sync_creates_server_copy(
     detail = await created(
         manager.service,
         CollectionCreate(
+            collection_group="Films",
             title="Seasonal Smart",
             active_start_mmdd="01-01",
             active_end_mmdd="01-02",
@@ -2395,6 +2444,7 @@ async def test_seasonal_smart_collection_sync_creates_server_copy(
     await manager.service.editor.update(
         detail.id,
         CollectionOptions(
+            collection_group="Films",
             title="Seasonal Smart",
             active_start_mmdd="01-01",
             active_end_mmdd="12-31",
@@ -2509,6 +2559,7 @@ async def test_a_new_collection_has_no_theme(manager: Manager) -> None:
     col = await created(
         manager.service,
         CollectionCreate(
+            collection_group="Films",
             title="Theme Target",
             rule=chosen(manager),
         ),
@@ -2537,6 +2588,7 @@ async def test_a_collection_below_its_minimum_waits_in_overture_for_the_server(
     detail = await created(
         manager.service,
         CollectionCreate(
+            collection_group="Films",
             title="Empty",
             rule=NOTHING_MATCHES,
         ),
@@ -2558,6 +2610,7 @@ async def test_inactive_rule_without_delete_skips_sync(manager: Manager) -> None
     col = await created(
         manager.service,
         CollectionCreate(
+            collection_group="Films",
             title="Inactive Seasonal",
             active_start_mmdd="01-01",
             active_end_mmdd="01-02",
@@ -2575,6 +2628,7 @@ async def test_bulk_operations_order_and_visibility(manager: Manager) -> None:
     col = await created(
         manager.service,
         CollectionCreate(
+            collection_group="Films",
             title="Bulk Config",
             rule=chosen(manager),
         ),
@@ -2652,6 +2706,7 @@ async def test_tmdb_lists_merge_in_order_and_failures_keep_members(
     detail = await created(
         manager.service,
         CollectionCreate(
+            collection_group="Films",
             title="Lists",
             order_type=CollectionOrder.CUSTOM,
             rule=library_rule(criteria=sources(TmdbListSource(list_ids=[1, 2]))),
@@ -2727,12 +2782,15 @@ async def test_summary_source_is_not_replaced_by_its_rendered_template(
     identity = await create(manager)
     await manager.service.editor.update(
         identity,
-        CollectionOptions(title="Saga", summary="Original overview"),
+        CollectionOptions(
+            collection_group="Films", title="Saga", summary="Original overview"
+        ),
     )
     for _ in range(2):
         result = await manager.service.editor.update(
             identity,
             CollectionOptions(
+                collection_group="Films",
                 title="Saga",
                 summary_format="{title}: {summary}",
             ),
@@ -2802,6 +2860,7 @@ async def test_bulk_display_edits_keep_inheritance_and_store_reusable_templates(
     detail = await created(
         manager.service,
         CollectionCreate(
+            collection_group="Films",
             title="First",
             summary="Original",
             summary_format="{title}: {summary}",
@@ -2841,6 +2900,7 @@ async def test_a_saved_collection_stays_off_the_server_until_synced(
 ) -> None:
     saved = await manager.service.editor.create(
         CollectionCreate(
+            collection_group="Films",
             title="Draft",
             rule=library_rule(criteria=sources(TmdbItemSource(tmdb_ids=[11]))),
         )
@@ -2855,7 +2915,9 @@ async def test_a_saved_collection_stays_off_the_server_until_synced(
 
 async def test_saved_edits_wait_for_sync(manager: Manager) -> None:
     identity = await create(manager)
-    await manager.service.editor.update(identity, CollectionOptions(title="Renamed"))
+    await manager.service.editor.update(
+        identity, CollectionOptions(collection_group="Films", title="Renamed")
+    )
     detail = await manager.service.editor.set_members(
         identity,
         CollectionMembersUpdate(
@@ -2879,6 +2941,7 @@ async def test_append_sync_sends_members_chosen_since_the_last_sync(
     saved = await created(
         manager.service,
         CollectionCreate(
+            collection_group="Films",
             title="Append",
             rule=library_rule(
                 criteria=sources(TmdbItemSource(tmdb_ids=[11])),
@@ -2911,6 +2974,7 @@ async def test_a_chart_keeps_its_order_for_its_region(manager: Manager) -> None:
     detail = await created(
         manager.service,
         CollectionCreate(
+            collection_group="Films",
             title="Popular",
             order_type=CollectionOrder.CUSTOM,
             rule=library_rule(criteria=_chart()),
@@ -2929,6 +2993,7 @@ async def test_missing_titles_list_and_request_what_the_library_lacks(
     collection = await created(
         manager.service,
         CollectionCreate(
+            collection_group="Films",
             title="Popular",
             rule=library_rule(criteria=_chart()),
         ),
@@ -2996,6 +3061,7 @@ async def test_collections_sharing_an_arr_tag_keep_each_others_members(
     """Radarr accepts a-z, 0-9 and -, so both templates render one tag."""
     holder = await manager.service.editor.create(
         CollectionCreate(
+            collection_group="Films",
             title="Holder",
             rule=library_rule(
                 criteria=sources(TmdbItemSource(tmdb_ids=[11])), arr_tag="Shared Tag"
@@ -3004,6 +3070,7 @@ async def test_collections_sharing_an_arr_tag_keep_each_others_members(
     )
     other = await manager.service.editor.create(
         CollectionCreate(
+            collection_group="Films",
             title="Other",
             rule=library_rule(
                 criteria=sources(TmdbItemSource(tmdb_ids=[12])), arr_tag="shared-tag"
@@ -3024,6 +3091,7 @@ async def test_a_failed_effect_is_recorded_after_members_sync(
 ) -> None:
     collection = await manager.service.editor.create(
         CollectionCreate(
+            collection_group="Films",
             title="Popular",
             rule=library_rule(criteria=_chart(), request_missing=True),
         ),
@@ -3198,6 +3266,7 @@ async def test_source_summary_follows_the_first_list(manager: Manager) -> None:
     detail = await created(
         manager.service,
         CollectionCreate(
+            collection_group="Films",
             title="Listed",
             summary_format="From TMDB: {source_summary}",
             rule=library_rule(criteria=sources(TmdbListSource(list_ids=[1]))),
@@ -3237,18 +3306,18 @@ def test_tmdb_facts_are_tested_like_other_metadata() -> None:
 async def test_adoption_puts_an_unmanaged_collection_in_its_group(
     manager: Manager, database: Database
 ) -> None:
-    assert await manager.service.groups.names() == ["Ungrouped"]
     identity = await create_unmanaged(manager, database)
     unmanaged = await manager.service.reader.get(identity)
     assert unmanaged.tmdb_collection_id is None
-    # An unmanaged collection is in no stored group, even if it names one.
-    assert await manager.service.groups.names() == ["Ungrouped"]
+    # An unmanaged collection is in no stored group, even if it names one;
+    # Films is where the helper first made it.
+    assert await manager.service.groups.names() == ["Films"]
 
     detail = await manager.service.adoption.adopt(
         identity, CollectionAdoption(group="Sagas")
     )
 
-    assert await manager.service.groups.names() == ["Sagas", "Ungrouped"]
+    assert await manager.service.groups.names() == ["Films", "Sagas"]
     assert detail.collection_group == "Sagas"
     assert detail.rule is not None
     # Every member belongs to TMDB collection 10, which becomes its source.
@@ -3259,7 +3328,12 @@ async def test_adoption_puts_an_unmanaged_collection_in_its_group(
     assert detail.member_ids == manager.ids
     assert detail.tmdb_collection_id == 10
     with pytest.raises(PublicServiceError, match="already manages"):
-        await manager.service.adoption.adopt(identity, CollectionAdoption())
+        await manager.service.adoption.adopt(
+            identity,
+            CollectionAdoption(
+                group="Films",
+            ),
+        )
 
 
 async def test_adoption_names_members_that_share_no_franchise(
@@ -3272,7 +3346,12 @@ async def test_adoption_names_members_that_share_no_franchise(
         item.tmdb_collection_id = 20
         session.add(item)
 
-    detail = await manager.service.adoption.adopt(identity, CollectionAdoption())
+    detail = await manager.service.adoption.adopt(
+        identity,
+        CollectionAdoption(
+            group="Films",
+        ),
+    )
 
     assert detail.rule is not None
     assert detail.rule.libraries[0].criteria == sources(
@@ -3362,7 +3441,7 @@ async def test_orphan_reverses_adoption_keeping_the_server_copy(
     assert not detail.withheld
     assert detail.member_ids == manager.ids
     # The group outlives its last collection, until it is deleted.
-    assert await manager.service.groups.names() == ["Sagas", "Ungrouped"]
+    assert await manager.service.groups.names() == ["Films", "Sagas"]
     with pytest.raises(PublicServiceError, match="does not manage"):
         await manager.service.adoption.orphan(identity)
     refused = await manager.service.bulk.run(
@@ -3408,20 +3487,6 @@ async def test_bulk_delete_removes_only_the_server_copy_when_asked(
     detail = await manager.service.reader.get(identity)
     assert detail.withheld
     assert detail.managed
-
-
-async def test_ungrouped_cannot_be_a_set(manager: Manager) -> None:
-    decades = CollectionGenerator(
-        dimension=SetDimension.DECADE, library_ids=["1:movies"], title_format="{value}s"
-    )
-    with pytest.raises(PublicServiceError, match="cannot be a set"):
-        await manager.service.groups.save_policy(
-            "ungrouped", CollectionGroupPolicy(generator=decades)
-        )
-    saved = await manager.service.groups.save_policy(
-        "Ungrouped", CollectionGroupPolicy(minimum_items=2)
-    )
-    assert saved.generator is None
 
 
 async def test_the_unmanaged_name_is_reserved(manager: Manager) -> None:
@@ -3476,18 +3541,12 @@ async def test_group_sync_keeps_plexs_order_for_smart_members_under_a_custom_one
     )
 
 
-async def test_missing_group_membership_uses_reserved_fallback(
-    manager: Manager, database: Database
-) -> None:
-    identity = await create_unmanaged(manager, database)
-    detail = await manager.service.adoption.adopt(identity, CollectionAdoption())
-    assert detail.collection_group == "Ungrouped"
-    result = await manager.service.bulk.run(
-        BulkCollectionOperation(collection_ids=[identity], operation="set_group")
-    )
-    assert not result.errors
-    detail = await manager.service.reader.get(identity)
-    assert detail.collection_group == "Ungrouped"
+def test_assigning_or_adopting_into_a_group_names_one() -> None:
+    for operation in ("set_group", "adopt"):
+        with pytest.raises(ValidationError, match="Choose a group"):
+            BulkCollectionOperation(collection_ids=[1], operation=operation)
+    with pytest.raises(ValidationError, match="at least 1"):
+        CollectionAdoption(group="  ")  # blank, once stripped
 
 
 @pytest.mark.parametrize(
@@ -3663,7 +3722,9 @@ async def test_unmanaged_collections_accept_only_adoption(
 ) -> None:
     identity = await create_unmanaged(manager, database)
     for change in (
-        manager.service.editor.update(identity, CollectionOptions(title="X")),
+        manager.service.editor.update(
+            identity, CollectionOptions(collection_group="Films", title="X")
+        ),
         manager.service.rules.sync(identity),
         manager.service.editor.delete(identity),
         manager.service.editor.set_monitored(identity, False),
@@ -3683,10 +3744,17 @@ async def test_unmanaged_collections_accept_only_adoption(
     )
     assert refused.errors == {identity: "Adopt the collection before changing it"}
 
-    await manager.service.adoption.adopt(identity, CollectionAdoption())
+    await manager.service.adoption.adopt(
+        identity,
+        CollectionAdoption(
+            group="Films",
+        ),
+    )
     await manager.service.editor.set_monitored(identity, False)
     again = await manager.service.bulk.run(
-        BulkCollectionOperation(collection_ids=[identity], operation="adopt")
+        BulkCollectionOperation(
+            collection_ids=[identity], operation="adopt", collection_group="Films"
+        )
     )
     assert again.errors == {identity: "Overture already manages it"}
 
@@ -3758,7 +3826,10 @@ async def test_a_collection_spans_a_plex_library_of_each_type_as_one_collection_
     manager: Manager,
 ) -> None:
     detail = await created(
-        manager.service, CollectionCreate(title="Everything", rule=spanning(manager))
+        manager.service,
+        CollectionCreate(
+            collection_group="Films", title="Everything", rule=spanning(manager)
+        ),
     )
 
     # Plex keeps a collection in one library, so each holds its own copy.
@@ -3773,7 +3844,8 @@ async def test_a_collection_spans_a_plex_library_of_each_type_as_one_collection_
     assert detail.child_count == 2
 
     await manager.service.editor.update(
-        detail.id, CollectionOptions(title="Everything", summary="Both")
+        detail.id,
+        CollectionOptions(collection_group="Films", title="Everything", summary="Both"),
     )
     await synced(manager.service, detail.id)
     assert manager.provider.summaries == {"1": "Both", "2": "Both"}
@@ -3788,7 +3860,9 @@ async def test_a_refused_copy_leaves_the_others_synced_and_placed(
 ) -> None:
     manager.provider.refused_libraries = {"1:shows"}
     detail = await manager.service.editor.create(
-        CollectionCreate(title="Everything", rule=spanning(manager))
+        CollectionCreate(
+            collection_group="Films", title="Everything", rule=spanning(manager)
+        )
     )
 
     outcome = await manager.service.rules.sync(detail.id)
@@ -3825,7 +3899,11 @@ async def test_a_collection_a_failed_creation_left_is_found_not_made_again(
 
     detail = await created(
         manager.service,
-        CollectionCreate(title="Saga", rule=chosen(manager, [manager.ids[0]])),
+        CollectionCreate(
+            collection_group="Films",
+            title="Saga",
+            rule=chosen(manager, [manager.ids[0]]),
+        ),
     )
 
     async with database.read_session() as session:
@@ -3850,7 +3928,11 @@ async def test_a_server_collection_reusing_a_deleted_ones_id_has_one_owner(
 
     detail = await created(
         manager.service,
-        CollectionCreate(title="Again", rule=chosen(manager, [manager.ids[0]])),
+        CollectionCreate(
+            collection_group="Films",
+            title="Again",
+            rule=chosen(manager, [manager.ids[0]]),
+        ),
     )
 
     async with database.read_session() as session:
@@ -3867,7 +3949,10 @@ async def test_one_boxset_holds_every_library_on_jellyfin(
     provider = JellyfinProvider(app_config)
     service = make_jellyfin_service(manager, app_config, database, provider)
     detail = await created(
-        service, CollectionCreate(title="Everything", rule=spanning(manager))
+        service,
+        CollectionCreate(
+            collection_group="Films", title="Everything", rule=spanning(manager)
+        ),
     )
 
     assert provider.created == ["Everything"]
@@ -3889,7 +3974,10 @@ async def test_libraries_saved_apart_fold_into_one_boxset(
     provider = JellyfinProvider(app_config)
     service = make_jellyfin_service(manager, app_config, database, provider)
     detail = await created(
-        service, CollectionCreate(title="Everything", rule=spanning(manager))
+        service,
+        CollectionCreate(
+            collection_group="Films", title="Everything", rule=spanning(manager)
+        ),
     )
     provider.members["2"] = ["s1"]
     async with database.write_session() as session:
@@ -3932,7 +4020,10 @@ async def test_removing_a_library_takes_its_copy_off_at_the_next_sync(
     manager: Manager, database: Database
 ) -> None:
     detail = await created(
-        manager.service, CollectionCreate(title="Everything", rule=spanning(manager))
+        manager.service,
+        CollectionCreate(
+            collection_group="Films", title="Everything", rule=spanning(manager)
+        ),
     )
     await manager.service.editor.save_rule(
         detail.id,
@@ -3968,7 +4059,8 @@ async def test_a_library_with_nothing_to_hold_gets_no_copy_until_it_has(
         ]
     )
     detail = await created(
-        manager.service, CollectionCreate(title="Everything", rule=rule)
+        manager.service,
+        CollectionCreate(collection_group="Films", title="Everything", rule=rule),
     )
     assert manager.provider.created == ["Everything"]
     async with database.read_session() as session:
@@ -3984,6 +4076,7 @@ async def test_each_library_is_validated_against_what_it_holds(
         await created(
             manager.service,
             CollectionCreate(
+                collection_group="Films",
                 title="Everything",
                 rule=CollectionRuleWrite(
                     libraries=[
@@ -4050,7 +4143,10 @@ async def test_orphaning_leaves_plex_copies_for_the_next_sync_to_list(
     manager: Manager, database: Database
 ) -> None:
     detail = await created(
-        manager.service, CollectionCreate(title="Everything", rule=spanning(manager))
+        manager.service,
+        CollectionCreate(
+            collection_group="Films", title="Everything", rule=spanning(manager)
+        ),
     )
 
     orphaned = await manager.service.adoption.orphan(detail.id)
@@ -4138,7 +4234,9 @@ async def test_a_catch_all_collection_holds_what_no_other_collection_does(
     catch_all = await created(
         manager.service,
         CollectionCreate(
-            title="Everything else", rule=library_rule(criteria=collectionless)
+            collection_group="Films",
+            title="Everything else",
+            rule=library_rule(criteria=collectionless),
         ),
     )
     assert catch_all.member_ids == manager.ids[1:]
@@ -4164,11 +4262,17 @@ async def test_a_collection_condition_follows_the_collection_through_a_rename(
     )
     following = await created(
         manager.service,
-        CollectionCreate(title="Saga picks", rule=library_rule(criteria=in_saga)),
+        CollectionCreate(
+            collection_group="Films",
+            title="Saga picks",
+            rule=library_rule(criteria=in_saga),
+        ),
     )
     assert following.member_ids == [manager.ids[0]]
 
-    await manager.service.editor.update(held, CollectionOptions(title="Renamed"))
+    await manager.service.editor.update(
+        held, CollectionOptions(collection_group="Films", title="Renamed")
+    )
     await manager.service.rules.sync(following.id)
 
     detail = await manager.service.reader.get(following.id)
@@ -4218,7 +4322,7 @@ async def test_a_plex_group_separator_heads_its_collections_while_it_is_on(
     assert ArtType.POSTER in manager.art.selections
     with pytest.raises(PublicServiceError, match="group keeps the separator"):
         await manager.service.editor.update(
-            separator.id, CollectionOptions(title="Other")
+            separator.id, CollectionOptions(collection_group="Films", title="Other")
         )
 
     await manager.service.groups.save_policy(
@@ -4263,7 +4367,7 @@ async def test_automatic_art_keeps_an_upload_and_generates_a_missing_poster(
     manager.art.fail = True
     manager.art.selections.clear()
     await manager.service.groups.save_policy(
-        "Ungrouped",
+        "Films",
         CollectionGroupPolicy(
             auto_art=[AutoArtSource.GENERATE], generated_title_only=True
         ),
@@ -4449,7 +4553,7 @@ async def test_preview_smart_collection_with_labelled_fields_evaluates_locally(
 ) -> None:
     identity = await create(manager)
     await manager.service.groups.save_policy(
-        "Ungrouped", CollectionGroupPolicy(order_type=CollectionOrder.RELEASE_ASC)
+        "Films", CollectionGroupPolicy(order_type=CollectionOrder.RELEASE_ASC)
     )
     preview = await manager.service.discovery.preview(
         CollectionPreviewRequest(
@@ -4510,9 +4614,11 @@ async def test_automatic_generation_titles_posters_and_generates_backgrounds_it_
 async def test_chosen_collections_sync_alone(manager: Manager) -> None:
     rule = library_rule(criteria=sources(TmdbItemSource(tmdb_ids=[11])))
     chosen_one = await manager.service.editor.create(
-        CollectionCreate(title="Chosen", rule=rule)
+        CollectionCreate(collection_group="Films", title="Chosen", rule=rule)
     )
-    await manager.service.editor.create(CollectionCreate(title="Left", rule=rule))
+    await manager.service.editor.create(
+        CollectionCreate(collection_group="Films", title="Left", rule=rule)
+    )
 
     result = RecordedReport()
     await manager.service.groups.sync_collections([chosen_one.id, 999], result)
@@ -4530,6 +4636,7 @@ async def test_a_server_leaving_keeps_managed_collections_and_forgets_its_own(
     saga = await created(
         manager.service,
         CollectionCreate(
+            collection_group="Films",
             title="Saga",
             collection_mode=CollectionMode.HIDE_ITEMS,
             visible_home=True,
@@ -4538,7 +4645,10 @@ async def test_a_server_leaving_keeps_managed_collections_and_forgets_its_own(
         ),
     )
     unmanaged = await created(
-        manager.service, CollectionCreate(title="Theirs", rule=chosen(manager))
+        manager.service,
+        CollectionCreate(
+            collection_group="Films", title="Theirs", rule=chosen(manager)
+        ),
     )
     async with database.write_session() as session:
         rule = await CollectionRepository(session).rule(unmanaged.id)
@@ -4572,7 +4682,7 @@ async def test_a_collection_takes_over_the_server_one_of_its_title(
     manager: Manager, database: Database
 ) -> None:
     saved = await manager.service.editor.create(
-        CollectionCreate(title="Saga", rule=chosen(manager))
+        CollectionCreate(collection_group="Films", title="Saga", rule=chosen(manager))
     )
     async with database.write_session() as session:
         session.add(
@@ -4595,7 +4705,7 @@ async def test_a_collection_takes_over_the_server_one_of_its_franchise(
     manager: Manager, database: Database
 ) -> None:
     saved = await manager.service.editor.create(
-        CollectionCreate(title="Saga", rule=chosen(manager))
+        CollectionCreate(collection_group="Films", title="Saga", rule=chosen(manager))
     )
     async with database.write_session() as session:
         row = await session.get(MediaCollection, saved.id)
@@ -4624,7 +4734,8 @@ async def test_collections_sets_and_schedules_follow_a_moved_library(
     manager: Manager, app_config: Settings, database: Database
 ) -> None:
     saga = await created(
-        manager.service, CollectionCreate(title="Saga", rule=chosen(manager))
+        manager.service,
+        CollectionCreate(collection_group="Films", title="Saga", rule=chosen(manager)),
     )
     await manager.service.groups.save_policy(
         "Decades",
@@ -4733,6 +4844,7 @@ async def test_library_status_fields_are_library_filters_only(manager: Manager) 
     with pytest.raises(PublicServiceError, match="not available"):
         await manager.service.editor.create(
             CollectionCreate(
+                collection_group="Films",
                 title="Unarted",
                 rule=library_rule(
                     criteria=where(FilterField.ART_STATUS, FilterOperator.IS, "missing")
@@ -4836,7 +4948,7 @@ async def test_collection_mutations_keep_ledger_needs_and_deliveries_current(
         await manager.service.reader.get(created_detail.id)
     ).assets.theme.needed is False
     await manager.service.groups.delete(
-        "Minimal", CollectionGroupDelete(collections="keep")
+        "Minimal", CollectionGroupDelete(collections="move", group="Films")
     )
     after_group_delete = await manager.service.reader.get(created_detail.id)
     assert after_group_delete.assets.background.needed is True
@@ -4890,6 +5002,7 @@ async def test_a_sync_logs_what_it_did_to_each_server_collection(
     starts = where(FilterField.TITLE, FilterOperator.STARTS_WITH, "S")
     detail = await manager.service.editor.create(
         CollectionCreate(
+            collection_group="Films",
             title="Esses",
             rule=CollectionRuleWrite(
                 libraries=[

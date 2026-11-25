@@ -46,8 +46,8 @@ async def verify_overture(
         everything = await overture.get("/api/collections")
         listing = Listing(
             frozenset(
-                name.casefold()
-                for name in await overture.get("/api/collections/groups")
+                group["name"].casefold()
+                for group in await overture.get("/api/collections/groups")
             ),
             settings["collection_import_unmanaged"],
         )

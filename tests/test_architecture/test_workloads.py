@@ -172,7 +172,11 @@ async def bed(
     await bench.stock(_TITLES)
     bench.regular = (
         await service.editor.create(
-            CollectionCreate(title="Regular", rule=library_rule(criteria=_LEAD))
+            CollectionCreate(
+                collection_group="Films",
+                title="Regular",
+                rule=library_rule(criteria=_LEAD),
+            )
         )
     ).id
     labelled = FilterGroup(
@@ -181,6 +185,7 @@ async def bed(
     bench.smart = (
         await service.editor.create(
             CollectionCreate(
+                collection_group="Films",
                 title="Smart",
                 rule=library_rule(
                     criteria=labelled,

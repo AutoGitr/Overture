@@ -33,6 +33,7 @@ lazy from overture.schemas.collections import (
     CollectionGenerator,
     CollectionGroupDelete,
     CollectionGroupPolicy,
+    CollectionGroupRead,
     CollectionGroupRename,
     CollectionLibraryCriteria,
     CollectionMembersUpdate,
@@ -79,7 +80,9 @@ async def test_collection_routes_delegate_to_service() -> None:
     )
     service = MagicMock()
     service.reader.listed = AsyncMock(return_value=[read_item])
-    service.groups.names = AsyncMock(return_value=["Franchises"])
+    service.groups.list = AsyncMock(
+        return_value=[CollectionGroupRead(name="Franchises")]
+    )
     service.groups.policy = AsyncMock(return_value=CollectionGroupPolicy())
     service.groups.save_policy = AsyncMock(return_value=CollectionGroupPolicy())
     capabilities = CollectionCapabilities(
@@ -146,7 +149,7 @@ async def test_collection_routes_delegate_to_service() -> None:
     # Collections listing & groups
     assert len(await collections_router.list_collections(service.reader)) == 1
     assert await collections_router.list_collection_groups(service.groups) == [
-        "Franchises"
+        CollectionGroupRead(name="Franchises")
     ]
 
     defaults = CollectionDefaults(minimum_items=2)
@@ -262,6 +265,7 @@ async def test_collection_routes_delegate_to_service() -> None:
     )
     # Create, update, delete
     create = CollectionCreate(
+        collection_group="Films",
         title="Star Wars",
         rule=rule_write,
     )

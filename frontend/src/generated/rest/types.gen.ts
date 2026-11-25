@@ -2035,7 +2035,7 @@ export type CatalogSyncStats = {
  * The group a collection joins when Overture adopts it.
  */
 export type CollectionAdoption = {
-    group?: GroupName | null;
+    group: RequiredGroupName;
 };
 
 /**
@@ -2697,16 +2697,16 @@ export type CollectionGeneratorOutput = {
  *
  * What happens to a deleted group's collections.
  *
- * ``keep`` moves them to Ungrouped, ``move`` puts them in *group*,
- * ``orphan`` stops managing them, as orphaning one collection does, and
- * ``both`` deletes them from Overture and the server.
+ * ``move`` puts them in *group*, ``orphan`` stops managing them, as
+ * orphaning one collection does, and ``both`` deletes them from Overture and
+ * the server. A group without collections needs no choice.
  */
 export type CollectionGroupDelete = {
     /**
      * Collections
      */
-    collections?: 'keep' | 'move' | 'orphan' | 'both';
-    group?: GroupName | null;
+    collections?: 'move' | 'orphan' | 'both' | null;
+    group?: RequiredGroupName | null;
 };
 
 /**
@@ -2870,12 +2870,38 @@ export type CollectionGroupPolicyOutput = {
 };
 
 /**
+ * CollectionGroupRead
+ *
+ * A collection group, and the set it runs when it is one.
+ */
+export type CollectionGroupRead = {
+    /**
+     * Name
+     */
+    name: string;
+    set: CollectionGroupSet | null;
+};
+
+/**
  * CollectionGroupRename
  *
  * A replacement group name, scoped by the request.
  */
 export type CollectionGroupRename = {
-    name: GroupName;
+    name: RequiredGroupName;
+};
+
+/**
+ * CollectionGroupSet
+ *
+ * What a set splits by, and in which libraries.
+ */
+export type CollectionGroupSet = {
+    dimension: SetDimension;
+    /**
+     * Library Ids
+     */
+    library_ids: Array<string>;
 };
 
 export type CollectionIds = Array<number>;
@@ -3817,23 +3843,6 @@ export type CollectionSetPreview = {
      * Minimum Items
      */
     minimum_items?: number | null;
-};
-
-/**
- * CollectionSetSummary
- *
- * A group that is a set: what it splits by, and in which libraries.
- */
-export type CollectionSetSummary = {
-    dimension: SetDimension;
-    /**
-     * Group
-     */
-    group: string;
-    /**
-     * Library Ids
-     */
-    library_ids: Array<string>;
 };
 
 export type CollectionSourceInput = ({
@@ -5977,6 +5986,8 @@ export type RenameRequest = {
  */
 export type RenameStatus = 'renamed' | 'conflict' | 'error';
 
+export type RequiredGroupName = GroupName;
+
 /**
  * SaveArtRequest
  *
@@ -7387,6 +7398,8 @@ export type JsonValueWritable = string | number | number | boolean | Array<JsonV
 } | null;
 
 export type RemovableAssetWritable = ItemArtAssetWritable | 'theme';
+
+export type RequiredGroupNameWritable = GroupName;
 
 export type SourceOrderArtSourceStepWritable = Array<ArtSourceStepWritable>;
 
@@ -9853,7 +9866,7 @@ export type ListCollectionFieldValuesResponses = {
 
 export type ListCollectionFieldValuesResponse = ListCollectionFieldValuesResponses[keyof ListCollectionFieldValuesResponses];
 
-export type GetCollectionGroupPolicyData = {
+export type ListCollectionGroupsData = {
     body?: never;
     headers?: {
         /**
@@ -9864,16 +9877,11 @@ export type GetCollectionGroupPolicyData = {
         'X-Api-Key'?: string | null;
     };
     path?: never;
-    query: {
-        /**
-         * Name
-         */
-        name: string;
-    };
-    url: '/api/collections/group-policy';
+    query?: never;
+    url: '/api/collections/groups';
 };
 
-export type GetCollectionGroupPolicyErrors = {
+export type ListCollectionGroupsErrors = {
     /**
      * Not signed in, or the API key is not valid
      */
@@ -9900,88 +9908,18 @@ export type GetCollectionGroupPolicyErrors = {
     503: ErrorResponse;
 };
 
-export type GetCollectionGroupPolicyError = GetCollectionGroupPolicyErrors[keyof GetCollectionGroupPolicyErrors];
+export type ListCollectionGroupsError = ListCollectionGroupsErrors[keyof ListCollectionGroupsErrors];
 
-export type GetCollectionGroupPolicyResponses = {
+export type ListCollectionGroupsResponses = {
     /**
+     * Response List Collection Groups
+     *
      * Successful Response
      */
-    200: CollectionGroupPolicyOutput;
+    200: Array<CollectionGroupRead>;
 };
 
-export type GetCollectionGroupPolicyResponse = GetCollectionGroupPolicyResponses[keyof GetCollectionGroupPolicyResponses];
-
-export type SaveCollectionGroupPolicyData = {
-    body: CollectionGroupPolicyInput;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path?: never;
-    query: {
-        /**
-         * Name
-         */
-        name: string;
-        /**
-         * New Set
-         *
-         * Create a set; refuse a group that already is one
-         */
-        new_set?: boolean;
-    };
-    url: '/api/collections/group-policy';
-};
-
-export type SaveCollectionGroupPolicyErrors = {
-    /**
-     * The body is not text in the declared encoding
-     */
-    400: ErrorResponse;
-    /**
-     * Not signed in, or the API key is not valid
-     */
-    401: ErrorResponse;
-    /**
-     * An API key asked for a change, or the CSRF token is missing
-     */
-    403: ErrorResponse;
-    /**
-     * No media server is configured
-     */
-    409: ErrorResponse;
-    /**
-     * The body is larger than the route accepts
-     */
-    413: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
-    /**
-     * A media server failed the request
-     */
-    502: ErrorResponse;
-    /**
-     * A media server is unavailable
-     */
-    503: ErrorResponse;
-};
-
-export type SaveCollectionGroupPolicyError = SaveCollectionGroupPolicyErrors[keyof SaveCollectionGroupPolicyErrors];
-
-export type SaveCollectionGroupPolicyResponses = {
-    /**
-     * Successful Response
-     */
-    200: CollectionGroupPolicyOutput;
-};
-
-export type SaveCollectionGroupPolicyResponse = SaveCollectionGroupPolicyResponses[keyof SaveCollectionGroupPolicyResponses];
+export type ListCollectionGroupsResponse = ListCollectionGroupsResponses[keyof ListCollectionGroupsResponses];
 
 export type DeleteCollectionGroupData = {
     body: CollectionGroupDelete;
@@ -9993,14 +9931,14 @@ export type DeleteCollectionGroupData = {
          */
         'X-Api-Key'?: string | null;
     };
-    path?: never;
-    query: {
+    path: {
         /**
          * Name
          */
         name: string;
     };
-    url: '/api/collections/groups';
+    query?: never;
+    url: '/api/collections/groups/{name}';
 };
 
 export type DeleteCollectionGroupErrors = {
@@ -10053,7 +9991,7 @@ export type DeleteCollectionGroupResponses = {
 
 export type DeleteCollectionGroupResponse = DeleteCollectionGroupResponses[keyof DeleteCollectionGroupResponses];
 
-export type ListCollectionGroupsData = {
+export type GetCollectionGroupPolicyData = {
     body?: never;
     headers?: {
         /**
@@ -10063,12 +10001,17 @@ export type ListCollectionGroupsData = {
          */
         'X-Api-Key'?: string | null;
     };
-    path?: never;
+    path: {
+        /**
+         * Name
+         */
+        name: string;
+    };
     query?: never;
-    url: '/api/collections/groups';
+    url: '/api/collections/groups/{name}';
 };
 
-export type ListCollectionGroupsErrors = {
+export type GetCollectionGroupPolicyErrors = {
     /**
      * Not signed in, or the API key is not valid
      */
@@ -10077,6 +10020,10 @@ export type ListCollectionGroupsErrors = {
      * An API key asked for a change, or the CSRF token is missing
      */
     403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
     /**
      * No media server is configured
      */
@@ -10095,18 +10042,16 @@ export type ListCollectionGroupsErrors = {
     503: ErrorResponse;
 };
 
-export type ListCollectionGroupsError = ListCollectionGroupsErrors[keyof ListCollectionGroupsErrors];
+export type GetCollectionGroupPolicyError = GetCollectionGroupPolicyErrors[keyof GetCollectionGroupPolicyErrors];
 
-export type ListCollectionGroupsResponses = {
+export type GetCollectionGroupPolicyResponses = {
     /**
-     * Response List Collection Groups
-     *
      * Successful Response
      */
-    200: Array<string>;
+    200: CollectionGroupPolicyOutput;
 };
 
-export type ListCollectionGroupsResponse = ListCollectionGroupsResponses[keyof ListCollectionGroupsResponses];
+export type GetCollectionGroupPolicyResponse = GetCollectionGroupPolicyResponses[keyof GetCollectionGroupPolicyResponses];
 
 export type RenameCollectionGroupData = {
     body: CollectionGroupRename;
@@ -10118,14 +10063,14 @@ export type RenameCollectionGroupData = {
          */
         'X-Api-Key'?: string | null;
     };
-    path?: never;
-    query: {
+    path: {
         /**
          * Name
          */
         name: string;
     };
-    url: '/api/collections/groups';
+    query?: never;
+    url: '/api/collections/groups/{name}';
 };
 
 export type RenameCollectionGroupErrors = {
@@ -10177,6 +10122,83 @@ export type RenameCollectionGroupResponses = {
 };
 
 export type RenameCollectionGroupResponse = RenameCollectionGroupResponses[keyof RenameCollectionGroupResponses];
+
+export type SaveCollectionGroupPolicyData = {
+    body: CollectionGroupPolicyInput;
+    headers?: {
+        /**
+         * X-Api-Key
+         *
+         * Read-only API key
+         */
+        'X-Api-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Name
+         */
+        name: string;
+    };
+    query?: {
+        /**
+         * New Set
+         *
+         * Create a set; refuse a group that already is one
+         */
+        new_set?: boolean;
+    };
+    url: '/api/collections/groups/{name}';
+};
+
+export type SaveCollectionGroupPolicyErrors = {
+    /**
+     * The body is not text in the declared encoding
+     */
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type SaveCollectionGroupPolicyError = SaveCollectionGroupPolicyErrors[keyof SaveCollectionGroupPolicyErrors];
+
+export type SaveCollectionGroupPolicyResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionGroupPolicyOutput;
+};
+
+export type SaveCollectionGroupPolicyResponse = SaveCollectionGroupPolicyResponses[keyof SaveCollectionGroupPolicyResponses];
 
 export type SearchMdblistListsData = {
     body?: never;
@@ -10536,61 +10558,6 @@ export type RecommendCollectionKindResponses = {
 };
 
 export type RecommendCollectionKindResponse = RecommendCollectionKindResponses[keyof RecommendCollectionKindResponses];
-
-export type ListCollectionSetsData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/collections/sets';
-};
-
-export type ListCollectionSetsErrors = {
-    /**
-     * Not signed in, or the API key is not valid
-     */
-    401: ErrorResponse;
-    /**
-     * An API key asked for a change, or the CSRF token is missing
-     */
-    403: ErrorResponse;
-    /**
-     * No media server is configured
-     */
-    409: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
-    /**
-     * A media server failed the request
-     */
-    502: ErrorResponse;
-    /**
-     * A media server is unavailable
-     */
-    503: ErrorResponse;
-};
-
-export type ListCollectionSetsError = ListCollectionSetsErrors[keyof ListCollectionSetsErrors];
-
-export type ListCollectionSetsResponses = {
-    /**
-     * Response List Collection Sets
-     *
-     * Successful Response
-     */
-    200: Array<CollectionSetSummary>;
-};
-
-export type ListCollectionSetsResponse = ListCollectionSetsResponses[keyof ListCollectionSetsResponses];
 
 export type PreviewCollectionSetData = {
     body: CollectionSetPreview;

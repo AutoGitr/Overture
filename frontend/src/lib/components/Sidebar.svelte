@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Folders from "@lucide/svelte/icons/folders";
   import LayersPlus from "@lucide/svelte/icons/layers-plus";
   import type {
     CatalogEntryRow,
@@ -14,6 +13,9 @@
     goToNewCollection,
     sidebarGroup,
     openSidebarGroup,
+    goToCollectionsList,
+    goToGroup,
+    routedGroup,
     goToItem,
     goToItemArt,
     goToItemThemes,
@@ -33,8 +35,8 @@
   } from "../utils/sidebarFilters";
   import { SidebarListing } from "../utils/sidebarListing.svelte";
   import { searchFieldGroups, searchPlaceholder } from "../utils/sidebarSearches";
-  import { collectionGroupNames, statusTone, type CollectionGroupRow } from "../utils/sidebarShared";
-  import { UNMANAGED_GROUP, UNGROUPED_GROUP } from "../../generated/settings";
+  import { sidebarGroupNames, statusTone, type CollectionGroupRow } from "../utils/sidebarShared";
+  import { UNMANAGED_GROUP } from "../../generated/settings";
   import { readJson, writeJson } from "../utils/storage";
   import DataStatus from "./DataStatus.svelte";
   import SidebarControls from "./SidebarControls.svelte";
@@ -187,8 +189,11 @@
     title={group.title}
     count={group.collections}
     {style}
-    locked={group.title === UNMANAGED_GROUP || group.title === UNGROUPED_GROUP}
-    onselect={() => openSidebarGroup(group.title)}
+    locked={group.title === UNMANAGED_GROUP}
+    onselect={() =>
+      // Unmanaged gathers what Overture does not manage, so it has no page.
+      // On a phone the sidebar stays in front, listing the group's collections.
+      group.title === UNMANAGED_GROUP ? openSidebarGroup(group.title) : goToGroup(group.title)}
   />
 {/snippet}
 
@@ -203,7 +208,7 @@
     totalCollections={uiState.sidebarSource === "overturedb"
       ? (catalogCollections.data?.length ?? 0)
       : groupView
-        ? collectionGroupNames(groupsQuery.data ?? [], collections).length
+        ? sidebarGroupNames(groupsQuery.data ?? [], collections).length
         : collections.length}
   />
 
@@ -266,13 +271,6 @@
         title="Create collection"
         onclick={() => openDetail(() => goToNewCollection())}
         ><LayersPlus size={14} />Create</button
-      >
-      <button
-        type="button"
-        class="btn btn-secondary btn-sm"
-        aria-label="Collection groups"
-        title="Collection groups"
-        onclick={() => uiState.openCollectionGroups()}><Folders size={14} />Groups</button
       >
     </div>
   {/if}
@@ -375,7 +373,10 @@
           groupPoster={() => null}
           groupEntry={collectionGroupRow}
           entry={collectionRow}
-          onback={() => openSidebarGroup(null)}
+          onback={() => (routedGroup() === null ? openSidebarGroup(null) : goToCollectionsList())}
+          onopen={currentGroup === UNMANAGED_GROUP
+            ? null
+            : (group) => openDetail(() => goToGroup(group.title))}
           loading={collectionsQuery.isFetching && !collectionsQuery.data}
           message={collectionsMessage}
           scrollOffset={savedScroll}
@@ -390,7 +391,7 @@
 <style>
   .collection-actions {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-2);
     padding: var(--space-2);
   }

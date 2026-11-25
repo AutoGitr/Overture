@@ -35,7 +35,12 @@ vi.mock("../../../../generated/rest/sdk.gen", async (importOriginal) => ({
   listServerLibraries: async () => ({ data: await libraries() }),
   listSyncSchedules: async () => ({ data: await schedules() }),
   getCatalogStatus: async () => ({ data: await catalogStatus() }),
-  listCollectionGroups: async () => ({ data: ["Sagas", "Ungrouped"] }),
+  listCollectionGroups: async () => ({
+    data: [
+      { name: "Sagas", set: null },
+      { name: "Ungrouped", set: null },
+    ],
+  }),
   listCollections: async () => ({ data: await collections() }),
 }));
 vi.mock("../../../../generated/rest/@tanstack/svelte-query.gen", async (importOriginal) => ({
@@ -172,7 +177,7 @@ describe("Sync tab", () => {
     );
     collections.mockResolvedValue([
       collection({ id: 7, title: "Alien", collection_group: "Sagas", managed: true }),
-      collection({ id: 8, title: "Pixar", collection_group: null, managed: true }),
+      collection({ id: 8, title: "Pixar", collection_group: "Studios", managed: true }),
     ]);
     syncSelection.focus({ collectionIds: [8] });
     await renderSync();

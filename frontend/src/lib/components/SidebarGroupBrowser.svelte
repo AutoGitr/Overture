@@ -1,5 +1,6 @@
 <script lang="ts" generics="T, G extends S, S">
   import ArrowLeft from "@lucide/svelte/icons/arrow-left";
+  import Settings from "@lucide/svelte/icons/settings";
   import type { Snippet } from "svelte";
   import SidebarList from "./SidebarList.svelte";
   let {
@@ -14,6 +15,7 @@
     getKey,
     posterUrl,
     onback,
+    onopen,
     scrollOffset = 0,
     loading = false,
     message = "",
@@ -29,6 +31,8 @@
     getKey: (row: T) => string | number;
     posterUrl: (row: T) => string | null;
     onback: () => void;
+    /** Open the selected group's own page; without it the heading only names it. */
+    onopen?: ((group: S) => void) | null;
     scrollOffset?: number;
     loading?: boolean;
     message?: string;
@@ -45,7 +49,19 @@
     <button type="button" class="group-back" onclick={onback}
       ><ArrowLeft size={14} />Back to results</button
     >
-    <div class="group-heading truncate">{groupTitle(selected)}</div>
+    {#if onopen}
+      {@const group = selected}
+      <button
+        type="button"
+        class="group-heading group-open"
+        aria-label={`Configure group ${groupTitle(group)}`}
+        title="Configure the group"
+        onclick={() => onopen(group)}
+        ><span class="truncate">{groupTitle(group)}</span><Settings size={14} /></button
+      >
+    {:else}
+      <div class="group-heading truncate">{groupTitle(selected)}</div>
+    {/if}
   {/if}
   <div class="group-list">
     {#key selected === null ? "root" : groupKey(selected)}
@@ -88,6 +104,17 @@
   }
   .group-back:hover {
     background: var(--bg-hover);
+  }
+  .group-open {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    width: 100%;
+    text-align: left;
+  }
+  .group-open:hover {
+    color: var(--text-primary);
   }
   .group-heading {
     padding: 0 var(--space-3) var(--space-2);

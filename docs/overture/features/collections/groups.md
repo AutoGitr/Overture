@@ -6,31 +6,42 @@ description: Shared settings, defaults, separators and what happens when a group
 
 # Groups
 
-Every managed collection belongs to a group; missing membership uses
-**Ungrouped**. The sidebar's **Groups** view organises collections by these
-groups and keeps unmanaged server collections separate. Movies and shows share
-groups.
+Every collection Overture manages belongs to a group, which you choose or name
+when you create or adopt it. The sidebar's **Groups** view organises collections
+by these groups, and lists the server collections Overture does not manage under
+**Unmanaged**. Movies and shows share groups.
 
-## Collection groups
+## A group's page
 
-**Collection groups**, opened from **Groups** in the collection sidebar
-or **Create new group** in Setup's Group list, creates groups and edits a
-group's collection set, Settings and Active dates; Setup only assigns a group.
+Click a group in the sidebar to open it: the sidebar lists its collections,
+and the group's page opens beside it. On a phone the sidebar stays in front;
+tap the group's name at the top of the list to open its page.
+
+A group's page is laid out as a collection's is:
+
+1. **Setup**: its name, which **Rename** changes; for a set, what it splits
+   by, its title template and its libraries.
+2. **Content**: for a set only, what it makes a collection for, and
+   **Stop creating collections**, which, once saved, leaves its collections in
+   the group as they are and stops the set making and updating them.
+3. **Members**: the collections in the group, each opening its own page.
+4. **Settings** and **Active dates**: the defaults its collections inherit.
 
 **Save** saves the group in Overture at once; its collections get its display
 settings on the server with their next sync, keeping members and explicit
 overrides. **Save and Sync** saves, then opens **Sync** in Operations with
-only this group chosen, which runs the set and syncs the group's collections;
-the group needs a collection or a set first.
+only this group chosen, which runs the set and syncs the group's collections.
 
-Rename or delete a custom group in **Collection groups**. Ungrouped cannot be
-renamed, deleted or made a collection set, and `Unmanaged` cannot name a
-custom group. Sync and Assets schedules, and the groups the Sync and Assets
-tabs remember, keep a renamed group chosen.
+A group is made by naming it: type a new name in a collection's **Group**, in
+**Adopt**, or in **Assign group** among the collection operations, or create a
+set with **Create → One per value**, which is also how a group that holds
+collections becomes a set. `Unmanaged`, which gathers the collections Overture
+does not manage, has no page and cannot name a group. Sync and Assets schedules, and the groups the Sync and Assets tabs
+remember, keep a renamed group chosen.
 
 ## Defaults
 
-A group's settings in **Collection groups** and the global defaults under
+A group's settings on its page and the global defaults under
 **Settings > Collections** use the same fields and names. **Default**
 inherits, from the group and then the global default, and names the value it
 inherits.
@@ -41,7 +52,7 @@ which Plex cannot apply to it; it takes the next order the settings give.
 
 ## Separators
 
-**Separator**, a Plex group setting in **Collection groups**, heads the group
+**Separator**, a Plex setting on a group's page, heads the group
 with an empty collection titled after it, with a poster generated in the group's
 Generated colours and showing the group's name alone, in each library its
 collections use. Its sort title is the group's sort title template with an
@@ -60,9 +71,10 @@ checked.
 
 ## Deleting a group
 
-Deleting a group moves its collections to the reserved **Ungrouped** group by
-default; you can instead move them to another group, orphan them (Overture
-stops managing them and the server keeps them, listed under Unmanaged), or
-delete them from both Overture and the server; **Delete group** asks which.
+**Delete group**, the trash icon on the group's page, asks what happens to its
+collections: move them to another group, orphan them (Overture stops managing
+them and the server keeps them, listed under Unmanaged), or delete them from
+both Overture and the server. A group without collections is deleted once you
+confirm.
 
 Bulk group assignment offers the existing groups.

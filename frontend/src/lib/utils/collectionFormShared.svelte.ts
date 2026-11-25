@@ -1,7 +1,6 @@
 import { createQuery } from "@tanstack/svelte-query";
 import { getCollectionDefaultsOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
 import { SvelteMap, SvelteSet } from "svelte/reactivity";
-import { UNGROUPED_GROUP } from "../../generated/settings";
 import type {
   ArtStyle,
   AutoArtSource,
@@ -252,7 +251,7 @@ export function optionsBody(form: CollectionFormLike): CollectionOptions {
     active_end_mmdd: form.activeEndMmdd || null,
     delete_when_inactive: form.deleteWhenInactive,
     collection_filtering: form.collectionFiltering,
-    collection_group: form.collectionGroup || UNGROUPED_GROUP,
+    collection_group: form.collectionGroup.trim(),
     tmdb_collection_id: form.tmdbCollectionId ?? null,
     collection_mode: form.collectionMode,
     order_type: form.orderType,

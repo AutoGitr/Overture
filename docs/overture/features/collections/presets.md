@@ -33,9 +33,10 @@ group already has stays as it is.
 
 ## Exporting and importing
 
-**Groups → Export** saves the groups and collections you choose as
-`overture-collections.json`. A group brings its set and the collections it
-holds that its set does not make. The file names media types instead of
+**Export**, the download icon on a group's or a collection's page, saves it as
+a file; **Export as a file** under the Filters popup's collection operations
+saves every collection the filters, search and open group match. A group brings
+its set and the collections it holds that its set does not make. The file names media types instead of
 libraries, so another install can use it: **Load file** beside **Presets**
 adds the file's collections and sets to the list, under **From file**, and each
 fills in the form as a preset does. A collection's art links come with it and

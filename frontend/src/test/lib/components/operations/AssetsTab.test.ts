@@ -42,7 +42,7 @@ const reads = vi.hoisted(() => ({
   ),
   getCatalogStatus: vi.fn(() => Promise.resolve({ data: { enabled: true } })),
   clearJobSnapshot: vi.fn(() => Promise.resolve({ data: { status: "cleared" } })),
-  listCollectionGroups: vi.fn(() => Promise.resolve({ data: ["Sagas"] })),
+  listCollectionGroups: vi.fn(() => Promise.resolve({ data: [{ name: "Sagas", set: null }] })),
 }));
 
 vi.mock("../../../../generated/rest/sdk.gen", async (importOriginal) => ({

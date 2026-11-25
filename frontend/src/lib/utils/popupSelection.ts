@@ -2,7 +2,7 @@
 export interface ChoosableCollection {
   id: number;
   title: string;
-  /** The group it belongs to, Ungrouped when it has none. */
+  /** The group it belongs to. */
   group: string;
 }
 

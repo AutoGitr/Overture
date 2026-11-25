@@ -1,6 +1,5 @@
 import { createMutation } from "@tanstack/svelte-query";
 import { SvelteMap, SvelteSet } from "svelte/reactivity";
-import { UNGROUPED_GROUP } from "../../generated/settings";
 import {
   deleteCollectionMutation,
   orphanCollectionMutation,
@@ -52,7 +51,8 @@ export class CollectionEditor extends CollectionRuleForm {
   );
   sortTitleFormat = $derived(this.savedSortExpression);
   private savedGroup = $derived.by(() => this.current().collection_group);
-  collectionGroup = $derived(this.savedGroup ?? UNGROUPED_GROUP);
+  // Only a collection Overture manages has an editor, and every one names a group.
+  collectionGroup = $derived(this.savedGroup ?? "");
   private savedCollectionMode = $derived.by(() => this.saved()?.rule?.collection_mode ?? null);
   collectionMode = $derived(this.savedCollectionMode);
   private savedVisibleHome = $derived.by(() => this.saved()?.rule?.visible_home ?? null);
@@ -170,6 +170,7 @@ export class CollectionEditor extends CollectionRuleForm {
   /** Why the form cannot be saved yet, or null when it can. */
   get blocker(): string | null {
     if (!this.title.trim()) return "Enter a title";
+    if (!this.collectionGroup.trim()) return "Choose a group";
     return null;
   }
 

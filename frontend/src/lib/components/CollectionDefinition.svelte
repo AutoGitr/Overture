@@ -1,20 +1,17 @@
 <script lang="ts">
-  import { TEXT_LIMITS, UNGROUPED_GROUP } from "../../generated/settings";
-
-  import { uiState } from "../stores/uiState.svelte";
-  import DetailForm from "./DetailForm.svelte";
-  import FieldRow from "./FieldRow.svelte";
-  import SegmentedControl from "./SegmentedControl.svelte";
+  import { TEXT_LIMITS } from "../../generated/settings";
+  import type { LibrarySectionRead } from "../../generated/rest/types.gen";
+  import { goToGroup } from "../router/routes";
   import { CollectionDraft } from "../utils/collectionDraft.svelte";
   import type { CollectionEditor } from "../utils/collectionEditor.svelte";
-  import Notice from "./Notice.svelte";
-  import SetDimensionField from "./SetDimensionField.svelte";
-  import type { LibrarySectionRead } from "../../generated/rest/types.gen";
-  import LibraryOptions from "./LibraryOptions.svelte";
+  import { groupOptions } from "../utils/collectionGroups.svelte";
   import CollectionPresetField from "./CollectionPresetField.svelte";
-  import Select from "./Select.svelte";
-  import { toOptions } from "../utils/selectOptions";
-  import { NEW_GROUP_OPTION, groupOptions } from "../utils/collectionGroups.svelte";
+  import DetailForm from "./DetailForm.svelte";
+  import FieldRow from "./FieldRow.svelte";
+  import LibraryOptions from "./LibraryOptions.svelte";
+  import Notice from "./Notice.svelte";
+  import SegmentedControl from "./SegmentedControl.svelte";
+  import SetSetupFields from "./SetSetupFields.svelte";
   import ValueCombobox from "./ValueCombobox.svelte";
 
   let {
@@ -34,17 +31,8 @@
   ] as const;
   let draft = $derived(editor instanceof CollectionDraft ? editor : null);
   let creatingSet = $derived(draft?.kind === "set");
-  let groupChoices = $derived([...groupOptions(groups, editor.collectionGroup), NEW_GROUP_OPTION]);
-  /** Choosing to create a group keeps the current one until Collection groups makes it. */
-  function chooseGroup(chosen: string) {
-    if (chosen !== NEW_GROUP_OPTION.value) {
-      editor.collectionGroup = chosen;
-      return;
-    }
-    uiState.openCollectionGroups("", (name, replacement) => {
-      if (!name || editor.collectionGroup === name) editor.collectionGroup = replacement;
-    });
-  }
+  /** The groups it can join; typing another name makes a group of it once saved. */
+  let groupChoices = $derived(groupOptions(groups, editor.collectionGroup));
 </script>
 
 <DetailForm
@@ -66,10 +54,10 @@
         bind:value={() => form.kind, (kind) => form.selectKind(kind)}
       />
     </FieldRow>
-    {#if creatingSet}
-      <SetDimensionField
-        value={form.generator.dimension}
-        dimensions={form.dimensions}
+    {#if creatingSet && form.set.generator}
+      <SetSetupFields
+        generator={form.set.generator}
+        dimensions={form.set.dimensions}
         onchoose={(dimension) => form.chooseDimension(dimension)}
       />
     {/if}
@@ -96,49 +84,7 @@
     {/if}
   </fieldset>
 
-  {#if draft && creatingSet}
-    {@const form = draft}
-    <FieldRow
-      label="Title template"
-      for={`${id}-title`}
-      hint={"{value} becomes each value, such as 1990 or Action."}
-    >
-      <input
-        id={`${id}-title`}
-        required
-        maxlength={TEXT_LIMITS.setTitleFormat}
-        bind:value={form.generator.title_format}
-        placeholder={"{value}"}
-      />
-    </FieldRow>
-    <FieldRow
-      label="Group"
-      for={`${id}-group`}
-      hint="A set is a group whose collections it creates; Split by names it. A group that holds collections can become a set; one that already is a set cannot."
-    >
-      <ValueCombobox
-        id={`${id}-group`}
-        required={false}
-        maxlength={TEXT_LIMITS.groupName}
-        placeholder="e.g. Decades"
-        bind:value={form.collectionGroup}
-        options={toOptions(groups)}
-      />
-    </FieldRow>
-    {#each form.setNotices as notice (notice.title)}
-      <Notice
-        tone={notice.tone}
-        title={notice.title}
-        message={notice.message}
-        action={notice.group
-          ? {
-              label: "Open group settings",
-              run: () => uiState.openCollectionGroups(notice.group),
-            }
-          : undefined}
-      />
-    {/each}
-  {:else}
+  {#if !creatingSet}
     <FieldRow label="Title" for={`${id}-title`}>
       <input
         id={`${id}-title`}
@@ -149,27 +95,42 @@
         placeholder="Collection title"
       />
     </FieldRow>
-
-    <FieldRow
-      label="Group"
-      for={`${id}-group`}
-      hint={editor.generated
-        ? "Its group's set titles this collection."
-        : (draft?.groupHint ?? "The collection inherits the group's defaults.")}
-    >
-      <Select
-        id={`${id}-group`}
-        disabled={editor.generated}
-        options={groupChoices}
-        bind:value={() => editor.collectionGroup || UNGROUPED_GROUP, chooseGroup}
-      />
-    </FieldRow>
   {/if}
-
+  <FieldRow
+    label="Group"
+    for={`${id}-group`}
+    hint={creatingSet
+      ? "A set is a group whose collections it creates; Split by names it. A group that holds collections can become a set; one that already is a set cannot."
+      : editor.generated
+        ? "Its group's set titles this collection."
+        : (draft?.groupHint ??
+          "Every collection belongs to a group, whose defaults it inherits; a new name makes a group of it.")}
+  >
+    <fieldset class="group" disabled={editor.generated}>
+      <ValueCombobox
+        id={`${id}-group`}
+        maxlength={TEXT_LIMITS.groupName}
+        placeholder={creatingSet ? "e.g. Decades" : "e.g. Franchises"}
+        bind:value={editor.collectionGroup}
+        options={groupChoices}
+      />
+    </fieldset>
+  </FieldRow>
+  {#each draft && creatingSet ? draft.setNotices : [] as notice (notice.title)}
+    <Notice
+      tone={notice.tone}
+      title={notice.title}
+      message={notice.message}
+      action={notice.group
+        ? { label: "Open group", run: () => goToGroup(notice.group ?? "") }
+        : undefined}
+    />
+  {/each}
 </DetailForm>
 
 <style>
-  .libraries {
+  .libraries,
+  .group {
     display: flex;
     flex-direction: column;
     gap: var(--space-2);

@@ -259,7 +259,8 @@ export function collection(
     below_minimum: false,
     server_background_version: null,
     sort_title: null,
-    collection_group: null,
+    // Every collection Overture manages belongs to a group.
+    collection_group: "Films",
     has_incorrect_aspect_ratio: false,
     home_order: null,
     art_status: "missing",

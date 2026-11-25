@@ -4,12 +4,15 @@
 
 ### 🚨 Breaking Changes
 
+- **API:** collection groups are one resource: `GET /api/collections/groups` lists each group with its set, and `GET`, `PUT`, `PATCH` and `DELETE /api/collections/groups/{name}` read, save, rename and delete one. `/api/collections/group-policy` and `GET /api/collections/sets` are gone, and the group's name moves from the query to the path.
 - **Backups:** a backup taken before a database upgrade is named after the version the copy is at, as `overture_<time>_at_<version>.db`. Backups named `overture_<time>_before_<version>.db` hold the same thing but are no longer listed, kept by retention or removed; rename `_before_` to `_at_` to keep managing one, or delete it.
+- **Collections:** Every collection Overture manages names a group, chosen or typed when you create, adopt or assign it; there is no reserved **Ungrouped** group. An existing Ungrouped group stays as an ordinary group of that name, which you can rename, delete or make a set. The API refuses a collection, adoption or Assign group without a group, and deleting a group that holds collections needs `move`, `orphan` or `both`; `keep` is gone.
 
 ### 🚀 Features
 
+- **Collections:** Clicking a group opens its own page, laid out as a collection's: its name, its set, its collections, settings and active dates, with **Export** and **Delete group**. It replaces the **Collection groups** popup; type a new name in a collection's **Group** to make a group.
 - **Collections:** **Presets**, first in a new collection's Setup, fills the form from one of OvertureDB's ready-made collections or sets, such as Holidays, Decades, Franchises and TMDB charts, grouped by category, in every library of its media type on every server; change anything before saving.
-- **Collections:** **Groups → Export** saves groups, sets and collections as a file another install loads beside **Presets**, or that you can contribute to OvertureDB as a preset.
+- **Collections:** **Export**, on a group's or a collection's page and among the collection operations for everything the filters match, saves them as a file another install loads beside **Presets**, or that you can contribute to OvertureDB as a preset.
 
 ### 🐛 Bug fixes
 

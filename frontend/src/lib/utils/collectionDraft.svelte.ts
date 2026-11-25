@@ -1,11 +1,11 @@
 import { createMutation, createQuery } from "@tanstack/svelte-query";
 import { SvelteMap } from "svelte/reactivity";
-import { UNGROUPED_GROUP, UNMANAGED_GROUP } from "../../generated/settings";
+import { UNMANAGED_GROUP } from "../../generated/settings";
 import {
   createCollectionMutation,
   getCollectionGroupPolicyOptions,
+  listCollectionGroupsOptions,
   listCollectionPresetsOptions,
-  listCollectionSetsOptions,
   listCollectionsOptions,
   readCollectionPresetFileMutation,
   saveCollectionArtMutation,
@@ -30,7 +30,7 @@ import type {
 } from "../../generated/rest/types.gen";
 import { storeCollectionDetail } from "../rest/cache";
 import { queryClient } from "../rest/queryClient";
-import { goToCollection, goToCollectionsList } from "../router/routes";
+import { goToCollection, goToGroup } from "../router/routes";
 import { createNotifier } from "../stores/notificationState.svelte";
 import { settingsState } from "../stores/settingsState.svelte";
 import { emptyGroup, franchiseCriteria } from "./collectionCriteria";
@@ -41,11 +41,9 @@ import {
   optionsBody,
   ruleBody,
   setLibrary,
-  withDimension,
   type DraftKind,
-  type SetGenerator,
-  type SetPolicy,
 } from "./collectionFormShared.svelte";
+import { CollectionGroupForm } from "./collectionGroupForm.svelte";
 import { CriteriaPreview } from "./criteriaPreview.svelte";
 import { errorMessage } from "./errors";
 import type { CollectionOptions as Capabilities } from "./libraries.svelte";
@@ -113,9 +111,8 @@ export class CollectionDraft extends CollectionRuleForm {
     });
     return rule;
   });
-  /** The group policy and generator a new set saves. */
-  setPolicy = $state<SetPolicy>({});
-  generator = $state<SetGenerator>(defaultGenerator());
+  /** The group a new set saves: its defaults and what it creates. */
+  readonly set: CollectionGroupForm;
   readonly preview: CriteriaPreview;
   readonly request = createMutation(() => createCollectionMutation());
   private readonly groupRequest = createMutation(() => saveCollectionGroupPolicyMutation());
@@ -135,7 +132,7 @@ export class CollectionDraft extends CollectionRuleForm {
   /** The art a filled-in collection starts with. */
   private presetArt: PresetArtOutput | null = null;
   private readonly feedback = createNotifier();
-  private readonly sets = createQuery(() => listCollectionSetsOptions());
+  private readonly groups = createQuery(() => listCollectionGroupsOptions());
   private readonly collections = createQuery(() => ({
     ...listCollectionsOptions(),
     enabled: this.kind === "set",
@@ -148,6 +145,7 @@ export class CollectionDraft extends CollectionRuleForm {
     super();
     ({ defaults: this.defaults, options: this.options } = this.formQueries());
     this.preview = new CriteriaPreview(() => this);
+    this.set = new CollectionGroupForm(libraries, () => []);
   }
 
   typeOf(libraryId: string): MediaType {
@@ -167,29 +165,34 @@ export class CollectionDraft extends CollectionRuleForm {
   private fallbackCriteria(seed: TmdbCollectionResponse | null) {
     return seed ? franchiseCriteria(seed.tmdb_id) : emptyGroup();
   }
+  /** Choose a library in Setup, which a new set spans as well. */
   setLibrary(libraryId: string, chosen: boolean) {
     const seed = this.typeOf(libraryId) === "movie" ? this.seed() : null;
     setLibrary(this, libraryId, chosen, this.fallbackCriteria(seed));
-  }
-  /** What a set can test: only what every one of its libraries holds. */
-  get setCapabilities() {
-    return this.options.shared(this.mediaTypes);
+    this.set.setLibrary(libraryId, chosen);
   }
   /** The group a set saves into: the one named, or else the dimension's name. */
   get setGroup() {
+    const dimension = this.set.generator?.dimension;
     return (
       this.collectionGroup.trim() ||
-      this.dimensions.find((entry) => entry.dimension === this.generator.dimension)?.label ||
+      this.set.dimensions.find((entry) => entry.dimension === dimension)?.label ||
       ""
     );
   }
   get busy() {
-    return this.request.isPending || this.groupRequest.isPending;
+    return this.request.isPending || this.set.busy || this.groupRequest.isPending;
   }
   private dimensionLabel(dimension: string) {
     return (
-      this.dimensions.find((entry) => entry.dimension === dimension)?.label.toLowerCase() ??
+      this.set.dimensions.find((entry) => entry.dimension === dimension)?.label.toLowerCase() ??
       dimension
+    );
+  }
+  /** The groups that are sets, with what each splits by. */
+  private get sets() {
+    return (this.groups.data ?? []).flatMap((group) =>
+      group.set ? [{ group: group.name, ...group.set }] : [],
     );
   }
 
@@ -203,7 +206,7 @@ export class CollectionDraft extends CollectionRuleForm {
   }
 
   get groupHint(): string | null {
-    const set = (this.sets.data ?? []).find((entry) => sameName(entry.group, this.collectionGroup));
+    const set = this.sets.find((entry) => sameName(entry.group, this.collectionGroup));
     return set
       ? `"${set.group}" is a set that splits by ${this.dimensionLabel(set.dimension)}; this collection sits beside the ones it makes and inherits the group's defaults.`
       : null;
@@ -212,22 +215,22 @@ export class CollectionDraft extends CollectionRuleForm {
   get setNotices(): SetNotice[] {
     const name = this.setGroup;
     if (this.kind !== "set" || !name) return [];
-    if ([UNGROUPED_GROUP, UNMANAGED_GROUP].some((reserved) => sameName(reserved, name)))
+    if (sameName(UNMANAGED_GROUP, name))
       return [
         {
           tone: "error",
           title: `"${name}" is reserved`,
-          message: "Overture keeps it for collections outside any group; name another group.",
+          message: "Overture keeps it for the collections it does not manage; name another group.",
         },
       ];
-    const sets = this.sets.data ?? [];
+    const sets = this.sets;
     const existing = sets.find((set) => sameName(set.group, name));
     if (existing)
       return [
         {
           tone: "error",
           title: `"${existing.group}" already is a set`,
-          message: `It splits ${this.libraryNames(existing.library_ids)} by ${this.dimensionLabel(existing.dimension)}. Edit that set in the group's settings, or name another group.`,
+          message: `It splits ${this.libraryNames(existing.library_ids)} by ${this.dimensionLabel(existing.dimension)}. Edit that set on its group's page, or name another group.`,
           group: existing.group,
         },
       ];
@@ -244,7 +247,7 @@ export class CollectionDraft extends CollectionRuleForm {
       });
     for (const set of sets) {
       const shared = set.library_ids.filter((id) => this.libraryIds.includes(id));
-      if (set.dimension !== this.generator.dimension || !shared.length) continue;
+      if (set.dimension !== this.set.generator?.dimension || !shared.length) continue;
       notices.push({
         tone: "warning",
         title: `"${set.group}" already splits by ${this.dimensionLabel(set.dimension)}`,
@@ -263,17 +266,18 @@ export class CollectionDraft extends CollectionRuleForm {
       return this.setNotices.find((notice) => notice.tone === "error")?.title ?? null;
     }
     if (!this.title.trim()) return "Enter a title";
+    if (!this.collectionGroup.trim()) return "Choose a group";
     return null;
   }
 
   selectKind(kind: DraftKind) {
     this.kind = kind;
-    const dimension = this.dimensions.find((entry) => entry.dimension === this.generator.dimension);
-    if (kind === "set" && dimension && !this.collectionGroup) this.chooseDimension(dimension);
-  }
-
-  get dimensions() {
-    return this.setCapabilities?.dimensions ?? [];
+    if (kind !== "set") return;
+    this.set.generator ??= defaultGenerator(this.libraryIds);
+    const dimension = this.set.dimensions.find(
+      (entry) => entry.dimension === this.set.generator?.dimension,
+    );
+    if (dimension && !this.collectionGroup) this.chooseDimension(dimension);
   }
 
   /**
@@ -281,11 +285,12 @@ export class CollectionDraft extends CollectionRuleForm {
    * and starts the set and its collections with the dimension's defaults.
    */
   chooseDimension(dimension: CollectionDimensionRead) {
-    const previous = this.dimensions.find((entry) => entry.dimension === this.generator.dimension);
+    const previous = this.set.dimensions.find(
+      (entry) => entry.dimension === this.set.generator?.dimension,
+    );
     if (!this.collectionGroup.trim() || this.collectionGroup === previous?.label)
       this.collectionGroup = dimension.label;
-    this.generator = withDimension(this.generator, dimension, previous);
-    this.setPolicy = { ...this.setPolicy, order_type: dimension.order_type };
+    this.set.chooseDimension(dimension);
   }
 
   /** Read a collections file exported from Overture, offering its items beside the presets. */
@@ -342,8 +347,10 @@ export class CollectionDraft extends CollectionRuleForm {
     this.kind = "set";
     this.rule = rule;
     this.collectionGroup = group.name;
-    this.generator = { ...defaultGenerator(this.libraryIds), ...structuredClone(generator) };
-    this.setPolicy = groupPolicy(group);
+    this.set.reset({
+      ...groupPolicy(group),
+      generator: { ...defaultGenerator(this.libraryIds), ...structuredClone(generator) },
+    });
   }
 
   private fillCollection(collection: PortableCollectionOutput) {
@@ -396,16 +403,16 @@ export class CollectionDraft extends CollectionRuleForm {
   /** Give the collection's group its preset's defaults where the group leaves them at Default. */
   private async fillGroup() {
     if (!this.presetGroup || !sameName(this.presetGroup.name, this.collectionGroup)) return;
-    const query = { name: this.collectionGroup.trim() };
-    const existing = await queryClient.fetchQuery(getCollectionGroupPolicyOptions({ query }));
+    const path = { name: this.collectionGroup.trim() };
+    const existing = await queryClient.fetchQuery(getCollectionGroupPolicyOptions({ path }));
     const missing = Object.fromEntries(
       Object.entries(groupPolicy(this.presetGroup)).filter(
         ([key, value]) => value !== null && existing[key as keyof typeof existing] == null,
       ),
     );
     if (!Object.keys(missing).length) return;
-    const saved = await this.groupRequest.mutateAsync({ query, body: { ...existing, ...missing } });
-    queryClient.setQueryData(getCollectionGroupPolicyOptions({ query }).queryKey, saved);
+    const saved = await this.groupRequest.mutateAsync({ path, body: { ...existing, ...missing } });
+    queryClient.setQueryData(getCollectionGroupPolicyOptions({ path }).queryKey, saved);
   }
 
   /** Choose the art a filled-in collection starts with; failing leaves the collection saved. */
@@ -450,32 +457,13 @@ export class CollectionDraft extends CollectionRuleForm {
     }
   }
 
-  /** Save the set into its group, keeping the group's other defaults. */
+  /** Save the set into its group, then open the group. */
   private async saveSet(sync: boolean) {
     const name = this.setGroup;
-    const query = { name };
-    try {
-      const existing = await queryClient.fetchQuery(getCollectionGroupPolicyOptions({ query }));
-      // A choice left at Default keeps what an existing group already has.
-      const chosen = Object.fromEntries(
-        Object.entries($state.snapshot(this.setPolicy)).filter(([, value]) => value !== null),
-      );
-      const saved = await this.groupRequest.mutateAsync({
-        query: { ...query, new_set: true },
-        body: {
-          ...existing,
-          ...chosen,
-          generator: { ...$state.snapshot(this.generator), library_ids: this.libraryIds },
-        },
-      });
-      queryClient.setQueryData(getCollectionGroupPolicyOptions({ query }).queryKey, saved);
-      goToCollectionsList(name);
-      if (sync) await openSync({ groups: [name] });
-      else this.feedback.success(`Saved "${name}". Sync the group to create its collections.`);
-      return true;
-    } catch (error) {
-      this.feedback.error(errorMessage(error, "Could not save the set"));
-      return false;
-    }
+    if (!(await this.set.save(name, true))) return false;
+    goToGroup(name);
+    if (sync) await openSync({ groups: [name] });
+    else this.feedback.success(`Saved "${name}". Sync the group to create its collections.`);
+    return true;
   }
 }

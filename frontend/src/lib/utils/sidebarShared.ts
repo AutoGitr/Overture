@@ -1,14 +1,11 @@
 import type {
   AssetStatus,
   CatalogEntryRow,
+  CollectionGroupRead,
   CollectionRead,
   MediaItemRead,
 } from "../../generated/rest/types.gen";
-import {
-  SELECTED_ART_SOURCE_LABELS,
-  UNGROUPED_GROUP,
-  UNMANAGED_GROUP,
-} from "../../generated/settings";
+import { SELECTED_ART_SOURCE_LABELS, UNMANAGED_GROUP } from "../../generated/settings";
 import type { NumberRange } from "../stores/filterState.svelte";
 
 export type SidebarTab = "movie" | "show";
@@ -148,27 +145,27 @@ export function preloadRowIndexes(first: number, end: number, count: number): nu
 }
 
 /**
- * Whether a collection is listed under *group*, or at the top level for null.
- * The virtual Unmanaged group holds every collection without a rule, so those
- * appear nowhere else.
+ * Whether a collection is listed under *group*. Every collection Overture
+ * manages is in a group, and the virtual Unmanaged one holds every collection
+ * without a rule, so those appear nowhere else.
  */
 export function inCollectionGroup(
   collection: Pick<CollectionRead, "collection_group" | "managed">,
-  group: string | null,
+  group: string,
 ): boolean {
-  if (!collection.managed) return group === UNMANAGED_GROUP;
-  return group !== UNMANAGED_GROUP && (collection.collection_group ?? null) === group;
+  return collection.managed ? collection.collection_group === group : group === UNMANAGED_GROUP;
 }
 
 /**
- * Every saved group, empty or not, then the reserved groups that hold one of `collections`,
- * with the unmanaged collections last.
+ * Every group, empty or not, and any a collection names that the group list
+ * has yet to load, as after saving into a new one; then Unmanaged while it
+ * holds one of `collections`.
  */
-export function collectionGroupNames(
-  saved: readonly string[],
+export function sidebarGroupNames(
+  saved: readonly CollectionGroupRead[],
   collections: readonly CollectionRead[],
 ): string[] {
-  const names = new Set(saved.filter((group) => group !== UNGROUPED_GROUP));
+  const names = new Set(saved.map((group) => group.name));
   for (const row of collections)
     if (row.managed && row.collection_group) names.add(row.collection_group);
   return collections.some((row) => !row.managed) ? [...names, UNMANAGED_GROUP] : [...names];

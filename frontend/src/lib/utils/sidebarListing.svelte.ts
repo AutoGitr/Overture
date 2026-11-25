@@ -19,7 +19,7 @@ import {
 } from "./sidebarDomain";
 import { tmdbFilterKeysFor } from "./sidebarFilters";
 import {
-  collectionGroupNames,
+  sidebarGroupNames,
   inCollectionGroup,
   type SidebarSortDir,
   type SidebarTab,
@@ -186,18 +186,21 @@ export class SidebarListing {
   readonly collectionGroups = $derived(
     sortCollectionGroups(
       collectionGroupRows(
-        collectionGroupNames(this.groupsQuery.data ?? [], this.filteredCollections),
+        sidebarGroupNames(this.groupsQuery.data ?? [], this.filteredCollections),
         this.filteredCollections,
       ),
       this.sort.field,
       this.sort.dir,
     ),
   );
-  readonly visibleCollections = $derived(
-    this.groupView
-      ? this.filteredCollections.filter((row) => inCollectionGroup(row, this.currentGroup))
-      : this.filteredCollections,
-  );
+  /** Grouped, the top level lists groups alone, as every collection is in one. */
+  readonly visibleCollections = $derived.by(() => {
+    if (!this.groupView) return this.filteredCollections;
+    const group = this.currentGroup;
+    return group === null
+      ? []
+      : this.filteredCollections.filter((row) => inCollectionGroup(row, group));
+  });
 
   /**
    * What the list shows and in which order: its scope, sort, filters and

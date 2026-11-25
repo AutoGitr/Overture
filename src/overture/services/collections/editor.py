@@ -36,7 +36,6 @@ lazy from ...schemas.common import (
 )
 lazy from ...utils.collection_fields import available_orders, kept_order
 lazy from ...utils.collection_formats import literal_template
-lazy from ...utils.collection_groups import collection_group
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
 lazy from ..downloads.service import DownloadService
@@ -64,6 +63,17 @@ lazy from .validation import CollectionValidator
 #: What a server copy holds: a title, or ``(server, item)`` for an item no
 #: sync has stored yet.
 type Held = int | tuple[int, str]
+
+
+def _required_group(body: CollectionOptions) -> str:
+    """The group a managed collection names; every one belongs to a group.
+
+    Raises:
+        PublicServiceError: 422 when it names none.
+    """
+    if body.collection_group is None:
+        raise PublicServiceError(422, "Choose a group for the collection")
+    return body.collection_group
 
 
 def _require_movies(
@@ -183,8 +193,7 @@ class CollectionEditor:
             smart=smart,
             servers=self._access.server_types(types),
         )
-        group = collection_group(body.collection_group)
-        body = body.model_copy(update={"collection_group": group})
+        group = _required_group(body)
         _require_movies(body.tmdb_collection_id, types.values())
         async with self._access.database.read_session() as session:
             policy = await self._access.policy(
@@ -279,9 +288,9 @@ class CollectionEditor:
             row.summary_source = body.summary
         display = body.model_dump(include=body.model_fields_set & DISPLAY_OVERRIDES)
         rule = row.rule
-        group = collection_group(body.collection_group) if rule is not None else None
+        # Only a managed collection belongs to a group, and every one names one.
+        group = _required_group(body) if rule is not None else None
         if rule is not None:
-            body = body.model_copy(update={"collection_group": group})
             rule.sqlmodel_update(display)
         refused: list[CopyChange] = []
         if push:
@@ -293,7 +302,6 @@ class CollectionEditor:
             saved = await self._access.require(session, row.id or 0)
             fields = effective.model_dump(exclude={"collection_group"})
             fields["summary_source"] = summary_source
-            # Only a managed collection belongs to a group.
             if group is not None:
                 saved.group = await CollectionRepository(session).ensure_group(group)
             if "tmdb_collection_id" not in body.model_fields_set:

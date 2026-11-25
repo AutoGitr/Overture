@@ -18,8 +18,9 @@ import { buildIdSlug, parseCatalogSlug, parseItemSlug, type ItemSlug } from "../
  *   /movies/:itemSlug/art/seasons/:seasonNum   a season's art, by season number
  *   /movies/:itemSlug/themes                   themes tab
  *   /collections                               collections, of movies and shows
- *   /collections/:collectionSlug/...           a collection ("{id}-{title}"), with art,
- *                                              themes, rule and settings views
+ *   /collections/:collectionSlug/...           a collection ("{id}-{title}"), with its
+ *                                              configuration, art and themes views
+ *   /collections/groups/:groupName             a collection group, by name
  *   /overturedb/movies|shows|collections/...   the OvertureDB catalog, in the same shape
  * `/shows/...` mirrors `/movies/...`.
  *
@@ -43,6 +44,7 @@ type SelectableSeason = { season_num: number };
 
 const loadLibraryPage = () => import("./pages/LibraryPage.svelte");
 const loadCollectionPage = () => import("./pages/CollectionPage.svelte");
+const loadCollectionGroupPage = () => import("./pages/CollectionGroupPage.svelte");
 const loadItemPage = () => import("./pages/ItemPage.svelte");
 const loadRedirectToLibrary = () => import("./pages/RedirectToLibrary.svelte");
 
@@ -57,13 +59,12 @@ const itemSubroutes = {
 const collectionSubroutes = {
   "/new": loadCollectionPage,
   "/": loadCollectionPage,
+  "/groups/:groupName": loadCollectionGroupPage,
   "/:collectionSlug": {
     "/": loadCollectionPage,
     "/art": loadCollectionPage,
     "/art/:subtab": loadCollectionPage,
     "/themes": loadCollectionPage,
-    "/rule": loadCollectionPage,
-    "/settings": loadCollectionPage,
   },
 };
 
@@ -276,9 +277,29 @@ export function goToNewCollection(tmdbId?: number): void {
   void navigate("/collections/new", { search });
 }
 
+/** The group the URL opens, by name. */
+export function routedGroup(): string | null {
+  return route.pathname.startsWith("/collections/groups/")
+    ? (route.params.groupName ?? null)
+    : null;
+}
+
+/**
+ * Open a group's page, with the sidebar inside it; `hash` names a section to
+ * show. Unmanaged gathers what Overture does not manage, so it has no page.
+ */
+export function goToGroup(group: string, hash?: string): void {
+  void navigate("/collections/groups/:groupName", {
+    params: { groupName: group },
+    search: { collection_group: `group:${group}` },
+    hash,
+  });
+}
+
+/** The group the sidebar lists the collections of: the one opened there, or the open group's. */
 export function sidebarGroup(): string | null {
   const value = searchParams.get("collection_group");
-  return typeof value === "string" && value.startsWith("group:") ? value.slice(6) : null;
+  return typeof value === "string" && value.startsWith("group:") ? value.slice(6) : routedGroup();
 }
 
 export function openSidebarGroup(group: string | null): void {

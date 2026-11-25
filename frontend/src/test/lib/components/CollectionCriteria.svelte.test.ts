@@ -1,13 +1,12 @@
 import type { PolicyData } from "../../../lib/utils/collectionFormShared.svelte";
 import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
+import { tick } from "svelte";
 import { beforeEach, describe, expect, it } from "vitest";
 import type {
-  CollectionGroupPolicyOutput,
   CollectionSourceOutput,
   FilterGroupOutput,
   FieldConditionOutput,
 } from "../../../generated/rest/types.gen";
-import GroupSettingsHarness from "../../helpers/GroupSettingsHarness.svelte";
 import CollectionPolicyFields from "../../../lib/components/CollectionPolicyFields.svelte";
 import CollectionSetEditor from "../../../lib/components/CollectionSetEditor.svelte";
 import GlobalCollectionDefaults from "../../../lib/components/GlobalCollectionDefaults.svelte";
@@ -18,7 +17,7 @@ import { queryClient } from "../../../lib/rest/queryClient";
 import { goToCollectionView, navigate } from "../../../lib/router/routes";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
 import { emptyGroup, newSource } from "../../../lib/utils/collectionCriteria";
-import { defaultGenerator } from "../../../lib/utils/collectionFormShared.svelte";
+import { defaultGenerator, withDimension } from "../../../lib/utils/collectionFormShared.svelte";
 import { mockFetchRoutes } from "../../helpers/fetch";
 import {
   appSettings,
@@ -30,8 +29,6 @@ import {
   mediaServers,
 } from "../../helpers/fixtures";
 import { chooseOption, renderWithQueryClient } from "../../helpers/render";
-import { uiState } from "../../../lib/stores/uiState.svelte";
-import { syncSelection } from "../../../lib/stores/syncSelection.svelte";
 
 const capabilities = collectionCapabilities();
 const members = [mediaItem({ id: 1, title: "First", library_id: "movies", server_item_id: "m1" })];
@@ -637,119 +634,29 @@ describe("collection criteria", () => {
     });
   });
 
-  it("turns a group into a collection set, previews it, saves it and opens its sync", async () => {
-    let putBody: CollectionGroupPolicyOutput | null = null;
-    const groupPolicy: CollectionGroupPolicyOutput = {
-      separator: false,
-      sync_mode: null,
-      minimum_items: 2,
-      delete_below_minimum: null,
-      auto_art: null,
-      generated_style: null,
-      generated_title_only: null,
-      overturedb_posters: null,
-      backgrounds: null,
-      themes: null,
-      auto_match_theme: null,
-      delete_when_inactive: null,
-      collection_mode: null,
-      collection_filtering: null,
-      visible_shared: null,
-      visible_library: null,
-      sort_title_format: null,
-      summary_format: null,
-      active_start_mmdd: null,
-      active_end_mmdd: null,
-      generator: null,
-      request_missing: null,
-      member_label: null,
-      arr_tag: null,
-      home_order: null,
-      visible_home: null,
-      order_type: null,
-    };
-    const { calls } = mockFetchRoutes({
-      "/api/collections/defaults": {},
-      "/api/collections/capabilities": capabilities,
-      "/api/collections/sets/preview": [
-        {
-          value: "Action",
-          title: "Action",
-          member_count: 3,
-          below_minimum: false,
-          collection_id: null,
-        },
-        {
-          value: "Drama",
-          title: "Drama",
-          member_count: 1,
-          below_minimum: true,
-          collection_id: null,
-        },
-      ],
-      "/api/collections/group-policy": ({ init }: { init: RequestInit }) => {
-        if (init.method === "PUT") {
-          putBody = JSON.parse(String(init.body));
-          return Response.json(putBody);
-        }
-        return Response.json(groupPolicy);
-      },
-    });
-    renderWithQueryClient(GroupSettingsHarness, {
-      group: "Genres",
-      libraries: [{ id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 10 }],
-    });
-
-    await fireEvent.click(await screen.findByRole("button", { name: "Collection set" }));
-    await fireEvent.click(screen.getByLabelText("Create this group's collections"));
-    await chooseOption(screen.getByLabelText("Split by"), "Genres");
-    expect(screen.getByLabelText(/^Title/)).toHaveValue("{value}");
-    await fireEvent.input(screen.getByLabelText(/^Most common only/), {
-      target: { value: "10" },
-    });
-    await fireEvent.click(screen.getByRole("button", { name: "Preview collections" }));
-    expect(await screen.findByText("1 collection, 1 below the minimum.")).toBeInTheDocument();
-    const preview = JSON.parse(
-      String(calls.find((call) => call.url.startsWith("/api/collections/sets"))?.init.body),
-    );
-    expect(preview).toMatchObject({
-      group: "Genres",
-      minimum_items: 2,
-      generator: { dimension: "genre", library_ids: ["movies"], top: 10 },
-    });
-
-    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(putBody).not.toBeNull());
-    expect(uiState.openPopup).toBeNull();
-    expect(putBody).toMatchObject({
-      minimum_items: 2,
-      generator: { dimension: "genre", library_ids: ["movies"], title_format: "{value}", top: 10 },
-    });
-    await fireEvent.click(screen.getByRole("button", { name: "Save and Sync" }));
-    await waitFor(() => expect(uiState.openPopup).toBe("operations"));
-    expect([uiState.operationsTab, syncSelection.groups]).toEqual(["sync", ["Genres"]]);
-    uiState.closePopup();
-  });
-
   it("lists a custom set's collections and renames or merges other values", async () => {
     const generator = $state(defaultGenerator(["movies"]));
+    const custom = dimension({ dimension: "custom", label: "Custom" });
+    const audio = dimension({
+      dimension: "audio_language",
+      label: "Audio languages",
+      smart_only: true,
+    });
+    /** Split the set as Setup's Split by does. */
+    const split = async (chosen: typeof custom) => {
+      const previous = [custom, audio].find((entry) => entry.dimension === generator.dimension);
+      Object.assign(generator, withDimension(generator, chosen, previous));
+      await tick();
+    };
     renderWithQueryClient(CollectionSetEditor, {
       generator,
       libraryIds: ["movies"],
       libraries: [{ id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 1 }],
       capabilities: collectionCapabilities({
-        dimensions: [
-          ...capabilities.dimensions,
-          dimension({
-            dimension: "audio_language",
-            label: "Audio languages",
-            smart_only: true,
-          }),
-        ],
+        dimensions: [...capabilities.dimensions, audio],
       }),
       group: "Mine",
       minimum: null,
-      standalone: true,
     });
     await fireEvent.click(screen.getByRole("button", { name: "Add alias" }));
     await fireEvent.change(screen.getByLabelText("Alias 1 values"), {
@@ -764,7 +671,7 @@ describe("collection criteria", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     expect(generator.aliases).toEqual([]);
 
-    await chooseOption(screen.getByLabelText("Split by"), "Custom");
+    await split(custom);
     expect(generator.custom_values).toHaveLength(1);
     await fireEvent.click(screen.getByRole("button", { name: "Add collection" }));
     await fireEvent.input(screen.getByLabelText("Collection 2 name"), {
@@ -774,10 +681,9 @@ describe("collection criteria", () => {
     await fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[0]!);
     expect(generator.custom_values?.map((value) => value.name)).toEqual(["B"]);
 
-    await chooseOption(screen.getByLabelText("Split by"), /Audio languages/);
+    await split(audio);
     expect(generator.smart).toBe(true);
     expect(generator.custom_values).toEqual([]);
-    expect(screen.getByText("Only Plex knows these values.")).toBeInTheDocument();
   });
 
   it("edits the global defaults under their own names and where requests go", async () => {

@@ -24,7 +24,6 @@ lazy from ...schemas.collections import (
     CollectionRuleRead,
     CollectionRuleWrite,
 )
-lazy from ...utils.collection_groups import collection_group
 lazy from ...utils.errors import PublicServiceError
 lazy from ...utils.time import utc_now
 lazy from ..needs import apply_needs
@@ -98,7 +97,7 @@ class CollectionAdoption:
     ) -> CollectionDetail:
         """Give a collection made outside Overture the rule its plan keeps."""
         plan = await self.adoption_plan(collection_id)
-        group = collection_group(body.group)
+        group = body.group
         async with self._access.locked(collection_id):
             async with self._access.database.write_session() as session:
                 stored = await self._access.require(session, collection_id)
