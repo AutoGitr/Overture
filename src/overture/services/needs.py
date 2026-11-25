@@ -41,35 +41,24 @@ async def apply_needs(
 ) -> None:
     """Record what is wanted for each of *items* and *collections*."""
     catalog = CatalogRepository(session)
-    settings: AppSettings | None = None
-    trusted: bool | None = None
     if items:
         matched = await catalog.match_items(items)
-        if any(entry and entry.no_theme for entry in matched):
-            settings = await get_app_settings(session)
-            trusted = await _trusts_no_theme(session, settings)
+        trusted = any(
+            entry and entry.no_theme for entry in matched
+        ) and await _trusts_no_theme(session, await get_app_settings(session))
         for item, entry in zip(items, matched, strict=True):
             set_needed(
-                item,
-                ServerAsset.THEME,
-                not (trusted and entry and entry.no_theme),
+                item, ServerAsset.THEME, not (trusted and entry and entry.no_theme)
             )
             session.add(item)
     if collections:
-        settings = settings or await get_app_settings(session)
-        if trusted is None:
-            trusted = await _trusts_no_theme(session, settings)
-        entries = (
-            await catalog.collections_by_tmdb_id(
-                {
-                    row.tmdb_collection_id
-                    for row in collections
-                    if row.tmdb_collection_id
-                }
-            )
-            if trusted
-            else {}
-        )
+        settings = await get_app_settings(session)
+        # Only a TMDB collection can carry the flag, so others ask nothing more.
+        tmdb_ids = {
+            row.tmdb_collection_id for row in collections if row.tmdb_collection_id
+        }
+        trusted = bool(tmdb_ids) and await _trusts_no_theme(session, settings)
+        entries = await catalog.collections_by_tmdb_id(tmdb_ids) if trusted else {}
         for row in collections:
             # A row made in this session has not loaded what decides its policy.
             if unloaded := {"group", "rule"} & inspect(row).unloaded:
