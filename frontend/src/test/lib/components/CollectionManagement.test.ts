@@ -220,7 +220,7 @@ describe("collection management", () => {
     const group = await screen.findByLabelText("Group");
     await fireEvent.click(group);
     await screen.findByRole("option", { name: "Weekend" });
-    expect(screen.queryByRole("button", { name: "Manage groups" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Collection groups" })).toBeNull();
     await fireEvent.click(screen.getByRole("option", { name: "Create new group..." }));
     expect(uiState.openPopup).toBe("collection-groups");
     expect(group).toHaveTextContent("Ungrouped");

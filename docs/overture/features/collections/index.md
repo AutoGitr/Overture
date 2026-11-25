@@ -36,7 +36,7 @@ items, date added or last synced.
 
 ## The Configure page
 
-**+ Create collection** opens a Configure page, the one place to create
+**Create** opens a Configure page, the one place to create
 anything: **One collection**, or **One per value** (a
 [collection set](sets.md)). Both kinds share the same sections, in the same
 order:

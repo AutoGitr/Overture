@@ -13,7 +13,7 @@ groups.
 
 ## Collection groups
 
-**Collection groups**, opened from **Manage groups** in the collection sidebar
+**Collection groups**, opened from **Groups** in the collection sidebar
 or **Create new group** in Setup's Group list, creates groups and edits a
 group's collection set, Settings and Active dates; Setup only assigns a group.
 

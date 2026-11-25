@@ -263,19 +263,25 @@
       <button
         type="button"
         class="btn btn-secondary btn-sm"
+        aria-label="Create collection"
+        title="Create collection"
         onclick={() => openDetail(() => goToNewCollection())}
-        ><LayersPlus size={14} />Create collection</button
+        ><LayersPlus size={14} />Create</button
       >
       <button
         type="button"
         class="btn btn-secondary btn-sm"
-        onclick={() => uiState.openCollectionGroups()}><Folders size={14} />Manage groups</button
-      >
-      <button
-        type="button"
-        class="btn btn-secondary btn-sm"
+        aria-label="Collection presets"
+        title="Collection presets"
         onclick={() => uiState.openPopupByName("collection-presets")}
         ><LibraryBig size={14} />Presets</button
+      >
+      <button
+        type="button"
+        class="btn btn-secondary btn-sm"
+        aria-label="Collection groups"
+        title="Collection groups"
+        onclick={() => uiState.openCollectionGroups()}><Folders size={14} />Groups</button
       >
     </div>
   {/if}
@@ -393,7 +399,7 @@
 <style>
   .collection-actions {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--space-2);
     padding: var(--space-2);
   }

@@ -621,7 +621,7 @@ test("deleting a group from the groups popup asks what happens to its collection
   );
   await page.route("**/api/collections/group-policy{,?*}", (route) => route.fulfill({ json: {} }));
   await logIn(page, "/collections");
-  await page.getByRole("button", { name: "Manage groups" }).click();
+  await page.getByRole("button", { name: "Collection groups" }).click();
   const popup = page.getByRole("dialog", { name: "Collection groups" });
   await chooseOption(popup.getByRole("combobox", { name: "Group" }), "Weekend");
   await popup.getByRole("button", { name: "Rename or delete" }).click();
