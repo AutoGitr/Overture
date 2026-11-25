@@ -225,6 +225,9 @@ class CollectionDetails:
     visible_shared: bool = False
     visible_library: bool = False
     filtering: CollectionFiltering | None = None
+    #: It has a Plex hub whose visibility the sync sets; an empty separator
+    #: has none, and Plex answers 404 when asked for one.
+    hub: bool = True
 
 
 @dataclass(slots=True, frozen=True)

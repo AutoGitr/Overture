@@ -88,7 +88,9 @@ ENV PYTHONUNBUFFERED=1 \
 # Keep apt downloads across builds, without putting them in image layers.
 # Debian publishes security fixes before the official image is rebuilt with
 # them, so each build applies them. apt is then removed through dpkg, so image
-# scanners do not report it.
+# scanners do not report it. A layer cache would otherwise keep an upgrade from
+# before a fix was published, so builds pass the day to re-run it daily.
+ARG APT_UPGRADE_DAY=unset
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean && \

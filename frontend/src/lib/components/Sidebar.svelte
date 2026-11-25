@@ -1,7 +1,6 @@
 <script lang="ts">
   import Folders from "@lucide/svelte/icons/folders";
   import LayersPlus from "@lucide/svelte/icons/layers-plus";
-  import LibraryBig from "@lucide/svelte/icons/library-big";
   import type {
     CatalogEntryRow,
     CollectionRead,
@@ -271,14 +270,6 @@
       <button
         type="button"
         class="btn btn-secondary btn-sm"
-        aria-label="Collection presets"
-        title="Collection presets"
-        onclick={() => uiState.openPopupByName("collection-presets")}
-        ><LibraryBig size={14} />Presets</button
-      >
-      <button
-        type="button"
-        class="btn btn-secondary btn-sm"
         aria-label="Collection groups"
         title="Collection groups"
         onclick={() => uiState.openCollectionGroups()}><Folders size={14} />Groups</button
@@ -399,7 +390,7 @@
 <style>
   .collection-actions {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--space-2);
     padding: var(--space-2);
   }

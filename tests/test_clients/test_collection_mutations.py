@@ -646,6 +646,42 @@ async def test_plex_leaves_a_collections_hub_alone_when_its_visibility_holds(
     assert hub_writes == [{"promotedToOwnHome": "0"}]
 
 
+async def test_plex_never_asks_for_the_hub_of_a_collection_without_one(
+    monkeypatch: pytest.MonkeyPatch, app_config: Settings
+) -> None:
+    paths: list[str] = []
+
+    def handle(request: httpx2.Request) -> httpx2.Response:
+        paths.append(request.url.path)
+        if request.url.path.startswith("/hubs/"):
+            return httpx2.Response(404)
+        return httpx2.Response(200, json={"MediaContainer": {}})
+
+    factory, _transport = mock_client_factory(handle)
+    client = PlexClient(
+        server=server_of(app_config), app_config=app_config, client_factory=factory
+    )
+    monkeypatch.setattr(PlexClient, "resolve_secure_url", keep_configured_plex_url)
+    try:
+        await client.update_collection_details(
+            "separator",
+            "1",
+            CollectionDetails(
+                title="Charts",
+                summary=None,
+                sort_title="Charts",
+                mode=CollectionMode.DEFAULT,
+                order=CollectionOrder.TITLE_ASC,
+                smart=False,
+                visible_home=True,
+                hub=False,
+            ),
+        )
+    finally:
+        await client.close()
+    assert not [path for path in paths if path.startswith("/hubs/")]
+
+
 async def test_plex_collection_rename_clears_orphaned_tag_when_no_collection_holds_it(
     monkeypatch: pytest.MonkeyPatch, app_config: Settings
 ) -> None:

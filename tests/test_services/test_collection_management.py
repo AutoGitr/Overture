@@ -171,6 +171,7 @@ class Provider(PlexProvider):
         self.members: dict[str, list[str]] = {}
         self.options: dict[str, tuple[str, CollectionMode, CollectionOrder, bool]] = {}
         self.sort_titles: dict[str, str | None] = {}
+        self.hubs: dict[str, bool] = {}
         self.summaries: dict[str, str | None] = {}
         self.smart_filters: dict[str, str] = {}
         self.synced_labels: list[tuple[str, list[str], list[str]]] = []
@@ -307,6 +308,7 @@ class Provider(PlexProvider):
         )
         self.sort_titles[server_collection_id] = details.sort_title
         self.summaries[server_collection_id] = details.summary
+        self.hubs[server_collection_id] = details.hub
 
     @override
     async def get_collection_member_ids(self, server_collection_id: str) -> list[str]:
@@ -928,6 +930,21 @@ async def test_group_rename_preserves_defaults_and_rejects_collisions(
         await manager.service.groups.rename("Evenings", "Other")
     with pytest.raises(PublicServiceError, match="not found"):
         await manager.service.groups.rename("Nothing", "Shows")
+
+
+async def test_group_art_orders_read_back_as_their_enums(manager: Manager) -> None:
+    await manager.service.groups.save_policy(
+        "Weekend",
+        CollectionGroupPolicy(
+            auto_art=[AutoArtSource.GENERATE],
+            overturedb_posters=[CollectionPosterStyle.INDIVIDUAL],
+        ),
+    )
+    # Warnings are errors, so a stored string read back as the enum's value
+    # fails here when the policy is serialised.
+    saved = await manager.service.groups.policy("Weekend")
+    assert saved.model_dump(mode="json")["auto_art"] == ["generate"]
+    assert saved.auto_art == [AutoArtSource.GENERATE]
 
 
 async def test_schedules_keep_running_a_renamed_group(
@@ -4196,6 +4213,8 @@ async def test_a_plex_group_separator_heads_its_collections_while_it_is_on(
     assert copy_id(separator) is not None
     # Its sort title is the group's with no title, so it sorts first.
     assert manager.provider.sort_titles[copy_id(separator) or ""] == "Sagas"
+    # Empty, it has no Plex hub to show or hide.
+    assert manager.provider.hubs[copy_id(separator) or ""] is False
     assert ArtType.POSTER in manager.art.selections
     with pytest.raises(PublicServiceError, match="group keeps the separator"):
         await manager.service.editor.update(

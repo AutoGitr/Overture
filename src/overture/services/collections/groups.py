@@ -27,7 +27,7 @@ lazy from ..needs import apply_needs
 lazy from . import COLLECTIONS_LOCK
 lazy from .access import CollectionAccess
 lazy from .adoption import CollectionAdoption
-lazy from .editor import CollectionEditor, PresetSource
+lazy from .editor import CollectionEditor
 lazy from .rule_sync import RuleSync
 lazy from .rules import generator, group_name
 lazy from .separators import CollectionSeparators
@@ -179,11 +179,16 @@ class CollectionGroups:
             generator=generator(row),
         )
 
-    async def check_policy(self, name: str, body: CollectionGroupPolicy) -> str:
-        """Refuse what :meth:`save_policy` would refuse, and return the name it saves.
+    async def save_policy(
+        self, name: str, body: CollectionGroupPolicy, *, new_set: bool = False
+    ) -> CollectionGroupPolicy:
+        """Save group defaults without replacing explicit collection overrides.
+
+        With *new_set*, the body creates a set, which never replaces another.
 
         Raises:
-            PublicServiceError: 422 for a choice the libraries cannot keep.
+            PublicServiceError: 409 when *new_set* names a group that already
+                is a set.
         """
         name = group_name(name)
         async with self._access.database.read_session() as session:
@@ -219,38 +224,20 @@ class CollectionGroups:
                 self._validator.generator(library_id, media_type, body.generator)
             if body.generator.smart and body.order_type is CollectionOrder.CUSTOM:
                 raise PublicServiceError(422, SMART_CUSTOM_ORDER)
-        return name
-
-    async def save_policy(
-        self,
-        name: str,
-        body: CollectionGroupPolicy,
-        *,
-        new_set: bool = False,
-        preset: PresetSource | None = None,
-    ) -> CollectionGroupPolicy:
-        """Save group defaults without replacing explicit collection overrides.
-
-        With *new_set*, the body creates a set, which never replaces another.
-        A group *preset* creates records the OvertureDB preset it came from.
-
-        Raises:
-            PublicServiceError: 409 when *new_set* names a group that already
-                is a set.
-        """
-        name = await self.check_policy(name, body)
         async with (
             self._access.asset_locks.acquire(COLLECTIONS_LOCK),
             self._access.database.write_session() as session,
         ):
             row = await CollectionRepository(session).group(name)
-            if new_set:
-                _require_no_set(name, row)
-            if row is None:
-                preset_id, preset_item = preset or (None, None)
-                row = CollectionGroup(
-                    name=name, preset_id=preset_id, preset_item=preset_item
+            if new_set and (current := generator(row)) is not None:
+                raise PublicServiceError(
+                    409,
+                    f'"{name}" already splits by '
+                    f"{DIMENSIONS[current.dimension].label}; "
+                    "edit that set in the group's settings, or name another group",
                 )
+            if row is None:
+                row = CollectionGroup(name=name)
             row.sqlmodel_update(body.model_dump(exclude={"generator"}))
             row.generator = (
                 body.generator.model_dump(mode="json")
@@ -341,13 +328,3 @@ class CollectionGroups:
                 await report(JobOutcome.ERROR, row.title, str(exc), finished=False)
                 continue
             await outcome.report(report, row.title, servers=self._access.log_server)
-
-
-def _require_no_set(name: str, row: CollectionGroup | None) -> None:
-    if (current := generator(row)) is not None:
-        raise PublicServiceError(
-            409,
-            f'"{name}" already splits by '
-            f"{DIMENSIONS[current.dimension].label}; "
-            "edit that set in the group's settings, or name another group",
-        )

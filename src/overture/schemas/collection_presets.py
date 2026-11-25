@@ -1,18 +1,18 @@
 """Portable collection files: OvertureDB presets and Overture's own exports.
 
 A file names media types where a collection names libraries, so it can be
-added to any install; the person adding it picks the libraries.
+added to any install: each collection or set in it fills the create form,
+where the person adding it picks the libraries.
 """
 
 lazy from datetime import datetime
-lazy from typing import Annotated, Literal, Self
+lazy from typing import Annotated, Self
 
 lazy from pydantic import Field, model_validator
 
 lazy from ..catalog_contract.contract import PRESET_ID_PATTERN, PRESET_VERSION
 lazy from ..domain import (
     CollectionPosterStyle,
-    Integration,
     MediaType,
     PresetCategory,
 )
@@ -24,7 +24,6 @@ lazy from .collections import (
     CollectionOptions,
     CollectionPolicyBase,
     FilterGroup,
-    LibraryId,
 )
 lazy from .validators import CollectionIds, GroupName, GroupNames, UniqueList
 
@@ -188,17 +187,13 @@ class PresetListing(StrictBaseModel):
     #: Its description; None when this Overture cannot read the preset.
     preset: PresetMetadata | None = None
     file: CollectionPresetFile | None = None
-    #: Integrations it needs that are not set up.
-    unavailable: list[Integration] = Field(default_factory=list[Integration])
+    #: What to set up before its collections can find their titles, such as
+    #: "Set TMDB_READ_ACCESS_TOKEN to use TMDB".
+    setup: list[PublicText] = Field(default_factory=list[PublicText])
     #: Why it cannot be added, such as needing a newer Overture.
     problem: str | None = None
     #: A small rendition of its first poster.
     preview_url: str | None = None
-    #: When it was last added here; None when it never was.
-    added_at: datetime | None = None
-    #: What the published version changes since it was added, such as
-    #: "Changes Christmas"; empty when nothing did.
-    changes: list[str] = Field(default_factory=list[str])
 
 
 class PresetGallery(StrictBaseModel):
@@ -241,55 +236,3 @@ class PresetExport(StrictBaseModel):
     warnings: list[str] = Field(default_factory=list[str])
     #: The OvertureDB issue that contributes the file as a preset.
     issue: ContributionIssue | None = None
-
-
-class PresetImportRequest(StrictBaseModel):
-    """A file to add, the libraries for each media type, and what to change."""
-
-    file: CollectionPresetFile
-    libraries: Annotated[
-        dict[MediaType, Annotated[list[LibraryId], Field(min_length=1, max_length=20)]],
-        Field(min_length=1),
-    ]
-    #: Collection titles and group names to skip, whether new or updated.
-    skip: Annotated[list[str], Field(max_length=PRESET_COLLECTIONS_MAX)] = Field(
-        default_factory=list[str]
-    )
-
-    @model_validator(mode="after")
-    def validate_libraries(self) -> Self:
-        """A library holds one media type, so it is chosen for one."""
-        chosen = [library for ids in self.libraries.values() for library in ids]
-        if len(chosen) != len(set(chosen)):
-            raise ValueError("Choose each library for one media type")
-        return self
-
-
-type PresetItemStatus = Literal["add", "update", "skip", "refused"]
-
-
-class PresetPlanItem(StrictBaseModel):
-    """What adding one collection or group of a file does."""
-
-    kind: Literal["collection", "group"]
-    name: str
-    status: PresetItemStatus
-    #: Why it is refused, or a warning about what it does once added.
-    reason: PublicText | None = None
-    #: Whether to add or update it unless someone says otherwise; something
-    #: deleted here since the preset added it is left out.
-    chosen: bool = True
-
-
-class PresetImportPlan(StrictBaseModel):
-    """What adding a file does, item by item, before anything is saved."""
-
-    items: list[PresetPlanItem] = Field(default_factory=list[PresetPlanItem])
-    warnings: list[str] = Field(default_factory=list[str])
-
-
-class PresetImportResult(StrictBaseModel):
-    """What adding a file did, item by item."""
-
-    items: list[PresetPlanItem] = Field(default_factory=list[PresetPlanItem])
-    collection_ids: list[int] = Field(default_factory=list[int])

@@ -4418,13 +4418,6 @@ export type IncrementalSyncState = {
  */
 export type IncrementalThemeOrder = 'off' | 'overturedb_themerrdb' | 'themerrdb_overturedb';
 
-/**
- * Integration
- *
- * An external service some criteria, sources and sets read from.
- */
-export type Integration = 'tmdb' | 'mdblist' | 'radarr' | 'sonarr';
-
 export type ItemArtAsset = ArtType | 'art';
 
 /**
@@ -5654,72 +5647,11 @@ export type PresetImage = {
 };
 
 /**
- * PresetImportPlan
- *
- * What adding a file does, item by item, before anything is saved.
- */
-export type PresetImportPlan = {
-    /**
-     * Items
-     */
-    items: Array<PresetPlanItem>;
-    /**
-     * Warnings
-     */
-    warnings: Array<string>;
-};
-
-/**
- * PresetImportRequest
- *
- * A file to add, the libraries for each media type, and what to change.
- */
-export type PresetImportRequest = {
-    file: CollectionPresetFileInput;
-    /**
-     * Libraries
-     */
-    libraries: {
-        [key in MediaType]?: Array<LibraryId>;
-    };
-    /**
-     * Skip
-     */
-    skip?: Array<string>;
-};
-
-/**
- * PresetImportResult
- *
- * What adding a file did, item by item.
- */
-export type PresetImportResult = {
-    /**
-     * Collection Ids
-     */
-    collection_ids: Array<number>;
-    /**
-     * Items
-     */
-    items: Array<PresetPlanItem>;
-};
-
-export type PresetItemStatus = 'add' | 'update' | 'skip' | 'refused';
-
-/**
  * PresetListing
  *
  * One OvertureDB preset in the gallery.
  */
 export type PresetListing = {
-    /**
-     * Added At
-     */
-    added_at: string | null;
-    /**
-     * Changes
-     */
-    changes: Array<string>;
     file: CollectionPresetFileOutput | null;
     /**
      * Id
@@ -5735,9 +5667,9 @@ export type PresetListing = {
      */
     problem: string | null;
     /**
-     * Unavailable
+     * Setup
      */
-    unavailable: Array<Integration>;
+    setup: Array<PublicText>;
 };
 
 /**
@@ -5796,28 +5728,6 @@ export type PresetMetadataOutput = {
      * Title
      */
     title: string;
-};
-
-/**
- * PresetPlanItem
- *
- * What adding one collection or group of a file does.
- */
-export type PresetPlanItem = {
-    /**
-     * Chosen
-     */
-    chosen: boolean;
-    /**
-     * Kind
-     */
-    kind: 'collection' | 'group';
-    /**
-     * Name
-     */
-    name: string;
-    reason: PublicText | null;
-    status: PresetItemStatus;
 };
 
 /**
@@ -10442,8 +10352,8 @@ export type ExportCollectionPresetResponses = {
 
 export type ExportCollectionPresetResponse = ExportCollectionPresetResponses[keyof ExportCollectionPresetResponses];
 
-export type ImportCollectionPresetData = {
-    body: PresetImportRequest;
+export type ReadCollectionPresetFileData = {
+    body: CollectionPresetFileInput;
     headers?: {
         /**
          * X-Api-Key
@@ -10454,10 +10364,10 @@ export type ImportCollectionPresetData = {
     };
     path?: never;
     query?: never;
-    url: '/api/collections/presets/import';
+    url: '/api/collections/presets/file';
 };
 
-export type ImportCollectionPresetErrors = {
+export type ReadCollectionPresetFileErrors = {
     /**
      * The body is not text in the declared encoding
      */
@@ -10492,77 +10402,16 @@ export type ImportCollectionPresetErrors = {
     503: ErrorResponse;
 };
 
-export type ImportCollectionPresetError = ImportCollectionPresetErrors[keyof ImportCollectionPresetErrors];
+export type ReadCollectionPresetFileError = ReadCollectionPresetFileErrors[keyof ReadCollectionPresetFileErrors];
 
-export type ImportCollectionPresetResponses = {
+export type ReadCollectionPresetFileResponses = {
     /**
      * Successful Response
      */
-    200: PresetImportResult;
+    200: PresetListing;
 };
 
-export type ImportCollectionPresetResponse = ImportCollectionPresetResponses[keyof ImportCollectionPresetResponses];
-
-export type PlanCollectionPresetData = {
-    body: PresetImportRequest;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/collections/presets/plan';
-};
-
-export type PlanCollectionPresetErrors = {
-    /**
-     * The body is not text in the declared encoding
-     */
-    400: ErrorResponse;
-    /**
-     * Not signed in, or the API key is not valid
-     */
-    401: ErrorResponse;
-    /**
-     * An API key asked for a change, or the CSRF token is missing
-     */
-    403: ErrorResponse;
-    /**
-     * No media server is configured
-     */
-    409: ErrorResponse;
-    /**
-     * The body is larger than the route accepts
-     */
-    413: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
-    /**
-     * A media server failed the request
-     */
-    502: ErrorResponse;
-    /**
-     * A media server is unavailable
-     */
-    503: ErrorResponse;
-};
-
-export type PlanCollectionPresetError = PlanCollectionPresetErrors[keyof PlanCollectionPresetErrors];
-
-export type PlanCollectionPresetResponses = {
-    /**
-     * Successful Response
-     */
-    200: PresetImportPlan;
-};
-
-export type PlanCollectionPresetResponse = PlanCollectionPresetResponses[keyof PlanCollectionPresetResponses];
+export type ReadCollectionPresetFileResponse = ReadCollectionPresetFileResponses[keyof ReadCollectionPresetFileResponses];
 
 export type PreviewCollectionData = {
     body: CollectionPreviewRequest;

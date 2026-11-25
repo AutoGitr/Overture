@@ -91,6 +91,7 @@ jobs:
             --notes-file release-notes.md --github-output "$GITHUB_OUTPUT"
           echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "created=$(git show -s --format=%cI HEAD)" >> "$GITHUB_OUTPUT"
+          echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
@@ -163,6 +164,7 @@ jobs:
             APP_VERSION=${{ steps.release.outputs.version }}
             BUILD_DATE=${{ steps.release.outputs.created }}
             VCS_REF=${{ steps.release.outputs.revision }}
+            APT_UPGRADE_DAY=${{ steps.release.outputs.day }}
           cache-from: |
             type=gha,scope=container-smoke
             type=gha,scope=release

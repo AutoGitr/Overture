@@ -11,6 +11,7 @@
   import SetDimensionField from "./SetDimensionField.svelte";
   import type { LibrarySectionRead } from "../../generated/rest/types.gen";
   import LibraryOptions from "./LibraryOptions.svelte";
+  import CollectionPresetField from "./CollectionPresetField.svelte";
   import Select from "./Select.svelte";
   import { toOptions } from "../utils/selectOptions";
   import { NEW_GROUP_OPTION, groupOptions } from "../utils/collectionGroups.svelte";
@@ -57,6 +58,7 @@
 >
   {#if draft}
     {@const form = draft}
+    <CollectionPresetField draft={form} />
     <FieldRow label="Create">
       <SegmentedControl
         label="Create"

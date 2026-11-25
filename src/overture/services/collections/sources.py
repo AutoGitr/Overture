@@ -160,9 +160,13 @@ class SourceResolver:
             only = "movies" if source in _MOVIE_SOURCES else "shows"
             return f"{SOURCE_LABELS[source]} select {only} only"
         integration = source_integration(source)
-        if integration is not None and not self.configured(integration):
-            return _SETUP[integration]
+        if integration is not None:
+            return self.setup(integration)
         return None
+
+    def setup(self, integration: Integration) -> str | None:
+        """What to set up before the integration can be used; None once it is."""
+        return None if self.configured(integration) else _SETUP[integration]
 
     def configured(self, integration: Integration) -> bool:
         """Whether the integration is set up."""

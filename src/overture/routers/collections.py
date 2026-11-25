@@ -32,12 +32,11 @@ lazy from ..schemas.art import (
 )
 lazy from ..schemas.assets import AssetRead
 lazy from ..schemas.collection_presets import (
+    CollectionPresetFile,
     PresetExport,
     PresetExportRequest,
     PresetGallery,
-    PresetImportPlan,
-    PresetImportRequest,
-    PresetImportResult,
+    PresetListing,
 )
 lazy from ..schemas.collections import (
     ArrTagRead,
@@ -258,28 +257,20 @@ async def list_collection_presets(presets: CollectionPresetsDep) -> PresetGaller
     return await presets.gallery()
 
 
+@router.post("/presets/file", openapi_extra=READS_ONLY)
+async def read_collection_preset_file(
+    presets: CollectionPresetsDep, body: CollectionPresetFile
+) -> PresetListing:
+    """Return a collections file, checked, as the gallery lists a preset."""
+    return presets.read_file(body)
+
+
 @router.post("/presets/export", openapi_extra=READS_ONLY)
 async def export_collection_preset(
     presets: CollectionPresetsDep, body: PresetExportRequest
 ) -> PresetExport:
     """Return collections and groups as a file any install can add."""
     return await presets.export(body)
-
-
-@router.post("/presets/plan", openapi_extra=READS_ONLY)
-async def plan_collection_preset(
-    presets: CollectionPresetsDep, body: PresetImportRequest
-) -> PresetImportPlan:
-    """Return what adding a file to the chosen libraries would do."""
-    return await presets.plan(body)
-
-
-@router.post("/presets/import")
-async def import_collection_preset(
-    presets: CollectionPresetsDep, body: PresetImportRequest
-) -> PresetImportResult:
-    """Add a file's groups and collections to the chosen libraries, once."""
-    return await presets.import_(body)
 
 
 @router.post("/bulk-operation")

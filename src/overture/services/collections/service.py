@@ -163,9 +163,7 @@ class CollectionsService:
             access=access,
             sources=self._sources,
             reader=self.reader,
-            editor=self.editor,
             groups=self.groups,
-            art=art,
         )
 
     async def close(self) -> None:

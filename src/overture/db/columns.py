@@ -11,8 +11,9 @@ lazy from collections.abc import Sequence
 lazy from enum import StrEnum
 lazy from typing import Any, cast, get_args, get_origin
 
-# SQLModel re-exports no ``event``; the listener coerces enum constructor arguments.
+# SQLModel re-exports no ``event``; the listeners coerce enum values.
 lazy from sqlalchemy import event
+lazy from sqlalchemy.orm.attributes import set_committed_value
 lazy from sqlmodel import JSON, CheckConstraint, SQLModel, Table, inspect
 lazy from sqlmodel import Enum as SAEnum
 
@@ -49,6 +50,14 @@ def _enum_annotation(annotation: Any) -> type[StrEnum] | None:
     return None
 
 
+def _enum_list_annotation(annotation: Any) -> type[StrEnum] | None:
+    """Return the :class:`StrEnum` a ``list[...]`` annotation holds, if any."""
+    for candidate in (annotation, *get_args(annotation)):
+        if get_origin(candidate) is list:
+            return _enum_annotation(get_args(candidate)[0])
+    return None
+
+
 def json_check(column: str) -> str:
     """The SQL a JSON column's values satisfy: valid JSON, and never JSON's null."""
     return f"json_valid({column}) AND json_type({column}) != 'null'"
@@ -64,7 +73,8 @@ def typed_columns(model: type[SQLModel]) -> None:
     models skip Pydantic validation, so a plain string handed to the constructor
     would sit in the attribute until the database round-tripped it - close
     enough to work, different enough to surprise; constructor arguments are
-    coerced to the enum instead.
+    coerced to the enum instead. A JSON list of enum values loads as strings,
+    so it is coerced both when constructed and when loaded.
     """
     mapper = inspect(model)
     table = mapper.local_table
@@ -74,6 +84,11 @@ def typed_columns(model: type[SQLModel]) -> None:
         name: enum_cls
         for name, field in model.model_fields.items()
         if (enum_cls := _enum_annotation(field.annotation)) is not None
+    }
+    enum_lists = {
+        name: enum_cls
+        for name, field in model.model_fields.items()
+        if (enum_cls := _enum_list_annotation(field.annotation)) is not None
     }
     for name, enum_cls in enum_fields.items():
         values = ", ".join(f"'{member.value}'" for member in enum_cls)
@@ -93,6 +108,16 @@ def typed_columns(model: type[SQLModel]) -> None:
                 )
             )
 
+    _coerce_enums(model, enum_fields, enum_lists)
+
+
+def _coerce_enums(
+    model: type[SQLModel],
+    enum_fields: dict[str, type[StrEnum]],
+    enum_lists: dict[str, type[StrEnum]],
+) -> None:
+    """Make *model*'s enum attributes, and its JSON lists of them, hold members."""
+
     def _coerce(
         _target: object, _args: Sequence[object], kwargs: dict[str, Any]
     ) -> None:
@@ -100,5 +125,16 @@ def typed_columns(model: type[SQLModel]) -> None:
             value = kwargs.get(name)
             if value is not None and not isinstance(value, enum_cls):
                 kwargs[name] = enum_cls(value)
+        for name, enum_cls in enum_lists.items():
+            if (values := kwargs.get(name)) is not None:
+                kwargs[name] = [enum_cls(value) for value in values]
+
+    def _coerce_loaded(target: object, *_: object) -> None:
+        for name, enum_cls in enum_lists.items():
+            if (values := getattr(target, name, None)) is not None:
+                set_committed_value(target, name, [enum_cls(value) for value in values])
 
     event.listen(model, "init", _coerce)
+    if enum_lists:
+        event.listen(model, "load", _coerce_loaded)
+        event.listen(model, "refresh", _coerce_loaded)

@@ -10368,17 +10368,6 @@
         "title": "IncrementalThemeOrder",
         "type": "string"
       },
-      "Integration": {
-        "description": "An external service some criteria, sources and sets read from.",
-        "enum": [
-          "tmdb",
-          "mdblist",
-          "radarr",
-          "sonarr"
-        ],
-        "title": "Integration",
-        "type": "string"
-      },
       "ItemArtAsset": {
         "anyOf": [
           {
@@ -13281,129 +13270,10 @@
         "title": "PresetImage",
         "type": "object"
       },
-      "PresetImportPlan": {
-        "additionalProperties": false,
-        "description": "What adding a file does, item by item, before anything is saved.",
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/PresetPlanItem"
-            },
-            "title": "Items",
-            "type": "array"
-          },
-          "warnings": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Warnings",
-            "type": "array"
-          }
-        },
-        "required": [
-          "items",
-          "warnings"
-        ],
-        "title": "PresetImportPlan",
-        "type": "object"
-      },
-      "PresetImportRequest": {
-        "additionalProperties": false,
-        "description": "A file to add, the libraries for each media type, and what to change.",
-        "properties": {
-          "file": {
-            "$ref": "#/components/schemas/CollectionPresetFile-Input"
-          },
-          "libraries": {
-            "additionalProperties": {
-              "items": {
-                "$ref": "#/components/schemas/LibraryId"
-              },
-              "maxItems": 20,
-              "minItems": 1,
-              "type": "array"
-            },
-            "minProperties": 1,
-            "propertyNames": {
-              "$ref": "#/components/schemas/MediaType"
-            },
-            "title": "Libraries",
-            "type": "object"
-          },
-          "skip": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 50,
-            "title": "Skip",
-            "type": "array"
-          }
-        },
-        "required": [
-          "file",
-          "libraries"
-        ],
-        "title": "PresetImportRequest",
-        "type": "object"
-      },
-      "PresetImportResult": {
-        "additionalProperties": false,
-        "description": "What adding a file did, item by item.",
-        "properties": {
-          "collection_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "title": "Collection Ids",
-            "type": "array"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/PresetPlanItem"
-            },
-            "title": "Items",
-            "type": "array"
-          }
-        },
-        "required": [
-          "items",
-          "collection_ids"
-        ],
-        "title": "PresetImportResult",
-        "type": "object"
-      },
-      "PresetItemStatus": {
-        "enum": [
-          "add",
-          "update",
-          "skip",
-          "refused"
-        ],
-        "type": "string"
-      },
       "PresetListing": {
         "additionalProperties": false,
         "description": "One OvertureDB preset in the gallery.",
         "properties": {
-          "added_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Added At"
-          },
-          "changes": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Changes",
-            "type": "array"
-          },
           "file": {
             "anyOf": [
               {
@@ -13450,11 +13320,11 @@
             ],
             "title": "Problem"
           },
-          "unavailable": {
+          "setup": {
             "items": {
-              "$ref": "#/components/schemas/Integration"
+              "$ref": "#/components/schemas/PublicText"
             },
-            "title": "Unavailable",
+            "title": "Setup",
             "type": "array"
           }
         },
@@ -13462,11 +13332,9 @@
           "id",
           "preset",
           "file",
-          "unavailable",
+          "setup",
           "problem",
-          "preview_url",
-          "added_at",
-          "changes"
+          "preview_url"
         ],
         "title": "PresetListing",
         "type": "object"
@@ -13574,51 +13442,6 @@
           "media_types"
         ],
         "title": "PresetMetadata",
-        "type": "object"
-      },
-      "PresetPlanItem": {
-        "additionalProperties": false,
-        "description": "What adding one collection or group of a file does.",
-        "properties": {
-          "chosen": {
-            "default": true,
-            "title": "Chosen",
-            "type": "boolean"
-          },
-          "kind": {
-            "enum": [
-              "collection",
-              "group"
-            ],
-            "title": "Kind",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "reason": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PublicText"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "status": {
-            "$ref": "#/components/schemas/PresetItemStatus"
-          }
-        },
-        "required": [
-          "kind",
-          "name",
-          "status",
-          "reason",
-          "chosen"
-        ],
-        "title": "PresetPlanItem",
         "type": "object"
       },
       "PresetPoster-Input": {
@@ -23918,10 +23741,10 @@
         "x-reads-only": true
       }
     },
-    "/api/collections/presets/import": {
+    "/api/collections/presets/file": {
       "post": {
-        "description": "Add a file's groups and collections to the chosen libraries, once.",
-        "operationId": "import_collection_preset",
+        "description": "Return a collections file, checked, as the gallery lists a preset.",
+        "operationId": "read_collection_preset_file",
         "parameters": [
           {
             "description": "Read-only API key",
@@ -23968,7 +23791,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PresetImportRequest"
+                "$ref": "#/components/schemas/CollectionPresetFile-Input"
               }
             }
           },
@@ -23979,7 +23802,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PresetImportResult"
+                  "$ref": "#/components/schemas/PresetListing"
                 }
               }
             },
@@ -24078,173 +23901,7 @@
             "description": "A media server is unavailable"
           }
         },
-        "summary": "Import Collection Preset",
-        "tags": [
-          "collections"
-        ]
-      }
-    },
-    "/api/collections/presets/plan": {
-      "post": {
-        "description": "Return what adding a file to the chosen libraries would do.",
-        "operationId": "plan_collection_preset",
-        "parameters": [
-          {
-            "description": "Read-only API key",
-            "in": "header",
-            "name": "X-Api-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Read-only API key",
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "description": "Session token",
-            "in": "cookie",
-            "name": "overture_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "password",
-                  "type": "string",
-                  "writeOnly": true
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Session token",
-              "title": "Overture Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PresetImportRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PresetImportPlan"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "The body is not text in the declared encoding"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not signed in, or the API key is not valid"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "An API key asked for a change, or the CSRF token is missing"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "No media server is configured"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              },
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "description": "The body is larger than the route accepts"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/ErrorResponse"
-                    },
-                    {
-                      "$ref": "#/components/schemas/ValidationErrorResponse"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "The request breaks the schema or a rule"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "A media server failed the request"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "A media server is unavailable"
-          }
-        },
-        "summary": "Plan Collection Preset",
+        "summary": "Read Collection Preset File",
         "tags": [
           "collections"
         ],

@@ -1042,6 +1042,8 @@ class PlexClient(MediaServerHttpClient):
             f"/library/metadata/{collection_id}/prefs",
             params=prefs,
         )
+        if not details.hub:
+            return
         path = f"/hubs/sections/{section_id}/manage"
         data = wire_object(
             await self._get(path, params={"metadataItemId": collection_id})

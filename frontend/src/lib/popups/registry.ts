@@ -2,7 +2,6 @@ import type { Component } from "svelte";
 import type { PopupType } from "../stores/uiState.svelte";
 import ApiKeysPopup from "./ApiKeysPopup.svelte";
 import CollectionGroupsPopup from "./CollectionGroupsPopup.svelte";
-import CollectionPresetsPopup from "./CollectionPresetsPopup.svelte";
 import BackupPopup from "./BackupPopup.svelte";
 import DbRecordPopup from "./DbRecordPopup.svelte";
 import FiltersPopup from "./FiltersPopup.svelte";
@@ -17,7 +16,6 @@ type ActivePopupType = Exclude<PopupType, null>;
 export const POPUP_COMPONENTS = {
   "api-keys": ApiKeysPopup,
   "collection-groups": CollectionGroupsPopup,
-  "collection-presets": CollectionPresetsPopup,
   filters: FiltersPopup,
   notifications: NotificationsPopup,
   operations: OperationsPopup,

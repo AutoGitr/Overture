@@ -131,3 +131,46 @@ it("keeps every section closed, and forgets one opened", async () => {
     await screen.findByRole("button", { name: "Settings", expanded: false }),
   ).toBeInTheDocument();
 });
+
+it("exports chosen groups from its Export tab and offers the file to OvertureDB", async () => {
+  const createObjectURL = vi.fn(() => "blob:file");
+  vi.stubGlobal("URL", Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() }));
+  const { calls } = mockFetchRoutes({
+    "/api/collections/groups": ["Decades", "Ungrouped"],
+    "/api/library/libraries": [],
+    "/api/collections/group-policy": {},
+    "/api/collections/defaults": {},
+    "/api/collections": [],
+    "/api/collections/presets/export": {
+      file: { preset_version: 1, preset: null, groups: [], collections: [] },
+      refused: [{ title: "Local", reason: "It tests folder, which only this install has" }],
+      warnings: [],
+      issue: {
+        url: "https://github.com/AutoGitr/OvertureDB/issues/new?template=preset.yml",
+        notes: [],
+      },
+    },
+  });
+  renderWithQueryClient(CollectionGroupsPopup);
+
+  await fireEvent.click(screen.getByRole("tab", { name: "Export" }));
+  const exportButton = screen.getByRole("button", { name: "Export" });
+  expect(exportButton).toBeDisabled();
+  await fireEvent.click(await screen.findByRole("checkbox", { name: "Decades" }));
+  await fireEvent.click(exportButton);
+
+  expect(
+    await screen.findByText("Left out Local: It tests folder, which only this install has"),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /GitHub/ })).toHaveAttribute(
+    "href",
+    "https://github.com/AutoGitr/OvertureDB/issues/new?template=preset.yml",
+  );
+  const exported = calls.find((call) => call.url.endsWith("/presets/export"));
+  expect(JSON.parse(String(exported?.init.body))).toEqual({
+    groups: ["Decades"],
+    collection_ids: null,
+  });
+  expect(createObjectURL).toHaveBeenCalledOnce();
+  vi.unstubAllGlobals();
+});

@@ -223,6 +223,7 @@ class CollectionDisplay:
                         visible_shared=effective.visible_shared,
                         visible_library=effective.visible_library,
                         filtering=effective.collection_filtering,
+                        hub=row.kind is not CollectionKind.SEPARATOR,
                     ),
                 )
             except MediaServerError as exc:

@@ -22,12 +22,7 @@ lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.media_servers.adapters import ServerItem
 lazy from overture.repositories.libraries import LibraryRepository
 lazy from overture.repositories.terms import TermRepository
-lazy from overture.schemas.collection_presets import (
-    CollectionPresetFile,
-    PortableCollection,
-    PresetExportRequest,
-    PresetImportRequest,
-)
+lazy from overture.schemas.collection_presets import PresetExportRequest
 lazy from overture.schemas.collections import (
     CollectionCreate,
     CollectionKindRequest,
@@ -237,19 +232,6 @@ async def _preset_export(bed: Bed) -> object:
     )
 
 
-async def _preset_plan(bed: Bed) -> object:
-    return await bed.service.presets.plan(
-        PresetImportRequest(
-            file=CollectionPresetFile(
-                collections=[
-                    PortableCollection(title="Leads", criteria={MediaType.MOVIE: _LEAD})
-                ]
-            ),
-            libraries={MediaType.MOVIE: ["1:movies"]},
-        )
-    )
-
-
 #: Each operation, and how many statements it may take at any library size.
 OPERATIONS: dict[str, tuple[Operation, int]] = {
     # A rule sync reads its libraries' names once, for its log lines.
@@ -263,7 +245,6 @@ OPERATIONS: dict[str, tuple[Operation, int]] = {
     "collection list": (lambda bed: bed.service.reader.listed(), 15),
     "removal options": (_removal_options, 6),
     "preset export": (_preset_export, 17),
-    "preset plan": (_preset_plan, 8),
     "collection theme removal": (
         lambda bed: bed.service.themes.remove(bed.regular, AssetRemoval()),
         12,

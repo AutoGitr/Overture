@@ -138,10 +138,6 @@ def save_placement(saved: MediaCollection, row: MediaCollection) -> None:
         )
 
 
-#: The OvertureDB preset a collection is added from, and its item in it.
-type PresetSource = tuple[str, str]
-
-
 class CollectionEditor:
     """Create, edit and remove collections; only syncs and removals reach the server.
 
@@ -169,30 +165,46 @@ class CollectionEditor:
     # Creating
 
     async def create(
-        self,
-        body: CollectionCreate,
-        *,
-        generated_value: str | None = None,
-        preset: PresetSource | None = None,
+        self, body: CollectionCreate, *, generated_value: str | None = None
     ) -> CollectionDetail:
         """Save a new collection in Overture; the next sync puts it on the server.
 
-        *generated_value* marks a collection its group's set creates, and
-        *preset* one added from an OvertureDB preset.
+        *generated_value* marks a collection its group's set creates.
         """
-        body, types = await self._checked(body)
+        overrides = body.model_dump(include=body.model_fields_set & DISPLAY_OVERRIDES)
+        body = body.model_copy(update={"rule": body.rule.model_copy(update=overrides)})
         rule = body.rule
         smart = rule.smart
+        scopes = await self._access.scopes(rule.libraries, smart=smart)
+        types = {scope.library_id: scope.media_type for scope in scopes}
+        self._validator.display(
+            body,
+            set(types.values()),
+            smart=smart,
+            servers=self._access.server_types(types),
+        )
         group = collection_group(body.collection_group)
+        body = body.model_copy(update={"collection_group": group})
+        _require_movies(body.tmdb_collection_id, types.values())
+        async with self._access.database.read_session() as session:
+            policy = await self._access.policy(
+                session, await self._access.group(session, body.collection_group), rule
+            )
+        self._validator.rule(types, rule, policy)
+        body = body.model_copy(update={"order_type": resolved_order(body, policy)})
         async with self._access.asset_locks.acquire(COLLECTIONS_LOCK):
-            await self._require_title_free(body.title, types)
+            async with self._access.database.read_session() as session:
+                existing = await CollectionRepository(session).list_listed()
+            if any(
+                row.title.casefold() == body.title.casefold()
+                and not types.keys().isdisjoint(row.library_ids)
+                for row in existing
+            ):
+                raise PublicServiceError(409, title_taken(body.title))
             now = utc_now()
-            preset_id, preset_item = preset or (None, None)
             row = MediaCollection(
                 kind=CollectionKind.SMART if smart else CollectionKind.REGULAR,
                 generated_value=generated_value,
-                preset_id=preset_id,
-                preset_item=preset_item,
                 unsynced=True,
                 last_synced_at=now,
                 created_at=now,
@@ -219,67 +231,6 @@ class CollectionEditor:
                 session.add(row)
         await self._access.changed()
         return await self._reader.get(row.id or 0)
-
-    async def check(
-        self, body: CollectionCreate, *, replacing: int | None = None
-    ) -> None:
-        """Refuse what :meth:`create` would refuse, without saving anything.
-
-        *replacing* names a collection the body would become, whose own title
-        is no reason to refuse it.
-        """
-        body, types = await self._checked(body)
-        await self._require_title_free(body.title, types, other_than=replacing)
-
-    async def _checked(
-        self, body: CollectionCreate
-    ) -> tuple[CollectionCreate, dict[str, MediaType]]:
-        """The body as create saves it, and its libraries' media types.
-
-        Raises:
-            PublicServiceError: When a library, criteria or display choice is
-                one the servers or sources cannot keep.
-        """
-        overrides = body.model_dump(include=body.model_fields_set & DISPLAY_OVERRIDES)
-        body = body.model_copy(update={"rule": body.rule.model_copy(update=overrides)})
-        rule = body.rule
-        scopes = await self._access.scopes(rule.libraries, smart=rule.smart)
-        types = {scope.library_id: scope.media_type for scope in scopes}
-        self._validator.display(
-            body,
-            set(types.values()),
-            smart=rule.smart,
-            servers=self._access.server_types(types),
-        )
-        body = body.model_copy(
-            update={"collection_group": collection_group(body.collection_group)}
-        )
-        _require_movies(body.tmdb_collection_id, types.values())
-        async with self._access.database.read_session() as session:
-            policy = await self._access.policy(
-                session, await self._access.group(session, body.collection_group), rule
-            )
-        self._validator.rule(types, rule, policy)
-        body = body.model_copy(update={"order_type": resolved_order(body, policy)})
-        return body, types
-
-    async def _require_title_free(
-        self,
-        title: str,
-        types: Mapping[str, MediaType],
-        *,
-        other_than: int | None = None,
-    ) -> None:
-        """Refuse a title another listed collection in one of the libraries has."""
-        async with self._access.database.read_session() as session:
-            existing = await CollectionRepository(session).list_listed()
-        if any(
-            row.id != other_than
-            and row.title.casefold() == title.casefold()
-            and not types.keys().isdisjoint(row.library_ids)
-            for row in existing
-        ):
-            raise PublicServiceError(409, title_taken(title))
 
     # Display options
 

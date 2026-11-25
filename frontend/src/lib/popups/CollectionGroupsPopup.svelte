@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Download from "@lucide/svelte/icons/download";
+  import Folders from "@lucide/svelte/icons/folders";
   import { createQuery } from "@tanstack/svelte-query";
   import type { Snippet } from "svelte";
   import { listCollectionGroupsOptions } from "../../generated/rest/@tanstack/svelte-query.gen";
@@ -7,6 +9,8 @@
   import PopupShell from "../components/PopupShell.svelte";
   import CollectionGroupSettings from "../components/CollectionGroupSettings.svelte";
   import CollectionGroupActions from "../components/CollectionGroupActions.svelte";
+  import CollectionExport from "../components/CollectionExport.svelte";
+  import PopupTabs from "../components/PopupTabs.svelte";
   import WorkflowSections from "../components/WorkflowSections.svelte";
   import DataStatus from "../components/DataStatus.svelte";
   import Select from "../components/Select.svelte";
@@ -15,6 +19,11 @@
   import { setSectionView } from "../stores/sectionState.svelte";
   import { allLibraries } from "../utils/libraries.svelte";
   setSectionView("collection-groups");
+  const TABS = [
+    { id: "groups", label: "Groups", icon: Folders },
+    { id: "export", label: "Export", icon: Download },
+  ] as const;
+  let tab = $state<(typeof TABS)[number]["id"]>("groups");
   const groupId = $props.id();
   let name = $state(uiState.collectionGroupToEdit);
   let newName = $state(uiState.collectionGroupToEdit);
@@ -28,6 +37,31 @@
 </script>
 
 <PopupShell title="Collection groups" size="wide" onclose={() => uiState.closePopup()}>
+  {#snippet tabs()}
+    <PopupTabs
+      tabs={TABS}
+      active={tab}
+      label="Collection groups"
+      idPrefix="collection-groups"
+      onselect={(chosen) => (tab = chosen)}
+    />
+  {/snippet}
+
+  <div
+    role="tabpanel"
+    id="collection-groups-panel-export"
+    aria-labelledby="collection-groups-tab-export"
+    hidden={tab !== "export"}
+  >
+    {#if tab === "export"}<CollectionExport />{/if}
+  </div>
+
+  <div
+    role="tabpanel"
+    id="collection-groups-panel-groups"
+    aria-labelledby="collection-groups-tab-groups"
+    hidden={tab !== "groups"}
+  >
   <p class="hint">
     Collections in a group share its defaults, and a group can be a set that creates its
     collections.
@@ -103,12 +137,13 @@
       {/if}
     </WorkflowSections>
   {/if}
+  </div>
 
   {#snippet footer()}
     <button type="button" class="btn btn-secondary" onclick={() => uiState.closePopup()}
       >Close</button
     >
-    {#if name.trim() && groupFooter}
+    {#if tab === "groups" && name.trim() && groupFooter}
       {@render groupFooter()}
     {/if}
   {/snippet}

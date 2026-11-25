@@ -4,8 +4,14 @@
 
 ### 🚀 Features
 
-- **Collections:** **Presets** adds OvertureDB's ready-made collections and sets, such as Holidays, Decades, Franchises and TMDB charts, to the libraries you choose; each is yours to change, and when OvertureDB updates a preset you added, the gallery lists what changed and you choose what to take.
-- **Collections:** **Presets → Export** saves groups, sets and collections as a file another install can add from **Import file**, or that you can contribute to OvertureDB as a preset.
+- **Collections:** **Presets**, first in a new collection's Setup, fills the form from one of OvertureDB's ready-made collections or sets, such as Holidays, Decades, Franchises and TMDB charts, grouped by category, in every library of its media type on every server; change anything before saving.
+- **Collections:** **Groups → Export** saves groups, sets and collections as a file another install loads beside **Presets**, or that you can contribute to OvertureDB as a preset.
+
+### 🐛 Bug fixes
+
+- **Collections:** Plex separators sync without a 404 error, as Overture leaves an empty collection's Home visibility alone.
+- **Collections:** Reading a group's defaults with Automatic art or OvertureDB poster styles set no longer logs a Pydantic serializer warning.
+- **Docker:** Every image build applies Debian's latest security updates, instead of reusing an earlier build's.
 
 ## 0.5.0 - 2026-11-24
 
