@@ -22,11 +22,9 @@ lazy from ...utils.time import local_now
 
 logger = logging.getLogger(__name__)
 
-#: A backup's name carries the local time it was taken, to the second, and
-#: the schema revision an upgrade started from when it was taken before one.
-_BACKUP_NAME = re.compile(
-    r"overture_(\d{8}_\d{6})(?:_\d+)*(?:_before_([0-9a-z]+))?\.db"
-)
+#: A backup's name carries the local time it was taken, to the second, and,
+#: for one taken before an upgrade, the schema revision the copy is at.
+_BACKUP_NAME = re.compile(r"overture_(\d{8}_\d{6})(?:_\d+)*(?:_at_([0-9a-z]+))?\.db")
 
 
 class DatedBackup(NamedTuple):
@@ -34,8 +32,8 @@ class DatedBackup(NamedTuple):
 
     taken_at: datetime
     path: Path
-    #: The schema revision an upgrade started from, for a backup taken before one.
-    before: str | None = None
+    #: The schema revision the copy is at, for a backup taken before an upgrade.
+    revision: str | None = None
 
 
 def _day(taken_at: datetime) -> date:
@@ -99,19 +97,20 @@ class BackupStore:
         *,
         retention: BackupRetention | None,
         reject_if_busy: bool = False,
-        before: str | None = None,
+        revision: str | None = None,
     ) -> BackupCreatedResponse:
         """Create a backup in a worker thread with instance-wide coordination.
 
-        Without *retention*, no existing backup is pruned. A backup taken
-        *before* upgrading from a revision replaces any taken before it earlier.
+        Without *retention*, no existing backup is pruned. A backup named for
+        the schema *revision* it is at, as one taken before an upgrade is,
+        replaces any other of that revision.
         """
         if self._closed:
             raise RuntimeError("Backups are stopping")
         if reject_if_busy and self._async_lock.locked():
             raise BackupInProgressError("A backup is already in progress")
         async with self._async_lock:
-            return await owned_thread(self._create, retention, before)
+            return await owned_thread(self._create, retention, revision)
 
     async def close(self) -> None:
         """Keep ownership until the backup thread actually exits."""
@@ -129,7 +128,7 @@ class BackupStore:
                 leftover.unlink(missing_ok=True)
 
     def _create(
-        self, retention: BackupRetention | None, before: str | None
+        self, retention: BackupRetention | None, revision: str | None
     ) -> BackupCreatedResponse:
         """Copy the database into the backup directory."""
         if not self.database_path.exists():
@@ -137,7 +136,7 @@ class BackupStore:
 
         with self._thread_lock:
             self.directory.mkdir(parents=True, exist_ok=True)
-            filename, destination = self._next_destination(before)
+            filename, destination = self._next_destination(revision)
             with staged_file(self.directory) as staged:
                 # SQLite writes the copy itself, through the staged file's path.
                 with (
@@ -161,7 +160,7 @@ class BackupStore:
                     if target.execute("PRAGMA integrity_check").fetchone() != ("ok",):
                         raise RuntimeError("Backup integrity check failed")
                 staged.place(destination)
-            removed = self._replaced(destination, before) if before else []
+            removed = self._replaced(destination, revision) if revision else []
             if removed:
                 sync_directory(self.directory)
 
@@ -170,10 +169,10 @@ class BackupStore:
                 removed += self._prune(retention)
             return BackupCreatedResponse(filename=filename, removed=removed)
 
-    def _next_destination(self, before: str | None) -> tuple[str, Path]:
+    def _next_destination(self, revision: str | None) -> tuple[str, Path]:
         timestamp = local_now(self.timezone).strftime("%Y%m%d_%H%M%S_%f")
         stem = f"overture_{timestamp}"
-        upgrade = f"_before_{before}" if before else ""
+        upgrade = f"_at_{revision}" if revision else ""
         filename = f"{stem}{upgrade}.db"
         destination = self.directory / filename
         suffix = 1
@@ -183,11 +182,11 @@ class BackupStore:
             suffix += 1
         return filename, destination
 
-    def _replaced(self, kept: Path, before: str) -> list[str]:
-        """Delete the other backups taken before upgrading from *before*."""
+    def _replaced(self, kept: Path, revision: str) -> list[str]:
+        """Delete the other backups at schema *revision*."""
         removed: list[str] = []
         for backup in self._dated_backups():
-            if backup.before == before and backup.path != kept:
+            if backup.revision == revision and backup.path != kept:
                 backup.path.unlink(missing_ok=True)
                 removed.append(backup.path.name)
                 logger.info("Replaced backup %s", backup.path)

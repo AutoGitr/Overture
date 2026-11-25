@@ -21,10 +21,11 @@ newest backup of each recent day, week and month. Every backup, scheduled or
 manual, applies it once it is written, and so does saving it, so a new backup
 can leave the count unchanged when it replaces one the rules no longer keep.
 **Back up now** names any backup it removed. A backup made before an upgrade
-is named after the database version it was taken of, such as
-`overture_<time>_before_d7b3e9a1c524.db`, and removes no other backup, except
-one taken before the same upgrade: if an upgrade fails and Overture tries it
-again, only the latest backup of that database is kept.
+is named after the database version the copy is at, such as
+`overture_<time>_at_d7b3e9a1c524.db`: restoring it gives you the database as it
+was at that version, before the upgrade ran. It removes no other backup, except
+one at the same version: if an upgrade fails and Overture tries it again, only
+the latest backup of that database is kept.
 
 ## Restore
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### 🚨 Breaking Changes
+
+- **Backups:** a backup taken before a database upgrade is named after the version the copy is at, as `overture_<time>_at_<version>.db`. Backups named `overture_<time>_before_<version>.db` hold the same thing but are no longer listed, kept by retention or removed; rename `_before_` to `_at_` to keep managing one, or delete it.
+
 ### 🚀 Features
 
 - **Collections:** **Presets**, first in a new collection's Setup, fills the form from one of OvertureDB's ready-made collections or sets, such as Holidays, Decades, Franchises and TMDB charts, grouped by category, in every library of its media type on every server; change anything before saving.

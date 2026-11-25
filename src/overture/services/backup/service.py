@@ -137,7 +137,7 @@ class BackupService:
         An upgrade that failed changed nothing, so trying it again replaces the
         backup taken before it rather than keeping another copy of the same data.
         """
-        created = await self.store.create(retention=None, before=revision)
+        created = await self.store.create(retention=None, revision=revision)
         logger.info("Backed up the database before upgrading it: %s", created.filename)
 
     def list_backups(self) -> BackupListResponse:

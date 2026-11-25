@@ -267,7 +267,7 @@ async def test_pre_upgrade_backup_never_applies_retention(
     create = AsyncMock(return_value=BackupCreatedResponse(filename="before-upgrade.db"))
     monkeypatch.setattr(backup_service.store, "create", create)
     await backup_service.backup_before_upgrade("abc123")
-    create.assert_awaited_once_with(retention=None, before="abc123")
+    create.assert_awaited_once_with(retention=None, revision="abc123")
     assert backup_service.events.job.last_event is None
 
 
@@ -368,7 +368,7 @@ async def test_backup_update_schedule_validates_and_applies_saved_values(
     assert applied == [(True, "0 3 * * *")]
 
 
-async def test_retrying_an_upgrade_replaces_the_backup_taken_before_it(
+async def test_retrying_an_upgrade_replaces_the_backup_of_its_revision(
     tmp_path: Path,
 ) -> None:
     store = _store(tmp_path)
@@ -377,13 +377,13 @@ async def test_retrying_an_upgrade_replaces_the_backup_taken_before_it(
     store.directory.mkdir()
     scheduled = store.directory / "overture_20261120_030000_024105.db"
     scheduled.write_bytes(b"x")
-    other = store.directory / "overture_20261119_090000_1_before_b9e2f4a7c613.db"
+    other = store.directory / "overture_20261119_090000_1_at_b9e2f4a7c613.db"
     other.write_bytes(b"x")
 
-    first = await store.create(retention=None, before="d7b3e9a1c524")
-    second = await store.create(retention=None, before="d7b3e9a1c524")
+    first = await store.create(retention=None, revision="d7b3e9a1c524")
+    second = await store.create(retention=None, revision="d7b3e9a1c524")
 
-    assert first.filename.endswith("_before_d7b3e9a1c524.db")
+    assert first.filename.endswith("_at_d7b3e9a1c524.db")
     assert second.removed == [first.filename]
     assert sorted(path.name for path in store.directory.iterdir()) == sorted(
         [scheduled.name, other.name, second.filename]
