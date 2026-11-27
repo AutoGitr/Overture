@@ -1,6 +1,7 @@
 <script lang="ts">
   import { TEXT_LIMITS } from "../../generated/settings";
   import { createMutation, createQuery } from "@tanstack/svelte-query";
+  import { untrack } from "svelte";
   import {
     createSavedFilterMutation,
     deleteSavedFilterMutation,
@@ -8,7 +9,11 @@
     listSavedFiltersOptions,
     updateSavedFilterMutation,
   } from "../../generated/rest/@tanstack/svelte-query.gen";
-  import type { FilterGroupOutput, MediaType } from "../../generated/rest/types.gen";
+  import type {
+    FilterGroupOutput,
+    MediaType,
+    SavedFilterRead,
+  } from "../../generated/rest/types.gen";
   import { invalidateTags } from "../rest/cache";
   import { settingsState } from "../stores/settingsState.svelte";
   import { emptyGroup } from "../utils/collectionCriteria";
@@ -35,7 +40,6 @@
     criteria: FilterGroupOutput;
   }
 
-  let draft = $state<Draft | null>(null);
   const saved = createQuery(() => listSavedFiltersOptions());
   /** The saved filters every condition of which can test this media type's titles. */
   let offered = $derived(
@@ -46,6 +50,37 @@
     ...offered.map((entry) => ({ value: entry.id, label: entry.name })),
   ]);
   let elsewhere = $derived((saved.data?.length ?? 0) - offered.length);
+  let selected = $derived(offered.find((entry) => entry.id === filterId) ?? null);
+  /** The chosen filter's ID: the draft starts over only when another is chosen. */
+  let selectedId = $derived(selected?.id ?? null);
+
+  /** An editable, deeply reactive draft. */
+  function editable(value: Draft): Draft {
+    const copy = $state(value);
+    return copy;
+  }
+
+  function copyOf(entry: SavedFilterRead | null): Draft | null {
+    return entry
+      ? editable({ id: entry.id, name: entry.name, criteria: structuredClone(entry.criteria) })
+      : null;
+  }
+
+  /**
+   * The chosen filter, ready to change; a refetch of the saved filters keeps
+   * the edits, as only choosing another filter starts it over.
+   */
+  let draft = $derived.by(() => {
+    void selectedId;
+    return untrack(() => copyOf(selected));
+  });
+  /** It differs from the chosen filter, or is a new one. */
+  let changed = $derived(
+    draft !== null &&
+      (draft.id === null ||
+        draft.name !== selected?.name ||
+        JSON.stringify(draft.criteria) !== JSON.stringify(selected.criteria)),
+  );
   const capabilities = createQuery(() => ({
     ...getLibraryFilterCapabilitiesOptions({ query: { media_type: mediaType } }),
     enabled: draft !== null,
@@ -56,14 +91,16 @@
 
   let failure = $state("");
   let busy = $derived(create.isPending || update.isPending || remove.isPending);
-  let selected = $derived(offered.find((entry) => entry.id === filterId) ?? null);
 
-  function edit(existing: boolean) {
+  function startNew() {
     failure = "";
-    draft =
-      existing && selected
-        ? { id: selected.id, name: selected.name, criteria: structuredClone(selected.criteria) }
-        : { id: null, name: "", criteria: emptyGroup() };
+    draft = editable({ id: null, name: "", criteria: emptyGroup() });
+  }
+
+  /** Leave a new filter, or the changes to the chosen one. */
+  function discard() {
+    failure = "";
+    draft = copyOf(selected);
   }
 
   async function save(asNew: boolean) {
@@ -76,7 +113,8 @@
           : await update.mutateAsync({ body, path: { filter_id: draft.id } });
       await invalidateTags(["library-filters"]);
       filterId = stored.id;
-      draft = null;
+      // The same filter saved keeps its ID, so the draft is taken anew.
+      draft = copyOf(stored);
     } catch (error) {
       failure = errorMessage(error, "The filter could not be saved");
     }
@@ -88,7 +126,6 @@
       await remove.mutateAsync({ path: { filter_id: selected.id } });
       await invalidateTags(["library-filters"]);
       filterId = null;
-      draft = null;
     } catch (error) {
       failure = errorMessage(error, "The filter could not be deleted");
     }
@@ -107,9 +144,8 @@
         options={filterOptions}
         bind:value={filterId}
       />
-      <button type="button" class="btn btn-secondary btn-sm" onclick={() => edit(false)}>New</button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick={startNew}>New</button>
       {#if selected}
-        <button type="button" class="btn btn-secondary btn-sm" onclick={() => edit(true)}>Edit</button>
         <button type="button" class="btn btn-secondary btn-sm" onclick={forget} disabled={busy}
           >Delete</button
         >
@@ -145,9 +181,11 @@
       {/if}
       {#if failure}<p class="hint error" role="alert">{failure}</p>{/if}
       <div class="actions">
-        <button type="button" class="btn btn-secondary btn-sm" onclick={() => (draft = null)}
-          >Cancel</button
-        >
+        {#if changed}
+          <button type="button" class="btn btn-secondary btn-sm" onclick={discard}
+            >{draft.id === null ? "Cancel" : "Discard changes"}</button
+          >
+        {/if}
         {#if draft.id !== null}
           <button
             type="button"
@@ -160,7 +198,7 @@
           type="button"
           class="btn btn-primary btn-sm"
           onclick={() => save(false)}
-          disabled={busy || !draft.name.trim()}>Save filter</button
+          disabled={busy || !changed || !draft.name.trim()}>Save filter</button
         >
       </div>
     </div>

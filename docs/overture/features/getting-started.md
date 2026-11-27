@@ -71,8 +71,9 @@ but, on Plex, what only smart collections test. Conditions match together (**all
 (**any**), and groups nest for anything in between; **is not** and **does not
 contain** exclude.
 
-Pick a saved filter to apply it with the other filters; **Edit**, **Save as
-new** and **Delete** manage them. Saved filters are kept on the server, so
+Pick a saved filter to apply it with the other filters and show its
+conditions, ready to edit; **Save filter**, **Save as new** and **Delete**
+manage them. Saved filters are kept on the server, so
 every browser sees them, and each is offered for movies, shows or both,
 wherever all its conditions apply; one naming titles by TMDB ID stays with the
 media type it was made for. **Add saved filter...** in any criteria, a

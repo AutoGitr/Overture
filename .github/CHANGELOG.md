@@ -19,6 +19,7 @@
 - **Collections:** **Set: <group>** beside a set's collection opens its group's page.
 - **Collections:** **Choose several** beside **Presets** adds every preset collection and set you tick at once, each as choosing it alone and saving would.
 - **Collections:** **Export**, on a group's or a collection's page and among the collection operations for everything the filters match, saves them as a file another install loads beside **Presets**, or that you can contribute to OvertureDB as a preset. It holds only what you set, without the settings each collection inherits.
+- **Interface:** Choosing a saved **Custom filter** shows its conditions at once, ready to change and save.
 
 ### 🐛 Bug fixes
 
