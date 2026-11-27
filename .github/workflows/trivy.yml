@@ -38,6 +38,7 @@ jobs:
       - name: Run Trivy (filesystem)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
+          # renovate: datasource=github-releases depName=aquasecurity/trivy
           version: v0.76.2
           scan-type: fs
           scan-ref: .
@@ -72,6 +73,7 @@ jobs:
       - name: Run Trivy (image)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
+          # renovate: datasource=github-releases depName=aquasecurity/trivy
           version: v0.76.2
           scan-type: image
           image-ref: ghcr.io/autogitr/overture:latest

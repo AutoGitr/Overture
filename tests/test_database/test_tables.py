@@ -1,3 +1,5 @@
+"""Every SQLModel table is discovered and describes its rows."""
+
 lazy from sqlmodel import SQLModel
 
 lazy from overture.db.tables import table_description, table_models, table_of

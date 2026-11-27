@@ -183,6 +183,15 @@ def test_runner_updates_are_enabled_without_automatic_os_upgrades() -> None:
         "aquasecurity/trivy",
         "sigstore/cosign",
     }
+    tool_regex = re.compile(
+        renovate["customManagers"][0]["matchStrings"][0].replace("(?<", "(?P<")
+    )
+    matched_tools = {
+        match.group("depName")
+        for path in (ROOT / ".github/workflows").glob("*.yml")
+        for match in tool_regex.finditer(path.read_text())
+    }
+    assert set(unpinned_tools["matchPackageNames"]) <= matched_tools
 
 
 def test_shared_tools_keep_their_group_over_broader_ones() -> None:
@@ -231,6 +240,8 @@ DEPENDENCIES = APP
         (".agents/skills.json", {"contracts"}),
         (".jscpd.json", {"duplication"}),
         ("openapi/overture.json", {"contracts"}),
+        ("redocly.yaml", {"contracts"}),
+        (".redocly.lint-ignore.yaml", {"contracts"}),
         ("Dockerfile", {"dockerfile", "backend", "container"}),
         ("compose.yaml", {"backend", "container"}),
         ("packaging/linux/build.py", {"backend", "native"}),

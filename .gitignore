@@ -24,14 +24,11 @@ frontend/playwright-report/
 
 # ── Bun / Node
 node_modules/
-.uv-cache/
 .bun-cache/
 
 # ── Svelte / Build
 dist/
 src/overture/frontend/
-dist-ssr/
-.svelte-kit/
 output.css
 *.css.map
 frontend/tsconfig.tsbuildinfo
@@ -70,7 +67,6 @@ Thumbs.db
 # ── Runtime / Misc
 *.db
 *.log
-gunicorn.ctl
 .todo.md
 /openapi/*-openapi.json
 verify.md

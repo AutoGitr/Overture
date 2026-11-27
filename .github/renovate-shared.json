@@ -3,9 +3,6 @@
   "description": "Overture's and OvertureDB's shared Renovate rules: both extend this preset, so a dependency they share updates on the same schedule, under the same group and at the same version in each",
   "extends": ["config:recommended", "abandonments:recommended", ":configMigration"],
   "pinDigests": true,
-  "dependencyDashboard": {
-    "enabled": true
-  },
   "rangeStrategy": "pin",
   "labels": ["deps"],
   "prConcurrentLimit": 0,
@@ -23,9 +20,8 @@
   "vulnerabilityAlerts": {
     "enabled": true,
     "labels": ["security"],
-    "minimumReleaseAge": null,
     "schedule": ["at any time"],
-    "vulnerabilityFixStrategy": "lowest"
+    "vulnerabilityFixStrategy": "highest"
   },
   "packageRules": [
     {
@@ -83,7 +79,11 @@
         "/pytest/",
         "/ruff/",
         "/pyright/",
-        "/testing-library/"
+        "/testing-library/",
+        "hatchling",
+        "pyyaml",
+        "vulture",
+        "zizmor"
       ],
       "matchUpdateTypes": ["minor", "patch", "digest", "pinDigest"],
       "groupName": "Tooling, Linters & Testing Rules"

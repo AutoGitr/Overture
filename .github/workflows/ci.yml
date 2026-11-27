@@ -110,7 +110,7 @@ jobs:
             echo "e2e=false" >> "$GITHUB_OUTPUT"
           fi
 
-          if has_changed '^(src/|scripts/(contracts|generate_ws_types|generate_settings_defaults|catalog_contract|preset_contract|sync_skills)\.py$|openapi/|frontend/src/generated/|frontend/(package\.json|bun\.lock|openapi-ts\.config\.ts|\.prettierrc)$|pyproject\.toml$|uv\.lock$|\.python-version$|\.agents/|\.claude/)'; then
+          if has_changed '^(src/|scripts/(contracts|generate_ws_types|generate_settings_defaults|catalog_contract|preset_contract|sync_skills)\.py$|openapi/|\.?redocly\.|frontend/src/generated/|frontend/(package\.json|bun\.lock|openapi-ts\.config\.ts|\.prettierrc)$|pyproject\.toml$|uv\.lock$|\.python-version$|\.agents/|\.claude/)'; then
             echo "contracts=true" >> "$GITHUB_OUTPUT"
           else
             echo "contracts=false" >> "$GITHUB_OUTPUT"
@@ -323,6 +323,10 @@ jobs:
 
       - name: Check generated contracts
         run: uv run --locked python -m scripts.contracts --check
+
+      - name: Lint OpenAPI schema
+        working-directory: frontend
+        run: bun run lint:openapi
 
       # A change that breaks API clients must say so in the changelog.
       - name: Compare the API with the latest release
@@ -539,6 +543,7 @@ jobs:
       - name: Block fixable High and Critical image vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
+          # renovate: datasource=github-releases depName=aquasecurity/trivy
           version: v0.76.2
           scan-type: image
           image-ref: overture:smoke

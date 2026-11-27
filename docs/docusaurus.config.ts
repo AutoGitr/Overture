@@ -37,7 +37,11 @@ const releases = [
   ...fs
     .readFileSync("../.github/CHANGELOG.md", "utf8")
     .matchAll(/^## ((\d+\.\d+\.\d+) - (\d{4}-\d{2}-\d{2}))$/gm),
-].map(([, heading, version, date]) => ({ version, date, anchor: anchor(heading) }));
+].map(([, heading = "", version = "", date = ""]) => ({
+  version,
+  date,
+  anchor: anchor(heading),
+}));
 const RELEASES_SHOWN = 5;
 
 const config: Config = {

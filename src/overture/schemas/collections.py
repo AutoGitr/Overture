@@ -113,7 +113,7 @@ class FieldCondition(StrictBaseModel):
 
 
 def _condition_value(
-    kind: FieldKind, operator: FilterOperator, value: str | int | float | bool
+    kind: FieldKind, operator: FilterOperator, value: str | float | bool
 ) -> str | int | float | bool:
     if kind is FieldKind.BOOLEAN:
         if isinstance(value, bool):

@@ -9,7 +9,7 @@ lazy import pytest
 lazy from fastapi import FastAPI, WebSocket
 lazy from fastapi.testclient import TestClient
 lazy from pydantic import SecretStr
-lazy from sqlalchemy.pool import QueuePool
+lazy from sqlmodel import QueuePool
 lazy from starlette.websockets import WebSocketDisconnect
 
 lazy from overture.config import Settings

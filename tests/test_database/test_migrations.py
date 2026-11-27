@@ -12,11 +12,10 @@ lazy import pytest
 lazy from alembic import command
 lazy from alembic.config import Config
 lazy from alembic.script import ScriptDirectory
-lazy from sqlalchemy import insert
 lazy from sqlalchemy.engine import Connection
 lazy from sqlalchemy.exc import IntegrityError
 lazy from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
-lazy from sqlmodel import CheckConstraint, String, create_engine, inspect, text
+lazy from sqlmodel import CheckConstraint, String, create_engine, insert, inspect, text
 
 lazy from overture.db import metadata
 lazy from overture.db import session as session_module

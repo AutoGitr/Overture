@@ -12,6 +12,7 @@ where OvertureDB is checked out.
 
 lazy import json
 lazy import os
+lazy import re
 lazy import tomllib
 lazy from pathlib import Path
 lazy from typing import Any
@@ -90,22 +91,50 @@ def test_shared_tools_and_python_match(overturedb: Path) -> None:
         theirs["tool"]["uv"]["required-version"]
         == (ours["tool"]["uv"]["required-version"])
     )
-    for key in ("target-version", "line-length", "indent-width"):
+    for key in ("target-version", "line-length", "indent-width", "format"):
         assert theirs["tool"]["ruff"][key] == ours["tool"]["ruff"][key], key
     assert set(theirs["tool"]["ruff"]["lint"]["select"]) == (
         set(ours["tool"]["ruff"]["lint"]["select"]) - OVERTURE_ONLY_RULES
     )
-    for key in ("minversion", "strict"):
+    for key in (
+        "typeCheckingMode",
+        "pythonVersion",
+        "pythonPlatform",
+        "reportUnnecessaryTypeIgnoreComment",
+        "reportImplicitOverride",
+        "reportPropertyTypeMismatch",
+        "reportUninitializedInstanceVariable",
+    ):
+        assert theirs["tool"]["pyright"][key] == ours["tool"]["pyright"][key], key
+    for key in ("minversion", "strict", "filterwarnings", "verbosity_subtests"):
         assert theirs["tool"]["pytest"][key] == ours["tool"]["pytest"][key], key
-    # Both turn warnings into errors; Overture ignores one of Starlette's too.
-    assert theirs["tool"]["pytest"]["filterwarnings"][0] == "error"
-    assert ours["tool"]["pytest"]["filterwarnings"][0] == "error"
 
 
 def test_a_dependency_both_pin_has_one_version(overturedb: Path) -> None:
     ours, theirs = _pins(_project(ROOT)), _pins(_project(overturedb))
     shared = ours.keys() & theirs.keys()
     assert shared, "the repositories share no pinned dependency"
+    assert {name: theirs[name] for name in shared} == {
+        name: ours[name] for name in shared
+    }
+
+
+def _workflow_actions(root: Path) -> dict[str, set[str]]:
+    """Each external GitHub Action a repository's workflows use, with its pins."""
+    actions: dict[str, set[str]] = {}
+    for path in (root / ".github/workflows").glob("*.yml"):
+        for repo, digest in re.findall(
+            r"(?m)^\s*-?\s*uses:\s*([\w-]+/[\w-]+)(?:/[\w.-]+)*@([0-9a-f]{40})\b",
+            path.read_text(),
+        ):
+            actions.setdefault(repo, set()).add(digest)
+    return actions
+
+
+def test_a_github_action_both_use_has_one_commit_digest(overturedb: Path) -> None:
+    ours, theirs = _workflow_actions(ROOT), _workflow_actions(overturedb)
+    shared = ours.keys() & theirs.keys()
+    assert shared, "the repositories share no GitHub Action"
     assert {name: theirs[name] for name in shared} == {
         name: ours[name] for name in shared
     }

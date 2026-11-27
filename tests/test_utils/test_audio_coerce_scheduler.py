@@ -3,7 +3,7 @@
 lazy import asyncio
 lazy import json
 lazy from pathlib import Path
-lazy from typing import cast
+lazy from typing import Self, cast
 
 lazy import httpx2
 lazy import pytest
@@ -179,10 +179,10 @@ async def test_downloaded_audio_yields_a_temporary_file(
         def __init__(self) -> None:
             self.headers: dict[str, str] = {}
 
-        async def __aenter__(self):
+        async def __aenter__(self) -> Self:
             return self
 
-        async def __aexit__(self, *_args: object):
+        async def __aexit__(self, *_args: object) -> None:
             return None
 
         def raise_for_status(self) -> None:

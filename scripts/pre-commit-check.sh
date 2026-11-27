@@ -37,9 +37,9 @@ else
 fi
 
 if echo "$CHANGED_FILES" | grep -Eq '^(src/|tests/|scripts/[^/]+\.py$|packaging/.+\.py$|pyproject\.toml$|uv\.lock$)'; then BACKEND_CHANGED=true; fi
-if echo "$CHANGED_FILES" | grep -q "^frontend/"; then FRONTEND_CHANGED=true; fi
+if echo "$CHANGED_FILES" | grep -Eq '^(frontend/|\.?redocly\.)'; then FRONTEND_CHANGED=true; fi
 if echo "$CHANGED_FILES" | grep -Eq '^(src/|frontend/src/|scripts/|docs/overture/|\.jscpd\.json$)'; then DUPLICATION_CHANGED=true; fi
-if echo "$CHANGED_FILES" | grep -Eq "^(src/|frontend/|scripts/(contracts|generate_ws_types|generate_settings_defaults)\.py|openapi/overture.json$|pyproject\.toml$)"; then CONTRACTS_CHANGED=true; fi
+if echo "$CHANGED_FILES" | grep -Eq "^(src/|frontend/|scripts/(contracts|generate_ws_types|generate_settings_defaults|catalog_contract|preset_contract|sync_skills)\.py|openapi/overture.json$|\.?redocly\.|pyproject\.toml$)"; then CONTRACTS_CHANGED=true; fi
 
 if [ "$BACKEND_CHANGED" = false ] && [ "$FRONTEND_CHANGED" = false ] && [ "$CONTRACTS_CHANGED" = false ]; then
     BACKEND_CHANGED=true
@@ -123,6 +123,7 @@ if [ "$FRONTEND_CHANGED" = true ]; then
     bun run format:check
     bun run lint:deps
     bun run lint
+    bun run lint:openapi
     bun run lint:unused
     bun run typecheck
     cd "$ROOT_DIR"

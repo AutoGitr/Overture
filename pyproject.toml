@@ -81,14 +81,9 @@ markers = [
     "real_process_pool: exercise PhashService with a real spawned ProcessPoolExecutor",
     "serial: timing- or resource-sensitive tests that run outside parallel xdist workers",
 ]
-filterwarnings = [
-    "error",
-    # Starlette's TestClient still annotates with the alias AnyIO deprecated.
-    "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning:starlette.testclient",
-]
+filterwarnings = ["error"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-asyncio_default_test_loop_scope = "function"
 
 [tool.coverage.run]
 source = ["src/overture"]
@@ -112,27 +107,19 @@ exclude = [
     "**/.*",
     "**/__pycache__",
     "**/node_modules",
-    ".pytest_cache",
-    ".ruff_cache",
-    ".venv",
 ]
 pythonVersion = "3.15"
 pythonPlatform = "All"
 typeCheckingMode = "strict"
 venvPath = "."
 venv = ".venv"
-strictListInference = true
-strictDictionaryInference = true
-strictSetInference = true
 reportUnnecessaryTypeIgnoreComment = "error"
 reportImplicitOverride = "error"
 reportPropertyTypeMismatch = "error"
 reportUninitializedInstanceVariable = "error"
-# Require explicit types at service injection boundaries.
-reportMissingParameterType = "error"
 
-# Test doubles are deliberately loose about the arguments they ignore; the rule
-# above exists to protect the production injection seam.
+# Test doubles are deliberately loose about the arguments they ignore; strict
+# mode requires explicit parameter types in production code.
 [[tool.pyright.executionEnvironments]]
 root = "tests"
 extraPaths = [".", "src"]
@@ -158,6 +145,7 @@ select = [
     "ERA",    # eradicate: identify and prevent commented-out dead code
     "EXE",    # flake8-executable: validate executable bits and shebang lines
     "F",      # Pyflakes: core undefined symbols, imports, and syntax checks
+    "FA",     # flake8-future-annotations: modern type annotation syntax
     "FAST",   # FastAPI: FastAPI-specific route and dependency validation
     "FIX",    # flake8-fixme: no TODO, FIXME, XXX or HACK left in the code
     "FLY",    # flynt: encourage modern f-strings over string joins
@@ -166,6 +154,7 @@ select = [
     "I",      # isort: deterministic and clean import ordering
     "ICN",    # flake8-import-conventions: enforce standard import conventions
     "INP",    # flake8-no-pep420: forbid implicit namespace packages (require __init__.py)
+    "INT",    # flake8-gettext: validate gettext translation calls
     "ISC",    # flake8-implicit-str-concat: catch accidental string concatenation bugs
     "LOG",    # flake8-logging: logging anti-patterns and performance
     "N",      # pep8-naming: PEP 8 naming convention enforcement
@@ -175,6 +164,8 @@ select = [
     "PL",     # Pylint: comprehensive linting (PLC, PLE, PLR, PLW) including non-ASCII checks
     "PT",     # flake8-pytest-style: pytest conventions, assertions, and fixtures
     "PTH",    # flake8-use-pathlib: modern pathlib usage instead of os.path
+    "PYI",    # flake8-pyi: type stub and annotation best practices
+    "Q",      # flake8-quotes: consistent string and docstring quoting
     "RET",    # flake8-return: return statement clarity and anti-patterns
     "RSE",    # flake8-raise: raise statement improvements
     "RUF",    # Ruff-specific: modern Python checks, ambiguous Unicode, and unused noqa
@@ -185,6 +176,7 @@ select = [
     "T10",    # flake8-debugger: forbid stray debugger calls (breakpoint, pdb)
     "T20",    # flake8-print: forbid stray print statements in backend runtime code
     "TC",     # flake8-type-checking: enforce TYPE_CHECKING blocks for type-only imports
+    "TD",     # flake8-todos: forbid unstructured TODO comments
     "TID",    # flake8-tidy-imports: clean and tidy import boundaries
     "UP",     # pyupgrade: automate Python 3.15 syntax upgrades
     "W",      # pycodestyle warnings: standard style warnings
@@ -223,6 +215,8 @@ max-complexity = 12
 # Relationship targets stay quoted for SQLAlchemy to resolve by name: evaluating
 # them would import the mutually referencing models while they are being defined.
 "src/overture/db/models/*.py" = ["UP037", "UP045"]
+# Local stubs carry a module docstring naming what they cover and why they exist.
+"typings/**/*.pyi" = ["PYI021"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 # Every module-level import is deferred to first use (PEP 810), which also makes
@@ -241,20 +235,45 @@ require-lazy = "all"
 "sqlalchemy.Column".msg = "Import it from sqlmodel, which re-exports it."
 "sqlalchemy.inspect".msg = "Import it from sqlmodel, which re-exports it."
 "sqlalchemy.select".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.insert".msg = "Import it from sqlmodel, which re-exports it."
 "sqlalchemy.delete".msg = "Import it from sqlmodel, which re-exports it."
 "sqlalchemy.update".msg = "Import it from sqlmodel, which re-exports it."
 "sqlalchemy.func".msg = "Import it from sqlmodel, which re-exports it."
 "sqlalchemy.text".msg = "Import it from sqlmodel, which re-exports it."
 "sqlalchemy.and_".msg = "Import it from sqlmodel, which re-exports it."
 "sqlalchemy.or_".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.not_".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.asc".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.desc".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.distinct".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.cast".msg = "Import it from sqlmodel, which re-exports it."
 "sqlalchemy.case".msg = "Import it from sqlmodel, which re-exports it."
 "sqlalchemy.literal".msg = "Import it from sqlmodel, which re-exports it."
 "sqlalchemy.exists".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.null".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.true".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.false".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.union".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.union_all".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.tuple_".msg = "Import it from sqlmodel, which re-exports it."
 "sqlalchemy.create_engine".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.QueuePool".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.pool.QueuePool".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.StaticPool".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.pool.StaticPool".msg = "Import it from sqlmodel, which re-exports it."
 "sqlalchemy.String".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.Text".msg = "Import it from sqlmodel, which re-exports it."
 "sqlalchemy.Integer".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.SmallInteger".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.BigInteger".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.Float".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.Numeric".msg = "Import it from sqlmodel, which re-exports it."
 "sqlalchemy.Boolean".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.DateTime".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.Date".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.LargeBinary".msg = "Import it from sqlmodel, which re-exports it."
 "sqlalchemy.Enum".msg = "Import it from sqlmodel, which re-exports it."
+"sqlalchemy.MetaData".msg = "Import it from sqlmodel, which re-exports it."
 
 [tool.ruff.format]
 quote-style = "double"

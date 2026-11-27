@@ -4,6 +4,7 @@ import sonarjs from "eslint-plugin-sonarjs";
 import svelte from "eslint-plugin-svelte";
 import globals from "globals";
 import tseslint from "typescript-eslint";
+import svelteConfig from "./svelte.config.js";
 
 // The package root re-exports every icon, and Vite compiles all of them
 // for each test file and dev page that imports it.
@@ -16,13 +17,13 @@ const ICON_IMPORTS = {
 export default [
   js.configs.recommended,
   ...tseslint.configs.recommended,
-  ...svelte.configs["flat/recommended"],
+  ...svelte.configs.recommended,
 
   {
     languageOptions: {
       globals: {
         ...globals.browser,
-        ...globals.es2022,
+        ...globals.es2023,
       },
     },
   },
@@ -35,6 +36,7 @@ export default [
     languageOptions: {
       parserOptions: {
         parser: tseslint.parser,
+        svelteConfig,
       },
     },
   },

@@ -2,6 +2,5 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": ["scripts/*.ts"],
   "ignore": ["src/generated/**"],
-  "ignoreBinaries": ["uv"],
-  "ignoreDependencies": ["@tsconfig/svelte"]
+  "ignoreBinaries": ["uv"]
 }

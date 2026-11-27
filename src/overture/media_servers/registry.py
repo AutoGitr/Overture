@@ -34,7 +34,7 @@ def log_server(provider: Provider) -> LogServer:
 
 #: The provider class that adapts each media server.
 _PROVIDERS: frozendict[
-    ServerType, type[PlexProvider] | type[JellyfinProvider] | type[EmbyProvider]
+    ServerType, type[PlexProvider | JellyfinProvider | EmbyProvider]
 ] = frozendict(
     {  # pyright: ignore[reportCallIssue] -- stale frozendict stub
         ServerType.PLEX: PlexProvider,
