@@ -18,8 +18,8 @@ The database upgrades on start, after a
 [backup](backup-and-restore.md). An upgraded database opens only in that
 version or newer, so to go back, restore that backup and run the old version:
 its version tag in place of `0` in `compose.yaml` for Docker, or
-`sudo ln -sfn /opt/overture/<previous-version> /opt/overture/current` for the
-service.
+`sudo ln -sfn /opt/overture/<previous-version> /opt/overture/current && sudo systemctl restart overture`
+for the service.
 
 ## Version lines
 

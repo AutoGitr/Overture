@@ -63,6 +63,7 @@ RUN apt-get update && \
 COPY --from=uv /uv /usr/local/bin/uv
 COPY --from=deno /deno /build/tools/
 COPY --from=ffmpeg /ffmpeg /ffprobe /build/tools/
+COPY --from=backend-deps /licenses/python/ /build/licenses/dependencies/python/
 COPY --from=frontend /licenses/frontend/ /build/licenses/dependencies/frontend/
 COPY LICENSE licenses/ /build/licenses/
 COPY packaging/linux/build.py packaging/linux/install.sh packaging/linux/uninstall.sh \

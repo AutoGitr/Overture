@@ -12,6 +12,8 @@ if [[ ${1:-} == after-restart ]]; then
     test -f /var/lib/overture/overture.db
     test -f /etc/overture/overture.env
     test ! -e /opt/overture
+    test ! -L /usr/local/bin/overture
+    test ! -e /etc/systemd/system/overture.service
     exit 0
 fi
 

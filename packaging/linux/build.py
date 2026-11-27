@@ -58,6 +58,7 @@ def install_runtime(runtime: Path, project: Path, work: Path) -> None:
         "uv",
         "pip",
         "install",
+        "--compile-bytecode",
         "--python",
         python,
         "--target",
