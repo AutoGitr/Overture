@@ -7,6 +7,7 @@ lazy from pydantic import Field
 lazy from ..domain import MediaType
 lazy from .base import StrictBaseModel
 lazy from .collections import (
+    GROUP_CONDITIONS_MAX,
     CollectionFieldRead,
     CollectionSourceRead,
     Condition,
@@ -30,7 +31,8 @@ class LibraryFilterMatchRequest(StrictBaseModel):
     """
 
     media_type: MediaType
-    conditions: Annotated[list[Condition], Field(max_length=200)]
+    #: Tested as one group of conditions, so no more than a group holds.
+    conditions: Annotated[list[Condition], Field(max_length=GROUP_CONDITIONS_MAX)]
 
 
 class LibraryFilterMatch(StrictBaseModel):

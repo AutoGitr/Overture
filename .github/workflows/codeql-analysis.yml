@@ -11,9 +11,6 @@ on:
         type: string
         required: true
 
-permissions:
-  contents: read
-
 jobs:
   analyze:
     name: Analyze

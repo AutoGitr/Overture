@@ -15,6 +15,7 @@ lazy from .common import (
     failure,
     inventory,
     item_copy_id,
+    named,
 )
 lazy from .library import Library
 lazy from .media_browser import MediaBrowserServer, check_media_browser_collections
@@ -47,7 +48,7 @@ async def verify_overture(
         listing = Listing(
             frozenset(
                 group["name"].casefold()
-                for group in await overture.get("/api/collections/groups")
+                for group in await overture.get("/api/collection-groups")
             ),
             settings["collection_import_unmanaged"],
         )
@@ -76,8 +77,58 @@ async def verify_overture(
                 cases.append(
                     Case(server["title"], "", "server", "check", error=failure(exc))
                 )
+        cases.extend(await compare_servers(everything, servers, direct))
     finally:
         await overture.client.aclose()
+    return cases
+
+
+async def compare_servers(
+    everything: list[dict[str, Any]],
+    servers: list[dict[str, Any]],
+    direct: dict[str, PlexServer | MediaBrowserServer],
+) -> list[Case]:
+    """Read each managed collection's fields on every server given, side by side.
+
+    Every server copy must hold what Overture says its sync wrote, locked, and
+    leave unlocked what Overture has no value for, so the servers agree with
+    Overture and so with each other.
+    """
+    kinds = [server["type"] for server in servers]
+    given = {
+        server["id"]: (server["title"], paired)
+        for server in servers
+        if kinds.count(server["type"]) == 1
+        and (paired := direct.get(server["type"])) is not None
+    }
+    cases: list[Case] = []
+    for row in everything:
+        if not row["managed"] or row["withheld"] or row["unsynced"]:
+            continue
+        copies = [
+            (given[copy["server_id"]], str(copy["server_item_id"]))
+            for copy in row["copies"]
+            if copy["server_id"] in given and copy["server_item_id"]
+        ]
+        if not copies:
+            continue
+        case = Case("every server", "", "fields", row["title"])
+        problems: list[str] = []
+        for (title, server), collection_id in copies:
+            try:
+                held = await server.fields(collection_id)
+            except httpx2.HTTPError as exc:
+                problems.append(f"{title}: {failure(exc)}")
+                continue
+            problems.extend(
+                f"{title}: {problem}"
+                for problem in held.against(
+                    row["title"], row["sort_title"] or "", row["summary"] or ""
+                )
+            )
+        case.note = "compared on " + named({title for (title, _), _ in copies})
+        case.error = "; ".join(problems)
+        cases.append(case)
     return cases
 
 

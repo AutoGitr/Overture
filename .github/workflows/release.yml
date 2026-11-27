@@ -11,9 +11,6 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: read
-
 concurrency:
   group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
@@ -37,6 +34,8 @@ jobs:
       ref: refs/tags/${{ inputs.tag || github.ref_name }}
 
   release-validation:
+    permissions:
+      contents: read
     uses: ./.github/workflows/release-validation.yml
     with:
       ref: refs/tags/${{ inputs.tag || github.ref_name }}
@@ -81,6 +80,9 @@ jobs:
 
       - name: Set up uv
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          # What is published is built from nothing another run cached.
+          enable-cache: false
 
       - name: Validate tag and release metadata
         id: release

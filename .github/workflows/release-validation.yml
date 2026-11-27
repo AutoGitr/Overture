@@ -13,11 +13,10 @@ concurrency:
   group: release-validation-${{ inputs.ref || github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-
 jobs:
   backend-capacity-and-soak:
+    permissions:
+      contents: read
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     env:
@@ -46,6 +45,8 @@ jobs:
         run: uv run --locked pytest tests/test_release -q
 
   frontend-capacity:
+    permissions:
+      contents: read
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     defaults:

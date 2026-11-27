@@ -16,9 +16,6 @@ concurrency:
   group: ci-${{ inputs.ref || github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-
 jobs:
   changes:
     name: Detect changes
@@ -134,6 +131,8 @@ jobs:
           fi
 
   dockerfile-lint:
+    permissions:
+      contents: read
     name: Lint Dockerfile
     runs-on: ubuntu-26.04
     timeout-minutes: 10
@@ -153,6 +152,8 @@ jobs:
           failure-threshold: warning
 
   backend-checks:
+    permissions:
+      contents: read
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     needs: changes
@@ -221,6 +222,8 @@ jobs:
           retention-days: 14
 
   frontend-checks:
+    permissions:
+      contents: read
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     needs: changes
@@ -261,6 +264,8 @@ jobs:
   # One check across the backend, frontend, scripts and docs, so a rule
   # copied from one into another is caught too.
   duplication:
+    permissions:
+      contents: read
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     needs: changes
@@ -288,6 +293,8 @@ jobs:
         run: bun run lint:duplication
 
   contract-checks:
+    permissions:
+      contents: read
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     needs: changes
@@ -357,6 +364,8 @@ jobs:
         run: uv run --locked python -m scripts.sync_skills --check
 
   frontend-e2e:
+    permissions:
+      contents: read
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     needs: changes
@@ -396,6 +405,8 @@ jobs:
         run: bun run test:oidc
 
   container-smoke:
+    permissions:
+      contents: read
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     needs: changes
@@ -546,6 +557,7 @@ jobs:
     uses: ./.github/workflows/native.yml
 
   ci-result:
+    permissions: {}
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     needs:

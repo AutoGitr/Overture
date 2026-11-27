@@ -127,4 +127,42 @@ describe("CustomFilterCard", () => {
       screen.getByText(/One saved filter tests what movies lack, so the Shows tab offers it/),
     ).toBeInTheDocument();
   });
+
+  it("shows a chosen filter's criteria at once, ready to change and save", async () => {
+    const shared: SavedFilterRead = {
+      id: 1,
+      name: "Unarted",
+      criteria: {
+        mode: "all",
+        conditions: [{ kind: "field", field: "art_status", operator: "is", value: "missing" }],
+        groups: [],
+      },
+      media_type: null,
+      media_types: ["movie", "show"],
+      unavailable: {},
+    };
+    const { calls } = mockFetchRoutes({
+      "/api/library/filters/capabilities": { fields: [unarted], sources: [] },
+      "/api/library/filters/saved": [shared],
+      "/api/library/filters/saved/1": (call: { init: RequestInit }) =>
+        Response.json({ ...shared, ...JSON.parse(String(call.init.body)) }),
+    });
+    renderWithQueryClient(CustomFilterCard, { filterId: 1, mediaType: "movie" });
+
+    // No Edit step: the chosen filter's name and conditions show as they are.
+    expect(await screen.findByLabelText("Name")).toHaveValue("Unarted");
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Save filter" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Discard changes" })).toBeNull();
+
+    await fireEvent.input(screen.getByLabelText("Name"), { target: { value: "No art" } });
+    await fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
+    expect(screen.getByLabelText("Name")).toHaveValue("Unarted");
+
+    await fireEvent.input(screen.getByLabelText("Name"), { target: { value: "No art" } });
+    await fireEvent.click(screen.getByRole("button", { name: "Save filter" }));
+    await waitFor(() => expect(calls.some((call) => call.init.method === "PUT")).toBe(true));
+    const updated = calls.find((call) => call.init.method === "PUT");
+    expect(JSON.parse(String(updated?.init.body))).toMatchObject({ name: "No art" });
+  });
 });

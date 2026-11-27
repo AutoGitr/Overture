@@ -25,7 +25,7 @@ lazy from overture.media_servers.registry import ProviderRegistry
 lazy from overture.schemas.collections import FilterGroup
 lazy from overture.utils.generated_art import render_art
 
-lazy from .common import Case, failure, named
+lazy from .common import Case, HeldFields, failure, named
 lazy from .media_browser import MediaBrowserServer
 lazy from .plex import PLEX_TYPES, PlexServer
 
@@ -92,6 +92,9 @@ class WriteCheck:
         self.made: list[str] = []
         #: Each regular Plex collection made, by its section and its key in filters.
         self.filed: dict[str, tuple[str, str]] = {}
+        #: What the server holds of the edited collection, to set beside the
+        #: other servers' after the same edit.
+        self.edited: HeldFields | None = None
 
     def case(self, label: str) -> Case:
         found = Case(self.direct.server, "", "writes", label)
@@ -159,6 +162,10 @@ class WriteCheck:
                         lambda case: self.details(case, library, made),
                     )
                     await self.step(
+                        "clear the sort title and summary, handing them back",
+                        lambda case: self.cleared(case, library, made),
+                    )
+                    await self.step(
                         "upload a poster and a background",
                         lambda case: self.artwork(case, made),
                     )
@@ -171,6 +178,10 @@ class WriteCheck:
                     lambda case: self.large(case, library, items),
                 )
                 if isinstance(self.direct, PlexServer):
+                    await self.step(
+                        "create and edit an empty collection, as a separator is",
+                        lambda case: self.empty(case, library),
+                    )
                     smart = await self.step(
                         "create a smart collection Plex fills itself",
                         lambda case: self.smart(case, library),
@@ -341,13 +352,72 @@ class WriteCheck:
         # Changing a BoxSet's own lock changes every member's: an edit keeps both.
         if await self.locks(collection_id) != locks:
             wrong.append("lock of the collection or its members")
+        # What it holds must also be locked, so a refresh keeps it.
+        self.edited = await self.direct.fields(collection_id)
+        problems = self.edited.against(
+            f"{WRITE_PREFIX} edited", f"{WRITE_PREFIX} sort", wanted["summary"]
+        )
         if wrong:
-            check.error = "the server holds another " + ", ".join(
-                f"{name} ({kept.get(name)!r})" if name in kept else name
-                for name in wrong
+            problems.insert(
+                0,
+                "the server holds another "
+                + ", ".join(
+                    f"{name} ({kept.get(name)!r})" if name in kept else name
+                    for name in wrong
+                ),
             )
+        if problems:
+            check.error = "; ".join(problems)
             if isinstance(self.direct, MediaBrowserServer):
                 check.note = await self.direct.seen_by_a_user(collection_id)
+
+    async def cleared(self, check: Case, library: str, collection_id: str) -> None:
+        """Send no sort title or summary: the server takes both back, unlocked."""
+        title = f"{WRITE_PREFIX} edited"
+        await self.provider.update_collection_details(
+            collection_id,
+            library,
+            CollectionDetails(
+                title=title,
+                summary="",
+                sort_title="",
+                mode=CollectionMode.DEFAULT,
+                order=CollectionOrder.TITLE_ASC,
+                smart=False,
+                visible_home=False,
+            ),
+        )
+        held = await self.direct.fields(collection_id)
+        check.error = "; ".join(held.against(title, "", ""))
+
+    async def empty(self, check: Case, library: str) -> None:
+        """Make a collection with no members and edit it, as a separator is."""
+        title = f"{WRITE_PREFIX} separator"
+        created = await self.provider.create_collection(
+            library, title, MediaType.MOVIE, []
+        )
+        self.made.append(created.id)
+        await self.provider.update_collection_details(
+            created.id,
+            library,
+            CollectionDetails(
+                title=title,
+                summary=None,
+                sort_title=title,
+                mode=CollectionMode.DEFAULT,
+                order=CollectionOrder.CUSTOM,
+                smart=False,
+                visible_home=True,
+                empty=True,
+            ),
+        )
+        held = await self.direct.fields(created.id)
+        check.error = "; ".join(
+            problem
+            for problem in held.against(title, title, "")
+            # Summary None leaves the server's own, as a separator's is.
+            if not problem.startswith("summary")
+        )
 
     async def member_tags(self, collection_id: str) -> set[str]:
         """The verify collection tags the collection's first member carries."""
@@ -578,3 +648,30 @@ class WriteCheck:
         if left:
             problems.append(f"the server still lists {named(left)}")
         check.error = "; ".join(problems)
+
+
+def compare_writes(checks: list[WriteCheck]) -> Case:
+    """Set what each server holds after the same edit side by side.
+
+    Each was checked against the edit on its own; this names any way they
+    still differ, such as one locking a field another leaves open.
+    """
+    case = Case("every server", "", "writes", "the same edit on every server")
+    held = {check.direct.server: check.edited for check in checks if check.edited}
+    if len(held) < 2:
+        case.note = "fewer than two servers were edited"
+        return case
+    locks = {server: sorted(fields.locked) for server, fields in held.items()}
+    titles = {server: fields.title for server, fields in held.items()}
+    summaries = {server: fields.summary for server, fields in held.items()}
+    case.error = "; ".join(
+        f"they differ in {what}: {values}"
+        for what, values in (
+            ("what they lock", locks),
+            ("title", titles),
+            ("summary", summaries),
+        )
+        if len({str(value) for value in values.values()}) > 1
+    )
+    case.note = "compared " + named(set(held))
+    return case

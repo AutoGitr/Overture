@@ -586,20 +586,27 @@ class JellyfinClient(MediaServerHttpClient):
         writes are locked, so a metadata refresh never takes the name or
         overview of the TMDB collection the title resembles. Only fields are
         locked: changing the item's own lock locks or unlocks every item the
-        BoxSet holds as well.
+        BoxSet holds as well. An empty summary is handed back to the server,
+        unlocked.
         """
         item = await self.collection_metadata(collection_id)
-        written = ["Name", *(["Overview"] if details.summary is not None else [])]
         held: list[str] = item.get("LockedFields") or []
+        overview = (
+            "Overview" in held if details.summary is None else bool(details.summary)
+        )
+        if details.summary is not None:
+            item["Overview"] = details.summary
         item.update(
             Name=details.title,
             DisplayOrder="PremiereDate"
             if details.order is CollectionOrder.RELEASE_ASC
             else "SortName",
-            LockedFields=[*held, *(field for field in written if field not in held)],
+            LockedFields=[
+                *(field for field in held if field not in {"Name", "Overview"}),
+                "Name",
+                *(["Overview"] if overview else []),
+            ],
         )
-        if details.summary is not None:
-            item["Overview"] = details.summary
         if details.sort_title is not None:
             self._set_sort_title(item, details.sort_title)
         # The whole item is sent, so sending it again changes nothing more.

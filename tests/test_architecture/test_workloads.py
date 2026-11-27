@@ -237,6 +237,11 @@ async def _preset_export(bed: Bed) -> object:
     )
 
 
+async def _preset_uses(bed: Bed) -> object:
+    # Every tracked item is compared with OvertureDB's, which the network serves.
+    return await bed.service.preset_uses.list()
+
+
 #: Each operation, and how many statements it may take at any library size.
 OPERATIONS: dict[str, tuple[Operation, int]] = {
     # A rule sync reads its libraries' names once, for its log lines.
@@ -250,6 +255,7 @@ OPERATIONS: dict[str, tuple[Operation, int]] = {
     "collection list": (lambda bed: bed.service.reader.listed(), 15),
     "removal options": (_removal_options, 6),
     "preset export": (_preset_export, 17),
+    "preset uses": (_preset_uses, 1),
     "collection theme removal": (
         lambda bed: bed.service.themes.remove(bed.regular, AssetRemoval()),
         12,

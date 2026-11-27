@@ -1,5 +1,6 @@
 """Request model and pure router helper coverage."""
 
+lazy import re
 lazy from collections.abc import Sequence
 lazy from pathlib import Path
 lazy from typing import Any
@@ -7,6 +8,7 @@ lazy from typing import Any
 lazy import pytest
 lazy from fastapi import FastAPI
 lazy from fastapi.routing import APIRoute
+lazy from fastapi.testclient import TestClient
 lazy from pydantic import ValidationError
 lazy from starlette.routing import BaseRoute
 
@@ -155,8 +157,9 @@ class TestRestResponseContracts:
     ) -> None:
         """Clients and the schema fuzzer read the refusals from the schema.
 
-        A route that needs signing in takes the API key header ``require_auth``
-        reads, so the schema shows which they are.
+        A route that needs signing in names the session and API key schemes
+        ``require_auth`` reads, so the schema shows which they are; every other
+        route says it is public.
         """
         operations = [
             (path, method, operation)
@@ -166,17 +169,54 @@ class TestRestResponseContracts:
         guarded = [
             (path, method, operation)
             for path, method, operation in operations
-            if any(
-                parameter["in"] == "header" and parameter["name"] == API_KEY_HEADER
-                for parameter in operation.get("parameters", [])
-            )
+            if operation["security"] == [{"Session": []}, {"ApiKey": []}]
         ]
+        assert {
+            (path, method)
+            for path, method, operation in operations
+            if operation["security"] == []
+        } == {
+            ("/api/auth/config", "get"),
+            ("/api/auth/login", "post"),
+            ("/api/auth/logout", "post"),
+            ("/api/auth/oidc/callback", "get"),
+            ("/api/auth/oidc/login", "get"),
+            ("/api/health", "get"),
+            ("/api/ready", "get"),
+        }
         assert len(guarded) > len(operations) / 2
         assert [
             (path, method)
             for path, method, operation in guarded
             if not {"401", "403"} <= set(operation["responses"])
         ] == []
+
+    def test_every_operation_naming_a_scheme_refuses_a_request_without_it(
+        self, *, test_app: FastAPI, client: TestClient
+    ) -> None:
+        """What the schema calls signed in, the API enforces, route by route."""
+        paths: dict[str, dict[str, dict[str, Any]]] = test_app.openapi()["paths"]
+        operations = [
+            (method, re.sub(r"\{[^}]+\}", "1", path))
+            for path, methods in paths.items()
+            for method, operation in methods.items()
+            # An empty requirement makes signing in optional.
+            if operation["security"] and {} not in operation["security"]
+        ]
+        assert operations
+        for headers in ({}, {API_KEY_HEADER: "not-a-key"}):
+            answered = {
+                (method, path): client.request(
+                    method, path, headers=headers
+                ).status_code
+                for method, path in operations
+            }
+            # A change without a session is refused by the CSRF check first.
+            assert {
+                key: status
+                for key, status in answered.items()
+                if status not in {401, 403}
+            } == {}
 
     def test_non_json_routes_are_documented_response_model_exemptions(self) -> None:
         non_json_paths = {

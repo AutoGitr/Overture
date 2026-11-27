@@ -427,9 +427,11 @@ async def test_art_source_matrix(
 class ThemeCase(NamedTuple):
     """One item's theme state."""
 
-    #: OvertureDB's own theme: none, an entry without one, one, or a failed one.
+    #: OvertureDB's own theme: none, an entry without one, one, or one that
+    #: failed to download before, which is offered again.
     overturedb: str
-    #: The ThemerrDB theme its entry carries: none, one, or a failed one.
+    #: The ThemerrDB theme its entry carries: none, one, or one that failed to
+    #: download before, which is offered again.
     themerrdb: str
     #: No saved selection, another video, or OvertureDB's own theme.
     saved: str | None
@@ -476,10 +478,8 @@ def theme_miss(
         return (
             "OvertureDB is disabled" if ours else "ThemerrDB needs OvertureDB enabled"
         )
-    if state == "served":
+    if state in {"served", "failed"}:
         return None
-    if state == "failed":
-        return f"the {source.label} theme failed to download before"
     if not ours:
         return "ThemerrDB has no theme for it"
     entry = case.overturedb != "absent" or case.themerrdb != "none"

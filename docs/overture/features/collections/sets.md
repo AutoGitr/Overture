@@ -33,8 +33,17 @@ set preview names values whose title another collection already has.
 ## How a set behaves
 
 A set's collections take their criteria and titles from the set; edit it on
-its group's page, which saving a new set opens. A set runs on its schedule once
-it has been synced.
+its group's page, which saving a new set opens. Saving a set makes or updates
+its collections in Overture at once, as saving a collection does, so they are
+listed in its group right away; a sync puts them on the server. A set runs on
+its schedule once it has been synced.
+
+A franchise set skips a TMDB franchise that a collection outside its group
+already is: one whose criteria select that franchise alone, or whose TMDB
+collection is set to it in its settings. A collection that gathers several
+franchises, such as a universe, is none of them, so the Franchises and
+Universes presets work side by side: Star Wars Universe holds every Star Wars
+franchise, and each franchise keeps its own collection too.
 
 A collection whose value the set no longer selects, or the library no longer
 holds, leaves the server and stays in Overture until the set selects its value

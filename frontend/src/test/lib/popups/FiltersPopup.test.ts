@@ -459,7 +459,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
       "/api/library/libraries": [],
       "/api/collections/capabilities": collectionCapabilities(),
       "/api/collections/bulk-operation": { collection_ids: [1], errors: {} },
-      "/api/collections/groups": [
+      "/api/collection-groups": [
         { name: "Ungrouped", set: null },
         { name: "Weekend", set: null },
       ],
@@ -516,9 +516,10 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     const { calls } = mockFetchRoutes({
       "/api/library/libraries": [],
       "/api/collections/capabilities": collectionCapabilities(),
-      "/api/collections/groups": [{ name: "Ungrouped", set: null }],
+      "/api/collection-groups": [{ name: "Ungrouped", set: null }],
       "/api/collections/presets/export": {
-        file: { preset_version: 1, preset: null, groups: [], collections: [] },
+        text: '{"preset_version": 1, "collections": []}',
+        count: 2,
         refused: [],
         warnings: [],
         issue: null,
@@ -547,7 +548,7 @@ describe("FiltersPopup edits one draft of the filter set", () => {
     mockFetchRoutes({
       "/api/library/libraries": [],
       "/api/collections/capabilities": collectionCapabilities(),
-      "/api/collections/groups": [
+      "/api/collection-groups": [
         { name: "Weekend", set: null },
         { name: "Anime", set: null },
         { name: "Ungrouped", set: null },

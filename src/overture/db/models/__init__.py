@@ -23,6 +23,7 @@ lazy from .media_item import MediaItem
 lazy from .media_item_copy import MediaItemCopy, SeasonCopy
 lazy from .media_server import MediaServer
 lazy from .notification import NotificationRule
+lazy from .preset_use import PresetUse
 lazy from .saved_schedule import SavedSchedule
 lazy from .season import Season
 lazy from .settings import (
@@ -62,6 +63,7 @@ __all__ = [
     "MediaItemTerm",
     "MediaServer",
     "NotificationRule",
+    "PresetUse",
     "SavedSchedule",
     "Season",
     "SeasonCopy",

@@ -2,9 +2,7 @@
 
 lazy from collections.abc import Collection, Iterable
 lazy from datetime import datetime
-lazy from typing import Literal
 
-lazy from sqlalchemy.orm import aliased
 lazy from sqlmodel import col, delete, func, select
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -135,56 +133,3 @@ class DownloadJobRepository:
             )
         )
         return result.rowcount or 0
-
-    async def failed_themes_by_item(
-        self, item_ids: list[int] | None = None
-    ) -> dict[int, set[str]]:
-        """Return the YouTube IDs that failed as item themes, by media item ID."""
-        return await self._failed_themes(JobType.THEME, "media_item_id", item_ids)
-
-    async def failed_themes_by_collection(
-        self, collection_ids: list[int]
-    ) -> dict[int, set[str]]:
-        """Return the YouTube IDs that failed as collection themes, by collection ID."""
-        return await self._failed_themes(
-            JobType.COLLECTION_THEME, "collection_id", collection_ids
-        )
-
-    async def _failed_themes(
-        self,
-        job_type: JobType,
-        owner_field: Literal["media_item_id", "collection_id"],
-        owner_ids: list[int] | None,
-    ) -> dict[int, set[str]]:
-        """Return each owner's YouTube IDs that failed and have not succeeded since.
-
-        A later successful download of the same video for the same owner, such
-        as a manual retry, clears the failure.
-        """
-        later = aliased(DownloadJob)
-        owner = col(getattr(DownloadJob, owner_field))
-        succeeded_since = (
-            select(later.id)
-            .where(
-                col(later.job_type) == job_type,
-                col(later.status) == JobStatus.DONE,
-                col(getattr(later, owner_field)) == owner,
-                col(later.target_url) == col(DownloadJob.target_url),
-                col(later.created_at) > col(DownloadJob.created_at),
-            )
-            .exists()
-        )
-        stmt = select(owner, col(DownloadJob.target_url)).where(
-            col(DownloadJob.job_type) == job_type,
-            col(DownloadJob.status) == JobStatus.FAILED,
-            owner.is_not(None),
-            col(DownloadJob.target_url).is_not(None),
-            ~succeeded_since,
-        )
-        if owner_ids is not None:
-            stmt = stmt.where(owner.in_(owner_ids))
-        failed: dict[int, set[str]] = {}
-        for owner_id, youtube_id in (await self.session.exec(stmt)).all():
-            if owner_id is not None and youtube_id is not None:
-                failed.setdefault(owner_id, set()).add(youtube_id)
-        return failed

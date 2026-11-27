@@ -106,6 +106,18 @@ TMDB's overview.
 Sort titles leave out a leading "The", "A" or "An" of the title and group, as
 Plex does when it sorts titles itself.
 
+## What Overture keeps on the server
+
+A collection Overture manages has its title, sort title and summary written by
+every sync, the same way on every server. A field Overture has a value for is
+written and locked, so the server's own metadata refresh never replaces it. A
+field it has no value for, such as a sort title no template or group sets, is
+handed back to the server: cleared and unlocked, so the server fills it in as it
+would for any collection. Whether a field is locked therefore follows only from
+whether a template, the group or the collection gives it a value; a group with
+a separator, for example, gives its collections a sort title, and a group
+without one leaves the sort title to the server.
+
 ## Minimum members and active dates
 
 **Minimum members** and **When inactive** decide only whether a collection is

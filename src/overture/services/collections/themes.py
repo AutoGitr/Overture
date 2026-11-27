@@ -135,9 +135,10 @@ class CollectionThemes:
             row = await self._access.require_managed(session, collection_id)
         scope = AssetScope(collection_id=collection_id)
         async with self._access.asset_locks.acquire(scope.lock_key):
+            # Overture's own files go first, as for a title's theme.
+            deleted = await self._delete_files(row) if removal.delete_file else []
             if removal.delete_from_server:
                 await self._remover.delete_collection_theme(row)
-            deleted = await self._delete_files(row) if removal.delete_file else []
             async with self._access.database.write_session() as db:
                 row = await self._access.require_managed(db, collection_id)
                 now = utc_now()

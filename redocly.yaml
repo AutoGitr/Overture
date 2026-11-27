@@ -1,0 +1,11 @@
+# Lints openapi/overture.json, the API contract the backend generates.
+extends:
+  - recommended
+rules:
+  # Each install serves the API at its own address, which OpenAPI takes as the
+  # default "/" when no server is named; naming "/" makes generated clients
+  # join it to every path as "//".
+  no-empty-servers: off
+  # Every tag an operation names is declared, with what its operations do.
+  operation-tag-defined: error
+  tag-description: error

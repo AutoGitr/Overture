@@ -4,21 +4,35 @@
 
 ### 🚨 Breaking Changes
 
-- **API:** collection groups are one resource: `GET /api/collections/groups` lists each group with its set, and `GET`, `PUT`, `PATCH` and `DELETE /api/collections/groups/{name}` read, save, rename and delete one. `/api/collections/group-policy` and `GET /api/collections/sets` are gone, and the group's name moves from the query to the path.
+- **API:** collection groups are one resource: `GET /api/collection-groups` lists each group with its set, and `GET`, `PUT`, `PATCH` and `DELETE /api/collection-groups/{name}` read, save, rename and delete one. `/api/collections/group-policy` and `GET /api/collections/sets` are gone, and the group's name moves from the query to the path.
+- **API:** the OpenAPI schema declares the session cookie and the API key as the `Session` and `ApiKey` security schemes, which every operation that needs signing in names, instead of listing them as a cookie and a header parameter on each; a client generated from the schema sends the key through its authentication option.
 - **Backups:** a backup taken before a database upgrade is named after the version the copy is at, as `overture_<time>_at_<version>.db`. Backups named `overture_<time>_before_<version>.db` hold the same thing but are no longer listed, kept by retention or removed; rename `_before_` to `_at_` to keep managing one, or delete it.
 - **Collections:** Every collection Overture manages names a group, chosen or typed when you create, adopt or assign it; there is no reserved **Ungrouped** group. An existing Ungrouped group stays as an ordinary group of that name, which you can rename, delete or make a set. The API refuses a collection, adoption or Assign group without a group, and deleting a group that holds collections needs `move`, `orphan` or `both`; `keep` is gone.
+- **Interface:** A group's page is `/collections/groups/<name>` alone, and the group the sidebar lists elsewhere is `?group=<name>`, replacing `?collection_group=group:<name>`; links saved with the old parameter open the sidebar at the top.
 
 ### 🚀 Features
 
 - **Collections:** Clicking a group opens its own page, laid out as a collection's: its name, its set, its collections, settings and active dates, with **Export** and **Delete group**. It replaces the **Collection groups** popup; type a new name in a collection's **Group** to make a group.
-- **Collections:** **Presets**, first in a new collection's Setup, fills the form from one of OvertureDB's ready-made collections or sets, such as Holidays, Decades, Franchises and TMDB charts, grouped by category, in every library of its media type on every server; change anything before saving.
-- **Collections:** **Export**, on a group's or a collection's page and among the collection operations for everything the filters match, saves them as a file another install loads beside **Presets**, or that you can contribute to OvertureDB as a preset.
+- **Collections:** **Presets**, first in a new collection's Setup, fills the form from one of OvertureDB's ready-made collections or sets, such as Holidays, Decades, Franchises and TMDB charts, grouped by category, in every library of its media type on every server; change anything before saving. A preset says what its collections are, such as their criteria, titles, order and active dates; how they are shown, their art and themes follow your defaults, such as **Automatic art**.
+- **Collections:** A collection or set saved from a preset remembers it: when OvertureDB changes the preset, its **Setup** says what changed, and **Take changes** applies only those parts, keeping everything you changed, while **Keep mine** leaves it as it is.
+- **Collections:** Saving a set makes its collections in Overture at once, as saving a collection does; a sync puts them on the server.
+- **Collections:** **Set: <group>** beside a set's collection opens its group's page.
+- **Collections:** **Choose several** beside **Presets** adds every preset collection and set you tick at once, each as choosing it alone and saving would.
+- **Collections:** **Export**, on a group's or a collection's page and among the collection operations for everything the filters match, saves them as a file another install loads beside **Presets**, or that you can contribute to OvertureDB as a preset. It holds only what you set, without the settings each collection inherits.
 
 ### 🐛 Bug fixes
 
-- **Collections:** Plex separators sync without a 404 error, as Overture leaves an empty collection's Home visibility alone.
+- **Collections:** Plex separators sync without a 404 error: Plex's library edits reach only collections that hold items, so an empty separator is edited directly and has no Home row to set.
+- **Collections:** The Franchises set makes a collection for every franchise a universe holds, such as Star Wars Universe beside each Star Wars franchise; a collection gathering several TMDB franchises is none of them, and no longer takes the lowest-numbered one's art, theme and server collection.
+- **Collections:** A sync writes a managed collection's sort title and summary on every server alike: a value is locked, and none hands the field back to the server unlocked, instead of leaving a sort title Overture no longer sets locked at its old value. Jellyfin and Emby no longer lock an empty summary.
+- **Collections:** A collection's or group's page opens with only Setup and Content expanded every time, including a group's Members.
 - **Collections:** Reading a group's defaults with Automatic art or OvertureDB poster styles set no longer logs a Pydantic serializer warning.
+- **Collections:** A separator no longer prepends its group to sort titles unseen: turning **Separator** on fills an empty group **Sort title** with `{group} {title}`, which you can change or clear, and groups that relied on the hidden default now show it there.
 - **Docker:** Every image build applies Debian's latest security updates, instead of reusing an earlier build's.
+- **Library:** Removing a title's art or theme from both its folder and the server deletes Overture's file first, so Jellyfin and Emby no longer fail with a 502 when they may only read the media folder.
+- **Logs:** A failed Plex request logs its path, hiding only the plex.direct address.
+- **Media servers:** An error from a media server says what the server answered, such as Jellyfin's reason for refusing a request, instead of the HTTP status alone.
+- **Themes:** An Assets run tries a theme that failed to download before again, as a manual download does, instead of passing it over until it succeeded once.
 
 ## 0.5.0 - 2026-11-24
 

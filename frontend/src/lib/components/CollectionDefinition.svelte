@@ -37,7 +37,6 @@
 
 <DetailForm
   collapsible
-  expanded
   title="Setup"
   description={creatingSet
     ? "One collection per value in the library, such as each decade, kept up to date."

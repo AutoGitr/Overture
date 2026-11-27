@@ -30,6 +30,7 @@ lazy from schemathesis.generation.meta import (
 )
 lazy from schemathesis.specs.openapi.checks import (
     allow_header_conformance,
+    ignored_auth,
     negative_data_rejection,
     positive_data_acceptance,
     unsupported_method,
@@ -40,6 +41,10 @@ lazy from overture.utils.http_security import CSRF_COOKIE, SESSION_COOKIE
 
 #: Checks that hold Overture to what it does not do, each with why.
 NOT_CHECKED = [
+    # The fuzzer is signed in with a session cookie, which the check cannot
+    # take away to try a request without credentials; test_router_contracts
+    # sends every operation that needs signing in without them.
+    ignored_auth,
     # Authentication answers before routing, so an undeclared method sent with
     # a wrong API key is refused with 401 rather than told 405.
     unsupported_method,

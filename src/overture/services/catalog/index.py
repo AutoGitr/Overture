@@ -1,6 +1,6 @@
 """OvertureDB resolution for a batch of media items, done once."""
 
-lazy from collections.abc import Iterable, Mapping, Sequence, Set
+lazy from collections.abc import Iterable, Mapping, Sequence
 lazy from dataclasses import dataclass, field
 lazy from typing import Self
 
@@ -226,13 +226,12 @@ class CatalogIndex:
         self,
         item: MediaItem | MediaCollection,
         sources: Iterable[ThemeBulkSource],
-        *,
-        failed: Set[str] = frozenset(),
     ) -> CatalogPick:
         """Return the first theme a catalog in *sources* offers, or why none does.
 
-        A theme in *failed* failed to download for *item* before, so it is
-        passed over. Sources that are not catalogs are not asked.
+        Sources that are not catalogs are not asked. A theme that failed to
+        download is offered again, so a failure caused by YouTube at the time
+        is tried again by the next run.
         """
         public_item = (
             self.collections.get(item.tmdb_collection_id or 0)
@@ -246,8 +245,6 @@ class CatalogIndex:
             youtube_id = public_item and _catalog_youtube_id(public_item, source)
             if not youtube_id:
                 notes.append(self._theme_missing(item, source))
-            elif youtube_id in failed:
-                notes.append(f"the {source.label} theme failed to download before")
             else:
                 return CatalogPick(youtube_id, f"{source.label} theme")
         if not notes and isinstance(item, MediaCollection):

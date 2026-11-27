@@ -2,7 +2,9 @@
 
 A file names media types where a collection names libraries, so it can be
 added to any install: each collection or set in it fills the create form,
-where the person adding it picks the libraries.
+where the person adding it picks the libraries. It says what each collection
+is and nothing more; how it is shown, its art and themes, and what it
+requests or labels follow the defaults of the install adding it.
 """
 
 lazy from datetime import datetime
@@ -17,15 +19,22 @@ lazy from ..domain import (
     PresetCategory,
 )
 lazy from ..utils.collection_fields import FIELDS
-lazy from .base import PublicText, StrictBaseModel
+lazy from .base import PositiveId, PublicText, StrictBaseModel
 lazy from .catalog import ContributionIssue
 lazy from .collections import (
+    CollectionContent,
+    CollectionContentPolicy,
     CollectionGeneratorBase,
-    CollectionOptions,
-    CollectionPolicyBase,
     FilterGroup,
+    MinimumItems,
 )
-lazy from .validators import CollectionIds, GroupName, GroupNames, UniqueList
+lazy from .validators import (
+    CollectionIds,
+    GroupName,
+    GroupNames,
+    RequiredGroupName,
+    UniqueList,
+)
 
 #: Collections one file adds.
 PRESET_COLLECTIONS_MAX = 50
@@ -34,12 +43,15 @@ PRESET_GROUPS_MAX = 10
 
 type ArtUrl = Annotated[str, Field(min_length=1, max_length=2000, pattern=r"^https://")]
 type PresetTag = Annotated[str, Field(min_length=1, max_length=40)]
+type PresetId = Annotated[
+    str, Field(max_length=60, pattern=f"^{PRESET_ID_PATTERN.pattern}$")
+]
 
 
 class PresetMetadata(StrictBaseModel):
     """How a preset describes itself in the gallery."""
 
-    id: Annotated[str, Field(max_length=60, pattern=f"^{PRESET_ID_PATTERN.pattern}$")]
+    id: PresetId
     title: Annotated[str, Field(min_length=1, max_length=100)]
     description: Annotated[str, Field(min_length=1, max_length=500)]
     category: PresetCategory
@@ -69,13 +81,13 @@ class PresetArt(StrictBaseModel):
     background: PresetImage | None = None
 
 
-class PortableCollection(CollectionOptions):
+class PortableCollection(CollectionContent):
     """A collection, with criteria for each media type instead of each library.
 
     ``collection_group`` names a group of the file or one the install has.
     """
 
-    policy: CollectionPolicyBase = Field(default_factory=CollectionPolicyBase)
+    minimum_items: MinimumItems | None = None
     #: Plex evaluates the criteria live instead of Overture on each sync.
     smart: bool = False
     #: The most members taken from each library.
@@ -97,13 +109,11 @@ class PortableSet(CollectionGeneratorBase):
     media_types: Annotated[UniqueList[MediaType], Field(min_length=1)]
 
 
-class PortableGroup(CollectionPolicyBase):
+class PortableGroup(CollectionContentPolicy):
     """A group's defaults, and the set it runs when it is one."""
 
-    name: Annotated[GroupName, Field(min_length=1)]
+    name: RequiredGroupName
     generator: PortableSet | None = None
-    #: Head the group's collections with an empty one titled after the group.
-    separator: bool = False
 
 
 def _criteria(file: CollectionPresetFile) -> list[tuple[MediaType, FilterGroup]]:
@@ -220,6 +230,53 @@ class PresetExportRequest(StrictBaseModel):
         return self
 
 
+class PresetSubject(StrictBaseModel):
+    """A collection, or the group a set was saved into."""
+
+    collection_id: PositiveId | None = None
+    group: GroupName | None = None
+
+    @model_validator(mode="after")
+    def validate_subject(self) -> Self:
+        """Name exactly one collection or group."""
+        if (self.collection_id is None) == (self.group is None):
+            raise ValueError("Name a collection or a group")
+        return self
+
+
+class PresetUseCreate(PresetSubject):
+    """Keep track of the OvertureDB preset item a collection or set was saved from."""
+
+    preset_id: PresetId
+    #: The collection's title or the set's group name in the preset.
+    item: Annotated[str, Field(min_length=1, max_length=200)]
+
+
+class PresetUseReview(PresetSubject):
+    """Take OvertureDB's changes to a preset item, or keep the saved one as it is."""
+
+    take: bool
+
+
+class PresetUseRead(PresetUseCreate):
+    """A collection or set saved from a preset, and what OvertureDB changed since."""
+
+    #: The preset's title, while OvertureDB publishes it.
+    preset_title: str | None = None
+    #: What OvertureDB has changed in the item since, such as "criteria".
+    changes: list[str] = Field(default_factory=list[str])
+    #: OvertureDB no longer publishes the item.
+    gone: bool = False
+
+
+class PresetUses(StrictBaseModel):
+    """Every collection and set saved from a preset."""
+
+    uses: list[PresetUseRead] = Field(default_factory=list[PresetUseRead])
+    #: Why OvertureDB's presets could not be read to compare them.
+    error: PublicText | None = None
+
+
 class PresetRefusal(StrictBaseModel):
     """Something left out of an export, and why."""
 
@@ -230,8 +287,11 @@ class PresetRefusal(StrictBaseModel):
 class PresetExport(StrictBaseModel):
     """An export, with what it left out and what an install adding it should know."""
 
-    #: None when nothing chosen could be exported.
-    file: CollectionPresetFile | None = None
+    #: The file's text, without the settings it leaves unset; None when
+    #: nothing chosen could be exported.
+    text: str | None = None
+    #: The groups and collections it holds.
+    count: int = 0
     refused: list[PresetRefusal] = Field(default_factory=list[PresetRefusal])
     warnings: list[str] = Field(default_factory=list[str])
     #: The OvertureDB issue that contributes the file as a preset.

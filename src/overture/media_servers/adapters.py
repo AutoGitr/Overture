@@ -214,8 +214,9 @@ class CollectionDetails:
     """
 
     title: str
-    #: ``None`` leaves the server's summary or sort title as it is; an empty
-    #: sort title hands it back to the server.
+    #: A value is written and locked; an empty one hands the field back to the
+    #: server, unlocked; ``None`` leaves it as it is, as for a collection
+    #: Overture does not manage.
     summary: str | None
     sort_title: str | None
     mode: CollectionMode
@@ -225,9 +226,9 @@ class CollectionDetails:
     visible_shared: bool = False
     visible_library: bool = False
     filtering: CollectionFiltering | None = None
-    #: It has a Plex hub whose visibility the sync sets; an empty separator
-    #: has none, and Plex answers 404 when asked for one.
-    hub: bool = True
+    #: It holds no members, as a separator: Plex keeps no hub for it, and its
+    #: section's edits, which reach only collections with items, answer 404.
+    empty: bool = False
 
 
 @dataclass(slots=True, frozen=True)

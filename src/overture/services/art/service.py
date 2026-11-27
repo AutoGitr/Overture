@@ -281,9 +281,10 @@ class ArtService:
             async with self._database.read_session() as db:
                 item = await require_item(db, item_id)
                 owners = await _art_owners(db, item, art_types, season_id)
+            # Overture's own files go first: a server deletes the file of an
+            # image it keeps in a media folder as it deletes the image, which
+            # one that may only read the folder cannot.
             for art_type, group in owners:
-                if removal.delete_from_server:
-                    await self._remover.delete_item_art_on_server(group, art_type)
                 if removal.delete_file:
                     deleted.update(
                         (art_type, type(owner), owner.id)
@@ -291,6 +292,8 @@ class ArtService:
                             item, group, art_type
                         )
                     )
+                if removal.delete_from_server:
+                    await self._remover.delete_item_art_on_server(group, art_type)
             async with self._database.write_session() as db:
                 item = await require_item(db, item_id)
                 for art_type, group in await _art_owners(

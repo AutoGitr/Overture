@@ -14,11 +14,10 @@ concurrency:
   group: fuzz
   cancel-in-progress: true
 
-permissions:
-  contents: read
-
 jobs:
   fuzz:
+    permissions:
+      contents: read
     name: Fuzz the API and media-server replies
     runs-on: ubuntu-26.04
     timeout-minutes: 40

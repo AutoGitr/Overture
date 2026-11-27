@@ -128,6 +128,8 @@ export class CollectionGroupForm {
       }
       const saved = await this.request.mutateAsync({ path, query: { new_set: newSet }, body });
       queryClient.setQueryData(getCollectionGroupPolicyQueryKey({ path }), saved);
+      // The server can fill in what a choice implies, such as a separator's sort title.
+      this.reset(saved);
       return true;
     } catch (error) {
       this.feedback.error(errorMessage(error, `Could not save "${name}"`));

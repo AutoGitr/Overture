@@ -2,6 +2,7 @@ import { createMutation } from "@tanstack/svelte-query";
 import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import {
   deleteCollectionMutation,
+  getCollectionOptions,
   orphanCollectionMutation,
   saveCollectionRuleMutation,
   setCollectionMembersMutation,
@@ -19,6 +20,7 @@ import type {
   MediaType,
 } from "../../generated/rest/types.gen";
 import { patchCollectionRule, storeCollectionDetail } from "../rest/cache";
+import { queryClient } from "../rest/queryClient";
 import { closeCollection } from "../router/routes";
 import { chooseAction, confirmAction, createNotifier } from "../stores/notificationState.svelte";
 import { settingsState } from "../stores/settingsState.svelte";
@@ -35,6 +37,18 @@ import { draftOf } from "./draft.svelte";
 import { errorMessage } from "./errors";
 import type { CollectionOptions as Capabilities } from "./libraries.svelte";
 import { openSync } from "./syncShortcut";
+
+/** The part of a saved collection's rule its form edits. */
+function editableRule(saved: CollectionDetail | null): CollectionRuleWriteOutput | null {
+  if (!saved?.rule) return null;
+  const {
+    last_error: _error,
+    last_synced_at: _synced,
+    source_summary: _summary,
+    ...editable
+  } = saved.rule;
+  return editable;
+}
 
 /** Form drafts and actions for one mounted collection. */
 export class CollectionEditor extends CollectionRuleForm {
@@ -80,17 +94,7 @@ export class CollectionEditor extends CollectionRuleForm {
   private savedOrder = $derived.by(() => this.saved()?.rule?.order_type ?? null);
   orderType = $derived<CollectionOrder | null>(this.savedOrder);
   /** The saved rule's editable part, taken once its details load. */
-  readonly #rule = draftOf((): CollectionRuleWriteOutput | null => {
-    const saved = this.saved()?.rule;
-    if (!saved) return null;
-    const {
-      last_error: _error,
-      last_synced_at: _synced,
-      source_summary: _summary,
-      ...editable
-    } = saved;
-    return editable;
-  }, defaultRule());
+  readonly #rule = draftOf(() => editableRule(this.saved()), defaultRule());
   get rule() {
     return this.#rule.current;
   }
@@ -202,6 +206,17 @@ export class CollectionEditor extends CollectionRuleForm {
       this.feedback.error(errorMessage(error, "Could not update the collection"));
       return false;
     }
+  }
+
+  /** Start the form over from the saved collection, as after a change saved elsewhere. */
+  async reload() {
+    const saved = await queryClient.fetchQuery({
+      ...getCollectionOptions(this.target),
+      staleTime: 0,
+    });
+    storeCollectionDetail(saved);
+    const rule = editableRule(saved);
+    if (rule) this.rule = rule;
   }
 
   /** Save in Overture; with `sync`, then open Sync with only this collection chosen. */

@@ -31,6 +31,7 @@ lazy from .post_sync import (
     PostSync,
     RequestMissing,
 )
+lazy from .preset_uses import PresetUseTracker
 lazy from .presets import CollectionPresets
 lazy from .reader import CollectionReader
 lazy from .rule_sync import RuleSync
@@ -164,6 +165,9 @@ class CollectionsService:
             sources=self._sources,
             reader=self.reader,
             groups=self.groups,
+        )
+        self.preset_uses = PresetUseTracker(
+            access=access, presets=self.presets, editor=self.editor, groups=self.groups
         )
 
     async def close(self) -> None:

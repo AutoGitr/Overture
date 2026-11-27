@@ -15,7 +15,12 @@
   import { cancelPendingAutoAdvance } from "../../utils/autoAdvance";
   import { allLibraries } from "../../utils/libraries.svelte";
   import { preloadNextCollection } from "../../utils/recordAdvance";
-  import { route, routedCollectionId, routedCollectionView } from "../routes";
+  import {
+    route,
+    routedCollectionId,
+    routedCollectionView,
+    routedNewCollectionForm,
+  } from "../routes";
 
   let creating = $derived(route.pathname.endsWith("/collections/new"));
   const libraries = allLibraries();
@@ -111,9 +116,7 @@
       onretry={() => groupsQuery.refetch()}
     />
   {/if}
-  {#key creating
-    ? `${route.search.draft ?? ""}`
-    : `${collectionId}:${collection?.managed}`}<CollectionManager
+  {#key creating ? routedNewCollectionForm() : `${collectionId}:${collection?.managed}`}<CollectionManager
       {collection}
       {detail}
       seed={creating ? (seed.data ?? null) : null}

@@ -5,7 +5,7 @@
   import Trash from "@lucide/svelte/icons/trash";
   import type { LibrarySectionRead } from "../../generated/rest/types.gen";
   import { goToGroup } from "../router/routes";
-  import { setSectionView } from "../stores/sectionState.svelte";
+  import { configureSections, setSectionView } from "../stores/sectionState.svelte";
   import { CollectionGroupEditor } from "../utils/collectionGroupEditor.svelte";
   import { countOf } from "../utils/plural";
   import CollectionConfigure from "./CollectionConfigure.svelte";
@@ -21,7 +21,7 @@
     group: string;
     libraries: LibrarySectionRead[];
   } = $props();
-  setSectionView("collection-group");
+  setSectionView(configureSections());
 
   const editor = new CollectionGroupEditor(
     () => group,

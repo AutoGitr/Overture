@@ -29,6 +29,9 @@ export default defineConfig({
     "@hey-api/typescript",
     {
       name: "@hey-api/sdk",
+      // The browser signs in with its session cookie, which it sends itself,
+      // so the calls carry no security schemes to apply.
+      auth: false,
     },
     {
       // Generates `<operation>Options` / `<operation>Mutation` helpers, plus

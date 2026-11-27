@@ -641,7 +641,7 @@ async def test_bulk_theme_selects_overturedb_or_themerrdb_by_configured_order(
     )
 
 
-async def test_bulk_theme_falls_back_when_first_source_previously_failed(
+async def test_bulk_theme_tries_a_theme_that_failed_to_download_before_again(
     monkeypatch: pytest.MonkeyPatch,
     *,
     app_config: Settings,
@@ -661,9 +661,7 @@ async def test_bulk_theme_falls_back_when_first_source_previously_failed(
 
     use_theme_work(
         monkeypatch,
-        BulkThemeWork(
-            [item], "{title} theme", index, failed_themes={1: {"yt-overture-failed"}}
-        ),
+        BulkThemeWork([item], "{title} theme", index),
     )
     monkeypatch.setattr(asset_run, "queue_download", fake_queue)
     bind_stamper(monkeypatch)
@@ -684,10 +682,10 @@ async def test_bulk_theme_falls_back_when_first_source_previously_failed(
         local_assets=make_local_assets(app_config=app_config, database=database),
         database=database,
     )
-    # Even though overturedb was first, it was failed, so fallback to themerrdb
-    assert queued == ["yt-themerr-working"]
+    # The first source's theme failed once; YouTube may serve it now.
+    assert queued == ["yt-overture-failed"]
     assert any(
-        "Queued Movie (theme) - ThemerrDB theme" in str(line)
+        "Queued Movie (theme) - OvertureDB theme" in str(line)
         for line in progress_logs(context)
     )
 

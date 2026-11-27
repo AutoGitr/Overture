@@ -39,7 +39,6 @@ lazy from ...jobs.progress_log import JobOutcome
 lazy from ...jobs.runner import JobContext, ManagedJob, run_managed_job
 lazy from ...jobs.tally import BulkAssetTally
 lazy from ...repositories.collections import CollectionRepository
-lazy from ...repositories.downloads import DownloadJobRepository
 lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
@@ -163,7 +162,6 @@ async def _load(run: _Run, batch: Batch) -> tuple[list[Target], BatchFacts]:
             source="assets.themes" if run.themes else "assets.art",
         )
     async with run.database.read_session() as session:
-        failed_themes = DownloadJobRepository(session)
         targets: list[Target] = []
         if batch.collections:
             rows = await CollectionRepository(session).bulk_targets(
@@ -173,11 +171,6 @@ async def _load(run: _Run, batch: Batch) -> tuple[list[Target], BatchFacts]:
                 await CatalogIndex.build_collections(session, rows)
                 if catalog
                 else CatalogIndex.empty()
-            )
-            failed = (
-                await failed_themes.failed_themes_by_collection(owner_ids)
-                if run.themes
-                else {}
             )
             targets = [
                 Target(row, kind)
@@ -206,11 +199,6 @@ async def _load(run: _Run, batch: Batch) -> tuple[list[Target], BatchFacts]:
                 if catalog
                 else CatalogIndex.empty()
             )
-            failed = (
-                await failed_themes.failed_themes_by_item(owner_ids)
-                if run.themes
-                else {}
-            )
             for item in items:
                 for kind, season_id in batch.visits.get(item.id or 0, ()):
                     if season_id is None:
@@ -218,7 +206,7 @@ async def _load(run: _Run, batch: Batch) -> tuple[list[Target], BatchFacts]:
                     elif season := seasons.get(season_id):
                         targets.append(Target(season, kind, item))
         search_format = (await get_app_settings(session)).theme_search_format
-    return targets, BatchFacts(index, failed, search_format)
+    return targets, BatchFacts(index, search_format)
 
 
 async def _decide(

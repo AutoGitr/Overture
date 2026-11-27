@@ -510,7 +510,7 @@ describe("collection criteria", () => {
     let saved: unknown = null;
     mockFetchRoutes({
       "/api/collections/defaults": {},
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/collections/capabilities": capabilities,
       "/api/collections/12": ({ init }: { init: RequestInit }) =>
         Response.json(init.method === "PUT" ? detail : { ...detail, rule }),
@@ -560,7 +560,7 @@ describe("collection criteria", () => {
     const custom = { ...rule, order_type: "custom" as const };
     mockFetchRoutes({
       "/api/collections/defaults": {},
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/collections/capabilities": capabilities,
       "/api/collections/12": ({ init }: { init: RequestInit }) =>
         Response.json(init.method === "PUT" ? detail : { ...detail, rule: custom }),
@@ -590,7 +590,7 @@ describe("collection criteria", () => {
     mockFetchRoutes({
       "/api/collections/12/rule": smartRule,
       "/api/collections/defaults": {},
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/collections/capabilities": capabilities,
       "/api/library/libraries": [
         { id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 1 },

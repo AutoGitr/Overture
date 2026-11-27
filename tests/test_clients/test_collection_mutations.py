@@ -174,6 +174,47 @@ async def test_emby_clearing_a_sort_title_releases_its_lock(
     assert updates[0]["LockData"] is True
 
 
+async def test_emby_clearing_a_summary_hands_it_back_unlocked(
+    app_config: Settings,
+) -> None:
+    item = {
+        "Id": "box",
+        "Name": "Box",
+        "Overview": "Old",
+        "LockData": True,
+        "LockedFields": ["Tags", "Overview", "Name"],
+    }
+    updates: list[dict[str, object]] = []
+
+    def handle(request: httpx2.Request) -> httpx2.Response:
+        if request.method == "POST":
+            updates.append(json.loads(request.content))
+            return httpx2.Response(204)
+        if request.url.path.endswith("/Users"):
+            return httpx2.Response(200, json=_USERS)
+        return httpx2.Response(200, json=item)
+
+    factory, _transport = mock_client_factory(handle)
+    client = media_client(EmbyClient, app_config, client_factory=factory)
+    try:
+        await client.update_collection_details(
+            "box",
+            CollectionDetails(
+                title="Box",
+                summary="",
+                sort_title=None,
+                mode=CollectionMode.DEFAULT,
+                order=CollectionOrder.TITLE_ASC,
+                smart=False,
+                visible_home=False,
+            ),
+        )
+    finally:
+        await client.close()
+    assert updates[0]["LockedFields"] == ["Tags", "Name"]
+    assert updates[0]["Overview"] == ""
+
+
 @pytest.mark.parametrize("client_type", [JellyfinClient, EmbyClient])
 async def test_a_collection_the_server_does_not_return_whole_is_left_as_it_is(
     client_type: type[JellyfinClient], app_config: Settings
@@ -646,14 +687,16 @@ async def test_plex_leaves_a_collections_hub_alone_when_its_visibility_holds(
     assert hub_writes == [{"promotedToOwnHome": "0"}]
 
 
-async def test_plex_never_asks_for_the_hub_of_a_collection_without_one(
+async def test_plex_edits_an_empty_collection_as_its_metadata_item_without_a_hub(
     monkeypatch: pytest.MonkeyPatch, app_config: Settings
 ) -> None:
-    paths: list[str] = []
+    calls: list[tuple[str, str]] = []
 
     def handle(request: httpx2.Request) -> httpx2.Response:
-        paths.append(request.url.path)
-        if request.url.path.startswith("/hubs/"):
+        calls.append((request.method, request.url.path))
+        if request.url.path.startswith("/hubs/") or request.url.path.startswith(
+            "/library/sections/"
+        ):
             return httpx2.Response(404)
         return httpx2.Response(200, json={"MediaContainer": {}})
 
@@ -674,12 +717,15 @@ async def test_plex_never_asks_for_the_hub_of_a_collection_without_one(
                 order=CollectionOrder.TITLE_ASC,
                 smart=False,
                 visible_home=True,
-                hub=False,
+                empty=True,
             ),
         )
     finally:
         await client.close()
-    assert not [path for path in paths if path.startswith("/hubs/")]
+    assert calls == [
+        ("PUT", "/library/metadata/separator"),
+        ("PUT", "/library/metadata/separator/prefs"),
+    ]
 
 
 async def test_plex_collection_rename_clears_orphaned_tag_when_no_collection_holds_it(

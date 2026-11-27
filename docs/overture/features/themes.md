@@ -25,13 +25,10 @@ keeps parallel downloads low.
 
 ## Themes that failed to download
 
-When a theme run's download of a video fails, such as when YouTube refuses it,
-later runs pass that video over for that title and try the next source, saying
-"the ThemerrDB theme failed to download before" (or OvertureDB, or the
-YouTube search's top result). A video is passed over until a later download of
-it for that title succeeds, as choosing it again on the title's theme tab
-does, or until the failed download ages out of the download history after 30
-days.
+A download that fails, such as when YouTube refuses it for a while, is logged
+with why, and the theme stays as it was. The next run, or **Download** on the
+title's theme tab, tries the same video again; yt-dlp retries within a
+download, and a rate limit pauses every download until YouTube answers again.
 
 ## No theme
 

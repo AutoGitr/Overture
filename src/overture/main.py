@@ -36,6 +36,7 @@ lazy from .routers.auth import router as auth_router
 lazy from .routers.backup import router as backup_router
 lazy from .routers.bulk_assets import router as bulk_assets_router
 lazy from .routers.catalog import router as catalog_router
+lazy from .routers.collections import groups_router as collection_groups_router
 lazy from .routers.collections import router as collections_router
 lazy from .routers.job_snapshots import router as job_snapshots_router
 lazy from .routers.library import router as library_router
@@ -84,6 +85,33 @@ websocket_router = APIRouter()
 MAX_REQUEST_BODY = 1024 * 1024
 
 
+#: What each group of the API's operations is about, in the order docs list them.
+_TAGS = {
+    "auth": "Signing in, sessions, OIDC and API keys.",
+    "settings": "Overture's settings and what its media servers can do.",
+    "library": "Titles and seasons, their art and themes, as the library holds them.",
+    "library-filters": "Saved filters and the values they test.",
+    "art": "Choosing, uploading and removing posters and backgrounds.",
+    "themes": "Choosing, searching for and removing theme songs.",
+    "tmdb": "Looking up titles, people and franchises on TMDB.",
+    "catalog": "OvertureDB: its catalog, drafts and contributions.",
+    "collections": (
+        "Collections, their groups, sets, criteria and presets, art and themes."
+    ),
+    "bulk": "Assets runs: art and themes for many titles at once, and schedules.",
+    "sync": "Library syncs and their schedules.",
+    "media-server": "The media servers: their libraries, links and health.",
+    "server-audit": "Comparing what the servers hold with what Overture chose.",
+    "asset-manager": "Files in the media folders that Overture manages.",
+    "job-snapshots": "What running and finished jobs did.",
+    "notifications": "Where Overture sends notices, and which.",
+    "stats": "Counts of what the library holds and lacks.",
+    "backups": "Database backups: taking, listing and restoring them.",
+    "realtime": "The WebSocket that pushes changes to the browser.",
+    "health": "Whether Overture is up and ready.",
+}
+
+
 def _operation_id(route: APIRoute) -> str:
     """Return stable semantic OpenAPI operation IDs."""
     return route.name
@@ -119,6 +147,16 @@ def create_app(
     app = FastAPI(
         title="Overture",
         version=APP_VERSION,
+        description=(
+            "Overture's own API, which its web interface uses. Sign in with the "
+            "session cookie, or read with an API key; an API key never changes "
+            "anything."
+        ),
+        license_info={"name": "AGPL-3.0-only", "identifier": "AGPL-3.0-only"},
+        openapi_tags=[
+            {"name": name, "description": description}
+            for name, description in _TAGS.items()
+        ],
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
@@ -209,6 +247,7 @@ def _register_api_routes(app: FastAPI) -> None:
         backup_router,
         bulk_assets_router,
         collections_router,
+        collection_groups_router,
         docs_router,
         health_router,
         library_router,

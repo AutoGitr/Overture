@@ -5,6 +5,7 @@ import {
   listCollectionsOptions,
 } from "../../generated/rest/@tanstack/svelte-query.gen";
 import type { CollectionRead, LibrarySectionRead } from "../../generated/rest/types.gen";
+import { queryClient } from "../rest/queryClient";
 import { goToCollectionsList, goToGroup } from "../router/routes";
 import { createNotifier } from "../stores/notificationState.svelte";
 import { CollectionExport } from "./collectionExport.svelte";
@@ -61,6 +62,16 @@ export class CollectionGroupEditor {
   }
   /** Nothing keeps a group from being saved. */
   readonly blocker = null;
+
+  /** Start the form over from the saved group, as after a change saved elsewhere. */
+  async reload() {
+    this.form.reset(
+      await queryClient.fetchQuery({
+        ...getCollectionGroupPolicyOptions({ path: { name: this.name } }),
+        staleTime: 0,
+      }),
+    );
+  }
 
   /** Save in Overture; with `sync`, then open Sync with only this group chosen. */
   async save(sync = false) {

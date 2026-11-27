@@ -4,7 +4,6 @@ import { afterEach, beforeEach, expect, vi } from "vitest";
 import NotificationHost from "../lib/components/NotificationHost.svelte";
 import { notificationState } from "../lib/stores/notificationState.svelte";
 import { criteriaClipboard } from "../lib/stores/criteriaClipboard.svelte";
-import { sectionState } from "../lib/stores/sectionState.svelte";
 import { sidebarState } from "../lib/stores/sidebarState.svelte";
 
 // jsdom doesn't implement IntersectionObserver. sv-router uses it internally
@@ -104,7 +103,6 @@ afterEach(() => {
   cleanup();
   expect(svelteWarnings, "Svelte warned").toEqual([]);
   notificationState.settleConfirm(null);
-  sectionState.reset();
   // Auto-advance keeps its walk between selections, never between tests.
   sidebarState.walk = null;
   criteriaClipboard.copied = null;

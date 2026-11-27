@@ -2,7 +2,7 @@
 
 lazy from collections.abc import Collection
 lazy from pathlib import Path
-lazy from typing import Any
+lazy from typing import Any, override
 
 lazy import pytest
 lazy from sqlmodel.ext.asyncio.session import AsyncSession
@@ -12,6 +12,7 @@ lazy from overture.db.ledger import read_asset
 lazy from overture.db.models.media_item import MediaItem
 lazy from overture.domain import ArtType, MediaType, ServerAsset
 lazy from overture.media_servers.adapters import ServerTheme
+lazy from overture.media_servers.errors import MediaServerError
 lazy from overture.schemas.removal import AssetRemoval, RemovalTarget
 lazy from overture.services.storage.assets import AssetStorage, PathTraversalError
 lazy from overture.utils.errors import PublicServiceError
@@ -271,3 +272,28 @@ async def test_deleting_a_theme_removes_only_mp3_theme_songs(
     assert item is not None
     await db_session.refresh(item)
     assert (theme_of(item).youtube_id, theme_file_hash(item)) == (None, None)
+
+
+async def test_overtures_own_file_goes_before_the_server_is_asked_to_delete(
+    tmp_path: Path, db_session: AsyncSession, app_config: Settings
+) -> None:
+    folder = tmp_path / "Movie"
+    await _item(db_session, folder)
+
+    class ReadOnlyServer(Server):
+        """Deleting an image deletes its file, which a read-only mount refuses."""
+
+        @override
+        async def delete_art(self, server_id: str, art_type: ArtType) -> None:
+            if (folder / "poster.jpg").exists():
+                raise MediaServerError("Jellyfin returned an unsuccessful response")
+            await super().delete_art(server_id, art_type)
+
+    server = ReadOnlyServer()
+    runtime = _runtime(tmp_path, db_session, server, app_config)
+
+    await runtime.art.remove(
+        1, ArtType.POSTER, AssetRemoval(delete_file=True, delete_from_server=True)
+    )
+
+    assert server.deleted_art == [("srv-1", ArtType.POSTER)]

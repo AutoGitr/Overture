@@ -22,7 +22,6 @@
 
 <DetailForm
   collapsible
-  expanded
   title="Setup"
   description={form.generator
     ? "One collection per value in its libraries, such as each decade, kept up to date."

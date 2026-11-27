@@ -45,7 +45,7 @@ test("a collection set previews and creates its collections without horizontal o
     }),
   );
   let saved: unknown = null;
-  await page.route("**/api/collections/groups/*", (route) => {
+  await page.route("**/api/collection-groups/*", (route) => {
     if (route.request().method() === "PUT") saved = route.request().postDataJSON();
     return route.fulfill({ json: saved ?? {} });
   });
@@ -77,7 +77,7 @@ test("a collection set previews and creates its collections without horizontal o
     .poll(() => saved)
     .toMatchObject({ generator: { dimension: "decade", library_ids: ["movies"] } });
   // A saved set opens as its group.
-  await expect(page).toHaveURL(/\/collections\/groups\/Decades\?/);
+  await expect(page).toHaveURL(/\/collections\/groups\/Decades$/);
 });
 
 test("collection members, metadata and rule views work on desktop and mobile", async ({ page }) => {
@@ -111,7 +111,7 @@ test("collection members, metadata and rule views work on desktop and mobile", a
       detail = { ...detail, ...route.request().postDataJSON() };
     await route.fulfill({ json: detail });
   });
-  await page.route("**/api/collections/groups{,?*}", (route) =>
+  await page.route("**/api/collection-groups{,?*}", (route) =>
     route.fulfill({
       json: [
         { name: "default-decades", set: null },
@@ -245,7 +245,7 @@ test("collection creation uses the selected library and TMDB list sources", asyn
         },
       });
       await route.fulfill({ json: detail });
-    } else if (path === "/api/collections" || path === "/api/collections/groups")
+    } else if (path === "/api/collections" || path === "/api/collection-groups")
       await route.fulfill({ json: [] });
     else if (path === "/api/collections/capabilities") await route.fallback();
     else await route.fulfill({ json: detail });
@@ -424,10 +424,10 @@ test("a franchise set shares Setup and saves its library, group and schedule", a
       ],
     }),
   );
-  await page.route("**/api/collections/groups{,?*}", (route) => route.fulfill({ json: [] }));
+  await page.route("**/api/collection-groups{,?*}", (route) => route.fulfill({ json: [] }));
   await page.route("**/api/collections{,?*}", (route) => route.fulfill({ json: [] }));
   let saves = 0;
-  await page.route("**/api/collections/groups/*", (route) => {
+  await page.route("**/api/collection-groups/*", (route) => {
     if (route.request().method() === "PUT") {
       const body = route.request().postDataJSON();
       expect(body).toMatchObject({
@@ -441,7 +441,7 @@ test("a franchise set shares Setup and saves its library, group and schedule", a
           exclude: ["10", "20"],
         },
       });
-      expect(new URL(route.request().url()).pathname).toBe("/api/collections/groups/Franchises");
+      expect(new URL(route.request().url()).pathname).toBe("/api/collection-groups/Franchises");
       saves++;
       return route.fulfill({ json: body });
     }
@@ -472,10 +472,10 @@ test("a franchise set shares Setup and saves its library, group and schedule", a
     await page.locator("body").evaluate((element) => element.clientWidth),
   );
   await submit.click();
-  await expect.poll(() => new URL(page.url()).pathname).toBe("/collections/groups/Franchises");
+  // The path names the group; the sidebar lists it without repeating it in the query.
   await expect
-    .poll(() => new URL(page.url()).searchParams.get("collection_group"))
-    .toBe("group:Franchises");
+    .poll(() => page.url().replace(/^https?:\/\/[^/]+/, ""))
+    .toBe("/collections/groups/Franchises");
   expect(saves).toBe(1);
 });
 
@@ -573,11 +573,11 @@ test("a group opens from the sidebar as a page, and saves its defaults apart fro
       json: appSettings({ media_servers: mediaServers("plex"), collections_supported: true }),
     }),
   );
-  await page.route("**/api/collections/groups{,?*}", (route) =>
+  await page.route("**/api/collection-groups{,?*}", (route) =>
     route.fulfill({ json: [{ name: "Weekend", set: null }] }),
   );
   let saved: unknown = null;
-  await page.route("**/api/collections/groups/*", (route) => {
+  await page.route("**/api/collection-groups/*", (route) => {
     if (route.request().method() === "PUT") saved = route.request().postDataJSON();
     return route.fulfill({
       json: saved ?? { sort_title_format: "01_{title}", summary_format: null },
@@ -590,10 +590,12 @@ test("a group opens from the sidebar as a page, and saves its defaults apart fro
   );
   await logIn(page, "/collections");
   await page.getByRole("button", { name: "Open group Weekend" }).click();
-  await expect(page).toHaveURL(/\/collections\/groups\/Weekend\?collection_group=group%3AWeekend/);
+  await expect(page).toHaveURL(/\/collections\/groups\/Weekend$/);
   // The sidebar opens the group, listing its collections; on a phone it stays in front.
   await expect(page.getByRole("button", { name: "Select collection Grouped saga" })).toBeVisible();
   await page.getByRole("button", { name: "Configure group Weekend" }).click();
+  // Members opens on request, as every section but Setup and Content does.
+  await page.getByRole("button", { name: "Members", exact: true }).click();
   const members = page.getByRole("list", { name: "Collections in the group" });
   await expect(members.getByRole("button", { name: /Grouped saga/ })).toBeVisible();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
@@ -622,7 +624,7 @@ test("deleting a group from its page asks what happens to its collections", asyn
   );
   await page.route("**/api/collections{,?*}", (route) => route.fulfill({ json: [grouped] }));
   // Its collections can move to any other group.
-  await page.route("**/api/collections/groups{,?*}", (route) =>
+  await page.route("**/api/collection-groups{,?*}", (route) =>
     route.fulfill({
       json: [
         { name: "Films", set: null },

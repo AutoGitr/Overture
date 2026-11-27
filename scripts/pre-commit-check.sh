@@ -66,6 +66,9 @@ else
     uv run python -m scripts.sync_skills --check
 fi
 
+echo "=== Auditing GitHub Workflows ==="
+uv run zizmor --offline --quiet .github/workflows
+
 OVERTUREDB_DIR="$ROOT_DIR/../OvertureDB"
 if [ -d "$OVERTUREDB_DIR/schema" ]; then
     echo "=== Checking the OvertureDB Contract Copy ==="

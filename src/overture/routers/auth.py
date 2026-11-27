@@ -69,9 +69,9 @@ async def require_auth(
             asks for a change.
     """
     if api_key is None:
-        await auth.require_token(token)
+        await auth.require_token(SecretStr(token) if token else None)
         return
-    await auth.require_api_key(api_key)
+    await auth.require_api_key(SecretStr(api_key))
     route = request.scope.get("route")
     if request.method not in _READ_METHODS and not (
         isinstance(route, APIRoute) and route.openapi_extra == READS_ONLY
@@ -275,10 +275,12 @@ async def _revoke_session(
     return id_token
 
 
-@router.get("/me")
+# Anyone may ask, signed in or not, which an empty requirement beside the
+# session's says.
+@router.get("/me", openapi_extra={"security": [{}, {"Session": []}]})
 async def me(auth: AuthDep, token: AuthTokenCookie = None) -> MeResponse:
     """Check auth status."""
-    return await auth.me_response(token)
+    return await auth.me_response(SecretStr(token) if token else None)
 
 
 @router.get("/config")

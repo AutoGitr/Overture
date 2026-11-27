@@ -51,8 +51,9 @@ def _assert_job_steps(steps: list[dict[str, Any]]) -> None:
             assert step["with"]["persist-credentials"] is False
         if uses.startswith("astral-sh/setup-uv@"):
             # setup-uv installs the required-version from pyproject.toml, and
-            # uv reads Python's version from .python-version.
-            assert "with" not in step
+            # uv reads Python's version from .python-version; a job that
+            # publishes builds from no cache another run could have written.
+            assert step.get("with", {}) in ({}, {"enable-cache": False})
         if uses.startswith("oven-sh/setup-bun@"):
             assert step["with"] == {"bun-version-file": "frontend/package.json"}
         run = step.get("run", "")
@@ -64,7 +65,10 @@ def test_workflows_pin_actions_bound_runtime_and_do_not_persist_credentials() ->
     for path in (ROOT / ".github/workflows").glob("*.yml"):
         raw = path.read_text()
         workflow = yaml.safe_load(raw)
-        assert "permissions" in workflow, path.name
+        # Each job names the permissions it needs, in one place, so none takes
+        # more than its own; the repository's default token reads only.
+        assert "permissions" not in workflow, path.name
+        assert all("permissions" in job for job in workflow["jobs"].values()), path.name
         for action in re.findall(r"(?m)^\s*-?\s*uses: (.+)$", raw):
             assert re.fullmatch(
                 r"\./\.github/workflows/[\w-]+\.yml", action

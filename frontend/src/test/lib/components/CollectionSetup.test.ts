@@ -33,7 +33,7 @@ function mockPage(overrides: Record<string, unknown> = {}) {
   return mockFetchRoutes({
     "/api/library/libraries": libraries,
     "/api/library/items": { items: [member], total: 1 },
-    "/api/collections/groups": [{ name: "Franchises", set: null }],
+    "/api/collection-groups": [{ name: "Franchises", set: null }],
     "/api/collections/defaults": {
       minimum_items: 1,
       sort_title_format: "01_{title}",
@@ -83,7 +83,7 @@ const SEASONAL = {
     preset_version: 1,
     preset: null,
     groups: [
-      { name: "Holidays", generator: null, auto_art: ["generate"], delete_when_inactive: null },
+      { name: "Holidays", generator: null, minimum_items: 2, delete_when_inactive: null },
       {
         name: "Decades",
         minimum_items: 3,
@@ -101,9 +101,8 @@ const SEASONAL = {
         collection_group: "Holidays",
         active_start_mmdd: "12-01",
         active_end_mmdd: "12-26",
-        visible_home: false,
         criteria: { movie: ACTION },
-        policy: {},
+        minimum_items: null,
         smart: false,
         limit: null,
         art: { poster: { url: "https://example.org/christmas.jpg", style: "individual" } },
@@ -173,7 +172,7 @@ describe("collection setup flow", () => {
         { id: "jf-shows", title: "Shows", media_type: "show", server_id: 2, count: 1 },
       ],
       "/api/collections/presets": { generated_at: null, presets: [SEASONAL], error: null },
-      "/api/collections/groups/Decades": ({ init }: { init: RequestInit }) =>
+      "/api/collection-groups/Decades": ({ init }: { init: RequestInit }) =>
         Response.json(init.method === "PUT" ? JSON.parse(String(init.body)) : {}),
     });
     await navigate("/collections/new");
@@ -196,20 +195,28 @@ describe("collection setup flow", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(sidebarGroup()).toBe("Decades"));
-    expect(postedBody(calls, "/api/collections/groups/Decades")).toMatchObject({
+    expect(postedBody(calls, "/api/collection-groups/Decades")).toMatchObject({
       minimum_items: 3,
       generator: { dimension: "decade", library_ids: ["movies", "other", "jf-movies"] },
     });
+    // OvertureDB's later changes to the set are tracked.
+    await waitFor(() =>
+      expect(postedBody(calls, "/api/collections/presets/uses")).toEqual({
+        group: "Decades",
+        preset_id: "holidays",
+        item: "Decades",
+      }),
+    );
   });
 
   it("fills a collection from a preset, its group's missing defaults and its art", async () => {
     const { calls } = mockPage({
       "/api/collections/presets": { generated_at: null, presets: [SEASONAL], error: null },
-      "/api/collections/groups/Holidays": ({ init }: { init: RequestInit }) =>
+      "/api/collection-groups/Holidays": ({ init }: { init: RequestInit }) =>
         Response.json(
           init.method === "PUT"
             ? JSON.parse(String(init.body))
-            : { auto_art: null, delete_when_inactive: true },
+            : { minimum_items: null, delete_when_inactive: true },
         ),
       "/api/collections/12/art/poster": { status: "ok" },
     });
@@ -226,8 +233,8 @@ describe("collection setup flow", () => {
       expect(calls.some((call) => call.url === "/api/collections/12/art/poster")).toBe(true),
     );
     // The group keeps what it set; only what it leaves at Default is filled.
-    expect(postedBody(calls, "/api/collections/groups/Holidays")).toEqual({
-      auto_art: ["generate"],
+    expect(postedBody(calls, "/api/collection-groups/Holidays")).toEqual({
+      minimum_items: 2,
       delete_when_inactive: true,
     });
     const created = postedBody(calls, "/api/collections");
@@ -242,11 +249,57 @@ describe("collection setup flow", () => {
         ],
       },
     });
-    // A hidden flag in a file is no choice, so the collection inherits.
+    // How it is shown is this install's own, so the collection inherits it.
     expect(created).not.toHaveProperty("visible_home");
     expect(postedBody(calls, "/api/collections/12/art/poster")).toEqual({
       url: "https://example.org/christmas.jpg",
       poster_style: "individual",
+    });
+    expect(postedBody(calls, "/api/collections/presets/uses")).toEqual({
+      collection_id: 12,
+      preset_id: "holidays",
+      item: "Christmas",
+    });
+  });
+
+  it("adds several presets at once, each as choosing it alone and saving would", async () => {
+    const { calls } = mockPage({
+      "/api/collections/presets": { generated_at: null, presets: [SEASONAL], error: null },
+      "/api/collection-groups/Decades": ({ init }: { init: RequestInit }) =>
+        Response.json(init.method === "PUT" ? JSON.parse(String(init.body)) : {}),
+      "/api/collection-groups/Holidays": ({ init }: { init: RequestInit }) =>
+        Response.json(
+          init.method === "PUT" ? JSON.parse(String(init.body)) : { minimum_items: null },
+        ),
+      "/api/collections/12/art/poster": { status: "ok" },
+    });
+    await navigate("/collections/new");
+    renderWithQueryClient(CollectionPage);
+    const setup = within(screen.getByRole("region", { name: "Collection setup" }));
+    await setup.findByLabelText("Presets");
+    await fireEvent.click(setup.getByRole("button", { name: "Choose several" }));
+    const list = within(setup.getByRole("group", { name: "Presets to add" }));
+    await fireEvent.click(await list.findByRole("checkbox", { name: /^Decades/ }));
+    await fireEvent.click(list.getByRole("checkbox", { name: /^Christmas/ }));
+    await fireEvent.click(setup.getByRole("button", { name: "Add 2" }));
+
+    await waitFor(() =>
+      expect(
+        calls.filter(
+          (call) => call.url === "/api/collections/presets/uses" && call.init.method === "POST",
+        ),
+      ).toHaveLength(2),
+    );
+    // Saving only records them; it never reads every collection's preset.
+    expect(
+      calls.some((call) => call.url === "/api/collections/presets/uses" && !call.init.method),
+    ).toBe(false);
+    expect(postedBody(calls, "/api/collection-groups/Decades")).toMatchObject({
+      generator: { dimension: "decade", library_ids: ["movies", "other"] },
+    });
+    expect(postedBody(calls, "/api/collections")).toMatchObject({
+      title: "Christmas",
+      collection_group: "Holidays",
     });
   });
 
@@ -364,7 +417,7 @@ describe("collection setup flow", () => {
 
   it("creates a set split by a dimension into a group that keeps its other defaults", async () => {
     const { calls } = mockPage({
-      "/api/collections/groups/Decades": ({ init }: { init: RequestInit }) =>
+      "/api/collection-groups/Decades": ({ init }: { init: RequestInit }) =>
         Response.json(
           init.method === "PUT" ? JSON.parse(String(init.body)) : { visible_home: true },
         ),
@@ -395,7 +448,7 @@ describe("collection setup flow", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Save and Sync" }));
 
     await waitFor(() => expect(sidebarGroup()).toBe("Decades"));
-    expect(postedBody(calls, "/api/collections/groups/Decades")).toMatchObject({
+    expect(postedBody(calls, "/api/collection-groups/Decades")).toMatchObject({
       visible_home: true,
       generator: {
         dimension: "decade",
@@ -414,7 +467,7 @@ describe("collection setup flow", () => {
 
   it("refuses a group that already is a set, and warns of another set splitting alike", async () => {
     mockPage({
-      "/api/collections/groups": [
+      "/api/collection-groups": [
         { name: "Decades", set: { dimension: "decade", library_ids: ["other"] } },
         { name: "Genres", set: { dimension: "genre", library_ids: ["other"] } },
       ],

@@ -2404,6 +2404,135 @@ def test_server_copies_gain_image_versions_and_lose_them_on_downgrade() -> None:
         ).all() == [("x10",)]
 
 
+def _franchise_criteria(*franchises: int) -> str:
+    return json.dumps(
+        {
+            "mode": "any",
+            "conditions": [
+                {
+                    "kind": "source",
+                    "operator": "is",
+                    "source": {"type": "tmdb_collection", "collection_id": franchise},
+                }
+                for franchise in franchises
+            ],
+            "groups": [],
+        }
+    )
+
+
+def test_a_collection_naming_several_franchises_is_none_of_them() -> None:
+    with _at_revision("d2f8a4c6e913") as (conn, config):
+        conn.exec_driver_sql(
+            "INSERT INTO media_servers (id, key, title, identity) "
+            "VALUES (1, 'plex', 'Plex', 'plex:plex')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO libraries (id, media_type, title, server_id) "
+            "VALUES ('1:1', 'movie', 'Movies', 1)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO media_collections (id, title, kind, order_type, "
+            "visible_home, visible_shared, visible_library, child_count, monitored, "
+            "deselected, unsynced, tmdb_collection_id) VALUES "
+            "(1, 'Alien / Predator', 'regular', 'release.asc', 0, 0, 0, 0, 1, 0, 0, "
+            "399), "
+            "(2, 'Alien', 'regular', 'release.asc', 0, 0, 0, 0, 1, 0, 0, 8091), "
+            "(3, 'Chosen', 'regular', 'release.asc', 0, 0, 0, 0, 1, 0, 0, 1241)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO collection_libraries (id, collection_id, library_id, "
+            "media_type, server_id, criteria) VALUES (?, ?, '1:1', 'movie', 1, ?)",
+            (1, 1, _franchise_criteria(8091, 399, 115762)),
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO collection_libraries (id, collection_id, library_id, "
+            "media_type, server_id, criteria) VALUES (?, ?, '1:1', 'movie', 1, ?)",
+            (2, 2, _franchise_criteria(8091)),
+        )
+        # A franchise chosen in its settings, not the lowest its criteria name.
+        conn.exec_driver_sql(
+            "INSERT INTO collection_libraries (id, collection_id, library_id, "
+            "media_type, server_id, criteria) VALUES (?, ?, '1:1', 'movie', 1, ?)",
+            (3, 3, _franchise_criteria(10, 1241)),
+        )
+
+        command.upgrade(config, "a7e3c5f9b241")
+        assert conn.exec_driver_sql(
+            "SELECT id, tmdb_collection_id FROM media_collections ORDER BY id"
+        ).all() == [(1, None), (2, 8091), (3, 1241)]
+
+        command.downgrade(config, "d2f8a4c6e913")
+        assert conn.exec_driver_sql(
+            "SELECT id, tmdb_collection_id FROM media_collections ORDER BY id"
+        ).all() == [(1, None), (2, 8091), (3, 1241)]
+
+
+def test_a_collection_or_set_keeps_the_preset_item_it_was_saved_from() -> None:
+    with _at_revision("a7e3c5f9b241") as (conn, config):
+        conn.exec_driver_sql(
+            "INSERT INTO collection_groups (id, name, separator) "
+            "VALUES (1, 'Decades', 0)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO media_collections (id, title, kind, order_type, "
+            "visible_home, visible_shared, visible_library, child_count, monitored, "
+            "deselected, unsynced, group_id) VALUES "
+            "(1, 'Christmas', 'regular', 'release.asc', 0, 0, 0, 0, 1, 0, 0, 1)"
+        )
+
+        command.upgrade(config, "b9d4f2a7e135")
+        conn.exec_driver_sql(
+            "INSERT INTO preset_uses (preset_id, item, definition, collection_id) "
+            "VALUES ('holidays', 'Christmas', '{\"title\": \"Christmas\"}', 1)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO preset_uses (preset_id, item, definition, group_id) "
+            "VALUES ('decades', 'Decades', '{\"name\": \"Decades\"}', 1)"
+        )
+        # Each names one collection or one group, never both or neither.
+        with pytest.raises(IntegrityError):
+            conn.exec_driver_sql(
+                "INSERT INTO preset_uses (preset_id, item, definition) "
+                "VALUES ('holidays', 'Easter', '{}')"
+            )
+        assert conn.exec_driver_sql(
+            "SELECT preset_id, collection_id, group_id FROM preset_uses ORDER BY id"
+        ).all() == [("holidays", 1, None), ("decades", None, 1)]
+
+        command.downgrade(config, "a7e3c5f9b241")
+        assert conn.exec_driver_sql("SELECT name FROM collection_groups").all() == [
+            ("Decades",)
+        ]
+        assert "preset_uses" not in inspect(conn).get_table_names()
+
+
+def test_a_separated_group_holds_the_sort_title_it_gave_unsaid() -> None:
+    with _at_revision("b9d4f2a7e135") as (conn, config):
+        conn.exec_driver_sql(
+            "INSERT INTO collection_groups (id, name, separator, sort_title_format) "
+            "VALUES (1, 'Franchises', 1, NULL), (2, 'Plain', 0, NULL), "
+            "(3, 'Own', 1, '+{title}')"
+        )
+
+        command.upgrade(config, "c2e7a4f9d816")
+        assert conn.exec_driver_sql(
+            "SELECT name, sort_title_format FROM collection_groups ORDER BY id"
+        ).all() == [
+            ("Franchises", "{group} {title}"),
+            ("Plain", None),
+            ("Own", "+{title}"),
+        ]
+
+        command.downgrade(config, "b9d4f2a7e135")
+        assert (
+            conn.exec_driver_sql(
+                "SELECT sort_title_format FROM collection_groups WHERE id = 1"
+            ).scalar()
+            == "{group} {title}"
+        )
+
+
 def test_every_revision_has_a_test_here() -> None:
     """Each migration is exercised on rows as the app stores them, in this file."""
     tests = Path(__file__).read_text()

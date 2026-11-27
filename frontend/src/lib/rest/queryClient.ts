@@ -20,6 +20,9 @@ const STALE_TIME_BY_OPERATION: Readonly<Record<string, number>> = {
   // Where the server's web app opens titles changes only with the server.
   getServerWebLinks: EXPENSIVE_STALE_TIME,
   listCollectionFieldValues: LIST_STALE_TIME,
+  // Both read the presets OvertureDB publishes, which it rebuilds daily at most.
+  listCollectionPresets: EXPENSIVE_STALE_TIME,
+  listPresetUses: EXPENSIVE_STALE_TIME,
   getCatalogStatus: STATUS_STALE_TIME,
   getCatalogRecord: LIST_STALE_TIME,
   listBackups: LIST_STALE_TIME,

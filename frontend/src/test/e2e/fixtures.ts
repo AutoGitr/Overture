@@ -139,8 +139,8 @@ export const test = base.extend<{ backend: void; realtime: Realtime }>({
         route.fulfill({ json: appSettings({ workflow: "art", auto_match_art: false }) }),
       );
       await page.route("**/api/collections/defaults{,?*}", (route) => route.fulfill({ json: {} }));
-      await page.route("**/api/collections/groups{,?*}", (route) => route.fulfill({ json: [] }));
-      await page.route("**/api/collections/groups/*", (route) => route.fulfill({ json: {} }));
+      await page.route("**/api/collection-groups{,?*}", (route) => route.fulfill({ json: [] }));
+      await page.route("**/api/collection-groups/*", (route) => route.fulfill({ json: {} }));
       await page.route("**/api/collections/capabilities{,?*}", (route) =>
         route.fulfill({ json: collectionCapabilities() }),
       );

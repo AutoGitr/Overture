@@ -119,7 +119,8 @@ def declare_framework_answers(schema: dict[str, Any]) -> dict[str, Any]:
 
     FastAPI documents its own 422 body, not the one Overture sends, and no
     answer for a body it cannot decode or one too large, or a path that names
-    nothing.
+    nothing. An operation that names no security scheme is public, which it
+    says outright.
     """
     components = schema.setdefault("components", {}).setdefault("schemas", {})
     _require_tags(schema, components)
@@ -140,4 +141,5 @@ def declare_framework_answers(schema: dict[str, Any]) -> dict[str, Any]:
                 responses.setdefault("413", _TOO_LARGE)
             if "{" in path:
                 responses.setdefault("404", _NOT_FOUND)
+            operation.setdefault("security", [])
     return schema

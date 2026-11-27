@@ -39,7 +39,6 @@ lazy from ...domain import (
 )
 lazy from ...jobs.progress_log import JobOutcome, asset_target
 lazy from ...repositories.collections import CollectionRepository
-lazy from ...repositories.downloads import DownloadJobRepository
 lazy from ...repositories.media_items import MediaItemRepository
 lazy from ...repositories.seasons import SeasonRepository
 lazy from ...schemas.bulk import BulkMatchArtRequest, BulkThemeRequest
@@ -328,8 +327,6 @@ def catalog_pick(
     target: Target,
     sources: Sequence[BulkSource],
     index: CatalogIndex,
-    *,
-    failed: set[str],
 ) -> CatalogPick:
     """What the catalogs among *sources* offer *target*, or why none does."""
     if target.kind is ServerAsset.THEME:
@@ -339,7 +336,6 @@ def catalog_pick(
         return index.theme(
             owner,
             [source for source in sources if isinstance(source, ThemeBulkSource)],
-            failed=failed,
         )
     art_type = target.kind.art_type
     if art_type is None:
@@ -357,8 +353,6 @@ def planning_pick(
     target: Target,
     sources: Sequence[BulkSource],
     index: CatalogIndex | None,
-    *,
-    failed: set[str],
 ) -> CatalogPick | None:
     """What decides *target* while planning: what the catalogs among *sources* offer.
 
@@ -374,7 +368,7 @@ def planning_pick(
         return CatalogPick(None, notes=reasons, enabled=True)
     if index is None or not all(source.catalog for source in serving):
         return None
-    pick = catalog_pick(target, serving, index, failed=failed)
+    pick = catalog_pick(target, serving, index)
     if pick.value is not None:
         return pick
     # Each source's notes stand where it does in the run's order.
@@ -535,7 +529,6 @@ def _plan_targets(
     *,
     index: CatalogIndex,
     catalog: bool,
-    failed: dict[int, set[str]],
 ) -> None:
     """Decide what the database alone settles of *targets*; keep the rest."""
     visits: dict[int, tuple[MediaItem | MediaCollection, list[Slot]]] = {}
@@ -559,7 +552,6 @@ def _plan_targets(
                 target,
                 params.precedence.asked(holding=holding),
                 index if catalog else None,
-                failed=failed.get(owner.id, set[str]()),
             ),
         )
         if decided is None:
@@ -591,7 +583,6 @@ async def plan_run(
         reported = plan.total
 
     wanted = kinds(params)
-    themes = ServerAsset.THEME in wanted
     # Catalog picks decide a target only when every usable source is a catalog.
     catalog = params.precedence.catalogs_only
     if not params.collection_scope or params.library_ids:
@@ -615,20 +606,12 @@ async def plan_run(
                 if catalog
                 else CatalogIndex.empty()
             )
-            failed = (
-                await DownloadJobRepository(session).failed_themes_by_item(
-                    [item.id for item in items if item.id is not None]
-                )
-                if themes and catalog
-                else {}
-            )
             _plan_targets(
                 plan,
                 title_targets(items, seasons, wanted),
                 params,
                 index=index,
                 catalog=catalog,
-                failed=failed,
             )
             await report()
     if params.collection_scope:
@@ -644,13 +627,6 @@ async def plan_run(
                 if not rows:
                     break
                 index = await CatalogIndex.build_collections(session, rows)
-                failed = (
-                    await DownloadJobRepository(session).failed_themes_by_collection(
-                        [row.id for row in rows if row.id is not None]
-                    )
-                    if themes
-                    else {}
-                )
             # A collection's sources are catalogs, unless local art matching
             # can compare its image; planning asks which apply to each.
             _plan_targets(
@@ -659,7 +635,6 @@ async def plan_run(
                 params,
                 index=index,
                 catalog=True,
-                failed=failed,
             )
             await report()
             after = rows[-1].id or after

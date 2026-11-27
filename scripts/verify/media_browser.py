@@ -9,6 +9,7 @@ lazy from scripts.json_values import is_object
 lazy from .common import (
     ApiError,
     Case,
+    HeldFields,
     Listing,
     Server,
     ServerArt,
@@ -207,6 +208,29 @@ class MediaBrowserServer(Server):
         if self.server == "jellyfin":
             return await self.get(f"/Items/{item_id}", userId=admin["Id"])
         return await self.get(f"/Users/{admin['Id']}/Items/{item_id}")
+
+    async def fields(self, collection_id: str) -> HeldFields:
+        """The collection's title, sort title and summary, and which it locks.
+
+        Jellyfin keeps a sort title by forcing it and refuses ``SortName`` as a
+        locked field; Emby locks ``SortName``.
+        """
+        row = await self.editor_item(collection_id)
+        held: list[str] = row.get("LockedFields") or []
+        forced = str(row.get("ForcedSortName") or "")
+        sort_locked = bool(forced) if self.server == "jellyfin" else "SortName" in held
+        return HeldFields(
+            title=str(row.get("Name") or ""),
+            sort_title=forced,
+            summary=str(row.get("Overview") or ""),
+            locked=frozenset(
+                {
+                    *(["title"] if "Name" in held else []),
+                    *(["summary"] if "Overview" in held else []),
+                    *(["sort title"] if sort_locked else []),
+                }
+            ),
+        )
 
     async def administrator(self) -> dict[str, Any] | None:
         """A user who sees every library, fetched once."""

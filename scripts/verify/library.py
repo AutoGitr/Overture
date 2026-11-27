@@ -7,10 +7,9 @@ lazy from urllib.parse import parse_qs, urlsplit
 lazy import httpx2
 
 lazy from overture.catalog_contract.contract import ISSUE_FORMS
-lazy from overture.domain import (
-    CollectionOrder,
-)
+lazy from overture.domain import CollectionOrder, MediaType, SourceType
 lazy from overture.schemas.collections import CollectionRuleWrite
+lazy from overture.services.collections.sources import selects_media
 
 lazy from .common import (
     ORDER_DEPTH,
@@ -156,6 +155,7 @@ class Library:
             ("fields", self.check_fields),
             ("orders", self.check_orders),
             ("sources", lambda: self.check_sources(extra_sources)),
+            ("groups", self.check_groups),
             ("sets", self.check_sets),
             ("issues", self.check_issues),
             ("kept art", self.check_kept_art),
@@ -385,7 +385,13 @@ class Library:
                 )
 
     async def check_sources(self, extra: list[dict[str, Any]]) -> None:
-        """Preview the tags and charts found, then the sources given."""
+        """Preview every source type, each as is and is not.
+
+        A source and its negation split the library between them, so their
+        counts add up to its titles. Sources come from the library itself
+        where it can name one, the tags and charts offered, and those given;
+        a type with none is named, so what went untested shows.
+        """
         sources: list[tuple[str, dict[str, Any]]] = []
         arr = "radarr" if self.media_type == "movie" else "sonarr"
         if self.capabilities["arr"]:
@@ -395,6 +401,27 @@ class Library:
                 sources.append(
                     (f"{arr} tag {first}", {"type": f"{arr}_tag", "tags": [first]})
                 )
+        if franchise := next(
+            (
+                item["tmdb_collection_id"]
+                for item in self.items
+                if item.get("tmdb_collection_id")
+            ),
+            None,
+        ):
+            sources.append(
+                (
+                    f"TMDB collection {franchise}",
+                    {"type": "tmdb_collection", "collection_id": franchise},
+                )
+            )
+        if title := next((item for item in self.items if item.get("tmdb_id")), None):
+            sources.append(
+                (
+                    f"TMDB title {title['title']}",
+                    {"type": "tmdb_item", "tmdb_ids": [title["tmdb_id"]]},
+                )
+            )
         sources.extend(
             (
                 f"TMDB chart {chart}",
@@ -402,15 +429,89 @@ class Library:
             )
             for chart in self.capabilities["charts"]
         )
-        sources.extend((f"{source['type']} (given)", source) for source in extra)
+        sources.extend(
+            (f"{source['type']} (given)", source)
+            for source in extra
+            if selects_media(SourceType(source["type"]), MediaType(self.media_type))
+        )
         for label, source in sources:
             case = self.case("source", label)
             await self.preview(
                 case,
                 single(self.id, {"kind": "source", "operator": "is", "source": source}),
             )
+            if case.error:
+                continue
             if case.count == 0:
                 case.note = "selects nothing in this library"
+            others = self.case("source", f"not {label}")
+            await self.preview(
+                others,
+                single(
+                    self.id, {"kind": "source", "operator": "is_not", "source": source}
+                ),
+            )
+            if not others.error and (case.count or 0) + (others.count or 0) != len(
+                self.items
+            ):
+                others.error = (
+                    f"with {case.count} that it selects, {others.count} it does not "
+                    f"miss {len(self.items)} titles of the library"
+                )
+        tested = {source["type"] for _, source in sources}
+        for kind in SourceType:
+            if kind.value not in tested and selects_media(
+                kind, MediaType(self.media_type)
+            ):
+                self.case(
+                    "source", kind.value
+                ).note = "not tested: the library names none; give one with --sources"
+
+    async def check_groups(self) -> None:
+        """Combine two titles' conditions in any, all and nested groups.
+
+        Each group's members are known from the titles alone; on Plex the
+        same group is evaluated by Plex as well.
+        """
+        titles = list(dict.fromkeys(item["title"] for item in self.items))[:2]
+        if len(titles) < 2:
+            self.case("groups", "any, all and nested").note = "fewer than two titles"
+            return
+        first, second = (
+            {"kind": "field", "field": "title", "operator": "is", "value": title}
+            for title in titles
+        )
+        counts = [
+            sum(item["title"] == title for item in self.items) for title in titles
+        ]
+        either = {"mode": "any", "conditions": [first, second], "groups": []}
+        groups = {
+            "any of two": (either, sum(counts)),
+            "all of two": ({"mode": "all", "conditions": [first, second]}, 0),
+            "one, and any of two": (
+                {"mode": "all", "conditions": [first], "groups": [either]},
+                counts[0],
+            ),
+        }
+        smart = self.plex_smart and self.fields.get("title", {}).get("smart", False)
+        for label, (criteria, expected) in groups.items():
+            case = self.case("groups", label)
+            rule = {"libraries": [{"library_id": self.id, "criteria": criteria}]}
+            await self.preview(case, rule)
+            if smart:
+                await self.preview(case, {**rule, "smart": True})
+            wrong = {
+                evaluator: count
+                for evaluator, count in (
+                    ("Overture", case.count),
+                    ("Plex", case.smart_count),
+                )
+                if count is not None and count != expected
+            }
+            if wrong and not case.error:
+                case.error = f"the titles make {expected}; " + ", ".join(
+                    f"{evaluator} counts {count}" for evaluator, count in wrong.items()
+                )
 
     async def check_sets(self) -> None:
         """Preview a set of every dimension the library offers."""

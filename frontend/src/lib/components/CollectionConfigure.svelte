@@ -25,8 +25,8 @@
   import FieldRow from "./FieldRow.svelte";
   import WorkflowSections from "./WorkflowSections.svelte";
   import PendingButton from "./PendingButton.svelte";
+  import PresetUseNotice from "./PresetUseNotice.svelte";
   import DataStatus from "./DataStatus.svelte";
-  import { getSectionView, sectionState } from "../stores/sectionState.svelte";
 
   let {
     collection,
@@ -44,9 +44,6 @@
     formId: string;
     libraries: LibrarySectionRead[];
   } = $props();
-
-  // Each visit opens with only Setup and Content expanded.
-  sectionState.forget(getSectionView());
 
   let groupEditor = $derived(editor instanceof CollectionGroupEditor ? editor : null);
   /** A collection, saved or new. */
@@ -99,7 +96,15 @@
       void editor.save(syncing);
     }}
   >
-    <section id={`${formId}-setup`} aria-label={`${noun} setup`} tabindex="-1">
+    <section class="setup" id={`${formId}-setup`} aria-label={`${noun} setup`} tabindex="-1">
+      {#if groupEditor}
+        <PresetUseNotice subject={{ group: groupEditor.name }} onreviewed={() => groupEditor.reload()} />
+      {:else if collectionEditor instanceof CollectionEditor}
+        <PresetUseNotice
+          subject={{ collection_id: collectionEditor.collectionId }}
+          onreviewed={() => collectionEditor.reload()}
+        />
+      {/if}
       {#if groupEditor}
         <CollectionGroupDefinition editor={groupEditor} {libraries} />
       {:else if collectionEditor}
@@ -112,7 +117,6 @@
       <section id={`${formId}-content`} aria-label={`${noun} content`} tabindex="-1">
         <DetailForm
           collapsible
-          expanded
           title="Content"
           description="What the set makes a collection for, and what every one needs."
           busy={editor.busy}
@@ -178,7 +182,7 @@
           {#if settingsState.hasServerType("plex")}
             <FieldRow
               label="Separator"
-              hint="An empty collection titled after the group, with generated art, sorted right before the group's collections. Without a sort title set anywhere, they sort as {'{group} {title}'}; one that puts the group first keeps it there."
+              hint="An empty collection titled after the group, with generated art, sorted right before the group's collections. Turning it on fills in an empty Sort title with {'{group} {title}'}, which keeps them together behind it; change it to any sort title that puts the group first."
             >
               <input type="checkbox" aria-label="Separator" bind:checked={form.current.separator} />
             </FieldRow>
@@ -247,5 +251,10 @@
   }
   section {
     scroll-margin-block: var(--space-4);
+  }
+  .setup {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
   }
 </style>

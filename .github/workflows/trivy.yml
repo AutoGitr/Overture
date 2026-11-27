@@ -19,9 +19,6 @@ concurrency:
   group: trivy
   cancel-in-progress: true
 
-permissions:
-  contents: read
-
 jobs:
   trivy-fs:
     name: Filesystem & dependency scan

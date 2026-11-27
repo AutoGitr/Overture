@@ -1,9 +1,11 @@
 <script lang="ts">
   import FileUp from "@lucide/svelte/icons/file-up";
+  import { SvelteSet } from "svelte/reactivity";
   import type { PresetListing } from "../../generated/rest/types.gen";
   import type { CollectionDraft, PresetItem } from "../utils/collectionDraft.svelte";
   import { errorMessage } from "../utils/errors";
   import type { SelectOption } from "../utils/selectOptions";
+  import Checklist, { type ChecklistGroup } from "./Checklist.svelte";
   import FieldRow from "./FieldRow.svelte";
   import Select from "./Select.svelte";
 
@@ -39,7 +41,7 @@
     new Map(
       [...(draft.file ? [draft.file] : []), ...(draft.presets.data?.presets ?? [])]
         .flatMap(items)
-        .map((item) => [`${item.listing.id}/${item.kind}/${item.name}`, item] as const),
+        .map((item): [string, PresetItem] => [`${item.listing.id}/${item.kind}/${item.name}`, item]),
     ),
   );
   let options = $derived<SelectOption[]>(
@@ -51,6 +53,26 @@
       group: heading(item.listing),
     })),
   );
+  /** Choosing several saves each as it is, instead of filling the form with one. */
+  let several = $state(false);
+  const picked = new SvelteSet<string>();
+  let checklist = $derived<ChecklistGroup[]>(
+    [...new Set(options.map((option) => option.group ?? ""))].map((group) => ({
+      key: group,
+      label: group,
+      options: options
+        .filter((option) => option.group === group)
+        .map((option) => ({
+          id: option.value,
+          label: option.detail ? `${option.label} (${option.detail})` : option.label,
+          checked: picked.has(option.value),
+        })),
+    })),
+  );
+  async function addPicked() {
+    const items = [...picked].flatMap((key) => choices.get(key) ?? []);
+    if ((await draft.addPresets(items)) > 0) picked.clear();
+  }
   let chosen = $derived(
     [...choices].find(([, item]) => item === draft.preset)?.[0] ?? null,
   );
@@ -66,11 +88,32 @@
 <FieldRow
   label="Presets"
   for={`${id}-preset`}
-  hint={draft.preset?.listing.preset
-    ? `${draft.preset.listing.preset.title}: ${draft.preset.listing.preset.description}`
-    : "Fills the form from an OvertureDB preset or an exported file; change anything before saving."}
+  hint={several
+    ? "Each is saved as choosing it alone and saving would: in every library of its kind, with your defaults."
+    : draft.preset?.listing.preset
+      ? `${draft.preset.listing.preset.title}: ${draft.preset.listing.preset.description}`
+      : "Fills the form from an OvertureDB preset or an exported file; change anything before saving."}
 >
   <div class="preset-choice">
+    {#if several}
+      <div class="preset-list">
+        <Checklist
+          label="Presets to add"
+          groups={checklist}
+          ontoggle={(_group, key) => (picked.has(key) ? picked.delete(key) : picked.add(key))}
+          ontoggleall={(checked) => {
+            picked.clear();
+            if (checked) for (const option of options) picked.add(option.value);
+          }}
+        />
+      </div>
+      <button
+        type="button"
+        class="btn btn-primary btn-sm"
+        disabled={!picked.size || draft.busy}
+        onclick={() => void addPicked()}>Add {picked.size || ""}</button
+      >
+    {:else}
     <div class="preset-select">
       <Select
         id={`${id}-preset`}
@@ -85,6 +128,13 @@
         }
       />
     </div>
+    {/if}
+    <button
+      type="button"
+      class="btn btn-secondary btn-sm"
+      aria-pressed={several}
+      onclick={() => (several = !several)}>{several ? "Choose one" : "Choose several"}</button
+    >
     <label class="btn btn-secondary btn-sm load-file"
       ><FileUp size={14} />Load file
       <input
@@ -123,6 +173,13 @@
   .preset-select {
     flex: 1 1 14rem;
     min-width: 0;
+  }
+
+  /* A long gallery scrolls inside the field rather than lengthening the form. */
+  .preset-list {
+    flex-basis: 100%;
+    max-height: 20rem;
+    overflow-y: auto;
   }
 
   /* The input is hidden, so its label shows where focus is. */

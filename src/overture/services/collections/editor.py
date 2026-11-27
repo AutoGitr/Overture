@@ -51,10 +51,10 @@ lazy from .reader import CollectionReader
 lazy from .rules import (
     ORDERED_SOURCES,
     apply_libraries,
-    franchise_ids,
     outdates_server,
     rule_read,
     rule_row,
+    sole_franchise,
     title_taken,
 )
 lazy from .sync_outcome import CopyChange
@@ -228,9 +228,7 @@ class CollectionEditor:
             )
             async with self._access.database.write_session() as session:
                 if row.tmdb_collection_id is None:
-                    row.tmdb_collection_id = min(
-                        franchise_ids(rule.libraries), default=None
-                    )
+                    row.tmdb_collection_id = sole_franchise(rule.libraries)
                 row.group = await CollectionRepository(session).ensure_group(group)
                 session.add(row)
                 await session.flush()
@@ -738,7 +736,7 @@ class CollectionEditor:
         )
         if keep_source_order:
             body = body.model_copy(update={"order_type": CollectionOrder.CUSTOM})
-        franchise = min(franchise_ids(body.libraries), default=None)
+        franchise = sole_franchise(body.libraries)
         async with self._access.database.write_session() as session:
             saved_row = await self._access.require(session, collection_id)
             rule = saved_row.rule

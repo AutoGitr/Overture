@@ -65,8 +65,9 @@ type GroupName = Annotated[
     AfterValidator(check_group_name),
 ]
 
-#: The group a managed collection belongs to: every one names a group.
-type RequiredGroupName = Annotated[GroupName, Field(min_length=1)]
+#: The group a managed collection belongs to: every one names a group. Spaces
+#: alone are stripped to nothing, so the schema asks for a character besides.
+type RequiredGroupName = Annotated[GroupName, Field(min_length=1, pattern=r"\S")]
 
 #: Collection groups a run covers, without repeats; at least one when given.
 type GroupNames = Annotated[

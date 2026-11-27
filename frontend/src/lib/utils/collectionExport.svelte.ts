@@ -41,16 +41,14 @@ export class CollectionExport {
       ...(exported.refused ?? []).map((refusal) => `Left out ${refusal.title}: ${refusal.reason}`),
       ...(exported.warnings ?? []),
     ].join("\n");
-    const file = exported.file;
-    if (!file) {
+    const text = exported.text;
+    if (!text) {
       this.feedback.error(notes || "Nothing chosen can be exported", {
         title: "Nothing to export",
       });
       return;
     }
-    const url = URL.createObjectURL(
-      new Blob([JSON.stringify(file, null, 2)], { type: "application/json" }),
-    );
+    const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
     const link = document.createElement("a");
     link.href = url;
     link.download = fileName(title);
@@ -59,7 +57,7 @@ export class CollectionExport {
     // the file after the URL is revoked.
     URL.revokeObjectURL(url);
     const issue = exported.issue?.url;
-    const count = file.groups.length + file.collections.length;
+    const count = exported.count;
     (notes ? this.feedback.warning : this.feedback.success)(
       notes || "Load it beside Presets on another install, or contribute it to OvertureDB.",
       {

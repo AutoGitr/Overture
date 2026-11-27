@@ -1,0 +1,10 @@
+# Operations that answer nothing but success, whatever the request: checking
+# health or readiness, reading the public login settings or the session, and
+# signing out, which succeeds even without a session.
+openapi/overture.json:
+  operation-4xx-response:
+    - '#/paths/~1api~1auth~1config/get/responses'
+    - '#/paths/~1api~1auth~1logout/post/responses'
+    - '#/paths/~1api~1auth~1me/get/responses'
+    - '#/paths/~1api~1health/get/responses'
+    - '#/paths/~1api~1ready/get/responses'

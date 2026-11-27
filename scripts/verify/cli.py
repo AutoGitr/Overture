@@ -13,7 +13,7 @@ lazy from .checks import servers, verify_overture
 lazy from .common import Case, api_key
 lazy from .report import report
 lazy from .services import check_services
-lazy from .writes import WriteCheck
+lazy from .writes import WriteCheck, compare_writes
 
 
 async def run(args: argparse.Namespace) -> int:
@@ -30,9 +30,13 @@ async def run(args: argparse.Namespace) -> int:
         )
         cases.extend(await check_services(args, verify))
         if args.write:
+            checks: list[WriteCheck] = []
             for server, url, secret in given:
                 print(f"Writing to {server.server}...", flush=True)
-                cases.extend(await WriteCheck(server, url, secret, verify=verify).run())
+                check = WriteCheck(server, url, secret, verify=verify)
+                cases.extend(await check.run())
+                checks.append(check)
+            cases.append(compare_writes(checks))
     finally:
         for server in direct.values():
             await server.client.aclose()

@@ -37,9 +37,9 @@ _AUTH_HEADER_RE = re.compile(
     r"((?:bearer|basic)\s+|mediabrowser\s+token=\"?)[^\",\s;}]+\"?"
 )
 _URL_USERINFO_RE = re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://)([^/@\s]+)@")
-_PLEX_DIRECT_URL_RE = re.compile(
-    r"(?i)\b(https?://)[^\s/?#\"'<>]+\.plex\.direct(?::\d+)?[^\s\"'<>]*"
-)
+#: A plex.direct host names the server's address and identity; the path after
+#: it stays, so a log says which request failed.
+_PLEX_DIRECT_URL_RE = re.compile(r"(?i)\b(https?://)[^\s/?#\"'<>]+\.plex\.direct\b")
 _JWT_RE = re.compile(
     r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"
 )

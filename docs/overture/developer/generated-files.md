@@ -9,7 +9,9 @@ description: What is generated, from what, and the command that regenerates it.
 - **API contracts.** After changing endpoints, schemas, WebSocket events or
   setting defaults, run `uv run python -m scripts.contracts`. It regenerates
   `openapi/overture.json` and `frontend/src/generated/`; commit them with your
-  change.
+  change. `bun run lint:openapi` in `frontend/` lints the description with
+  Redocly's recommended rules (`redocly.yaml`); an exception is listed, with
+  why, in `.redocly.lint-ignore.yaml`.
 - **Media server specs.** `scripts/provider_specs.py` pins the Plex, Jellyfin
   and Emby API specs by version and digest. A changed upstream spec fails
   until you review it and update the pin.

@@ -81,7 +81,7 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/collections/12": { ...detail, withheld: true },
     });
     renderWithQueryClient(CollectionPage);
@@ -96,7 +96,7 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/collections/12": detail,
       "/api/library/items": { items: members, total: 2 },
       "/api/collections/12/members": { ...detail, member_ids: [2], child_count: 1 },
@@ -122,7 +122,7 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/collections/12": ({ init }: { init: RequestInit }) => {
         if (init.method === "PUT") {
           saved = true;
@@ -143,7 +143,7 @@ describe("collection management", () => {
     const { calls } = mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/collections/12": { ...detail, rule },
       "/api/collections/12/rule": rule,
     });
@@ -183,7 +183,7 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/collections/groups": [
+      "/api/collection-groups": [
         { name: "default-decades", set: null },
         { name: "Weekend", set: null },
       ],
@@ -214,7 +214,7 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/collections/groups": [{ name: "Weekend", set: null }],
+      "/api/collection-groups": [{ name: "Weekend", set: null }],
       "/api/collections/12": ({ init }: { init: RequestInit }) =>
         Response.json(init.method === "PUT" ? { ...detail, collection_group: "Fresh" } : detail),
     });
@@ -257,7 +257,7 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/collections/12": detail,
       "/api/collections/12/art/poster/sources": { sources: {}, current_url: null },
     });
@@ -282,7 +282,7 @@ describe("collection management", () => {
         { id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 2 },
       ],
       "/api/library/items": { items: members, total: 2 },
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
     });
     await navigate("/collections/new");
     const view = renderWithQueryClient(CollectionPage);
@@ -298,7 +298,7 @@ describe("collection management", () => {
         { id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 2 },
         { id: "other", title: "Other", media_type: "movie", server_id: 1, count: 1 },
       ],
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
     });
     await navigate("/collections/new");
     renderWithQueryClient(CollectionPage);
@@ -313,7 +313,7 @@ describe("collection management", () => {
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
       "/api/collections/12": { ...detail, tmdb_collection_id: 10 },
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
     });
     renderWithQueryClient(CollectionPage);
     const input = await screen.findByLabelText("Collection TMDB franchise ID");
@@ -446,7 +446,7 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/library/libraries": [
         { id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 2 },
       ],
@@ -498,7 +498,7 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/collections/12": detail,
       "/api/library/libraries": [movieLibrary],
       "/api/library/items": { items: members, total: members.length },
@@ -530,7 +530,7 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/collections/12": { ...detail, member_ids: all.map((member) => member.id) },
       "/api/library/libraries": [movieLibrary],
       "/api/library/items": { items: all, total: all.length },
@@ -569,7 +569,7 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/collections/12": both,
       "/api/library/items": { items: held, total: 3 },
       "/api/library/libraries": [
@@ -592,7 +592,7 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/collections/12": { ...detail, member_ids: [1] },
       "/api/library/items": ({ url }: { url: string }) =>
         Response.json(
@@ -615,7 +615,7 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/library/libraries": [
         { id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 2 },
         { id: "other", title: "Other", media_type: "movie", server_id: 1, count: 1 },
@@ -679,7 +679,7 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/library/libraries": [
         { id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 2 },
       ],
@@ -709,7 +709,7 @@ describe("collection management", () => {
     mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/library/libraries": [
         { id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 2 },
       ],
@@ -734,7 +734,7 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/collections/12": { ...detail, tmdb_collection_id: 10 },
       "/api/collections/12/art/background/sources": { sources: {}, current_url: null },
     });
@@ -754,7 +754,7 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/collections/12": detail,
       "/api/library/items": { items: members, total: members.length },
       "/api/collections/12/art/poster/sources": { sources: {}, current_url: null },
@@ -825,7 +825,7 @@ describe("collection management", () => {
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/library/libraries": [
         { id: "movies", title: "Movies", media_type: "movie", server_id: 1, count: 2 },
       ],
@@ -857,7 +857,7 @@ describe("collection management", () => {
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
       "/api/collections/12": detail,
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/library/libraries": [],
       "/api/library/items": { items: members, total: 2 },
     });
@@ -877,7 +877,7 @@ describe("collection management", () => {
     const { calls } = mockFetchRoutes({
       "/api/collections/defaults": {},
       "/api/collections/capabilities": capabilities,
-      "/api/collections/groups": [{ name: "Ungrouped", set: null }],
+      "/api/collection-groups": [{ name: "Ungrouped", set: null }],
       "/api/collections/12": ({ init }: { init: RequestInit }) =>
         Response.json(init.method === "DELETE" ? { status: "deleted" } : detail),
       "/api/library/libraries": [],
@@ -898,7 +898,7 @@ describe("collection management", () => {
     const { calls } = mockFetchRoutes({
       "/api/collections/defaults": { visible_home: true, visible_library: true },
       "/api/collections/capabilities": capabilities,
-      "/api/collections/groups": [{ name: "Ungrouped", set: null }],
+      "/api/collection-groups": [{ name: "Ungrouped", set: null }],
       "/api/collections/12": detail,
       "/api/collections/12/rule": rule,
     });
@@ -946,7 +946,7 @@ describe("collection management", () => {
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
       "/api/collections/12": { ...detail, rule, lists_missing: true },
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/library/libraries": [],
       "/api/library/items": { items: members, total: 2 },
       "/api/collections/12/missing": {
@@ -1006,7 +1006,7 @@ describe("collection management", () => {
       "/api/collections/capabilities": capabilities,
       "/api/collections/12/rule": rule,
       "/api/collections/12": { ...detail, rule, lists_missing: true },
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/library/libraries": [],
       "/api/library/items": { items: members, total: 2 },
       "/api/collections/12/missing": { titles: [], truncated: false, requestable: true },

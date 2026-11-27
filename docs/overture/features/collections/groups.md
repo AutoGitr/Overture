@@ -56,9 +56,12 @@ which Plex cannot apply to it; it takes the next order the settings give.
 with an empty collection titled after it, with a poster generated in the group's
 Generated colours and showing the group's name alone, in each library its
 collections use. Its sort title is the group's sort title template with an
-empty title, so it sorts right before the group's collections. A separated
-group whose sort title is not set anywhere sorts its collections as
-`{group} {title}`, which keeps them together behind it. Sort titles leave out
+empty title, so it sorts right before the group's collections. Turning
+**Separator** on for a group without a sort title of its own fills in the
+group's **Sort title** as `{group} {title}`, which keeps its collections
+together behind the separator; it shows there, and you can change or clear it
+like any sort title. Cleared, the collections sort by their own titles, away
+from the separator. Sort titles leave out
 a leading "The", "A" or "An" of the title and group, as Plex does when it
 sorts titles itself, so _The Matrix_ in _The Sagas_ sorts as `Sagas Matrix`.
 

@@ -17,12 +17,12 @@
   import PopupShell from "../components/PopupShell.svelte";
   import { routedCatalogEntry, routedCollectionId, routedItemId } from "../router/routes";
   import { createNotifier } from "../stores/notificationState.svelte";
-  import { sectionState, setSectionView } from "../stores/sectionState.svelte";
+  import { SectionView } from "../stores/sectionState.svelte";
   import { uiState } from "../stores/uiState.svelte";
   import { dbRecordFields, type DisplayField } from "../utils/dbRecordFields";
 
-  const VIEW = "db-record";
-  setSectionView(VIEW);
+  /** Its field groups, closed until opened while it is open. */
+  const sections = new SectionView(() => false);
   let catalogEntry = $derived(routedCatalogEntry());
   let collectionId = $derived(catalogEntry ? null : routedCollectionId());
   let itemId = $derived(catalogEntry || collectionId !== null ? null : routedItemId());
@@ -102,8 +102,8 @@
 {#snippet rows(key: string, title: string, fields: DisplayField[])}
   <Disclosure
     {title}
-    open={sectionState.isOpen(VIEW, key, false)}
-    ontoggle={(open) => sectionState.setOpen(VIEW, key, open)}
+    open={sections.isOpen(key)}
+    ontoggle={(open) => sections.setOpen(key, open)}
     --disclosure-title-weight="500"
     --disclosure-title-color="var(--text-secondary)"
   >

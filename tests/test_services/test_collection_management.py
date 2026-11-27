@@ -86,6 +86,7 @@ lazy from overture.schemas.art import (
     SaveCollectionArtRequest,
 )
 lazy from overture.schemas.collections import (
+    GROUP_CONDITIONS_MAX,
     BulkCollectionOperation,
     CollectionAdoption,
     CollectionCreate,
@@ -171,7 +172,7 @@ class Provider(PlexProvider):
         self.members: dict[str, list[str]] = {}
         self.options: dict[str, tuple[str, CollectionMode, CollectionOrder, bool]] = {}
         self.sort_titles: dict[str, str | None] = {}
-        self.hubs: dict[str, bool] = {}
+        self.empty: dict[str, bool] = {}
         self.summaries: dict[str, str | None] = {}
         self.smart_filters: dict[str, str] = {}
         self.synced_labels: list[tuple[str, list[str], list[str]]] = []
@@ -308,7 +309,7 @@ class Provider(PlexProvider):
         )
         self.sort_titles[server_collection_id] = details.sort_title
         self.summaries[server_collection_id] = details.summary
-        self.hubs[server_collection_id] = details.hub
+        self.empty[server_collection_id] = details.empty
 
     @override
     async def get_collection_member_ids(self, server_collection_id: str) -> list[str]:
@@ -2555,6 +2556,82 @@ async def test_franchise_sets_skip_franchises_other_collections_hold(
     )[0].title == "Saga"
 
 
+async def test_a_universe_of_franchises_is_none_of_them_and_leaves_their_set_whole(
+    manager: Manager,
+) -> None:
+    universe = await created(
+        manager.service,
+        CollectionCreate(
+            title="Saga Universe",
+            collection_group="Universes",
+            rule=library_rule(
+                criteria=sources(
+                    TmdbCollectionSource(collection_id=10),
+                    TmdbCollectionSource(collection_id=99),
+                ),
+            ),
+        ),
+    )
+    assert universe.tmdb_collection_id is None
+    await manager.service.groups.save_policy(
+        "Franchises",
+        CollectionGroupPolicy(
+            minimum_items=1,
+            generator=CollectionGenerator(
+                dimension=SetDimension.FRANCHISE, library_ids=["1:movies"]
+            ),
+        ),
+    )
+    await group_sync(manager, "Franchises")
+    assert [
+        (row.title, row.tmdb_collection_id)
+        for row in await manager.service.reader.listed()
+        if row.collection_group == "Franchises"
+    ] == [("Saga", 10)]
+
+
+async def test_saving_a_set_makes_its_collections_in_overture_before_any_sync(
+    manager: Manager,
+) -> None:
+    await manager.service.groups.save_policy(
+        "Franchises",
+        CollectionGroupPolicy(
+            minimum_items=1,
+            generator=CollectionGenerator(
+                dimension=SetDimension.FRANCHISE, library_ids=["1:movies"]
+            ),
+        ),
+        new_set=True,
+    )
+    [saga] = [
+        row
+        for row in await manager.service.reader.listed()
+        if row.collection_group == "Franchises"
+    ]
+    # Saved as a collection is: in Overture, for the next sync to send.
+    assert (saga.title, saga.withheld) == ("Saga", True)
+    assert manager.provider.created == []
+
+
+async def test_turning_a_separator_on_gives_its_group_the_sort_title_it_shows(
+    manager: Manager,
+) -> None:
+    groups = manager.service.groups
+    saved = await groups.save_policy("Sagas", CollectionGroupPolicy(separator=True))
+    assert saved.sort_title_format == "{group} {title}"
+    assert (await groups.policy("Sagas")).sort_title_format == "{group} {title}"
+    # Cleared while the separator stays on, it stays cleared.
+    await groups.save_policy(
+        "Sagas", CollectionGroupPolicy(separator=True, sort_title_format=None)
+    )
+    assert (await groups.policy("Sagas")).sort_title_format is None
+    # A sort title of the group's own is kept as it turns a separator on.
+    await groups.save_policy(
+        "Parts", CollectionGroupPolicy(separator=True, sort_title_format="~{title}")
+    )
+    assert (await groups.policy("Parts")).sort_title_format == "~{title}"
+
+
 async def test_a_new_collection_has_no_theme(manager: Manager) -> None:
     col = await created(
         manager.service,
@@ -4318,7 +4395,7 @@ async def test_a_plex_group_separator_heads_its_collections_while_it_is_on(
     # Its sort title is the group's with no title, so it sorts first.
     assert manager.provider.sort_titles[copy_id(separator) or ""] == "Sagas"
     # Empty, it has no Plex hub to show or hide.
-    assert manager.provider.hubs[copy_id(separator) or ""] is False
+    assert manager.provider.empty[copy_id(separator) or ""] is True
     assert ArtType.POSTER in manager.art.selections
     with pytest.raises(PublicServiceError, match="group keeps the separator"):
         await manager.service.editor.update(
@@ -5038,3 +5115,16 @@ async def test_a_sync_logs_what_it_did_to_each_server_collection(
         ),
         "[Plex] Unchanged Esses - holds the same 1 title in Movies",
     ]
+
+
+def test_a_library_filter_asks_no_more_than_one_group_of_conditions_holds() -> None:
+    """It is tested as one group, so a longer list is refused as the request."""
+    condition = FieldCondition(field=FilterField.HDR, value=False)
+    LibraryFilterMatchRequest(
+        media_type=MediaType.SHOW, conditions=[condition] * GROUP_CONDITIONS_MAX
+    )
+    with pytest.raises(ValidationError):
+        LibraryFilterMatchRequest(
+            media_type=MediaType.SHOW,
+            conditions=[condition] * (GROUP_CONDITIONS_MAX + 1),
+        )

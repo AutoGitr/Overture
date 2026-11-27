@@ -7,7 +7,7 @@ import { gzipSync } from "node:zlib";
 const ASSETS = fileURLToPath(new URL("../../src/overture/frontend/assets", import.meta.url));
 
 /** Compressed kilobytes; raise one only for a change that earns the weight. */
-const BUDGETS = { entry: 125, javascript: 228, css: 22 };
+const BUDGETS = { entry: 125, javascript: 229, css: 22 };
 
 const compressed = (name: string) =>
   gzipSync(readFileSync(join(ASSETS, name)), { level: 9 }).length / 1024;

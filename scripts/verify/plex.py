@@ -22,6 +22,7 @@ lazy from scripts.json_values import is_array
 lazy from .common import (
     ApiError,
     Case,
+    HeldFields,
     Server,
     ServerArt,
     collection_copy,
@@ -102,6 +103,23 @@ class PlexServer(Server):
 
     async def container(self, path: str, **params: Any) -> dict[str, Any]:
         return (await self.get(path, **params))["MediaContainer"]
+
+    async def fields(self, collection_id: str) -> HeldFields:
+        """The collection's title, sort title and summary, and which Plex locks."""
+        [row] = (await self.container(f"/library/metadata/{collection_id}")).get(
+            "Metadata", [{}]
+        )
+        names = {"title": "title", "titleSort": "sort title", "summary": "summary"}
+        return HeldFields(
+            title=str(row.get("title") or ""),
+            sort_title=str(row.get("titleSort") or ""),
+            summary=str(row.get("summary") or ""),
+            locked=frozenset(
+                names[field["name"]]
+                for field in row.get("Field", [])
+                if field.get("locked") and field.get("name") in names
+            ),
+        )
 
     async def libraries(self, media_type: str) -> dict[str, str]:
         sections = (await self.container("/library/sections")).get("Directory", [])

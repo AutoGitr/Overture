@@ -247,7 +247,7 @@ _FIXED: dict[str, Any] = {
     "/api/catalog/items/2/issue": _issue("show.yml", "Aliens"),
     "/api/collections/tags/radarr": [{"id": 1, "label": "requests"}],
     "/api/collections/arr-options": {"root_folders": [], "quality_profiles": []},
-    "/api/collections/groups": [{"name": "Charts", "set": None}],
+    "/api/collection-groups": [{"name": "Charts", "set": None}],
     "/api/library/items/1/record": {
         "stored": [
             {"table": "media_items", "values": {"id": 1}},
@@ -509,6 +509,16 @@ async def test_a_run_checks_overture_against_plex_and_names_each_problem(
     assert status == 1
     text = report.read_text()
     assert "| Movies (movie) | field | Genre is 'Horror' | 1 | 2 |" in text
+    # Groups of conditions are counted against the titles that make them.
+    assert "| groups | any of two | 1 |  |  | Alien | the titles make 2;" in text
+    # A source type the library cannot name is said to go untested.
+    assert (
+        "| source | tmdb_list |  |  |  |  |  | not tested: the library names "
+        "none; give one with --sources |"
+    ) in text
+    # Every managed collection is read on each server given, side by side.
+    assert "|  | fields | Scary |" in text
+    assert "compared on Plex |" in text
     # The first title only Plex selects is shown with the genres Plex holds.
     assert "only Plex selects Aliens; Plex holds genre='Horror'" in text
     assert "recommends regular, expected smart" in text
@@ -730,10 +740,12 @@ class _Collections:
         self.held[collection_id] = replace(
             self.held[collection_id], title=details.title
         )
+        # Jellyfin locks what Overture's client sends with a value.
         self.items[collection_id] |= {
             "Name": details.title,
             "ForcedSortName": details.sort_title,
             "Overview": details.summary,
+            "LockedFields": ["Name", *(["Overview"] if details.summary else [])],
             "DisplayOrder": "SortName"
             if details.order is CollectionOrder.TITLE_ASC
             else "PremiereDate",
@@ -1360,3 +1372,39 @@ async def test_collection_assets_and_plex_themes_are_read_from_asset_deliveries(
         ): "Plex holds a theme Overture does not know",
         ("assets", "Queued"): "the server holds none of the theme Overture holds",
     }
+
+
+def test_a_servers_fields_are_held_and_locked_as_overture_wrote_them() -> None:
+    held = common.HeldFields(
+        title="Alien",
+        sort_title="Alien",
+        summary="",
+        locked=frozenset({"title", "sort title", "summary"}),
+    )
+    assert held.against("Alien", "Alien", "") == [
+        "summary locked with no value from Overture"
+    ]
+    assert held.against("Aliens", "", "") == [
+        "title 'Alien', not 'Aliens'",
+        "sort title locked with no value from Overture",
+        "summary locked with no value from Overture",
+    ]
+    loose = replace(held, locked=frozenset({"title"}))
+    assert loose.against("Alien", "Alien", "") == ["sort title unlocked"]
+
+
+def test_the_same_edit_is_set_side_by_side_on_every_server() -> None:
+    def check(server: str, locked: set[str]) -> writes.WriteCheck:
+        found = object.__new__(writes.WriteCheck)
+        found.direct = cast("Any", type("Direct", (), {"server": server})())
+        found.edited = common.HeldFields("t", "s", "m", frozenset(locked))
+        return found
+
+    alike = writes.compare_writes(
+        [check("plex", {"title", "summary"}), check("jellyfin", {"title", "summary"})]
+    )
+    assert (alike.error, alike.note) == ("", "compared jellyfin, plex")
+    apart = writes.compare_writes(
+        [check("plex", {"title", "summary"}), check("emby", {"title"})]
+    )
+    assert apart.error.startswith("they differ in what they lock")

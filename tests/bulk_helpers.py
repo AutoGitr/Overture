@@ -174,8 +174,6 @@ class BulkThemeWork:
     items: list[MediaItem]
     search_format: str
     public_index: CatalogIndex = field(default_factory=CatalogIndex.empty)
-    #: YouTube IDs that failed to download before, by item ID.
-    failed_themes: dict[int, set[str]] = field(default_factory=dict[int, set[str]])
 
 
 def use_targets(
@@ -222,7 +220,7 @@ def use_theme_work(monkeypatch: pytest.MonkeyPatch, work: BulkThemeWork) -> None
     use_targets(
         monkeypatch,
         [Target(item, ServerAsset.THEME) for item in work.items],
-        BatchFacts(work.public_index, work.failed_themes, work.search_format),
+        BatchFacts(work.public_index, work.search_format),
     )
 
 

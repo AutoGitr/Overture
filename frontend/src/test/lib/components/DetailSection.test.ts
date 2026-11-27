@@ -1,65 +1,51 @@
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { createRawSnippet } from "svelte";
 import { expect, it } from "vitest";
-import { sectionState } from "../../../lib/stores/sectionState.svelte";
+import { configureSections, SectionView } from "../../../lib/stores/sectionState.svelte";
 import { readJson } from "../../../lib/utils/storage";
 import ViewedSection from "../../helpers/ViewedSection.svelte";
 
 const children = createRawSnippet(() => ({ render: () => "<p>Body</p>" }));
 const props = {
-  view: "collection",
   title: "Settings",
   description: "Defaults.",
   collapsible: true,
   children,
 };
 
-it("keeps the user's choice when its default changes", async () => {
-  const view = render(ViewedSection, { ...props, expanded: true });
-  await fireEvent.click(screen.getByRole("button", { name: "Settings", expanded: true }));
-  await view.rerender({ ...props, expanded: false });
-  await view.rerender({ ...props, expanded: true });
-  expect(screen.getByRole("button", { name: "Settings", expanded: false })).toBeInTheDocument();
-  expect(screen.getByText("Body")).not.toBeVisible();
+it("opens a collection's Setup and Content and closes every other section", () => {
+  const view = configureSections();
+  const titles = ["Setup", "Content", "Members", "Settings", "Active dates", "Missing"];
+  for (const title of titles) render(ViewedSection, { ...props, title, view });
+  expect(
+    titles.map((name) => screen.getByRole("button", { name }).getAttribute("aria-expanded")),
+  ).toEqual(["true", "true", "false", "false", "false", "false"]);
 });
 
-it("stays open when it is mounted again", async () => {
-  const first = render(ViewedSection, props);
+it("keeps the choice made in its view when it is mounted again", async () => {
+  const view = configureSections();
+  const first = render(ViewedSection, { ...props, view });
   await fireEvent.click(screen.getByRole("button", { name: "Settings", expanded: false }));
   first.unmount();
-  render(ViewedSection, props);
+  render(ViewedSection, { ...props, view });
   expect(screen.getByRole("button", { name: "Settings", expanded: true })).toBeInTheDocument();
   expect(screen.getByText("Body")).toBeVisible();
 });
 
-it("keeps each view's choice apart", async () => {
-  render(ViewedSection, props);
-  await fireEvent.click(screen.getByRole("button", { name: "Settings", expanded: false }));
-  render(ViewedSection, { ...props, view: "collection-groups" });
-  expect(screen.getAllByRole("button", { name: "Settings" }).map((b) => b.ariaExpanded)).toEqual([
-    "true",
-    "false",
-  ]);
-});
-
-it("starts a view over when it is forgotten, and persists only remembered views", async () => {
-  const first = render(ViewedSection, props);
+it("starts every new view over, and stores nothing for it", async () => {
+  const first = render(ViewedSection, { ...props, view: configureSections() });
   await fireEvent.click(screen.getByRole("button", { name: "Settings", expanded: false }));
   first.unmount();
-  sectionState.forget("collection");
-  const again = render(ViewedSection, props);
+  render(ViewedSection, { ...props, view: configureSections() });
   expect(screen.getByRole("button", { name: "Settings", expanded: false })).toBeInTheDocument();
-  await fireEvent.click(screen.getByRole("button", { name: "Settings", expanded: false }));
-  again.unmount();
-  expect(readJson("sections_open_by_view", {})).toEqual({});
-
-  render(ViewedSection, { ...props, view: "collection-groups" });
-  await fireEvent.click(screen.getByRole("button", { name: "Settings", expanded: false }));
   expect(readJson("sections_open_by_view", {})).toEqual({});
 });
 
-it("persists the filters' sections", async () => {
-  render(ViewedSection, { ...props, view: "filters" });
-  await fireEvent.click(screen.getByRole("button", { name: "Settings", expanded: false }));
-  expect(readJson("sections_open_by_view", {})).toEqual({ "filters/Settings": true });
+it("keeps a remembered view's choices across visits", async () => {
+  const first = render(ViewedSection, { ...props, view: new SectionView(() => true, "filters") });
+  await fireEvent.click(screen.getByRole("button", { name: "Settings", expanded: true }));
+  expect(readJson("sections_open_by_view", {})).toEqual({ "filters/Settings": false });
+  first.unmount();
+  render(ViewedSection, { ...props, view: new SectionView(() => true, "filters") });
+  expect(screen.getByRole("button", { name: "Settings", expanded: false })).toBeInTheDocument();
 });

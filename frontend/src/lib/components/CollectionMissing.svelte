@@ -10,7 +10,7 @@
     MediaType,
   } from "../../generated/rest/types.gen";
   import { createNotifier } from "../stores/notificationState.svelte";
-  import { getSectionView, sectionState } from "../stores/sectionState.svelte";
+  import { getSectionView } from "../stores/sectionState.svelte";
   import { settingsState } from "../stores/settingsState.svelte";
   import { errorMessage } from "../utils/errors";
   import DataStatus from "./DataStatus.svelte";
@@ -21,7 +21,7 @@
 
   const TITLE = "Missing";
   const view = getSectionView();
-  let expanded = $derived(sectionState.isOpen(view, TITLE, false));
+  let expanded = $derived(view.isOpen(TITLE));
   const target = $derived({ path: { collection_id: collection.id } });
   const missing = createQuery(() => ({
     ...getCollectionMissingOptions(target),

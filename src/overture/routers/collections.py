@@ -17,6 +17,7 @@ lazy from ..dependencies import (
     CollectionReaderDep,
     CollectionSetsDep,
     CollectionThemesDep,
+    PresetUsesDep,
 )
 lazy from ..domain import (
     MATCH_THRESHOLD_DEFAULT,
@@ -37,8 +38,13 @@ lazy from ..schemas.collection_presets import (
     PresetExportRequest,
     PresetGallery,
     PresetListing,
+    PresetUseCreate,
+    PresetUseRead,
+    PresetUseReview,
+    PresetUses,
 )
 lazy from ..schemas.collections import (
+    COLLECTION_LIBRARIES_MAX,
     ArrTagRead,
     BulkCollectionMonitorUpdate,
     BulkCollectionOperation,
@@ -71,6 +77,7 @@ lazy from ..schemas.collections import (
     CollectionSetPreview,
     DeleteCollectionThemeResponse,
     KindRecommendation,
+    LibraryId,
     MdblistListRead,
     SetCollectionThemeRequest,
     SetCollectionThemeResponse,
@@ -95,7 +102,16 @@ lazy from .parameters import (
 lazy from .responses import NOT_CONFIGURED, UPLOAD_GONE, errors
 
 router = media_server_router(prefix="/collections", tags=["collections"])
+#: Groups are a resource of their own: under /collections a group's name and a
+#: collection's ID would share a path segment.
+groups_router = media_server_router(prefix="/collection-groups", tags=["collections"])
 _NO_GROUP = errors({404: "No collection group has that name"})
+_PRESET_USE = errors(
+    {
+        404: "No such collection, group or preset item",
+        502: "OvertureDB's presets could not be read",
+    }
+)
 #: A group's name in a path; a name may hold slashes.
 type GroupPath = Annotated[str, Path(min_length=1, max_length=200)]
 
@@ -106,7 +122,7 @@ async def list_collections(reader: CollectionReaderDep) -> list[CollectionRead]:
     return await reader.listed()
 
 
-@router.get("/groups")
+@groups_router.get("")
 async def list_collection_groups(
     groups: CollectionGroupsDep,
 ) -> list[CollectionGroupRead]:
@@ -128,9 +144,9 @@ async def get_collection_capabilities(
     discovery: CollectionDiscoveryDep,
     media_type: MediaTypeQuery,
     library_ids: Annotated[
-        list[str] | None,
+        list[LibraryId] | None,
         Query(
-            max_length=200,
+            max_length=COLLECTION_LIBRARIES_MAX,
             description="The collection's libraries; every server without them.",
         ),
     ] = None,
@@ -193,7 +209,7 @@ async def preview_collection_set(
     return await sets.preview(body)
 
 
-@router.patch("/groups/{name:path}", responses=_NO_GROUP)
+@groups_router.patch("/{name:path}", responses=_NO_GROUP)
 async def rename_collection_group(
     body: CollectionGroupRename, groups: CollectionGroupsDep, name: GroupPath
 ) -> StatusResponse:
@@ -201,7 +217,7 @@ async def rename_collection_group(
     return await groups.rename(name, body.name)
 
 
-@router.delete("/groups/{name:path}", responses=_NO_GROUP)
+@groups_router.delete("/{name:path}", responses=_NO_GROUP)
 async def delete_collection_group(
     body: CollectionGroupDelete, groups: CollectionGroupsDep, name: GroupPath
 ) -> BulkCollectionOperationResult:
@@ -209,7 +225,7 @@ async def delete_collection_group(
     return await groups.delete(name, body)
 
 
-@router.get("/groups/{name:path}")
+@groups_router.get("/{name:path}")
 async def get_collection_group_policy(
     groups: CollectionGroupsDep, name: GroupPath
 ) -> CollectionGroupPolicy:
@@ -217,7 +233,7 @@ async def get_collection_group_policy(
     return await groups.policy(name)
 
 
-@router.put("/groups/{name:path}")
+@groups_router.put("/{name:path}")
 async def save_collection_group_policy(
     groups: CollectionGroupsDep,
     name: GroupPath,
@@ -262,6 +278,32 @@ async def export_collection_preset(
 ) -> PresetExport:
     """Return collections and groups as a file any install can add."""
     return await presets.export(body)
+
+
+@router.get("/presets/uses")
+async def list_preset_uses(uses: PresetUsesDep) -> PresetUses:
+    """Return the collections and sets saved from presets, and OvertureDB's changes."""
+    return await uses.list()
+
+
+@router.post("/presets/uses", responses=_PRESET_USE)
+async def record_preset_use(
+    uses: PresetUsesDep, body: PresetUseCreate
+) -> PresetUseRead:
+    """Keep track of the preset item a collection or set was just saved from."""
+    return await uses.record(body)
+
+
+@router.post("/presets/uses/review", responses=_PRESET_USE)
+async def review_preset_use(
+    uses: PresetUsesDep, body: PresetUseReview
+) -> PresetUseRead | None:
+    """Take OvertureDB's changes to a preset item, or keep the saved one.
+
+    Returns null once OvertureDB no longer publishes the item, which then
+    stops being tracked.
+    """
+    return await uses.review(body)
 
 
 @router.post("/bulk-operation")

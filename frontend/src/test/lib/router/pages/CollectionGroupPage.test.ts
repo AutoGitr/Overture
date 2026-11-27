@@ -42,13 +42,13 @@ function mockGroup(policy: Record<string, unknown> = {}, overrides: Record<strin
     "/api/collections": [
       collection({ id: 12, title: "Saga", collection_group: "Weekend", media_types: ["movie"] }),
     ],
-    "/api/collections/groups": [
+    "/api/collection-groups": [
       { name: "Films", set: null },
       { name: "Weekend", set: null },
     ],
     "/api/collections/defaults": {},
     "/api/collections/capabilities": collectionCapabilities(),
-    "/api/collections/groups/Weekend": ({ init }: FetchCall) =>
+    "/api/collection-groups/Weekend": ({ init }: FetchCall) =>
       Response.json(init.method === "PUT" ? JSON.parse(String(init.body)) : policy),
     ...overrides,
   });
@@ -79,6 +79,11 @@ describe("collection group page", () => {
       expect(await screen.findByRole("region", { name })).toBeInTheDocument();
     // A plain group has no set to edit.
     expect(screen.queryByRole("region", { name: "Group content" })).toBeNull();
+    // A group opens as a collection does: its Setup open, every other section closed.
+    expect(screen.getByRole("button", { name: "Setup", expanded: true })).toBeInTheDocument();
+    for (const name of ["Members", "Settings", "Active dates"])
+      expect(screen.getByRole("button", { name, expanded: false })).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole("button", { name: "Members" }));
     const members = within(screen.getByRole("list", { name: "Collections in the group" }));
     await fireEvent.click(members.getByRole("button", { name: /Saga/ }));
     await waitFor(() => expect(route.pathname).toBe("/collections/12-saga"));
@@ -104,7 +109,7 @@ describe("collection group page", () => {
       sort_title_format: "+{title}",
     });
     expect(calls.find((call) => call.init.method === "PUT")?.url).toBe(
-      "/api/collections/groups/Weekend?new_set=false",
+      "/api/collection-groups/Weekend?new_set=false",
     );
     expect(
       await screen.findByText('Saved "Weekend". Its collections get it with their next sync.'),
@@ -128,7 +133,7 @@ describe("collection group page", () => {
     let served = { sort_title_format: null as string | null };
     const { calls } = mockGroup(
       {},
-      { "/api/collections/groups/Weekend": () => Response.json(served) },
+      { "/api/collection-groups/Weekend": () => Response.json(served) },
     );
     await openGroup();
     await fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
@@ -140,7 +145,7 @@ describe("collection group page", () => {
     await queryClient.invalidateQueries();
     await waitFor(() =>
       expect(
-        calls.slice(fetched).some((call) => call.url === "/api/collections/groups/Weekend"),
+        calls.slice(fetched).some((call) => call.url === "/api/collection-groups/Weekend"),
       ).toBe(true),
     );
     expect(screen.getByRole("textbox", { name: "Sort title" })).toHaveValue("+{title}");
@@ -161,7 +166,7 @@ describe("collection group page", () => {
     const { calls } = mockGroup(
       {},
       {
-        "/api/collections/groups/Weekend": ({ init }: FetchCall) =>
+        "/api/collection-groups/Weekend": ({ init }: FetchCall) =>
           Response.json(init.method === "PATCH" ? { status: "ok" } : {}),
       },
     );
@@ -177,12 +182,13 @@ describe("collection group page", () => {
     const { calls } = mockGroup(
       {},
       {
-        "/api/collections/groups/Weekend": ({ init }: FetchCall) =>
+        "/api/collection-groups/Weekend": ({ init }: FetchCall) =>
           Response.json(init.method === "DELETE" ? { collection_ids: [12], errors: {} } : {}),
       },
     );
     await openGroup();
-    await screen.findByRole("list", { name: "Collections in the group" });
+    // The group says what it holds before it is deleted.
+    await screen.findByText("1 collection");
     await fireEvent.click(screen.getByRole("button", { name: "Delete group" }));
     await answerConfirmation(true, "Move them to Films");
     await waitFor(() => expect(route.pathname).toBe("/collections"));
@@ -194,16 +200,17 @@ describe("collection group page", () => {
     const { calls } = mockGroup(
       {},
       {
-        "/api/collections/groups": [
+        "/api/collection-groups": [
           { name: "Anime", set: null },
           { name: "Weekend", set: null },
         ],
-        "/api/collections/groups/Weekend": ({ init }: FetchCall) =>
+        "/api/collection-groups/Weekend": ({ init }: FetchCall) =>
           Response.json(init.method === "DELETE" ? { collection_ids: [12], errors: {} } : {}),
       },
     );
     await openGroup();
-    await screen.findByRole("list", { name: "Collections in the group" });
+    // The group says what it holds before it is deleted.
+    await screen.findByText("1 collection");
     await fireEvent.click(screen.getByRole("button", { name: "Delete group" }));
     await answerConfirmation(true, "Move them to Anime");
     await waitFor(() => expect(calls.some((call) => call.init.method === "DELETE")).toBe(true));
@@ -215,7 +222,7 @@ describe("collection group page", () => {
     mockGroup(
       {},
       {
-        "/api/collections/groups/Weekend": ({ init }: FetchCall) =>
+        "/api/collection-groups/Weekend": ({ init }: FetchCall) =>
           init.method === "PATCH"
             ? Response.json({ detail: "A group named Anime already exists" }, { status: 409 })
             : Response.json({}),
@@ -236,7 +243,8 @@ describe("collection group page", () => {
       {},
       {
         "/api/collections/presets/export": {
-          file: { preset_version: 1, preset: null, groups: [{ name: "Weekend" }], collections: [] },
+          text: '{"preset_version": 1, "groups": [{"name": "Weekend"}]}',
+          count: 1,
           refused: [{ title: "Local", reason: "It tests folder, which only this install has" }],
           warnings: [],
           issue: { url: "https://github.com/AutoGitr/OvertureDB/issues/new", notes: [] },
@@ -269,7 +277,8 @@ describe("collection group page", () => {
         "/api/collections/presets/export": () =>
           refusing
             ? Response.json({
-                file: null,
+                text: null,
+                count: 0,
                 refused: [{ title: "Weekend", reason: "No such group" }],
                 warnings: [],
                 issue: null,
@@ -290,7 +299,7 @@ describe("collection group page", () => {
       {},
       {
         "/api/collections": [],
-        "/api/collections/groups/Weekend": ({ init }: FetchCall) =>
+        "/api/collection-groups/Weekend": ({ init }: FetchCall) =>
           Response.json(init.method === "DELETE" ? { collection_ids: [], errors: {} } : {}),
       },
     );

@@ -49,7 +49,6 @@
 
 <DetailForm
   collapsible
-  expanded
   title="Content"
   description={editor.generated
     ? "Its group's set decides the criteria."

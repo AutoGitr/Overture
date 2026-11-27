@@ -2035,7 +2035,7 @@ export type CatalogSyncStats = {
  * The group a collection joins when Overture adopts it.
  */
 export type CollectionAdoption = {
-    group: RequiredGroupName;
+    group: RequiredGroupNameInput;
 };
 
 /**
@@ -2236,10 +2236,7 @@ export type CollectionDefaults = {
      */
     home_order: number | null;
     member_label: MemberTagFormat | null;
-    /**
-     * Minimum Items
-     */
-    minimum_items: number | null;
+    minimum_items: MinimumItems | null;
     order_type: CollectionOrder | null;
     /**
      * Overturedb Posters
@@ -2625,7 +2622,7 @@ export type CollectionGeneratorInput = {
     /**
      * Library Ids
      */
-    library_ids: Array<string>;
+    library_ids: Array<LibraryId>;
     /**
      * Smart
      */
@@ -2672,7 +2669,7 @@ export type CollectionGeneratorOutput = {
     /**
      * Library Ids
      */
-    library_ids: Array<string>;
+    library_ids: Array<LibraryId>;
     /**
      * Smart
      */
@@ -2706,7 +2703,7 @@ export type CollectionGroupDelete = {
      * Collections
      */
     collections?: 'move' | 'orphan' | 'both' | null;
-    group?: RequiredGroupName | null;
+    group?: RequiredGroupNameInput | null;
 };
 
 /**
@@ -2751,10 +2748,7 @@ export type CollectionGroupPolicyInput = {
      */
     home_order?: number | null;
     member_label?: MemberTagFormat | null;
-    /**
-     * Minimum Items
-     */
-    minimum_items?: number | null;
+    minimum_items?: MinimumItems | null;
     order_type?: CollectionOrder | null;
     /**
      * Overturedb Posters
@@ -2831,10 +2825,7 @@ export type CollectionGroupPolicyOutput = {
      */
     home_order: number | null;
     member_label: MemberTagFormat | null;
-    /**
-     * Minimum Items
-     */
-    minimum_items: number | null;
+    minimum_items: MinimumItems | null;
     order_type: CollectionOrder | null;
     /**
      * Overturedb Posters
@@ -2888,7 +2879,7 @@ export type CollectionGroupRead = {
  * A replacement group name, scoped by the request.
  */
 export type CollectionGroupRename = {
-    name: RequiredGroupName;
+    name: RequiredGroupNameInput;
 };
 
 /**
@@ -3097,156 +3088,6 @@ export type CollectionOptions = {
  * members of other collections and stores the result as a custom order.
  */
 export type CollectionOrder = 'custom' | 'release.asc' | 'release.desc' | 'title.asc' | 'title.desc' | 'added.desc' | 'added.asc' | 'critic_rating.desc' | 'critic_rating.asc' | 'audience_rating.desc' | 'audience_rating.asc' | 'user_rating.desc' | 'user_rating.asc' | 'duration.desc' | 'duration.asc' | 'plays.desc' | 'plays.asc' | 'last_played.desc' | 'last_played.asc' | 'episode_added.desc' | 'episode_added.asc' | 'unplayed_episodes.desc' | 'unplayed_episodes.asc' | 'random';
-
-/**
- * CollectionPolicyBase
- *
- * Shared policy and media server display configuration.
- */
-export type CollectionPolicyBaseInput = {
-    active_end_mmdd?: SeasonalDate | null;
-    active_start_mmdd?: SeasonalDate | null;
-    arr_tag?: MemberTagFormat | null;
-    /**
-     * Auto Art
-     */
-    auto_art?: Array<AutoArtSource> | null;
-    /**
-     * Auto Match Theme
-     */
-    auto_match_theme?: boolean | null;
-    /**
-     * Backgrounds
-     */
-    backgrounds?: boolean | null;
-    collection_filtering?: CollectionFiltering | null;
-    collection_mode?: CollectionMode | null;
-    /**
-     * Delete Below Minimum
-     */
-    delete_below_minimum?: boolean | null;
-    /**
-     * Delete When Inactive
-     */
-    delete_when_inactive?: boolean | null;
-    generated_style?: ArtStyle | null;
-    /**
-     * Generated Title Only
-     */
-    generated_title_only?: boolean | null;
-    /**
-     * Home Order
-     */
-    home_order?: number | null;
-    member_label?: MemberTagFormat | null;
-    /**
-     * Minimum Items
-     */
-    minimum_items?: number | null;
-    order_type?: CollectionOrder | null;
-    /**
-     * Overturedb Posters
-     */
-    overturedb_posters?: Array<CollectionPosterStyle> | null;
-    /**
-     * Request Missing
-     */
-    request_missing?: boolean | null;
-    sort_title_format?: SortTitleFormat | null;
-    summary_format?: SummaryFormat | null;
-    sync_mode?: SyncMode | null;
-    /**
-     * Themes
-     */
-    themes?: boolean | null;
-    /**
-     * Visible Home
-     */
-    visible_home?: boolean | null;
-    /**
-     * Visible Library
-     */
-    visible_library?: boolean | null;
-    /**
-     * Visible Shared
-     */
-    visible_shared?: boolean | null;
-};
-
-/**
- * CollectionPolicyBase
- *
- * Shared policy and media server display configuration.
- */
-export type CollectionPolicyBaseOutput = {
-    active_end_mmdd: SeasonalDate | null;
-    active_start_mmdd: SeasonalDate | null;
-    arr_tag: MemberTagFormat | null;
-    /**
-     * Auto Art
-     */
-    auto_art: Array<AutoArtSource> | null;
-    /**
-     * Auto Match Theme
-     */
-    auto_match_theme: boolean | null;
-    /**
-     * Backgrounds
-     */
-    backgrounds: boolean | null;
-    collection_filtering: CollectionFiltering | null;
-    collection_mode: CollectionMode | null;
-    /**
-     * Delete Below Minimum
-     */
-    delete_below_minimum: boolean | null;
-    /**
-     * Delete When Inactive
-     */
-    delete_when_inactive: boolean | null;
-    generated_style: ArtStyle | null;
-    /**
-     * Generated Title Only
-     */
-    generated_title_only: boolean | null;
-    /**
-     * Home Order
-     */
-    home_order: number | null;
-    member_label: MemberTagFormat | null;
-    /**
-     * Minimum Items
-     */
-    minimum_items: number | null;
-    order_type: CollectionOrder | null;
-    /**
-     * Overturedb Posters
-     */
-    overturedb_posters: Array<CollectionPosterStyle> | null;
-    /**
-     * Request Missing
-     */
-    request_missing: boolean | null;
-    sort_title_format: SortTitleFormat | null;
-    summary_format: SummaryFormat | null;
-    sync_mode: SyncMode | null;
-    /**
-     * Themes
-     */
-    themes: boolean | null;
-    /**
-     * Visible Home
-     */
-    visible_home: boolean | null;
-    /**
-     * Visible Library
-     */
-    visible_library: boolean | null;
-    /**
-     * Visible Shared
-     */
-    visible_shared: boolean | null;
-};
 
 /**
  * CollectionPosterStyle
@@ -3576,10 +3417,7 @@ export type CollectionRuleRead = {
      */
     limit: number | null;
     member_label: MemberTagFormat | null;
-    /**
-     * Minimum Items
-     */
-    minimum_items: number | null;
+    minimum_items: MinimumItems | null;
     order_type: CollectionOrder | null;
     /**
      * Overturedb Posters
@@ -3667,10 +3505,7 @@ export type CollectionRuleWriteInput = {
      */
     limit?: number | null;
     member_label?: MemberTagFormat | null;
-    /**
-     * Minimum Items
-     */
-    minimum_items?: number | null;
+    minimum_items?: MinimumItems | null;
     order_type?: CollectionOrder | null;
     /**
      * Overturedb Posters
@@ -3754,10 +3589,7 @@ export type CollectionRuleWriteOutput = {
      */
     limit: number | null;
     member_label: MemberTagFormat | null;
-    /**
-     * Minimum Items
-     */
-    minimum_items: number | null;
+    minimum_items: MinimumItems | null;
     order_type: CollectionOrder | null;
     /**
      * Overturedb Posters
@@ -5070,6 +4902,8 @@ export type MemberTagFormat = string;
  */
 export type MetadataIssue = 'no_tmdb_id' | 'no_tvdb_id' | 'no_imdb_id' | 'no_local_path' | 'no_year' | 'no_server_id' | 'id_mismatch';
 
+export type MinimumItems = number;
+
 /**
  * MonitorUpdate
  *
@@ -5196,9 +5030,7 @@ export type PortableCollectionInput = {
     active_end_mmdd?: SeasonalDate | null;
     active_start_mmdd?: SeasonalDate | null;
     art?: PresetArtInput | null;
-    collection_filtering?: CollectionFiltering | null;
     collection_group?: GroupName | null;
-    collection_mode?: CollectionMode | null;
     /**
      * Criteria
      */
@@ -5213,8 +5045,8 @@ export type PortableCollectionInput = {
      * Limit
      */
     limit?: number | null;
+    minimum_items?: MinimumItems | null;
     order_type?: CollectionOrder | null;
-    policy?: CollectionPolicyBaseInput;
     /**
      * Smart
      */
@@ -5237,18 +5069,6 @@ export type PortableCollectionInput = {
      * Tmdb Collection Id
      */
     tmdb_collection_id?: number | null;
-    /**
-     * Visible Home
-     */
-    visible_home?: boolean;
-    /**
-     * Visible Library
-     */
-    visible_library?: boolean;
-    /**
-     * Visible Shared
-     */
-    visible_shared?: boolean;
 };
 
 /**
@@ -5262,9 +5082,7 @@ export type PortableCollectionOutput = {
     active_end_mmdd: SeasonalDate | null;
     active_start_mmdd: SeasonalDate | null;
     art: PresetArtOutput | null;
-    collection_filtering: CollectionFiltering | null;
     collection_group: GroupName | null;
-    collection_mode: CollectionMode | null;
     /**
      * Criteria
      */
@@ -5279,8 +5097,8 @@ export type PortableCollectionOutput = {
      * Limit
      */
     limit: number | null;
+    minimum_items: MinimumItems | null;
     order_type: CollectionOrder | null;
-    policy: CollectionPolicyBaseOutput;
     /**
      * Smart
      */
@@ -5303,18 +5121,6 @@ export type PortableCollectionOutput = {
      * Tmdb Collection Id
      */
     tmdb_collection_id: number | null;
-    /**
-     * Visible Home
-     */
-    visible_home: boolean;
-    /**
-     * Visible Library
-     */
-    visible_library: boolean;
-    /**
-     * Visible Shared
-     */
-    visible_shared: boolean;
 };
 
 /**
@@ -5325,77 +5131,16 @@ export type PortableCollectionOutput = {
 export type PortableGroupInput = {
     active_end_mmdd?: SeasonalDate | null;
     active_start_mmdd?: SeasonalDate | null;
-    arr_tag?: MemberTagFormat | null;
-    /**
-     * Auto Art
-     */
-    auto_art?: Array<AutoArtSource> | null;
-    /**
-     * Auto Match Theme
-     */
-    auto_match_theme?: boolean | null;
-    /**
-     * Backgrounds
-     */
-    backgrounds?: boolean | null;
-    collection_filtering?: CollectionFiltering | null;
-    collection_mode?: CollectionMode | null;
-    /**
-     * Delete Below Minimum
-     */
-    delete_below_minimum?: boolean | null;
     /**
      * Delete When Inactive
      */
     delete_when_inactive?: boolean | null;
-    generated_style?: ArtStyle | null;
-    /**
-     * Generated Title Only
-     */
-    generated_title_only?: boolean | null;
     generator?: PortableSetInput | null;
-    /**
-     * Home Order
-     */
-    home_order?: number | null;
-    member_label?: MemberTagFormat | null;
-    /**
-     * Minimum Items
-     */
-    minimum_items?: number | null;
-    name: GroupName;
+    minimum_items?: MinimumItems | null;
+    name: RequiredGroupNameInput;
     order_type?: CollectionOrder | null;
-    /**
-     * Overturedb Posters
-     */
-    overturedb_posters?: Array<CollectionPosterStyle> | null;
-    /**
-     * Request Missing
-     */
-    request_missing?: boolean | null;
-    /**
-     * Separator
-     */
-    separator?: boolean;
     sort_title_format?: SortTitleFormat | null;
     summary_format?: SummaryFormat | null;
-    sync_mode?: SyncMode | null;
-    /**
-     * Themes
-     */
-    themes?: boolean | null;
-    /**
-     * Visible Home
-     */
-    visible_home?: boolean | null;
-    /**
-     * Visible Library
-     */
-    visible_library?: boolean | null;
-    /**
-     * Visible Shared
-     */
-    visible_shared?: boolean | null;
 };
 
 /**
@@ -5406,77 +5151,16 @@ export type PortableGroupInput = {
 export type PortableGroupOutput = {
     active_end_mmdd: SeasonalDate | null;
     active_start_mmdd: SeasonalDate | null;
-    arr_tag: MemberTagFormat | null;
-    /**
-     * Auto Art
-     */
-    auto_art: Array<AutoArtSource> | null;
-    /**
-     * Auto Match Theme
-     */
-    auto_match_theme: boolean | null;
-    /**
-     * Backgrounds
-     */
-    backgrounds: boolean | null;
-    collection_filtering: CollectionFiltering | null;
-    collection_mode: CollectionMode | null;
-    /**
-     * Delete Below Minimum
-     */
-    delete_below_minimum: boolean | null;
     /**
      * Delete When Inactive
      */
     delete_when_inactive: boolean | null;
-    generated_style: ArtStyle | null;
-    /**
-     * Generated Title Only
-     */
-    generated_title_only: boolean | null;
     generator: PortableSetOutput | null;
-    /**
-     * Home Order
-     */
-    home_order: number | null;
-    member_label: MemberTagFormat | null;
-    /**
-     * Minimum Items
-     */
-    minimum_items: number | null;
-    name: GroupName;
+    minimum_items: MinimumItems | null;
+    name: RequiredGroupNameOutput;
     order_type: CollectionOrder | null;
-    /**
-     * Overturedb Posters
-     */
-    overturedb_posters: Array<CollectionPosterStyle> | null;
-    /**
-     * Request Missing
-     */
-    request_missing: boolean | null;
-    /**
-     * Separator
-     */
-    separator: boolean;
     sort_title_format: SortTitleFormat | null;
     summary_format: SummaryFormat | null;
-    sync_mode: SyncMode | null;
-    /**
-     * Themes
-     */
-    themes: boolean | null;
-    /**
-     * Visible Home
-     */
-    visible_home: boolean | null;
-    /**
-     * Visible Library
-     */
-    visible_library: boolean | null;
-    /**
-     * Visible Shared
-     */
-    visible_shared: boolean | null;
 };
 
 /**
@@ -5606,12 +5290,19 @@ export type PresetCategory = 'charts' | 'seasonal' | 'decades' | 'franchises' | 
  * An export, with what it left out and what an install adding it should know.
  */
 export type PresetExport = {
-    file: CollectionPresetFileOutput | null;
+    /**
+     * Count
+     */
+    count: number;
     issue: ContributionIssue | null;
     /**
      * Refused
      */
     refused: Array<PresetRefusal>;
+    /**
+     * Text
+     */
+    text: string | null;
     /**
      * Warnings
      */
@@ -5645,6 +5336,8 @@ export type PresetGallery = {
      */
     presets: Array<PresetListing>;
 };
+
+export type PresetId = string;
 
 /**
  * PresetImage
@@ -5692,10 +5385,7 @@ export type PresetMetadataInput = {
      * Description
      */
     description: string;
-    /**
-     * Id
-     */
-    id: string;
+    id: PresetId;
     /**
      * Media Types
      */
@@ -5721,10 +5411,7 @@ export type PresetMetadataOutput = {
      * Description
      */
     description: string;
-    /**
-     * Id
-     */
-    id: string;
+    id: PresetId;
     /**
      * Media Types
      */
@@ -5773,6 +5460,84 @@ export type PresetRefusal = {
 };
 
 export type PresetTag = string;
+
+/**
+ * PresetUseCreate
+ *
+ * Keep track of the OvertureDB preset item a collection or set was saved from.
+ */
+export type PresetUseCreate = {
+    /**
+     * Collection Id
+     */
+    collection_id?: number | null;
+    group?: GroupName | null;
+    /**
+     * Item
+     */
+    item: string;
+    preset_id: PresetId;
+};
+
+/**
+ * PresetUseRead
+ *
+ * A collection or set saved from a preset, and what OvertureDB changed since.
+ */
+export type PresetUseRead = {
+    /**
+     * Changes
+     */
+    changes: Array<string>;
+    /**
+     * Collection Id
+     */
+    collection_id: number | null;
+    /**
+     * Gone
+     */
+    gone: boolean;
+    group: GroupName | null;
+    /**
+     * Item
+     */
+    item: string;
+    preset_id: PresetId;
+    /**
+     * Preset Title
+     */
+    preset_title: string | null;
+};
+
+/**
+ * PresetUseReview
+ *
+ * Take OvertureDB's changes to a preset item, or keep the saved one as it is.
+ */
+export type PresetUseReview = {
+    /**
+     * Collection Id
+     */
+    collection_id?: number | null;
+    group?: GroupName | null;
+    /**
+     * Take
+     */
+    take: boolean;
+};
+
+/**
+ * PresetUses
+ *
+ * Every collection and set saved from a preset.
+ */
+export type PresetUses = {
+    error: PublicText | null;
+    /**
+     * Uses
+     */
+    uses: Array<PresetUseRead>;
+};
 
 /**
  * PublicError
@@ -5986,7 +5751,9 @@ export type RenameRequest = {
  */
 export type RenameStatus = 'renamed' | 'conflict' | 'error';
 
-export type RequiredGroupName = GroupName;
+export type RequiredGroupNameInput = GroupName;
+
+export type RequiredGroupNameOutput = string;
 
 /**
  * SaveArtRequest
@@ -7399,7 +7166,7 @@ export type JsonValueWritable = string | number | number | boolean | Array<JsonV
 
 export type RemovableAssetWritable = ItemArtAssetWritable | 'theme';
 
-export type RequiredGroupNameWritable = GroupName;
+export type RequiredGroupNameInputWritable = GroupName;
 
 export type SourceOrderArtSourceStepWritable = Array<ArtSourceStepWritable>;
 
@@ -7443,14 +7210,6 @@ export type ThemeStatsWritable = {
 
 export type GetRemovalOptionsData = {
     body: RemovalTarget;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/art/removal-options';
@@ -7492,14 +7251,6 @@ export type GetRemovalOptionsResponse = GetRemovalOptionsResponses[keyof GetRemo
 
 export type UploadArtData = {
     body: Blob | File;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/art/uploads';
@@ -7526,10 +7277,6 @@ export type UploadArtErrors = {
      * It is not a JPEG or PNG
      */
     415: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type UploadArtError = UploadArtErrors[keyof UploadArtErrors];
@@ -7545,14 +7292,6 @@ export type UploadArtResponse = UploadArtResponses[keyof UploadArtResponses];
 
 export type RenameAssetsData = {
     body: RenameRequest;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/asset-manager/rename';
@@ -7598,14 +7337,6 @@ export type RenameAssetsResponse = RenameAssetsResponses[keyof RenameAssetsRespo
 
 export type StartScanData = {
     body: ScanRequest;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/asset-manager/scan';
@@ -7647,14 +7378,6 @@ export type StartScanResponse = StartScanResponses[keyof StartScanResponses];
 
 export type StopScanData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/asset-manager/scan/stop';
@@ -7669,10 +7392,6 @@ export type StopScanErrors = {
      * An API key asked for a change, or the CSRF token is missing
      */
     403: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type StopScanError = StopScanErrors[keyof StopScanErrors];
@@ -7688,14 +7407,6 @@ export type StopScanResponse = StopScanResponses[keyof StopScanResponses];
 
 export type ListApiKeysData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/auth/api-keys';
@@ -7710,10 +7421,6 @@ export type ListApiKeysErrors = {
      * An API key asked for a change, or the CSRF token is missing
      */
     403: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type ListApiKeysError = ListApiKeysErrors[keyof ListApiKeysErrors];
@@ -7731,14 +7438,6 @@ export type ListApiKeysResponse = ListApiKeysResponses[keyof ListApiKeysResponse
 
 export type CreateApiKeyData = {
     body: ApiKeyCreate;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/auth/api-keys';
@@ -7784,14 +7483,6 @@ export type CreateApiKeyResponse = CreateApiKeyResponses[keyof CreateApiKeyRespo
 
 export type DeleteApiKeyData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Key Id
@@ -7926,15 +7617,6 @@ export type MeData = {
     url: '/api/auth/me';
 };
 
-export type MeErrors = {
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
-};
-
-export type MeError = MeErrors[keyof MeErrors];
-
 export type MeResponses = {
     /**
      * Successful Response
@@ -8013,14 +7695,6 @@ export type OidcLoginResponses = {
 
 export type ListBackupsData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/backups';
@@ -8035,10 +7709,6 @@ export type ListBackupsErrors = {
      * An API key asked for a change, or the CSRF token is missing
      */
     403: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type ListBackupsError = ListBackupsErrors[keyof ListBackupsErrors];
@@ -8054,14 +7724,6 @@ export type ListBackupsResponse = ListBackupsResponses[keyof ListBackupsResponse
 
 export type CreateBackupData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/backups';
@@ -8076,10 +7738,6 @@ export type CreateBackupErrors = {
      * An API key asked for a change, or the CSRF token is missing
      */
     403: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type CreateBackupError = CreateBackupErrors[keyof CreateBackupErrors];
@@ -8095,14 +7753,6 @@ export type CreateBackupResponse = CreateBackupResponses[keyof CreateBackupRespo
 
 export type GetBackupScheduleData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/backups/schedule';
@@ -8117,10 +7767,6 @@ export type GetBackupScheduleErrors = {
      * An API key asked for a change, or the CSRF token is missing
      */
     403: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetBackupScheduleError = GetBackupScheduleErrors[keyof GetBackupScheduleErrors];
@@ -8136,14 +7782,6 @@ export type GetBackupScheduleResponse = GetBackupScheduleResponses[keyof GetBack
 
 export type UpdateBackupScheduleData = {
     body: BackupScheduleUpdate;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/backups/schedule';
@@ -8185,14 +7823,6 @@ export type UpdateBackupScheduleResponse = UpdateBackupScheduleResponses[keyof U
 
 export type StartBulkAssetsData = {
     body: BulkAssetsRequestInput;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/bulk/assets';
@@ -8234,14 +7864,6 @@ export type StartBulkAssetsResponse = StartBulkAssetsResponses[keyof StartBulkAs
 
 export type ListBulkAssetsSchedulesData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/bulk/assets/schedules';
@@ -8256,10 +7878,6 @@ export type ListBulkAssetsSchedulesErrors = {
      * An API key asked for a change, or the CSRF token is missing
      */
     403: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type ListBulkAssetsSchedulesError = ListBulkAssetsSchedulesErrors[keyof ListBulkAssetsSchedulesErrors];
@@ -8277,14 +7895,6 @@ export type ListBulkAssetsSchedulesResponse = ListBulkAssetsSchedulesResponses[k
 
 export type CreateBulkAssetsScheduleData = {
     body: BulkAssetsScheduleWrite;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/bulk/assets/schedules';
@@ -8326,14 +7936,6 @@ export type CreateBulkAssetsScheduleResponse = CreateBulkAssetsScheduleResponses
 
 export type DeleteBulkAssetsScheduleData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Schedule Id
@@ -8378,14 +7980,6 @@ export type DeleteBulkAssetsScheduleResponse = DeleteBulkAssetsScheduleResponses
 
 export type UpdateBulkAssetsScheduleData = {
     body: BulkAssetsScheduleWrite;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Schedule Id
@@ -8438,14 +8032,6 @@ export type UpdateBulkAssetsScheduleResponse = UpdateBulkAssetsScheduleResponses
 
 export type RunBulkAssetsScheduleData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Schedule Id
@@ -8493,14 +8079,6 @@ export type StopBulkAssetsData = {
      * Body
      */
     body?: BulkAssetsStopRequest | null;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/bulk/assets/stop';
@@ -8542,14 +8120,6 @@ export type StopBulkAssetsResponse = StopBulkAssetsResponses[keyof StopBulkAsset
 
 export type ListCatalogEntriesData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query: {
         /**
@@ -8598,14 +8168,6 @@ export type ListCatalogEntriesResponse = ListCatalogEntriesResponses[keyof ListC
 
 export type GetCatalogCountsData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/catalog/catalog/counts';
@@ -8624,10 +8186,6 @@ export type GetCatalogCountsErrors = {
      * OvertureDB is disabled
      */
     409: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetCatalogCountsError = GetCatalogCountsErrors[keyof GetCatalogCountsErrors];
@@ -8643,14 +8201,6 @@ export type GetCatalogCountsResponse = GetCatalogCountsResponses[keyof GetCatalo
 
 export type DiscardCatalogDraftsData = {
     body: CatalogDraftsDiscard;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Entry kind
@@ -8705,14 +8255,6 @@ export type DiscardCatalogDraftsResponse = DiscardCatalogDraftsResponses[keyof D
 
 export type GetCatalogEntryData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Entry kind
@@ -8765,14 +8307,6 @@ export type GetCatalogEntryResponse = GetCatalogEntryResponses[keyof GetCatalogE
 
 export type DiscardCatalogDraftData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Entry kind
@@ -8825,14 +8359,6 @@ export type DiscardCatalogDraftResponse = DiscardCatalogDraftResponses[keyof Dis
 
 export type SaveCatalogDraftData = {
     body: CatalogDraftUpdate;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Entry kind
@@ -8893,14 +8419,6 @@ export type SaveCatalogDraftResponse = SaveCatalogDraftResponses[keyof SaveCatal
 
 export type GetCatalogEntryRecordData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Entry kind
@@ -8949,14 +8467,6 @@ export type GetCatalogEntryRecordResponse = GetCatalogEntryRecordResponses[keyof
 
 export type GetCatalogCollectionIssueData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -9001,14 +8511,6 @@ export type GetCatalogCollectionIssueResponse = GetCatalogCollectionIssueRespons
 
 export type GetCatalogCollectionRecordData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -9053,14 +8555,6 @@ export type GetCatalogCollectionRecordResponse = GetCatalogCollectionRecordRespo
 
 export type SetCatalogEnabledData = {
     body: CatalogEnabledRequest;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/catalog/enabled';
@@ -9102,14 +8596,6 @@ export type SetCatalogEnabledResponse = SetCatalogEnabledResponses[keyof SetCata
 
 export type ExportCatalogSelectionsData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/catalog/export';
@@ -9124,10 +8610,6 @@ export type ExportCatalogSelectionsErrors = {
      * An API key asked for a change, or the CSRF token is missing
      */
     403: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type ExportCatalogSelectionsError = ExportCatalogSelectionsErrors[keyof ExportCatalogSelectionsErrors];
@@ -9143,14 +8625,6 @@ export type ExportCatalogSelectionsResponse = ExportCatalogSelectionsResponses[k
 
 export type GetCatalogItemIssueData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Item Id
@@ -9195,14 +8669,6 @@ export type GetCatalogItemIssueResponse = GetCatalogItemIssueResponses[keyof Get
 
 export type GetCatalogRecordData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Item Id
@@ -9247,14 +8713,6 @@ export type GetCatalogRecordResponse = GetCatalogRecordResponses[keyof GetCatalo
 
 export type GetCatalogSourcesData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Item Id
@@ -9299,14 +8757,6 @@ export type GetCatalogSourcesResponse = GetCatalogSourcesResponses[keyof GetCata
 
 export type GetCatalogStatusData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/catalog/status';
@@ -9321,10 +8771,6 @@ export type GetCatalogStatusErrors = {
      * An API key asked for a change, or the CSRF token is missing
      */
     403: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetCatalogStatusError = GetCatalogStatusErrors[keyof GetCatalogStatusErrors];
@@ -9340,14 +8786,6 @@ export type GetCatalogStatusResponse = GetCatalogStatusResponses[keyof GetCatalo
 
 export type SyncCatalogNowData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/catalog/sync';
@@ -9362,10 +8800,6 @@ export type SyncCatalogNowErrors = {
      * An API key asked for a change, or the CSRF token is missing
      */
     403: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type SyncCatalogNowError = SyncCatalogNowErrors[keyof SyncCatalogNowErrors];
@@ -9379,16 +8813,298 @@ export type SyncCatalogNowResponses = {
 
 export type SyncCatalogNowResponse = SyncCatalogNowResponses[keyof SyncCatalogNowResponses];
 
+export type ListCollectionGroupsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/collection-groups';
+};
+
+export type ListCollectionGroupsErrors = {
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type ListCollectionGroupsError = ListCollectionGroupsErrors[keyof ListCollectionGroupsErrors];
+
+export type ListCollectionGroupsResponses = {
+    /**
+     * Response List Collection Groups
+     *
+     * Successful Response
+     */
+    200: Array<CollectionGroupRead>;
+};
+
+export type ListCollectionGroupsResponse = ListCollectionGroupsResponses[keyof ListCollectionGroupsResponses];
+
+export type DeleteCollectionGroupData = {
+    body: CollectionGroupDelete;
+    path: {
+        /**
+         * Name
+         */
+        name: string;
+    };
+    query?: never;
+    url: '/api/collection-groups/{name}';
+};
+
+export type DeleteCollectionGroupErrors = {
+    /**
+     * The body is not text in the declared encoding
+     */
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No collection group has that name
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type DeleteCollectionGroupError = DeleteCollectionGroupErrors[keyof DeleteCollectionGroupErrors];
+
+export type DeleteCollectionGroupResponses = {
+    /**
+     * Successful Response
+     */
+    200: BulkCollectionOperationResult;
+};
+
+export type DeleteCollectionGroupResponse = DeleteCollectionGroupResponses[keyof DeleteCollectionGroupResponses];
+
+export type GetCollectionGroupPolicyData = {
+    body?: never;
+    path: {
+        /**
+         * Name
+         */
+        name: string;
+    };
+    query?: never;
+    url: '/api/collection-groups/{name}';
+};
+
+export type GetCollectionGroupPolicyErrors = {
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type GetCollectionGroupPolicyError = GetCollectionGroupPolicyErrors[keyof GetCollectionGroupPolicyErrors];
+
+export type GetCollectionGroupPolicyResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionGroupPolicyOutput;
+};
+
+export type GetCollectionGroupPolicyResponse = GetCollectionGroupPolicyResponses[keyof GetCollectionGroupPolicyResponses];
+
+export type RenameCollectionGroupData = {
+    body: CollectionGroupRename;
+    path: {
+        /**
+         * Name
+         */
+        name: string;
+    };
+    query?: never;
+    url: '/api/collection-groups/{name}';
+};
+
+export type RenameCollectionGroupErrors = {
+    /**
+     * The body is not text in the declared encoding
+     */
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No collection group has that name
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type RenameCollectionGroupError = RenameCollectionGroupErrors[keyof RenameCollectionGroupErrors];
+
+export type RenameCollectionGroupResponses = {
+    /**
+     * Successful Response
+     */
+    200: StatusResponse;
+};
+
+export type RenameCollectionGroupResponse = RenameCollectionGroupResponses[keyof RenameCollectionGroupResponses];
+
+export type SaveCollectionGroupPolicyData = {
+    body: CollectionGroupPolicyInput;
+    path: {
+        /**
+         * Name
+         */
+        name: string;
+    };
+    query?: {
+        /**
+         * New Set
+         *
+         * Create a set; refuse a group that already is one
+         */
+        new_set?: boolean;
+    };
+    url: '/api/collection-groups/{name}';
+};
+
+export type SaveCollectionGroupPolicyErrors = {
+    /**
+     * The body is not text in the declared encoding
+     */
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * Nothing has the ID or key the path names
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type SaveCollectionGroupPolicyError = SaveCollectionGroupPolicyErrors[keyof SaveCollectionGroupPolicyErrors];
+
+export type SaveCollectionGroupPolicyResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionGroupPolicyOutput;
+};
+
+export type SaveCollectionGroupPolicyResponse = SaveCollectionGroupPolicyResponses[keyof SaveCollectionGroupPolicyResponses];
+
 export type ListCollectionsData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/collections';
@@ -9407,10 +9123,6 @@ export type ListCollectionsErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
     /**
      * A media server failed the request
      */
@@ -9436,14 +9148,6 @@ export type ListCollectionsResponse = ListCollectionsResponses[keyof ListCollect
 
 export type CreateCollectionData = {
     body: CollectionCreate;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/collections';
@@ -9497,14 +9201,6 @@ export type CreateCollectionResponse = CreateCollectionResponses[keyof CreateCol
 
 export type GetCollectionArrOptionsData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query: {
         /**
@@ -9555,14 +9251,6 @@ export type GetCollectionArrOptionsResponse = GetCollectionArrOptionsResponses[k
 
 export type BulkSetCollectionMonitoredData = {
     body: BulkCollectionMonitorUpdate;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/collections/bulk-monitored';
@@ -9616,14 +9304,6 @@ export type BulkSetCollectionMonitoredResponse = BulkSetCollectionMonitoredRespo
 
 export type BulkOperateCollectionsData = {
     body: BulkCollectionOperation;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/collections/bulk-operation';
@@ -9677,14 +9357,6 @@ export type BulkOperateCollectionsResponse = BulkOperateCollectionsResponses[key
 
 export type GetCollectionCapabilitiesData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query: {
         /**
@@ -9696,7 +9368,7 @@ export type GetCollectionCapabilitiesData = {
          *
          * The collection's libraries; every server without them.
          */
-        library_ids?: Array<string> | null;
+        library_ids?: Array<LibraryId> | null;
     };
     url: '/api/collections/capabilities';
 };
@@ -9741,14 +9413,6 @@ export type GetCollectionCapabilitiesResponse = GetCollectionCapabilitiesRespons
 
 export type GetCollectionDefaultsData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: {
         /**
@@ -9799,14 +9463,6 @@ export type GetCollectionDefaultsResponse = GetCollectionDefaultsResponses[keyof
 
 export type ListCollectionFieldValuesData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query: {
         /**
@@ -9866,350 +9522,8 @@ export type ListCollectionFieldValuesResponses = {
 
 export type ListCollectionFieldValuesResponse = ListCollectionFieldValuesResponses[keyof ListCollectionFieldValuesResponses];
 
-export type ListCollectionGroupsData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/collections/groups';
-};
-
-export type ListCollectionGroupsErrors = {
-    /**
-     * Not signed in, or the API key is not valid
-     */
-    401: ErrorResponse;
-    /**
-     * An API key asked for a change, or the CSRF token is missing
-     */
-    403: ErrorResponse;
-    /**
-     * No media server is configured
-     */
-    409: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
-    /**
-     * A media server failed the request
-     */
-    502: ErrorResponse;
-    /**
-     * A media server is unavailable
-     */
-    503: ErrorResponse;
-};
-
-export type ListCollectionGroupsError = ListCollectionGroupsErrors[keyof ListCollectionGroupsErrors];
-
-export type ListCollectionGroupsResponses = {
-    /**
-     * Response List Collection Groups
-     *
-     * Successful Response
-     */
-    200: Array<CollectionGroupRead>;
-};
-
-export type ListCollectionGroupsResponse = ListCollectionGroupsResponses[keyof ListCollectionGroupsResponses];
-
-export type DeleteCollectionGroupData = {
-    body: CollectionGroupDelete;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Name
-         */
-        name: string;
-    };
-    query?: never;
-    url: '/api/collections/groups/{name}';
-};
-
-export type DeleteCollectionGroupErrors = {
-    /**
-     * The body is not text in the declared encoding
-     */
-    400: ErrorResponse;
-    /**
-     * Not signed in, or the API key is not valid
-     */
-    401: ErrorResponse;
-    /**
-     * An API key asked for a change, or the CSRF token is missing
-     */
-    403: ErrorResponse;
-    /**
-     * No collection group has that name
-     */
-    404: ErrorResponse;
-    /**
-     * No media server is configured
-     */
-    409: ErrorResponse;
-    /**
-     * The body is larger than the route accepts
-     */
-    413: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
-    /**
-     * A media server failed the request
-     */
-    502: ErrorResponse;
-    /**
-     * A media server is unavailable
-     */
-    503: ErrorResponse;
-};
-
-export type DeleteCollectionGroupError = DeleteCollectionGroupErrors[keyof DeleteCollectionGroupErrors];
-
-export type DeleteCollectionGroupResponses = {
-    /**
-     * Successful Response
-     */
-    200: BulkCollectionOperationResult;
-};
-
-export type DeleteCollectionGroupResponse = DeleteCollectionGroupResponses[keyof DeleteCollectionGroupResponses];
-
-export type GetCollectionGroupPolicyData = {
-    body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Name
-         */
-        name: string;
-    };
-    query?: never;
-    url: '/api/collections/groups/{name}';
-};
-
-export type GetCollectionGroupPolicyErrors = {
-    /**
-     * Not signed in, or the API key is not valid
-     */
-    401: ErrorResponse;
-    /**
-     * An API key asked for a change, or the CSRF token is missing
-     */
-    403: ErrorResponse;
-    /**
-     * Nothing has the ID or key the path names
-     */
-    404: ErrorResponse;
-    /**
-     * No media server is configured
-     */
-    409: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
-    /**
-     * A media server failed the request
-     */
-    502: ErrorResponse;
-    /**
-     * A media server is unavailable
-     */
-    503: ErrorResponse;
-};
-
-export type GetCollectionGroupPolicyError = GetCollectionGroupPolicyErrors[keyof GetCollectionGroupPolicyErrors];
-
-export type GetCollectionGroupPolicyResponses = {
-    /**
-     * Successful Response
-     */
-    200: CollectionGroupPolicyOutput;
-};
-
-export type GetCollectionGroupPolicyResponse = GetCollectionGroupPolicyResponses[keyof GetCollectionGroupPolicyResponses];
-
-export type RenameCollectionGroupData = {
-    body: CollectionGroupRename;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Name
-         */
-        name: string;
-    };
-    query?: never;
-    url: '/api/collections/groups/{name}';
-};
-
-export type RenameCollectionGroupErrors = {
-    /**
-     * The body is not text in the declared encoding
-     */
-    400: ErrorResponse;
-    /**
-     * Not signed in, or the API key is not valid
-     */
-    401: ErrorResponse;
-    /**
-     * An API key asked for a change, or the CSRF token is missing
-     */
-    403: ErrorResponse;
-    /**
-     * No collection group has that name
-     */
-    404: ErrorResponse;
-    /**
-     * No media server is configured
-     */
-    409: ErrorResponse;
-    /**
-     * The body is larger than the route accepts
-     */
-    413: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
-    /**
-     * A media server failed the request
-     */
-    502: ErrorResponse;
-    /**
-     * A media server is unavailable
-     */
-    503: ErrorResponse;
-};
-
-export type RenameCollectionGroupError = RenameCollectionGroupErrors[keyof RenameCollectionGroupErrors];
-
-export type RenameCollectionGroupResponses = {
-    /**
-     * Successful Response
-     */
-    200: StatusResponse;
-};
-
-export type RenameCollectionGroupResponse = RenameCollectionGroupResponses[keyof RenameCollectionGroupResponses];
-
-export type SaveCollectionGroupPolicyData = {
-    body: CollectionGroupPolicyInput;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
-    path: {
-        /**
-         * Name
-         */
-        name: string;
-    };
-    query?: {
-        /**
-         * New Set
-         *
-         * Create a set; refuse a group that already is one
-         */
-        new_set?: boolean;
-    };
-    url: '/api/collections/groups/{name}';
-};
-
-export type SaveCollectionGroupPolicyErrors = {
-    /**
-     * The body is not text in the declared encoding
-     */
-    400: ErrorResponse;
-    /**
-     * Not signed in, or the API key is not valid
-     */
-    401: ErrorResponse;
-    /**
-     * An API key asked for a change, or the CSRF token is missing
-     */
-    403: ErrorResponse;
-    /**
-     * Nothing has the ID or key the path names
-     */
-    404: ErrorResponse;
-    /**
-     * No media server is configured
-     */
-    409: ErrorResponse;
-    /**
-     * The body is larger than the route accepts
-     */
-    413: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
-    /**
-     * A media server failed the request
-     */
-    502: ErrorResponse;
-    /**
-     * A media server is unavailable
-     */
-    503: ErrorResponse;
-};
-
-export type SaveCollectionGroupPolicyError = SaveCollectionGroupPolicyErrors[keyof SaveCollectionGroupPolicyErrors];
-
-export type SaveCollectionGroupPolicyResponses = {
-    /**
-     * Successful Response
-     */
-    200: CollectionGroupPolicyOutput;
-};
-
-export type SaveCollectionGroupPolicyResponse = SaveCollectionGroupPolicyResponses[keyof SaveCollectionGroupPolicyResponses];
-
 export type SearchMdblistListsData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query: {
         /**
@@ -10262,14 +9576,6 @@ export type SearchMdblistListsResponse = SearchMdblistListsResponses[keyof Searc
 
 export type ListCollectionPresetsData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/collections/presets';
@@ -10288,10 +9594,6 @@ export type ListCollectionPresetsErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
     /**
      * A media server failed the request
      */
@@ -10315,14 +9617,6 @@ export type ListCollectionPresetsResponse = ListCollectionPresetsResponses[keyof
 
 export type ExportCollectionPresetData = {
     body: PresetExportRequest;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/collections/presets/export';
@@ -10376,14 +9670,6 @@ export type ExportCollectionPresetResponse = ExportCollectionPresetResponses[key
 
 export type ReadCollectionPresetFileData = {
     body: CollectionPresetFileInput;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/collections/presets/file';
@@ -10435,16 +9721,165 @@ export type ReadCollectionPresetFileResponses = {
 
 export type ReadCollectionPresetFileResponse = ReadCollectionPresetFileResponses[keyof ReadCollectionPresetFileResponses];
 
+export type ListPresetUsesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/collections/presets/uses';
+};
+
+export type ListPresetUsesErrors = {
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * A media server failed the request
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type ListPresetUsesError = ListPresetUsesErrors[keyof ListPresetUsesErrors];
+
+export type ListPresetUsesResponses = {
+    /**
+     * Successful Response
+     */
+    200: PresetUses;
+};
+
+export type ListPresetUsesResponse = ListPresetUsesResponses[keyof ListPresetUsesResponses];
+
+export type RecordPresetUseData = {
+    body: PresetUseCreate;
+    path?: never;
+    query?: never;
+    url: '/api/collections/presets/uses';
+};
+
+export type RecordPresetUseErrors = {
+    /**
+     * The body is not text in the declared encoding
+     */
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No such collection, group or preset item
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * OvertureDB's presets could not be read
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type RecordPresetUseError = RecordPresetUseErrors[keyof RecordPresetUseErrors];
+
+export type RecordPresetUseResponses = {
+    /**
+     * Successful Response
+     */
+    200: PresetUseRead;
+};
+
+export type RecordPresetUseResponse = RecordPresetUseResponses[keyof RecordPresetUseResponses];
+
+export type ReviewPresetUseData = {
+    body: PresetUseReview;
+    path?: never;
+    query?: never;
+    url: '/api/collections/presets/uses/review';
+};
+
+export type ReviewPresetUseErrors = {
+    /**
+     * The body is not text in the declared encoding
+     */
+    400: ErrorResponse;
+    /**
+     * Not signed in, or the API key is not valid
+     */
+    401: ErrorResponse;
+    /**
+     * An API key asked for a change, or the CSRF token is missing
+     */
+    403: ErrorResponse;
+    /**
+     * No such collection, group or preset item
+     */
+    404: ErrorResponse;
+    /**
+     * No media server is configured
+     */
+    409: ErrorResponse;
+    /**
+     * The body is larger than the route accepts
+     */
+    413: ErrorResponse;
+    /**
+     * The request breaks the schema or a rule
+     */
+    422: ErrorResponse | ValidationErrorResponse;
+    /**
+     * OvertureDB's presets could not be read
+     */
+    502: ErrorResponse;
+    /**
+     * A media server is unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type ReviewPresetUseError = ReviewPresetUseErrors[keyof ReviewPresetUseErrors];
+
+export type ReviewPresetUseResponses = {
+    /**
+     * Response Review Preset Use
+     *
+     * Successful Response
+     */
+    200: PresetUseRead | null;
+};
+
+export type ReviewPresetUseResponse = ReviewPresetUseResponses[keyof ReviewPresetUseResponses];
+
 export type PreviewCollectionData = {
     body: CollectionPreviewRequest;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/collections/preview';
@@ -10498,14 +9933,6 @@ export type PreviewCollectionResponse = PreviewCollectionResponses[keyof Preview
 
 export type RecommendCollectionKindData = {
     body: CollectionKindRequest;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/collections/recommend-kind';
@@ -10561,14 +9988,6 @@ export type RecommendCollectionKindResponse = RecommendCollectionKindResponses[k
 
 export type PreviewCollectionSetData = {
     body: CollectionSetPreview;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/collections/sets/preview';
@@ -10624,14 +10043,6 @@ export type PreviewCollectionSetResponse = PreviewCollectionSetResponses[keyof P
 
 export type ListRadarrTagsData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/collections/tags/radarr';
@@ -10650,10 +10061,6 @@ export type ListRadarrTagsErrors = {
      * A setting it needs is not set
      */
     409: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
     /**
      * A media server failed the request
      */
@@ -10679,14 +10086,6 @@ export type ListRadarrTagsResponse = ListRadarrTagsResponses[keyof ListRadarrTag
 
 export type ListSonarrTagsData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/collections/tags/sonarr';
@@ -10705,10 +10104,6 @@ export type ListSonarrTagsErrors = {
      * A setting it needs is not set
      */
     409: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
     /**
      * A media server failed the request
      */
@@ -10734,14 +10129,6 @@ export type ListSonarrTagsResponse = ListSonarrTagsResponses[keyof ListSonarrTag
 
 export type DeleteCollectionData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -10803,14 +10190,6 @@ export type DeleteCollectionResponse = DeleteCollectionResponses[keyof DeleteCol
 
 export type GetCollectionData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -10867,14 +10246,6 @@ export type GetCollectionResponse = GetCollectionResponses[keyof GetCollectionRe
 
 export type UpdateCollectionData = {
     body: CollectionOptions;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -10939,14 +10310,6 @@ export type UpdateCollectionResponse = UpdateCollectionResponses[keyof UpdateCol
 
 export type PlanCollectionAdoptionData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -11003,14 +10366,6 @@ export type PlanCollectionAdoptionResponse = PlanCollectionAdoptionResponses[key
 
 export type AdoptCollectionData = {
     body: CollectionAdoption;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -11075,14 +10430,6 @@ export type AdoptCollectionResponse = AdoptCollectionResponses[keyof AdoptCollec
 
 export type RemoveAllCollectionArtData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -11152,14 +10499,6 @@ export type RemoveAllCollectionArtResponse = RemoveAllCollectionArtResponses[key
 
 export type RemoveCollectionArtData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -11233,14 +10572,6 @@ export type RemoveCollectionArtResponse = RemoveCollectionArtResponses[keyof Rem
 
 export type SaveCollectionArtData = {
     body: SaveCollectionArtRequest;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -11309,14 +10640,6 @@ export type SaveCollectionArtResponse = SaveCollectionArtResponses[keyof SaveCol
 
 export type GetGeneratedCollectionArtData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -11381,14 +10704,6 @@ export type GetGeneratedCollectionArtResponses = {
 
 export type MatchCollectionArtData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -11454,14 +10769,6 @@ export type MatchCollectionArtResponse = MatchCollectionArtResponses[keyof Match
 
 export type GetCollectionArtSourcesData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -11522,14 +10829,6 @@ export type GetCollectionArtSourcesResponse = GetCollectionArtSourcesResponses[k
 
 export type ProxyCollectionImageData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -11601,14 +10900,6 @@ export type ProxyCollectionImageResponses = {
 
 export type ServeCollectionLocalImageData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -11680,14 +10971,6 @@ export type ServeCollectionLocalImageResponses = {
 
 export type SetCollectionMembersData = {
     body: CollectionMembersUpdate;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -11752,14 +11035,6 @@ export type SetCollectionMembersResponse = SetCollectionMembersResponses[keyof S
 
 export type GetCollectionMissingData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -11816,14 +11091,6 @@ export type GetCollectionMissingResponse = GetCollectionMissingResponses[keyof G
 
 export type RequestCollectionMissingData = {
     body: CollectionRequest;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -11888,14 +11155,6 @@ export type RequestCollectionMissingResponse = RequestCollectionMissingResponses
 
 export type SetCollectionMonitoredData = {
     body: MonitorUpdate;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -11960,14 +11219,6 @@ export type SetCollectionMonitoredResponse = SetCollectionMonitoredResponses[key
 
 export type OrphanCollectionData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -12024,14 +11275,6 @@ export type OrphanCollectionResponse = OrphanCollectionResponses[keyof OrphanCol
 
 export type GetCollectionRecordData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -12088,14 +11331,6 @@ export type GetCollectionRecordResponse = GetCollectionRecordResponses[keyof Get
 
 export type SaveCollectionRuleData = {
     body: CollectionRuleWriteInput;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -12160,14 +11395,6 @@ export type SaveCollectionRuleResponse = SaveCollectionRuleResponses[keyof SaveC
 
 export type RemoveCollectionThemeData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -12237,14 +11464,6 @@ export type RemoveCollectionThemeResponse = RemoveCollectionThemeResponses[keyof
 
 export type GetCollectionThemeData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -12301,14 +11520,6 @@ export type GetCollectionThemeResponse = GetCollectionThemeResponses[keyof GetCo
 
 export type SetCollectionThemeData = {
     body: SetCollectionThemeRequest;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -12389,14 +11600,6 @@ export type HealthResponse2 = HealthResponses[keyof HealthResponses];
 
 export type GetJobLogData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Run Id
@@ -12460,14 +11663,6 @@ export type GetJobLogResponse = GetJobLogResponses[keyof GetJobLogResponses];
 
 export type GetJobResultsData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Run Id
@@ -12510,14 +11705,6 @@ export type GetJobResultsResponse = GetJobResultsResponses[keyof GetJobResultsRe
 
 export type ClearJobSnapshotData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Job kind
@@ -12565,14 +11752,6 @@ export type ClearJobSnapshotResponse = ClearJobSnapshotResponses[keyof ClearJobS
 
 export type GetLibraryFilterCapabilitiesData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query: {
         /**
@@ -12623,14 +11802,6 @@ export type GetLibraryFilterCapabilitiesResponse = GetLibraryFilterCapabilitiesR
 
 export type MatchLibraryFilterData = {
     body: LibraryFilterMatchRequest;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/library/filters/match';
@@ -12684,14 +11855,6 @@ export type MatchLibraryFilterResponse = MatchLibraryFilterResponses[keyof Match
 
 export type ListSavedFiltersData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/library/filters/saved';
@@ -12710,10 +11873,6 @@ export type ListSavedFiltersErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
     /**
      * A media server failed the request
      */
@@ -12739,14 +11898,6 @@ export type ListSavedFiltersResponse = ListSavedFiltersResponses[keyof ListSaved
 
 export type CreateSavedFilterData = {
     body: SavedFilterWrite;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/library/filters/saved';
@@ -12800,14 +11951,6 @@ export type CreateSavedFilterResponse = CreateSavedFilterResponses[keyof CreateS
 
 export type DeleteSavedFilterData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Filter Id
@@ -12864,14 +12007,6 @@ export type DeleteSavedFilterResponse = DeleteSavedFilterResponses[keyof DeleteS
 
 export type UpdateSavedFilterData = {
     body: SavedFilterWrite;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Filter Id
@@ -12936,14 +12071,6 @@ export type UpdateSavedFilterResponse = UpdateSavedFilterResponses[keyof UpdateS
 
 export type GetFolderRootsData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/library/folder-roots';
@@ -12958,10 +12085,6 @@ export type GetFolderRootsErrors = {
      * An API key asked for a change, or the CSRF token is missing
      */
     403: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetFolderRootsError = GetFolderRootsErrors[keyof GetFolderRootsErrors];
@@ -12977,14 +12100,6 @@ export type GetFolderRootsResponse = GetFolderRootsResponses[keyof GetFolderRoot
 
 export type ListItemsData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: {
         /**
@@ -13025,14 +12140,6 @@ export type ListItemsResponse = ListItemsResponses[keyof ListItemsResponses];
 
 export type BulkOperateItemsData = {
     body: BulkItemOperation;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/library/items/bulk-operation';
@@ -13078,14 +12185,6 @@ export type BulkOperateItemsResponse = BulkOperateItemsResponses[keyof BulkOpera
 
 export type DeleteItemData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Item Id
@@ -13130,14 +12229,6 @@ export type DeleteItemResponse = DeleteItemResponses[keyof DeleteItemResponses];
 
 export type GetItemData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Item Id
@@ -13182,14 +12273,6 @@ export type GetItemResponse = GetItemResponses[keyof GetItemResponses];
 
 export type RemoveAllArtData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Item Id
@@ -13251,14 +12334,6 @@ export type RemoveAllArtResponse = RemoveAllArtResponses[keyof RemoveAllArtRespo
 
 export type RemoveArtData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Item Id
@@ -13328,14 +12403,6 @@ export type RemoveArtResponse = RemoveArtResponses[keyof RemoveArtResponses];
 
 export type SaveArtData = {
     body: SaveArtRequest;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Item Id
@@ -13403,14 +12470,6 @@ export type SaveArtResponse = SaveArtResponses[keyof SaveArtResponses];
 
 export type MatchArtData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Item Id
@@ -13470,14 +12529,6 @@ export type MatchArtResponse = MatchArtResponses[keyof MatchArtResponses];
 
 export type GetArtSourcesData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Item Id
@@ -13533,14 +12584,6 @@ export type GetArtSourcesResponse = GetArtSourcesResponses[keyof GetArtSourcesRe
 
 export type ServeLocalImageData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Item Id
@@ -13600,14 +12643,6 @@ export type ServeLocalImageResponses = {
 
 export type SetMonitoredData = {
     body: MonitorUpdate;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Item Id
@@ -13660,14 +12695,6 @@ export type SetMonitoredResponse = SetMonitoredResponses[keyof SetMonitoredRespo
 
 export type ProxyItemProviderArtData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Item Id
@@ -13727,14 +12754,6 @@ export type ProxyItemProviderArtResponses = {
 
 export type GetItemRecordData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Item Id
@@ -13779,14 +12798,6 @@ export type GetItemRecordResponse = GetItemRecordResponses[keyof GetItemRecordRe
 
 export type GetSeasonsData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Item Id
@@ -13833,14 +12844,6 @@ export type GetSeasonsResponse = GetSeasonsResponses[keyof GetSeasonsResponses];
 
 export type RemoveThemeData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Item Id
@@ -13898,14 +12901,6 @@ export type RemoveThemeResponse = RemoveThemeResponses[keyof RemoveThemeResponse
 
 export type SelectThemeData = {
     body: SelectThemeRequest;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Item Id
@@ -13958,14 +12953,6 @@ export type SelectThemeResponse = SelectThemeResponses[keyof SelectThemeResponse
 
 export type GetLibrariesData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: {
         /**
@@ -14008,14 +12995,6 @@ export type GetLibrariesResponse = GetLibrariesResponses[keyof GetLibrariesRespo
 
 export type ServeLocalSeasonImageData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Season Id
@@ -14071,14 +13050,6 @@ export type ServeLocalSeasonImageResponses = {
 
 export type ProxySeasonProviderArtData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Season Id
@@ -14134,14 +13105,6 @@ export type ProxySeasonProviderArtResponses = {
 
 export type ListServerLibrariesData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/media-server/libraries';
@@ -14160,10 +13123,6 @@ export type ListServerLibrariesErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
     /**
      * A media server failed the request
      */
@@ -14189,14 +13148,6 @@ export type ListServerLibrariesResponse = ListServerLibrariesResponses[keyof Lis
 
 export type GetServerWebLinksData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/media-server/links';
@@ -14215,10 +13166,6 @@ export type GetServerWebLinksErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
     /**
      * A media server failed the request
      */
@@ -14244,14 +13191,6 @@ export type GetServerWebLinksResponse = GetServerWebLinksResponses[keyof GetServ
 
 export type GetNotificationsData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/notifications';
@@ -14266,10 +13205,6 @@ export type GetNotificationsErrors = {
      * An API key asked for a change, or the CSRF token is missing
      */
     403: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetNotificationsError = GetNotificationsErrors[keyof GetNotificationsErrors];
@@ -14285,14 +13220,6 @@ export type GetNotificationsResponse = GetNotificationsResponses[keyof GetNotifi
 
 export type UpdateNotificationsData = {
     body: NotificationSettingsUpdate;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/notifications';
@@ -14334,14 +13261,6 @@ export type UpdateNotificationsResponse = UpdateNotificationsResponses[keyof Upd
 
 export type SendTestNotificationData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/notifications/test';
@@ -14360,10 +13279,6 @@ export type SendTestNotificationErrors = {
      * A setting it needs is not set
      */
     409: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type SendTestNotificationError = SendTestNotificationErrors[keyof SendTestNotificationErrors];
@@ -14404,14 +13319,6 @@ export type ReadyResponse = ReadyResponses[keyof ReadyResponses];
 
 export type GetRealtimeSnapshotData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/realtime/snapshot';
@@ -14426,10 +13333,6 @@ export type GetRealtimeSnapshotErrors = {
      * An API key asked for a change, or the CSRF token is missing
      */
     403: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetRealtimeSnapshotError = GetRealtimeSnapshotErrors[keyof GetRealtimeSnapshotErrors];
@@ -14445,14 +13348,6 @@ export type GetRealtimeSnapshotResponse = GetRealtimeSnapshotResponses[keyof Get
 
 export type FixAuditFindingsData = {
     body: FixAuditRequest;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/server-audit/fix';
@@ -14506,14 +13401,6 @@ export type FixAuditFindingsResponse = FixAuditFindingsResponses[keyof FixAuditF
 
 export type StopAuditFixData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/server-audit/fix/stop';
@@ -14532,10 +13419,6 @@ export type StopAuditFixErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
     /**
      * A media server failed the request
      */
@@ -14559,14 +13442,6 @@ export type StopAuditFixResponse = StopAuditFixResponses[keyof StopAuditFixRespo
 
 export type StartServerAuditData = {
     body: ServerAuditRequest;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/server-audit/scan';
@@ -14620,14 +13495,6 @@ export type StartServerAuditResponse = StartServerAuditResponses[keyof StartServ
 
 export type StopServerAuditData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/server-audit/scan/stop';
@@ -14646,10 +13513,6 @@ export type StopServerAuditErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
     /**
      * A media server failed the request
      */
@@ -14673,14 +13536,6 @@ export type StopServerAuditResponse = StopServerAuditResponses[keyof StopServerA
 
 export type GetSettingsData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/settings';
@@ -14695,10 +13550,6 @@ export type GetSettingsErrors = {
      * An API key asked for a change, or the CSRF token is missing
      */
     403: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetSettingsError = GetSettingsErrors[keyof GetSettingsErrors];
@@ -14714,14 +13565,6 @@ export type GetSettingsResponse = GetSettingsResponses[keyof GetSettingsResponse
 
 export type UpdateSettingsData = {
     body: AppSettingsUpdate;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/settings';
@@ -14763,14 +13606,6 @@ export type UpdateSettingsResponse = UpdateSettingsResponses[keyof UpdateSetting
 
 export type CheckConnectivityData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/settings/connectivity';
@@ -14785,10 +13620,6 @@ export type CheckConnectivityErrors = {
      * An API key asked for a change, or the CSRF token is missing
      */
     403: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type CheckConnectivityError = CheckConnectivityErrors[keyof CheckConnectivityErrors];
@@ -14804,14 +13635,6 @@ export type CheckConnectivityResponse = CheckConnectivityResponses[keyof CheckCo
 
 export type GetStatsData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/stats';
@@ -14826,10 +13649,6 @@ export type GetStatsErrors = {
      * An API key asked for a change, or the CSRF token is missing
      */
     403: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
 };
 
 export type GetStatsError = GetStatsErrors[keyof GetStatsErrors];
@@ -14845,14 +13664,6 @@ export type GetStatsResponse = GetStatsResponses[keyof GetStatsResponses];
 
 export type RunSyncData = {
     body: SyncRunRequest;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/sync/run';
@@ -14906,14 +13717,6 @@ export type RunSyncResponse = RunSyncResponses[keyof RunSyncResponses];
 
 export type ListSyncSchedulesData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/sync/schedules';
@@ -14932,10 +13735,6 @@ export type ListSyncSchedulesErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
     /**
      * A media server failed the request
      */
@@ -14961,14 +13760,6 @@ export type ListSyncSchedulesResponse = ListSyncSchedulesResponses[keyof ListSyn
 
 export type CreateSyncScheduleData = {
     body: SyncScheduleWrite;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/sync/schedules';
@@ -15022,14 +13813,6 @@ export type CreateSyncScheduleResponse = CreateSyncScheduleResponses[keyof Creat
 
 export type DeleteSyncScheduleData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Schedule Id
@@ -15086,14 +13869,6 @@ export type DeleteSyncScheduleResponse = DeleteSyncScheduleResponses[keyof Delet
 
 export type UpdateSyncScheduleData = {
     body: SyncScheduleWrite;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Schedule Id
@@ -15158,14 +13933,6 @@ export type UpdateSyncScheduleResponse = UpdateSyncScheduleResponses[keyof Updat
 
 export type RunSyncScheduleData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Schedule Id
@@ -15222,14 +13989,6 @@ export type RunSyncScheduleResponse = RunSyncScheduleResponses[keyof RunSyncSche
 
 export type GetSyncStatusData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/sync/status';
@@ -15248,10 +14007,6 @@ export type GetSyncStatusErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
     /**
      * A media server failed the request
      */
@@ -15275,14 +14030,6 @@ export type GetSyncStatusResponse = GetSyncStatusResponses[keyof GetSyncStatusRe
 
 export type StopSyncData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/api/sync/stop';
@@ -15301,10 +14048,6 @@ export type StopSyncErrors = {
      * No media server is configured
      */
     409: ErrorResponse;
-    /**
-     * The request breaks the schema or a rule
-     */
-    422: ErrorResponse | ValidationErrorResponse;
     /**
      * A media server failed the request
      */
@@ -15328,14 +14071,6 @@ export type StopSyncResponse = StopSyncResponses[keyof StopSyncResponses];
 
 export type SearchYoutubeData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query?: {
         /**
@@ -15386,14 +14121,6 @@ export type SearchYoutubeResponse = SearchYoutubeResponses[keyof SearchYoutubeRe
 
 export type GetTmdbCollectionData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Collection Id
@@ -15449,14 +14176,6 @@ export type GetTmdbCollectionResponse = GetTmdbCollectionResponses[keyof GetTmdb
 
 export type SearchTmdbPeopleData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query: {
         /**
@@ -15499,14 +14218,6 @@ export type SearchTmdbPeopleResponse = SearchTmdbPeopleResponses[keyof SearchTmd
 
 export type SearchTmdbData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path?: never;
     query: {
         /**
@@ -15554,14 +14265,6 @@ export type SearchTmdbResponse = SearchTmdbResponses[keyof SearchTmdbResponses];
 
 export type GetTmdbItemData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Media type ('movie' or 'show')
@@ -15614,14 +14317,6 @@ export type GetTmdbItemResponse = GetTmdbItemResponses[keyof GetTmdbItemResponse
 
 export type SaveTmdbArtData = {
     body: SaveArtRequest;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Media type ('movie' or 'show')
@@ -15693,14 +14388,6 @@ export type SaveTmdbArtResponse = SaveTmdbArtResponses[keyof SaveTmdbArtResponse
 
 export type GetTmdbArtSourcesData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Catalog entry kind
@@ -15764,14 +14451,6 @@ export type GetTmdbArtSourcesResponse = GetTmdbArtSourcesResponses[keyof GetTmdb
 
 export type GetTmdbCatalogSourcesData = {
     body?: never;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Media type ('movie' or 'show')
@@ -15824,14 +14503,6 @@ export type GetTmdbCatalogSourcesResponse = GetTmdbCatalogSourcesResponses[keyof
 
 export type SelectTmdbThemeData = {
     body: SelectThemeRequest;
-    headers?: {
-        /**
-         * X-Api-Key
-         *
-         * Read-only API key
-         */
-        'X-Api-Key'?: string | null;
-    };
     path: {
         /**
          * Media type ('movie' or 'show')

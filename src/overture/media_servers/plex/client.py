@@ -1006,7 +1006,9 @@ class PlexClient(MediaServerHttpClient):
         that renames the collection tag its members carry as well, where an
         edit of the metadata item renames the collection alone, and deleting
         it would then leave the members tagged with the old title, from which
-        Plex makes the collection again.
+        Plex makes the collection again. A section's edits reach only
+        collections with items, so an empty one, with no members to retag, is
+        edited as a metadata item.
 
         Plex rejects a smart collection's ``collectionSort`` (its query sorts
         it) and a regular collection's ``collectionFilterBasedOnUser`` with
@@ -1027,7 +1029,12 @@ class PlexClient(MediaServerHttpClient):
                 "titleSort.value": sort_title,
                 "titleSort.locked": int(bool(sort_title)),
             }
-        await self._edit_collection_fields(section_id, collection_id, title, fields)
+        if details.empty:
+            await self._request(
+                "PUT", f"/library/metadata/{collection_id}", params=fields
+            )
+        else:
+            await self._edit_collection_fields(section_id, collection_id, title, fields)
         prefs: dict[str, int] = {"collectionMode": PLEX_COLLECTION_MODES[details.mode]}
         if not details.smart:
             prefs["collectionSort"] = PLEX_COLLECTION_SORTS.get(
@@ -1042,7 +1049,7 @@ class PlexClient(MediaServerHttpClient):
             f"/library/metadata/{collection_id}/prefs",
             params=prefs,
         )
-        if not details.hub:
+        if details.empty:
             return
         path = f"/hubs/sections/{section_id}/manage"
         data = wire_object(

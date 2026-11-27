@@ -4,6 +4,7 @@ Each collection and set of a file fills the create form, which saves it as any
 other; these tests save every OvertureDB preset the way the form sends it.
 """
 
+lazy import json
 lazy import os
 lazy from pathlib import Path
 lazy from typing import Any
@@ -30,6 +31,8 @@ lazy from overture.schemas.collection_presets import (
     PresetImage,
     PresetMetadata,
     PresetPoster,
+    PresetUseCreate,
+    PresetUseReview,
 )
 lazy from overture.schemas.collections import (
     CollectionCreate,
@@ -41,6 +44,7 @@ lazy from overture.schemas.collections import (
     FilterGroup,
 )
 lazy from overture.services.collections.sources import source_integration
+lazy from overture.utils.errors import PublicServiceError
 lazy from tests.collection_helpers import library_rule
 lazy from tests.sync_helpers import RecordedReport
 lazy from tests.test_services import test_collection_management as management
@@ -152,43 +156,44 @@ async def test_an_export_is_a_file_another_install_can_add(
             collection_ids=[local.id, labelled.id, generated[0].id],
         )
     )
-    assert exported.file is not None
-    assert [group.name for group in exported.file.groups] == ["Decades"]
-    assert exported.file.groups[0].generator == PortableSet(
+    assert exported.text is not None
+    assert exported.count == 3
+    file = CollectionPresetFile.model_validate_json(exported.text)
+    assert [group.name for group in file.groups] == ["Decades"]
+    assert file.groups[0].generator == PortableSet(
         dimension=SetDimension.DECADE, media_types=[MediaType.MOVIE]
     )
-    assert exported.file.groups[0].minimum_items == 2
-    assert [collection.title for collection in exported.file.collections] == [
+    assert file.groups[0].minimum_items == 2
+    assert [collection.title for collection in file.collections] == [
         "Action",
         "Labelled",
     ]
-    [first, _] = exported.file.collections
+    [first, _] = file.collections
     assert first.criteria == {MediaType.MOVIE: ACTION}
-    assert first.policy.request_missing is True
-    assert first.policy.minimum_items == 1
+    assert first.minimum_items == 1
     assert {(refusal.title, refusal.reason) for refusal in exported.refused} == {
         ("Missing", "No such group"),
         ("Local", "It tests folder, which only this install has"),
         (generated[0].title, "Its group's set makes it; export the group"),
     }
-    assert exported.warnings == [
-        (
-            "Action: requests titles or writes labels or tags, which OvertureDB "
-            "presets leave to the person adding them"
-        ),
-        "Labelled: tests labels another install may lack",
-    ]
+    assert exported.warnings == ["Labelled: tests labels another install may lack"]
     assert action.title not in {refusal.title for refusal in exported.refused}
+    # It holds what each collection is, as it was chosen: nothing it inherits,
+    # shows as its templates render it, or leaves to the install's defaults.
+    action_text = json.loads(exported.text)["collections"][0]
+    assert action_text == {
+        "title": "Action",
+        "collection_group": "Decades",
+        "minimum_items": 1,
+        "smart": False,
+        "criteria": {"movie": ACTION.model_dump(mode="json")},
+    }
 
     assert exported.issue is not None
     assert exported.issue.url is not None
     assert exported.issue.url.startswith(
         "https://github.com/AutoGitr/OvertureDB/issues/new?template=preset.yml"
     )
-    round_trip = CollectionPresetFile.model_validate_json(
-        exported.file.model_dump_json()
-    )
-    assert round_trip == exported.file
 
 
 async def test_an_export_of_nothing_portable_has_no_file(
@@ -197,7 +202,7 @@ async def test_an_export_of_nothing_portable_has_no_file(
     exported = await manager.service.presets.export(
         PresetExportRequest(groups=["Nothing here"])
     )
-    assert exported.file is None
+    assert (exported.text, exported.count) == (None, 0)
     assert [refusal.reason for refusal in exported.refused] == ["No such group"]
 
 
@@ -342,7 +347,7 @@ def _form_bodies(
             # A preset may leave the group to the person adding it, who picks one.
             collection_group=collection.collection_group or "Picked",
             rule=CollectionRuleWrite(
-                **collection.policy.model_dump(exclude_unset=True),
+                minimum_items=collection.minimum_items,
                 smart=collection.smart,
                 limit=collection.limit,
                 libraries=[
@@ -375,3 +380,171 @@ async def test_every_overturedb_preset_saves_on_plex(
         await manager.service.groups.save_policy(name, policy, new_set=new_set)
     for body in collections:
         await manager.service.editor.create(body)
+
+
+def _bundle(*files: CollectionPresetFile) -> tuple[dict[str, Any], list[object]]:
+    """OvertureDB's presets bundle, holding *files*."""
+    return (
+        {"generated_at": "2026-11-01T00:00:00Z", "source_revision": "a" * 40},
+        [file.model_dump(mode="json") for file in files],
+    )
+
+
+def _gallery(*files: CollectionPresetFile) -> Any:
+    return patch(
+        "overture.services.collections.presets.fetch_presets",
+        AsyncMock(return_value=_bundle(*files)),
+    )
+
+
+COMEDY = where(FilterField.GENRE, FilterOperator.IS, "Comedy")
+
+
+async def test_a_collection_from_a_preset_takes_only_what_overturedb_changed(
+    manager: Manager,
+) -> None:
+    service = manager.service
+    _, [body] = _form_bodies(holidays(groups=[]))
+    collection = await service.editor.create(body)
+    with _gallery(holidays()):
+        recorded = await service.preset_uses.record(
+            PresetUseCreate(
+                preset_id="holidays", item="Action Night", collection_id=collection.id
+            )
+        )
+        assert (recorded.preset_title, recorded.changes) == ("Holidays", [])
+        unchanged = await service.preset_uses.list()
+    assert [(use.collection_id, use.changes) for use in unchanged.uses] == [
+        (collection.id, [])
+    ]
+    # The person picks a sort title of their own, which OvertureDB never sets.
+    await service.editor.update(
+        collection.id,
+        CollectionOptions(
+            title="Action Night",
+            collection_group="Holidays",
+            sort_title_format="~{title}",
+            active_start_mmdd="12-01",
+            active_end_mmdd="12-26",
+        ),
+    )
+
+    [changed] = holidays(groups=[]).collections
+    newer = holidays(
+        groups=[],
+        collections=[
+            changed.model_copy(
+                update={
+                    "criteria": {MediaType.MOVIE: COMEDY},
+                    "active_end_mmdd": "12-31",
+                    "minimum_items": 3,
+                }
+            )
+        ],
+    )
+    with _gallery(newer):
+        [use] = (await service.preset_uses.list()).uses
+        assert use.changes == ["criteria", "minimum", "active dates"]
+        taken = await service.preset_uses.review(
+            PresetUseReview(collection_id=collection.id, take=True)
+        )
+        assert taken is not None
+        assert taken.changes == []
+        assert [use.changes for use in (await service.preset_uses.list()).uses] == [[]]
+
+    detail = await service.reader.get(collection.id)
+    assert detail.rule is not None
+    assert [library.criteria for library in detail.rule.libraries] == [COMEDY]
+    assert detail.rule.minimum_items == 3
+    assert (detail.active_start_mmdd, detail.active_end_mmdd) == ("12-01", "12-31")
+    assert detail.sort_title_format == "~{title}"
+
+
+async def test_keeping_a_preset_item_leaves_it_and_compares_from_overturedbs_change(
+    manager: Manager,
+) -> None:
+    service = manager.service
+    _, [body] = _form_bodies(holidays(groups=[]))
+    collection = await service.editor.create(body)
+    with _gallery(holidays()):
+        await service.preset_uses.record(
+            PresetUseCreate(
+                preset_id="holidays", item="Action Night", collection_id=collection.id
+            )
+        )
+    [item] = holidays(groups=[]).collections
+    newer = holidays(
+        groups=[],
+        collections=[item.model_copy(update={"criteria": {MediaType.MOVIE: COMEDY}})],
+    )
+    with _gallery(newer):
+        await service.preset_uses.review(
+            PresetUseReview(collection_id=collection.id, take=False)
+        )
+        assert [use.changes for use in (await service.preset_uses.list()).uses] == [[]]
+    detail = await service.reader.get(collection.id)
+    assert detail.rule is not None
+    assert [library.criteria for library in detail.rule.libraries] == [ACTION]
+
+    # An item OvertureDB drops stays as it is, and stops being tracked.
+    with _gallery(holidays(collections=[])):
+        [use] = (await service.preset_uses.list()).uses
+        assert use.gone
+        assert (
+            await service.preset_uses.review(
+                PresetUseReview(collection_id=collection.id, take=True)
+            )
+            is None
+        )
+        assert (await service.preset_uses.list()).uses == []
+    assert (await service.reader.get(collection.id)).title == "Action Night"
+
+
+async def test_a_set_from_a_preset_takes_overturedbs_new_set_in_its_own_libraries(
+    manager: Manager,
+) -> None:
+    service = manager.service
+    [(name, policy, new_set)], _ = _form_bodies(holidays(collections=[]))
+    await service.groups.save_policy(name, policy, new_set=new_set)
+    with _gallery(holidays()):
+        await service.preset_uses.record(
+            PresetUseCreate(preset_id="holidays", item="Decades", group="Decades")
+        )
+    [group] = holidays().groups
+    assert group.generator is not None
+    newer = holidays(
+        groups=[
+            group.model_copy(
+                update={
+                    "generator": group.generator.model_copy(
+                        update={"title_format": "The {value}s"}
+                    )
+                }
+            )
+        ]
+    )
+    with _gallery(newer):
+        [use] = (await service.preset_uses.list()).uses
+        assert (use.group, use.changes) == ("Decades", ["what the set makes"])
+        await service.preset_uses.review(PresetUseReview(group="Decades", take=True))
+    saved = await service.groups.policy("Decades")
+    assert saved.generator is not None
+    assert saved.generator.title_format == "The {value}s"
+    assert saved.generator.library_ids == ["1:movies"]
+
+
+async def test_only_a_preset_item_overturedb_publishes_is_tracked(
+    manager: Manager,
+) -> None:
+    _, [body] = _form_bodies(holidays(groups=[]))
+    collection = await manager.service.editor.create(body)
+    with _gallery(holidays()), pytest.raises(PublicServiceError, match="no Easter"):
+        await manager.service.preset_uses.record(
+            PresetUseCreate(
+                preset_id="holidays", item="Easter", collection_id=collection.id
+            )
+        )
+    with pytest.raises(PublicServiceError, match="not saved from a preset"):
+        await manager.service.preset_uses.review(
+            PresetUseReview(collection_id=collection.id, take=True)
+        )

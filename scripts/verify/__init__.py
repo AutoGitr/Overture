@@ -12,7 +12,8 @@ server's own:
   server holds. A collection the server holds that Overture leaves out is
   named with why: a separator, an empty one, one of other items, or an
   unmanaged one while importing them is off.
-- **Fields**: every field and operator previews in every library; on Plex a
+- **Fields**: every field and operator previews in every library, with a
+  value the library holds; on Plex a
   field both evaluators know is previewed by Overture and by Plex, the counts
   must agree, and where they differ the range of years is narrowed until the
   title they disagree on is found, shown with the values Plex holds for it and
@@ -29,13 +30,22 @@ server's own:
 - **Kinds**: the kind recommended for each condition is the one Overture's
   rule names: smart where Plex tests it itself or only Plex can, regular where
   Overture evaluates it, including through labels.
-- **Sources and sets**: Radarr and Sonarr tags, every TMDB chart, any given
-  sources and every set dimension, with the defaults it starts with, preview.
+- **Sources and sets**: every source type previews as is and as is not, and
+  the two split the library between them: Radarr and Sonarr tags, the
+  library's own TMDB franchises and titles, every TMDB chart and any given
+  sources; a source type the library cannot name is reported as untested.
+  Every set dimension previews with the defaults it starts with.
+- **Groups**: two titles' conditions combined in any, all and nested groups
+  count what the titles make, by Plex as well where it can test titles.
 - **Collections**: in each library, each managed collection's rule previews to
   the members the server's copy holds; each unmanaged one plans an adoption
   whose criteria the editor offers and that selects what the server holds;
   every poster and background Overture serves, from the server or its own
   cache, loads.
+- **Every server**: each managed collection's title, sort title and summary
+  are read on every server given and set side by side: each must hold what
+  Overture says its sync wrote, locked, and leave unlocked what Overture has
+  no value for.
 - **OvertureDB**: a sample of each library's contribution issues are links to
   the OvertureDB form of their media type.
 - **What the server offers**: every Plex filter, field, sort and operator is one
@@ -59,9 +69,12 @@ sent.
   server takes Overture's own collection writes. Overture's media server
   clients, the code a sync runs, create a regular collection and on Plex a
   smart one, change and order their members, edit their title, sort title,
-  summary and order (and on Plex its Home visibility), upload a poster and a
-  background, change the smart one's filter and delete them, reading the
-  server itself back after each step. Each step is reported on its own, with
+  summary and order (and on Plex its Home visibility), clear the sort title
+  and summary, which hands them back unlocked, upload a poster and a
+  background, on Plex make and edit an empty collection as a separator is,
+  change the smart one's filter and delete them, reading the server itself
+  back after each step, locks included. What each server holds after the same
+  edit is then set side by side. Each step is reported on its own, with
   the request the server refused. Everything they make is titled "zz Overture
   verify" and deleted at the end, whatever fails, once Jellyfin and Emby have
   finished saving it; one left by a run that was killed is deleted first, and

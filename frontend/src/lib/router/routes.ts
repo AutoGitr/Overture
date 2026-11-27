@@ -21,8 +21,14 @@ import { buildIdSlug, parseCatalogSlug, parseItemSlug, type ItemSlug } from "../
  *   /collections/:collectionSlug/...           a collection ("{id}-{title}"), with its
  *                                              configuration, art and themes views
  *   /collections/groups/:groupName             a collection group, by name
+ *   /collections/new                           a new collection; `?tmdb_id=` seeds it
+ *                                              with a TMDB franchise
  *   /overturedb/movies|shows|collections/...   the OvertureDB catalog, in the same shape
  * `/shows/...` mirrors `/movies/...`.
+ *
+ * The path names what the detail panel shows. The query holds only what the
+ * path does not: the sidebar's own state, such as `?group=` for the group it
+ * lists when that is not the group the page shows, and its TMDB search.
  *
  * Library slugs lead with the stored ID, which drives lookups; the title is only
  * there to make links readable. Catalog entries have no stored ID, so their slug
@@ -93,7 +99,7 @@ function catalogTypeRoutes<T>(entryRoutes: T) {
   return { "/": loadCatalogPage, "/:entrySlug": entryRoutes };
 }
 
-export const { navigate, route } = createRouter({
+const router = createRouter({
   hooks: {
     // A page whose code cannot be loaded leaves the one shown in place, so say
     // so rather than leaving a click without an answer.
@@ -116,6 +122,9 @@ export const { navigate, route } = createRouter({
   // Anything unmatched (including a bare "/") opens an available library.
   "*": loadRedirectToLibrary,
 });
+
+export const { navigate, route } = router;
+const { p } = router;
 
 /** Whether a navigation replaces the current history entry. */
 type NavigateOptions = { replace?: boolean };
@@ -258,10 +267,12 @@ export function goToLibrary(tab: SidebarTab): void {
   void navigate(tabBase(tab));
 }
 
+/** The query parameter naming the group the sidebar lists, away from that group's page. */
+const GROUP_PARAM = "group";
+
 /** Navigate to the collections list, optionally inside a group. */
 export function goToCollectionsList(group?: string): void {
-  const search: Record<string, string> = group ? { collection_group: `group:${group}` } : {};
-  void navigate("/collections", { search });
+  void navigate("/collections", { search: group ? { [GROUP_PARAM]: group } : {} });
 }
 
 /** Close the open collection, leaving the sidebar where it is, such as in a group. */
@@ -269,12 +280,21 @@ export function closeCollection(): void {
   void navigate("/collections", { search: sidebarSearch() });
 }
 
+/** The form a navigation to a new collection opens, kept in its history entry. */
+type NewCollectionState = { form: string };
+
+/** Open a new collection's form, empty or seeded with a TMDB franchise. */
 export function goToNewCollection(tmdbId?: number): void {
-  const search = {
-    draft: crypto.randomUUID(),
-    ...(tmdbId === undefined ? {} : { tmdb_id: tmdbId }),
-  };
-  void navigate("/collections/new", { search });
+  const state: NewCollectionState = { form: crypto.randomUUID() };
+  void navigate("/collections/new", {
+    search: tmdbId === undefined ? {} : { tmdb_id: tmdbId },
+    state,
+  });
+}
+
+/** Which new collection's form the URL opens: each navigation to one opens a fresh form. */
+export function routedNewCollectionForm(): string {
+  return (route.state as NewCollectionState | null)?.form ?? "";
 }
 
 /** The group the URL opens, by name. */
@@ -285,31 +305,35 @@ export function routedGroup(): string | null {
 }
 
 /**
- * Open a group's page, with the sidebar inside it; `hash` names a section to
+ * Open a group's page, whose sidebar lists the group; `hash` names a section to
  * show. Unmanaged gathers what Overture does not manage, so it has no page.
  */
 export function goToGroup(group: string, hash?: string): void {
-  void navigate("/collections/groups/:groupName", {
-    params: { groupName: group },
-    search: { collection_group: `group:${group}` },
-    hash,
-  });
+  void navigate("/collections/groups/:groupName", { params: { groupName: group }, hash });
+}
+
+/** A link to a group's page. */
+export function groupHref(group: string): string {
+  return p("/collections/groups/:groupName", { params: { groupName: group } });
 }
 
 /** The group the sidebar lists the collections of: the one opened there, or the open group's. */
 export function sidebarGroup(): string | null {
-  const value = searchParams.get("collection_group");
-  return typeof value === "string" && value.startsWith("group:") ? value.slice(6) : routedGroup();
+  const value = searchParams.get(GROUP_PARAM);
+  return typeof value === "string" ? value : routedGroup();
 }
 
 export function openSidebarGroup(group: string | null): void {
-  if (group === null) searchParams.delete("collection_group");
-  else searchParams.set("collection_group", `group:${group}`);
+  if (group === null) searchParams.delete(GROUP_PARAM);
+  else searchParams.set(GROUP_PARAM, group);
 }
 
+/** The sidebar's state, which a page it opens keeps in its query. */
 function sidebarSearch(): Record<string, string | number | boolean> {
   const search: Record<string, string | number | boolean> = {};
-  for (const key of ["collection_group", "tmdb_collection", "tmdb_query"]) {
+  const group = sidebarGroup();
+  if (group !== null) search[GROUP_PARAM] = group;
+  for (const key of ["tmdb_collection", "tmdb_query"]) {
     const value = searchParams.get(key);
     if (value !== null) search[key] = value;
   }

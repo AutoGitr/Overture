@@ -3,55 +3,66 @@ import { SvelteMap } from "svelte/reactivity";
 import { readJson, writeJson } from "../utils/storage";
 
 const STORAGE_KEY = "sections_open_by_view";
-/** Views whose sections stay as the user left them across visits and reloads. */
-const REMEMBERED_VIEWS = new Set(["filters", "settings"]);
-
-/** Names the view collapsible sections are shown in. */
-export const [getSectionView, setSectionView] = createContext<string>();
-
-function remembered(key: string): boolean {
-  return REMEMBERED_VIEWS.has(key.slice(0, key.indexOf("/")));
-}
 
 /**
- * Which collapsible sections the user opened or closed, by view and title.
+ * Which collapsible sections of one view are open.
  *
- * The choice outlives the component, so a section remounted by a refetch or a
- * keyed block, or given a new default, keeps it. Only remembered views keep it
- * across visits; a form calls `forget` as it opens and starts at its defaults.
+ * The view owns the choices, so a section remounted by a refetch or a keyed
+ * block keeps the one made there, and every new view starts as it declares.
+ * Only a view given a name to remember them by keeps them across visits and
+ * reloads.
  */
-class SectionState {
-  readonly #open = new SvelteMap<string, boolean>(
-    Object.entries(readJson<Record<string, boolean>>(STORAGE_KEY, {})).filter(([key]) =>
-      remembered(key),
-    ),
-  );
+export class SectionView {
+  readonly #open: SvelteMap<string, boolean>;
 
-  /** Whether *title* is open in *view*; *fallback* until the user has chosen. */
-  isOpen(view: string, title: string, fallback: boolean): boolean {
-    return this.#open.get(`${view}/${title}`) ?? fallback;
+  /**
+   * @param startsOpen Whether a section, by title, is open until someone
+   *   opens or closes it.
+   * @param remembered The name the view keeps its choices under.
+   */
+  constructor(
+    private readonly startsOpen: (title: string) => boolean,
+    private readonly remembered?: string,
+  ) {
+    const prefix = `${remembered}/`;
+    this.#open = new SvelteMap(
+      remembered === undefined
+        ? []
+        : Object.entries(readJson<Record<string, boolean>>(STORAGE_KEY, {}))
+            .filter(([key]) => key.startsWith(prefix))
+            .map(([key, open]) => [key.slice(prefix.length), open]),
+    );
   }
 
-  setOpen(view: string, title: string, open: boolean) {
-    const key = `${view}/${title}`;
-    this.#open.set(key, open);
-    if (remembered(key))
-      writeJson(
-        STORAGE_KEY,
-        Object.fromEntries([...this.#open].filter(([entry]) => remembered(entry))),
-      );
+  isOpen(title: string): boolean {
+    return this.#open.get(title) ?? this.startsOpen(title);
   }
 
-  /** Return *view*'s sections to their defaults. */
-  forget(view: string) {
-    for (const key of [...this.#open.keys()])
-      if (key.startsWith(`${view}/`)) this.#open.delete(key);
-  }
-
-  /** Forget every choice, as on a fresh browser. */
-  reset() {
-    this.#open.clear();
+  setOpen(title: string, open: boolean) {
+    this.#open.set(title, open);
+    if (this.remembered === undefined) return;
+    const prefix = `${this.remembered}/`;
+    writeJson(STORAGE_KEY, {
+      ...Object.fromEntries(
+        Object.entries(readJson<Record<string, boolean>>(STORAGE_KEY, {})).filter(
+          ([key]) => !key.startsWith(prefix),
+        ),
+      ),
+      ...Object.fromEntries([...this.#open].map(([key, value]) => [`${prefix}${key}`, value])),
+    });
   }
 }
 
-export const sectionState = new SectionState();
+/** The sections of the view a component is shown in. */
+export const [getSectionView, setSectionView] = createContext<SectionView>();
+
+/** The sections a collection or group opens with: what it is and what it holds. */
+const CONFIGURE_OPEN = new Set(["Setup", "Content"]);
+
+/**
+ * A collection's or group's sections, saved or new: each time one is opened,
+ * Setup and Content are open and every other section is closed.
+ */
+export function configureSections(): SectionView {
+  return new SectionView((title) => CONFIGURE_OPEN.has(title));
+}

@@ -167,11 +167,13 @@ class ThemesService:
         async with self._asset_storage.asset_locks.acquire(item_id):
             async with self._database.read_session() as db:
                 item = await require_item(db, item_id)
-            if removal.delete_from_server:
-                await self._remover.delete_item_theme_on_server(item)
+            # Overture's own file goes first, as a server deleting the theme
+            # deletes its file too, which one that may only read cannot.
             deleted = (
                 removal.delete_file and await self._remover.delete_item_theme_file(item)
             )
+            if removal.delete_from_server:
+                await self._remover.delete_item_theme_on_server(item)
             async with self._database.write_session() as db:
                 item = await require_item(db, item_id)
                 if removal.forget:

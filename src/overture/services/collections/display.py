@@ -190,11 +190,14 @@ class CollectionDisplay:
         """Send the effective options to every server copy.
 
         Each server keeps what it can: the order falls back to the default
-        where it cannot keep it, and only Plex copies are smart. Returns the
-        options, and the copies whose server refused them, which leaves the
-        others to take theirs.
+        where it cannot keep it, and only Plex copies are smart. A managed
+        collection's title, sort title and summary are Overture's: each is
+        written, and one without a value is handed back to the server. Returns
+        the options, and the copies whose server refused them, which leaves
+        the others to take theirs.
         """
         effective, policy = await self._resolve(row, options, rule)
+        managed = row.rule is not None
         refused: list[CopyChange] = []
         for copy in self._access.copies(row):
             if copy.server_item_id is None:
@@ -209,8 +212,12 @@ class CollectionDisplay:
                     copy.lead.library_id,
                     CollectionDetails(
                         title=effective.title,
-                        summary=effective.summary,
-                        sort_title=effective.sort_title,
+                        summary=effective.summary or ""
+                        if managed
+                        else effective.summary,
+                        sort_title=effective.sort_title or ""
+                        if managed
+                        else effective.sort_title,
                         mode=options.collection_mode or policy.collection_mode,
                         order=kept_order(
                             resolved_order(effective, policy),
@@ -223,7 +230,7 @@ class CollectionDisplay:
                         visible_shared=effective.visible_shared,
                         visible_library=effective.visible_library,
                         filtering=effective.collection_filtering,
-                        hub=row.kind is not CollectionKind.SEPARATOR,
+                        empty=row.kind is CollectionKind.SEPARATOR,
                     ),
                 )
             except MediaServerError as exc:

@@ -16,7 +16,6 @@
 
 <DetailForm
   collapsible
-  expanded
   title="Members"
   busy={false}
   description={members.length

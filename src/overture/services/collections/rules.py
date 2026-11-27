@@ -202,11 +202,17 @@ def generator(group: CollectionGroup | None) -> CollectionGenerator | None:
     return CollectionGenerator.model_validate(group.generator)
 
 
-def franchise_ids(libraries: Sequence[CollectionLibraryCriteria]) -> set[int]:
-    return {
+def sole_franchise(libraries: Sequence[CollectionLibraryCriteria]) -> int | None:
+    """The TMDB franchise a collection is: the one its criteria select, alone.
+
+    Criteria naming several franchises, as a universe's do, make a collection
+    of its own rather than any one of them.
+    """
+    franchises = {
         condition.source.collection_id
         for library in libraries
         for condition in library.criteria.source_conditions()
         if isinstance(condition.source, TmdbCollectionSource)
         and condition.operator is FilterOperator.IS
     }
+    return next(iter(franchises)) if len(franchises) == 1 else None

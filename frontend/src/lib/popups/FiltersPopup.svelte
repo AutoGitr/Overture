@@ -32,14 +32,15 @@
   import SegmentedControl from "../components/SegmentedControl.svelte";
   import Select from "../components/Select.svelte";
   import type { SelectOption } from "../utils/selectOptions";
-  import { setSectionView } from "../stores/sectionState.svelte";
+  import { SectionView, setSectionView } from "../stores/sectionState.svelte";
   import { settingsState } from "../stores/settingsState.svelte";
   import { alphabetical } from "../utils/alphabetical";
   import { keysOf } from "../utils/records";
   import { COLLECTION_POSTER_OPTIONS } from "../utils/collectionPosters";
   import { filterState, defaultFilters, type FilterState } from "../stores/filterState.svelte";
 
-  setSectionView("filters");
+  // Its sections stay as the user left them across visits and reloads.
+  setSectionView(new SectionView(() => true, "filters"));
   const id = $props.id();
   const catalogBrowsing = new CatalogBrowsing();
   let catalogEnabled = $derived(catalogBrowsing.enabled);

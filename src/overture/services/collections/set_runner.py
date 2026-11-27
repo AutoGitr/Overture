@@ -29,7 +29,7 @@ lazy from .criteria import TERM_FIELDS, criteria_terms
 lazy from .display import saved_options
 lazy from .editor import CollectionEditor
 lazy from .membership import Membership
-lazy from .rules import franchise_ids, library_criteria, rule_read, title_taken
+lazy from .rules import rule_read, title_taken
 lazy from .sets import SetValue, count_values, set_values
 lazy from .sources import SourceResolver
 lazy from .validation import CollectionValidator
@@ -220,7 +220,7 @@ class CollectionSets:
     ) -> list[tuple[SetValue, bool]]:
         """The set's values in one library, and whether each is below the minimum.
 
-        Franchises kept by collections outside the group, and new ones below
+        Franchises that collections outside the group are, and new ones below
         the minimum, are left out rather than looked up on TMDB; a franchise
         with a collection in *existing* stays, for the minimum policy to
         decide. Values only Plex knows are counted by Plex.
@@ -313,22 +313,17 @@ class CollectionSets:
         return counts
 
     async def _franchises_elsewhere(self, group: str | None) -> set[int]:
-        """TMDB franchises collections outside the group already hold."""
+        """TMDB franchises that collections outside the group are.
+
+        A collection merely naming a franchise among others, as a universe
+        does, leaves the franchise its own collection.
+        """
         async with self._access.database.read_session() as session:
-            outside = [
-                row
+            return {
+                row.tmdb_collection_id
                 for row in await CollectionRepository(session).list_listed()
-                if row.group_name != group
-            ]
-        return {
-            row.tmdb_collection_id
-            for row in outside
-            if row.tmdb_collection_id is not None
-        } | {
-            franchise
-            for row in outside
-            for franchise in franchise_ids(library_criteria(row))
-        }
+                if row.group_name != group and row.tmdb_collection_id is not None
+            }
 
     async def _apply_value(
         self,

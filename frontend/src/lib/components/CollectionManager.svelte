@@ -23,6 +23,7 @@
   import {
     goToCatalogEntry,
     goToCollectionView,
+    groupHref,
     routedCollectionView,
     routedCollectionArtType,
   } from "../router/routes";
@@ -45,7 +46,7 @@
   import { collectionArtDisplayUrl } from "../utils/artDisplay";
   import { CatalogBrowsing } from "../utils/catalogBrowsing.svelte";
   import { createServerLinks } from "../rest/queries";
-  import { setSectionView } from "../stores/sectionState.svelte";
+  import { configureSections, setSectionView } from "../stores/sectionState.svelte";
 
   const serverTitle = (serverId: number) => settingsState.serverTitle(serverId);
 
@@ -66,7 +67,7 @@
     groups: string[];
     libraries: LibrarySectionRead[];
   } = $props();
-  setSectionView("collection");
+  setSectionView(configureSections());
   const serverLinks = createServerLinks();
   // Copies come lead first; a withheld collection has none to open.
   let leadCopy = $derived(collection?.copies[0]);
@@ -128,9 +129,12 @@
       {#if collection.kind === "smart"}
         <span class="badge badge-accent">Smart</span>
       {/if}
-      {#if collection.generated_value !== null}
-        <span class="badge badge-muted" title="Created and kept up to date by its group's set"
-          >Set: {collection.collection_group}</span
+      {#if collection.generated_value !== null && collection.collection_group}
+        <a
+          class="badge badge-muted set-link"
+          href={groupHref(collection.collection_group)}
+          title="Created and kept up to date by its group's set; open the group"
+          >Set: {collection.collection_group}</a
         >
       {/if}
       {#if collection.withheld}
@@ -315,3 +319,9 @@
       themeBusy={actions.uploading}
     />{/if}
 {/snippet}
+
+<style>
+  .set-link:hover {
+    color: var(--accent-hover);
+  }
+</style>

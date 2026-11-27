@@ -8,6 +8,7 @@ lazy from typing import Any
 lazy import httpx2
 
 lazy from overture.media_servers.errors import MediaServerError
+lazy from overture.media_servers.http_client import server_answer
 lazy from overture.utils.http_security import API_KEY_HEADER
 lazy from scripts.json_values import is_object
 
@@ -171,7 +172,7 @@ def failure(exc: Exception) -> str:
     if not isinstance(cause, httpx2.HTTPStatusError):
         return str(exc)
     request, response = cause.request, cause.response
-    answer = " ".join(response.text.split())[:200]
+    answer = server_answer(response)
     return (
         f"{exc if cause is not exc else f'HTTP {response.status_code}'}: "
         f"{request.method} {request.url.path} answered {answer!r}"
@@ -292,6 +293,38 @@ class Members:
     @property
     def whole(self) -> bool:
         return len(self.names) == self.count
+
+
+@dataclass(slots=True, frozen=True)
+class HeldFields:
+    """A server collection's title, sort title and summary, and which it locks."""
+
+    title: str
+    sort_title: str
+    summary: str
+    #: Of "title", "sort title" and "summary".
+    locked: frozenset[str]
+
+    def against(self, title: str, sort_title: str, summary: str) -> list[str]:
+        """How it differs from what Overture says a sync wrote.
+
+        A field Overture has a value for holds it, locked; one without is the
+        server's, unlocked.
+        """
+        problems: list[str] = []
+        for name, held, wanted in (
+            ("title", self.title, title),
+            ("sort title", self.sort_title, sort_title),
+            ("summary", self.summary, summary),
+        ):
+            if wanted and held != wanted:
+                problems.append(f"{name} {held!r}, not {wanted!r}")
+            if bool(wanted) != (name in self.locked):
+                problems.append(
+                    f"{name} {'unlocked' if wanted else 'locked'}"
+                    f"{'' if wanted else ' with no value from Overture'}"
+                )
+        return problems
 
 
 @dataclass(slots=True, frozen=True)

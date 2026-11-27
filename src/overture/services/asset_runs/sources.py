@@ -114,8 +114,6 @@ class BatchFacts:
     """What one batch's sources read once for all its targets."""
 
     index: CatalogIndex
-    #: Themes that failed to download before, by owner ID.
-    failed: dict[int, set[str]] = field(default_factory=dict[int, set[str]])
     #: How a title's theme is searched for on YouTube.
     search_format: str = "{title} theme"
 
@@ -168,8 +166,7 @@ class Sources:
             return await self._match_title(target, notes)
         if source is ThemeBulkSource.YOUTUBE_SEARCH:
             return await self._search(target, facts, notes)
-        failed = facts.failed.get(target.owner.id or 0, set[str]())
-        pick = catalog_pick(target, (source,), facts.index, failed=failed)
+        pick = catalog_pick(target, (source,), facts.index)
         if pick.value is None:
             notes.empty.extend(pick.notes)
             return None
@@ -346,11 +343,6 @@ class Sources:
         results = await self.youtube_resolver.search(query, limit=1)
         if not results or not (best_id := results[0].id):
             notes.empty.append(f"{name}: no result for {query!r}")
-            return None
-        if best_id in facts.failed.get(title.id or 0, set[str]()):
-            notes.empty.append(
-                f"{name}: top result {best_id} failed to download before"
-            )
             return None
         found = results[0].title
         return Decision(

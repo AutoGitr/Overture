@@ -6,7 +6,7 @@ lazy from abc import ABC, abstractmethod
 lazy from collections import deque
 lazy from collections.abc import AsyncIterator, Callable, Hashable
 lazy from dataclasses import dataclass, field
-lazy from typing import Any, ClassVar
+lazy from typing import Any, ClassVar, cast
 
 lazy import httpx2
 
@@ -20,6 +20,7 @@ lazy from ..integrations.http import (
 )
 lazy from ..schemas.art import ArtCandidate
 lazy from ..utils.cache import AsyncMemoizer
+lazy from ..utils.security import sanitise_error
 lazy from .adapters import ItemIdentity, ServerTheme
 lazy from .errors import MediaServerError
 lazy from .health import MediaServerHealthTracker
@@ -82,6 +83,36 @@ class _ListingCheck[T]:
         if page.total is not None:
             return self.count == page.total
         return len(page.items) < self.page_size
+
+
+#: The most of a server's answer an error repeats.
+_ANSWER_LENGTH = 200
+
+
+def server_answer(response: httpx2.Response, *, secrets: tuple[str, ...] = ()) -> str:
+    """What a server said as it refused a request, short and without secrets.
+
+    A JSON problem's ``detail`` or ``title`` (Jellyfin's and Emby's ``Message``)
+    is taken over its whole body; an HTML page says nothing worth repeating.
+    *secrets*, such as the key the request was sent with, are removed by value,
+    as a server may repeat them.
+    """
+    text = response.text.strip()
+    if text.lstrip().lower().startswith(("<html", "<!doctype")):
+        return ""
+    try:
+        body: object = response.json()
+    except ValueError:
+        body = None
+    if isinstance(body, dict):
+        problem = cast("dict[str, object]", body)
+        text = str(
+            problem.get("detail")
+            or problem.get("title")
+            or problem.get("Message")
+            or text
+        )
+    return sanitise_error(" ".join(text.split()), secrets=secrets)[:_ANSWER_LENGTH]
 
 
 class MediaServerHttpClient(ABC):
@@ -176,9 +207,12 @@ class MediaServerHttpClient(ABC):
             if status not in _UNAVAILABLE_STATUS:
                 # The server answered: one request failed, not the server.
                 self.health.record(MediaServerState.REACHABLE)
+                answer = server_answer(
+                    exc.response, secrets=(self.server.api_key.get_secret_value(),)
+                )
                 return MediaServerError(
                     f"{self.server.title} returned an unsuccessful response "
-                    f"(HTTP {status})",
+                    f"(HTTP {status})" + (f": {answer}" if answer else ""),
                     upstream_status_code=status,
                 )
         error = MediaServerError(

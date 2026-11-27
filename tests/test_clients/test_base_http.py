@@ -8,6 +8,7 @@ lazy from overture.domain import MediaType
 lazy from overture.integrations.http import create_client, request_with_retry
 lazy from overture.integrations.proxy import ProxyClientManager
 lazy from overture.integrations.tmdb import TMDBClient
+lazy from overture.media_servers.http_client import server_answer
 lazy from overture.media_servers.plex.client import PlexClient
 lazy from overture.utils.cache import TimedRegistry
 lazy from tests.http_mock import RecordingMockTransport
@@ -111,3 +112,25 @@ def test_idle_hosts_are_forgotten_once_past_the_window() -> None:
 
     assert registry.get("stale.example.test", now=100.0) == 1.0
     assert registry.get("stale.example.test", now=1_000.0) is None
+
+
+def test_a_servers_answer_is_kept_short_readable_and_without_its_key() -> None:
+    def answer(body: str, content_type: str = "text/plain") -> str:
+        response = httpx2.Response(
+            500, text=body, headers={"Content-Type": content_type}
+        )
+        return server_answer(response, secrets=("sekret-key-1",))
+
+    assert (
+        answer(
+            '{"title": "Error", "detail": "Access to the path denied"}',
+            "application/json",
+        )
+        == "Access to the path denied"
+    )
+    assert answer('{"Message": "Index out of range"}', "application/json") == (
+        "Index out of range"
+    )
+    assert answer("<html><head><title>Not Found</title></head></html>") == ""
+    assert answer("denied for sekret-key-1") == "denied for [REDACTED]"
+    assert len(answer("x " * 500)) == 200

@@ -168,8 +168,8 @@ SMART_CUSTOM_ORDER = "Smart collections are ordered by Plex; choose a sort"
 
 #: The Radarr and Sonarr tag on every title Overture adds; no member tag may use it.
 ARR_ADDED_TAG = "overture"
-#: The sort title of a separated group's collections when none is set, which
-#: keeps them together behind their separator.
+#: The sort title a group gets as its separator is turned on without one, which
+#: keeps its collections together behind the separator.
 SEPARATED_SORT_TITLE = "{group} {title}"
 #: The virtual group of collections without rules; no stored group may use it.
 UNMANAGED_GROUP = "Unmanaged"

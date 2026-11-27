@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import { getSectionView, sectionState } from "../stores/sectionState.svelte";
+  import { getSectionView } from "../stores/sectionState.svelte";
   import Disclosure from "./Disclosure.svelte";
 
   let {
@@ -15,7 +15,7 @@
   } = $props();
 
   const view = getSectionView();
-  let open = $derived(sectionState.isOpen(view, label, true));
+  let open = $derived(view.isOpen(label));
 </script>
 
 <section class="popup-section" aria-label={label}>
@@ -23,7 +23,7 @@
     heading
     title={label}
     {open}
-    ontoggle={(value) => sectionState.setOpen(view, label, value)}
+    ontoggle={(value) => view.setOpen(label, value)}
     {description}
     --disclosure-padding="var(--space-3) var(--popup-pad)"
     --disclosure-body-padding="0 var(--popup-pad) var(--space-3)"

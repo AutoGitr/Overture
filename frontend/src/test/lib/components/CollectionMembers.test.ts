@@ -1,4 +1,4 @@
-import { fireEvent, screen } from "@testing-library/svelte";
+import { screen } from "@testing-library/svelte";
 import { afterEach, describe, expect, it } from "vitest";
 import CollectionMembers from "../../../lib/components/CollectionMembers.svelte";
 import { settingsState } from "../../../lib/stores/settingsState.svelte";
@@ -36,7 +36,6 @@ describe("CollectionMembers", () => {
     } as unknown as CollectionEditor;
 
     renderWithQueryClient(CollectionMembers, { editor, libraryItems: items, libraries });
-    await fireEvent.click(screen.getByRole("button", { name: /^Members/ }));
 
     expect(
       screen
@@ -65,7 +64,6 @@ describe("CollectionMembers", () => {
     ];
 
     renderWithQueryClient(CollectionMembers, { editor, libraryItems: items, libraries });
-    await fireEvent.click(screen.getByRole("button", { name: /^Members/ }));
 
     expect(screen.getAllByRole("heading", { level: 4 }).map((h) => h.textContent)).toEqual([
       "Plex",

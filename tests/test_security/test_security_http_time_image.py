@@ -75,7 +75,7 @@ class TestSecurityRedaction:
         assert "password=secret" not in safe
         assert jwt not in safe
         assert "[REDACTED]" in safe
-        assert "https://[REDACTED].plex.direct" in safe
+        assert "https://[REDACTED].plex.direct:32400/library" in safe
 
 
 class TestHttpSecurity:

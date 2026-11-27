@@ -6,9 +6,6 @@ name: Release check
 on:
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 concurrency:
   group: release-check-${{ github.sha }}
   cancel-in-progress: false
@@ -21,4 +18,6 @@ jobs:
     uses: ./.github/workflows/native.yml
 
   release-validation:
+    permissions:
+      contents: read
     uses: ./.github/workflows/release-validation.yml

@@ -1,6 +1,5 @@
 """Coverage for planning out bulk targets OvertureDB cannot serve."""
 
-lazy from datetime import timedelta
 lazy from typing import Any
 
 lazy import pytest
@@ -619,7 +618,7 @@ async def test_themerrdb_only_run_names_the_switch_it_needs(
     }
 
 
-async def test_a_theme_that_failed_before_is_planned_as_no_match(
+async def test_a_theme_that_failed_to_download_is_offered_again(
     db_session: AsyncSession,
     media_item_factory: MediaItemFactory,
     catalog_item_factory: CatalogItemFactory,
@@ -657,52 +656,5 @@ async def test_a_theme_that_failed_before_is_planned_as_no_match(
         database=database,
     )
 
-    assert decided(plan) == {
-        (
-            JobOutcome.NO_MATCH,
-            (
-                "the OvertureDB theme failed to download before; "
-                "ThemerrDB has no theme for it"
-            ),
-        ): 1
-    }
-
-
-async def test_a_theme_that_succeeded_after_failing_is_planned_again(
-    db_session: AsyncSession,
-    media_item_factory: MediaItemFactory,
-    catalog_item_factory: CatalogItemFactory,
-    *,
-    app_config: Settings,
-    database: Database,
-) -> None:
-    await enable_catalog(db_session)
-
-    item = _movie(media_item_factory, "Movie", tmdb_id=19)
-    db_session.add(item)
-    db_session.add(
-        catalog_item_factory(id=None, tmdb_id=19, youtube_id_overturedb="yt-flaky")
-    )
-    await db_session.commit()
-    failed_at = utc_now()
-    for status, created_at in (
-        (JobStatus.FAILED, failed_at),
-        (JobStatus.DONE, failed_at + timedelta(minutes=1)),
-    ):
-        db_session.add(
-            DownloadJob(
-                media_item_id=row_id(item),
-                job_type=JobType.THEME,
-                target_url="yt-flaky",
-                status=status,
-                created_at=created_at,
-            )
-        )
-    await db_session.commit()
-
-    plan = await plan_run(
-        BulkThemeRequest(source_order=[CURRENT_SELECTION, ThemeBulkSource.OVERTUREDB]),
-        database=database,
-    )
-
+    # A failure YouTube caused at the time says nothing of the next try.
     assert decided(plan) == {}

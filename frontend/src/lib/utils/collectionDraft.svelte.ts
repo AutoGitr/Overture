@@ -1,5 +1,5 @@
 import { createMutation, createQuery } from "@tanstack/svelte-query";
-import { SvelteMap } from "svelte/reactivity";
+import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import { UNMANAGED_GROUP } from "../../generated/settings";
 import {
   createCollectionMutation,
@@ -30,7 +30,7 @@ import type {
 } from "../../generated/rest/types.gen";
 import { storeCollectionDetail } from "../rest/cache";
 import { queryClient } from "../rest/queryClient";
-import { goToCollection, goToGroup } from "../router/routes";
+import { goToCollection, goToCollectionsList, goToGroup } from "../router/routes";
 import { createNotifier } from "../stores/notificationState.svelte";
 import { settingsState } from "../stores/settingsState.svelte";
 import { emptyGroup, franchiseCriteria } from "./collectionCriteria";
@@ -47,6 +47,8 @@ import { CollectionGroupForm } from "./collectionGroupForm.svelte";
 import { CriteriaPreview } from "./criteriaPreview.svelte";
 import { errorMessage } from "./errors";
 import type { CollectionOptions as Capabilities } from "./libraries.svelte";
+import { PresetUses, type PresetSubject } from "./presetUses.svelte";
+import { countOf } from "./plural";
 import { openSync } from "./syncShortcut";
 
 /** Something a new set's form found that the person should know before saving. */
@@ -117,6 +119,8 @@ export class CollectionDraft extends CollectionRuleForm {
   readonly request = createMutation(() => createCollectionMutation());
   private readonly groupRequest = createMutation(() => saveCollectionGroupPolicyMutation());
   private readonly artRequest = createMutation(() => saveCollectionArtMutation());
+  /** What collections and sets saved from OvertureDB's presets came from. */
+  private readonly presetUses = new PresetUses(false);
   /** OvertureDB's presets, whose collections and sets fill the form. */
   readonly presets = createQuery(() => listCollectionPresetsOptions());
   readonly fileRequest = createMutation(() => readCollectionPresetFileMutation());
@@ -353,8 +357,11 @@ export class CollectionDraft extends CollectionRuleForm {
     });
   }
 
+  /**
+   * Fill the form with what the collection is; how it is shown, its art and
+   * themes stay at Default, which the group and this install decide.
+   */
   private fillCollection(collection: PortableCollectionOutput) {
-    const { policy } = collection;
     for (const mediaType of ["movie", "show"] as const) {
       const criteria = collection.criteria[mediaType];
       // A library of the kind chosen later starts with the preset's criteria.
@@ -362,7 +369,7 @@ export class CollectionDraft extends CollectionRuleForm {
     }
     const rule = $state({
       ...defaultRule(),
-      ...policy,
+      minimum_items: collection.minimum_items,
       smart: collection.smart,
       limit: collection.limit,
       libraries: this.libraries().flatMap((library) => {
@@ -375,29 +382,12 @@ export class CollectionDraft extends CollectionRuleForm {
     this.title = collection.title;
     this.collectionGroup = collection.collection_group ?? "";
     this.tmdbCollectionId = collection.tmdb_collection_id ?? undefined;
-    this.sortTitleFormat =
-      collection.sort_title_format ??
-      policy.sort_title_format ??
-      literal(collection.sort_title) ??
-      "";
-    this.summaryFormat =
-      collection.summary_format ?? policy.summary_format ?? literal(collection.summary) ?? "";
-    this.activeStartMmdd = collection.active_start_mmdd ?? policy.active_start_mmdd ?? "";
-    this.activeEndMmdd = collection.active_end_mmdd ?? policy.active_end_mmdd ?? "";
-    this.deleteWhenInactive = collection.delete_when_inactive ?? policy.delete_when_inactive;
-    this.fillDisplay(collection);
-  }
-
-  /** How the server shows a filled-in collection: its own choice, else its policy's. */
-  private fillDisplay({ policy, ...collection }: PortableCollectionOutput) {
-    this.collectionFiltering = collection.collection_filtering ?? policy.collection_filtering;
-    this.collectionMode = collection.collection_mode ?? policy.collection_mode;
-    this.orderType = collection.order_type ?? policy.order_type;
-    // A file cannot tell a collection left hidden from one hidden on purpose,
-    // so only a shown one is its own choice.
-    this.visibleHome = collection.visible_home || policy.visible_home;
-    this.visibleShared = collection.visible_shared || policy.visible_shared;
-    this.visibleLibrary = collection.visible_library || policy.visible_library;
+    this.sortTitleFormat = collection.sort_title_format ?? literal(collection.sort_title) ?? "";
+    this.summaryFormat = collection.summary_format ?? literal(collection.summary) ?? "";
+    this.activeStartMmdd = collection.active_start_mmdd ?? "";
+    this.activeEndMmdd = collection.active_end_mmdd ?? "";
+    this.deleteWhenInactive = collection.delete_when_inactive;
+    this.orderType = collection.order_type;
   }
 
   /** Give the collection's group its preset's defaults where the group leaves them at Default. */
@@ -434,20 +424,35 @@ export class CollectionDraft extends CollectionRuleForm {
     }
   }
 
+  /** Keep track of the OvertureDB preset item *subject* was saved from, if it was. */
+  private async trackPreset(subject: PresetSubject) {
+    const preset = this.preset;
+    // A file read from disk has no OvertureDB version to follow.
+    if (!preset || preset.listing === this.file || !preset.listing.preset) return;
+    await this.presetUses.record({ ...subject, preset_id: preset.listing.id, item: preset.name });
+  }
+
   /** Save in Overture; with `sync`, then open Sync with only what was saved chosen. */
   async save(sync = false) {
     if (this.busy) return false;
     return this.kind === "set" ? this.saveSet(sync) : this.saveCollection(sync);
   }
 
+  /** Save the collection the form holds, with its art and preset, without opening it. */
+  private async persistCollection() {
+    await this.fillGroup();
+    const collection = await this.request.mutateAsync({
+      body: { ...optionsBody(this), rule: ruleBody(this) },
+    });
+    await this.applyArt(collection.id);
+    await this.trackPreset({ collection_id: collection.id });
+    storeCollectionDetail(collection);
+    return collection;
+  }
+
   private async saveCollection(sync: boolean) {
     try {
-      await this.fillGroup();
-      const collection = await this.request.mutateAsync({
-        body: { ...optionsBody(this), rule: ruleBody(this) },
-      });
-      await this.applyArt(collection.id);
-      storeCollectionDetail(collection);
+      const collection = await this.persistCollection();
       goToCollection(collection);
       if (sync) await openSync({ collectionIds: [collection.id] });
       return true;
@@ -457,13 +462,62 @@ export class CollectionDraft extends CollectionRuleForm {
     }
   }
 
+  /** Save the set the form holds into its group, with its preset; null when refused. */
+  private async persistSet() {
+    const name = this.setGroup;
+    if (!(await this.set.save(name, true))) return null;
+    await this.trackPreset({ group: name });
+    return name;
+  }
+
   /** Save the set into its group, then open the group. */
   private async saveSet(sync: boolean) {
-    const name = this.setGroup;
-    if (!(await this.set.save(name, true))) return false;
+    const name = await this.persistSet();
+    if (name === null) return false;
     goToGroup(name);
     if (sync) await openSync({ groups: [name] });
-    else this.feedback.success(`Saved "${name}". Sync the group to create its collections.`);
+    else
+      this.feedback.success(
+        `Saved "${name}". Sync the group to put its collections on the server.`,
+      );
     return true;
+  }
+
+  /**
+   * Save each of *items* as choosing it alone and saving would, unchanged;
+   * one that cannot be saved is named and the rest are saved. Opens the one
+   * group they all joined, else the collections. Returns how many were saved.
+   */
+  async addPresets(items: PresetItem[]) {
+    if (this.busy) return 0;
+    const groups = new SvelteSet<string>();
+    let added = 0;
+    for (const item of items) {
+      this.applyPreset(item);
+      const blocker = this.blocker;
+      if (blocker) {
+        this.feedback.error(`${item.name}: ${blocker}; choose it alone to finish it`);
+        continue;
+      }
+      try {
+        const group =
+          this.kind === "set"
+            ? await this.persistSet()
+            : (await this.persistCollection()).collection_group;
+        if (group === null) continue;
+        added += 1;
+        groups.add(group);
+      } catch (error) {
+        this.feedback.error(errorMessage(error, `Could not save ${item.name}`));
+      }
+    }
+    if (!added) return 0;
+    const [only] = groups;
+    if (groups.size === 1 && only) goToGroup(only);
+    else goToCollectionsList();
+    this.feedback.success(
+      `Added ${countOf(added, "preset collection or set", "preset collections and sets")}. Sync to put them on the server.`,
+    );
+    return added;
   }
 }

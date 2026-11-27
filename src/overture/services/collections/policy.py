@@ -11,7 +11,6 @@ lazy from ...db.models.settings import AppSettings
 lazy from ...domain import (
     DEFAULT_COLLECTION_ORDER,
     POLICY_SETTINGS,
-    SEPARATED_SORT_TITLE,
     ArtStyle,
     AutoArtSource,
     CollectionFiltering,
@@ -140,11 +139,6 @@ def resolve_policy(
             if not (rule is not None and rule.smart and order is CollectionOrder.CUSTOM)
         ),
     )
-    # A group's separator sorts its collections under it unless told otherwise.
-    if not values["sort_title_format"] and group is not None and group.separator:
-        values["sort_title_format"] = inherit(
-            *tiers("sort_title_format"), SEPARATED_SORT_TITLE
-        )
     return CollectionPolicy(**values)
 
 

@@ -31,10 +31,11 @@
     "verify": "bun run typecheck && bun run test:unit && bun run build",
     "lint:deps": "depcruise src --config .dependency-cruiser.mjs",
     "check:bundle": "bun scripts/check-bundle.ts",
-    "ci": "bun run format:check && bun run lint:deps && bun run lint && bun run lint:unused && bun run typecheck && bun run test:coverage && bun run build && bun run check:bundle",
+    "ci": "bun run format:check && bun run lint:deps && bun run lint && bun run lint:openapi && bun run lint:unused && bun run typecheck && bun run test:coverage && bun run build && bun run check:bundle",
     "ci:e2e": "bun run test:e2e",
     "lint:duplication": "jscpd --config ../.jscpd.json",
-    "lint:unused": "knip --no-progress"
+    "lint:unused": "knip --no-progress",
+    "lint:openapi": "redocly lint ../openapi/overture.json --config ../redocly.yaml"
   },
   "dependencies": {
     "@tanstack/svelte-query": "6.4.4",
@@ -51,6 +52,7 @@
     "@hey-api/openapi-ts": "0.99.0",
     "@lucide/svelte": "1.76.0",
     "@playwright/test": "1.65.1",
+    "@redocly/cli": "2.11.1",
     "@resvg/resvg-js": "2.6.2",
     "@sveltejs/vite-plugin-svelte": "7.3.1",
     "@testing-library/jest-dom": "8.0.0",

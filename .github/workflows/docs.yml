@@ -24,15 +24,14 @@ on:
     - cron: "29 5 * * 1"
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 concurrency:
   group: docs-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
+    permissions:
+      contents: read
     name: Build the site
     runs-on: ubuntu-26.04
     timeout-minutes: 15

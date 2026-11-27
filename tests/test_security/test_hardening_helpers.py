@@ -108,11 +108,14 @@ class TestRedaction:
             == "GET /library?X-Plex-Token=[REDACTED]&ok=1"
         )
 
-    def test_redacts_plex_direct_urls(self) -> None:
-        url = "https://192-168-50-60.example.plex.direct:32400/library/metadata/1"
-        assert (
-            sanitise_error(f"Selected secure Plex URL {url}")
-            == "Selected secure Plex URL https://[REDACTED].plex.direct"
+    def test_redacts_the_plex_direct_host_and_keeps_the_request_path(self) -> None:
+        url = (
+            "https://192-168-50-60.example.plex.direct:32400/library/metadata/1"
+            "?X-Plex-Token=secret-value"
+        )
+        assert sanitise_error(f"Request failed for url {url}") == (
+            "Request failed for url https://[REDACTED].plex.direct:32400"
+            "/library/metadata/1?X-Plex-Token=[REDACTED]"
         )
 
 

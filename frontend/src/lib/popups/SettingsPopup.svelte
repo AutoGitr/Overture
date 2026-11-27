@@ -9,7 +9,7 @@
   } from "../../generated/rest/@tanstack/svelte-query.gen";
   import { ASPECT_TOLERANCES, DEFAULT_APP_SETTINGS } from "../../generated/settings";
   import { createNotifier } from "../stores/notificationState.svelte";
-  import { setSectionView } from "../stores/sectionState.svelte";
+  import { SectionView, setSectionView } from "../stores/sectionState.svelte";
   import { catalogSyncState } from "../stores/jobStates.svelte";
   import { settingsState, type SettingsDraft } from "../stores/settingsState.svelte";
   import { uiState } from "../stores/uiState.svelte";
@@ -68,7 +68,8 @@
     { value: "all", label: "All languages" },
   ];
 
-  setSectionView("settings");
+  // Its sections stay as the user left them across visits and reloads.
+  setSectionView(new SectionView(() => true, "settings"));
   const id = $props.id();
   const queryClient = useQueryClient();
 

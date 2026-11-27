@@ -68,6 +68,8 @@ lazy from .validators import (
 )
 
 type LibraryId = Annotated[str, Field(min_length=1, max_length=200)]
+#: The most libraries one collection or set spans.
+COLLECTION_LIBRARIES_MAX = 20
 
 
 class ArrTagRead(StrictBaseModel):
@@ -579,11 +581,46 @@ class CollectionMonitoredEvent(StrictBaseModel):
     monitored: bool
 
 
-class CollectionPolicyBase(StrictBaseModel):
+#: The fewest titles a collection is put on the servers with.
+type MinimumItems = Annotated[int, Field(ge=1, le=100)]
+
+
+class SeasonalWindow(StrictBaseModel):
+    """The days of each year a collection is on the servers."""
+
+    active_start_mmdd: SeasonalDate | None = None
+    active_end_mmdd: SeasonalDate | None = None
+    #: Take it off the servers outside its window, rather than leave it as is.
+    delete_when_inactive: bool | None = None
+
+    @model_validator(mode="after")
+    def validate_seasonal_window(self) -> Self:
+        """Require both start and end dates when a seasonal window is set."""
+        if bool(self.active_start_mmdd) != bool(self.active_end_mmdd):
+            raise ValueError(
+                "Set both active_start_mmdd and active_end_mmdd "
+                "for seasonal collections"
+            )
+        return self
+
+
+class CollectionContentPolicy(SeasonalWindow):
+    """The policy that says what collections are, which a portable file carries.
+
+    How a server shows them, their art and themes, and what they request or
+    label are each install's own, so they follow its defaults.
+    """
+
+    minimum_items: MinimumItems | None = None
+    order_type: CollectionOrder | None = None
+    sort_title_format: SortTitleFormat | None = None
+    summary_format: SummaryFormat | None = None
+
+
+class CollectionPolicyBase(CollectionContentPolicy):
     """Shared policy and media server display configuration."""
 
     sync_mode: SyncMode | None = None
-    minimum_items: Annotated[int, Field(ge=1, le=100)] | None = None
     delete_below_minimum: bool | None = None
     #: The sources a sync tries for a slot with no art chosen, first to last.
     auto_art: UniqueList[AutoArtSource] | None = None
@@ -600,17 +637,11 @@ class CollectionPolicyBase(StrictBaseModel):
     #: Whether it needs a theme; without one, its theme is complete as it is.
     themes: bool | None = None
     auto_match_theme: bool | None = None
-    delete_when_inactive: bool | None = None
     collection_mode: CollectionMode | None = None
-    order_type: CollectionOrder | None = None
     collection_filtering: CollectionFiltering | None = None
     visible_home: bool | None = None
     visible_shared: bool | None = None
     visible_library: bool | None = None
-    sort_title_format: SortTitleFormat | None = None
-    summary_format: SummaryFormat | None = None
-    active_start_mmdd: SeasonalDate | None = None
-    active_end_mmdd: SeasonalDate | None = None
     #: Ask Radarr or Sonarr for list titles the library lacks after each sync.
     request_missing: bool | None = None
     #: A server label members get and other items lose; {title} and {group}.
@@ -620,19 +651,9 @@ class CollectionPolicyBase(StrictBaseModel):
     #: Where a promoted collection's row sits on Plex's Home; lower comes first.
     home_order: Annotated[int, Field(ge=1, le=999)] | None = None
 
-    @model_validator(mode="after")
-    def validate_seasonal_window(self) -> Self:
-        """Require both start and end dates when a seasonal window is set."""
-        if bool(self.active_start_mmdd) != bool(self.active_end_mmdd):
-            raise ValueError(
-                "Set both active_start_mmdd and active_end_mmdd "
-                "for seasonal collections"
-            )
-        return self
 
-
-class CollectionOptions(StrictBaseModel):
-    """Editable collection metadata and server display options."""
+class CollectionContent(SeasonalWindow):
+    """What a collection is, which a portable file carries: its titles and order."""
 
     title: Annotated[str, Field(min_length=1, max_length=200)]
     summary: Annotated[str, Field(max_length=MAX_COLLECTION_SUMMARY_LENGTH)] | None = (
@@ -643,16 +664,8 @@ class CollectionOptions(StrictBaseModel):
     sort_title_format: SortTitleFormat | None = None
     collection_group: GroupName | None = None
     tmdb_collection_id: PositiveId | None = None
-    collection_mode: CollectionMode | None = None
     #: Null inherits the group's or the global default.
     order_type: CollectionOrder | None = None
-    collection_filtering: CollectionFiltering | None = None
-    visible_home: bool = False
-    visible_shared: bool = False
-    visible_library: bool = False
-    active_start_mmdd: SeasonalDate | None = None
-    active_end_mmdd: SeasonalDate | None = None
-    delete_when_inactive: bool | None = None
 
     @field_validator("collection_group")
     @classmethod
@@ -668,15 +681,15 @@ class CollectionOptions(StrictBaseModel):
             raise ValueError("A collection needs a title")
         return value.strip()
 
-    @model_validator(mode="after")
-    def validate_seasonal_window(self) -> Self:
-        """Require both start and end dates when a seasonal window is set."""
-        if bool(self.active_start_mmdd) != bool(self.active_end_mmdd):
-            raise ValueError(
-                "Set both active_start_mmdd and active_end_mmdd "
-                "for seasonal collections"
-            )
-        return self
+
+class CollectionOptions(CollectionContent):
+    """Editable collection metadata and server display options."""
+
+    collection_mode: CollectionMode | None = None
+    collection_filtering: CollectionFiltering | None = None
+    visible_home: bool = False
+    visible_shared: bool = False
+    visible_library: bool = False
 
 
 class CollectionCreate(CollectionOptions):
@@ -703,7 +716,8 @@ class CollectionRuleWrite(CollectionPolicyBase):
     """Each library's criteria, which decide membership, and policy overrides."""
 
     libraries: Annotated[
-        list[CollectionLibraryCriteria], Field(min_length=1, max_length=20)
+        list[CollectionLibraryCriteria],
+        Field(min_length=1, max_length=COLLECTION_LIBRARIES_MAX),
     ]
     #: Plex evaluates the criteria live instead of Overture on each sync.
     smart: bool = False
@@ -804,8 +818,7 @@ class CollectionGenerator(CollectionGeneratorBase):
     """A collection set: its collections in each of its libraries."""
 
     library_ids: Annotated[
-        list[Annotated[str, Field(min_length=1, max_length=200)]],
-        Field(min_length=1, max_length=20),
+        list[LibraryId], Field(min_length=1, max_length=COLLECTION_LIBRARIES_MAX)
     ]
 
 

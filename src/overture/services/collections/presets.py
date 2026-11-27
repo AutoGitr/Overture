@@ -10,8 +10,8 @@ lazy from typing import Any, cast
 lazy from pydantic import ValidationError
 
 lazy from ...catalog_contract.contract import (
-    PRESET_REFUSED_POLICY,
     preset_requires,
+    preset_text,
     validate_preset,
 )
 lazy from ...domain import (
@@ -37,9 +37,9 @@ lazy from ...schemas.collection_presets import (
     PresetRefusal,
 )
 lazy from ...schemas.collections import (
+    CollectionContent,
+    CollectionContentPolicy,
     CollectionDetail,
-    CollectionOptions,
-    CollectionPolicyBase,
     FilterGroup,
 )
 lazy from ...utils.art_urls import art_preview_url
@@ -52,10 +52,14 @@ lazy from .groups import CollectionGroups
 lazy from .reader import CollectionReader
 lazy from .sources import SourceResolver
 
-#: The policy a collection keeps in its own options rather than its rule.
-_RULE_POLICY = frozenset(CollectionPolicyBase.model_fields) - frozenset(
-    CollectionOptions.model_fields
-)
+#: What a collection's detail holds as it chose it; its summary and sort title
+#: are shown as its templates render them, and its order as it inherits it, so
+#: they come from its templates and its rule instead.
+_OWN_CONTENT = frozenset(CollectionContent.model_fields) - {
+    "summary",
+    "sort_title",
+    "order_type",
+}
 
 
 class _RefusedError(Exception):
@@ -199,7 +203,8 @@ class CollectionPresets:
         """Return the chosen collections and groups as a portable file.
 
         A group brings its set and the collections it holds that its set does
-        not make. What another install could not add is left out with why.
+        not make. What another install could not add is left out with why, and
+        the file holds only what each collection is.
         """
         refused: list[PresetRefusal] = []
         warnings: list[str] = []
@@ -241,7 +246,8 @@ class CollectionPresets:
         except ValueError as exc:
             raise PublicServiceError(422, str(exc)) from exc
         return PresetExport(
-            file=file,
+            text=preset_text(file.model_dump(mode="json")),
+            count=len(groups) + len(collections),
             refused=refused,
             warnings=warnings,
             issue=preset_issue(body.preset),
@@ -263,7 +269,7 @@ class CollectionPresets:
                 media_types=sorted(set(types.values())),
             )
         return PortableGroup(
-            **policy.model_dump(exclude={"generator"}),
+            **policy.model_dump(include=set(CollectionContentPolicy.model_fields)),
             name=name,
             generator=portable_set,
         )
@@ -287,14 +293,10 @@ class CollectionPresets:
         _require_portable(criteria.values())
         if _tests_labels(criteria.values()):
             warnings.append(f"{detail.title}: tests labels another install may lack")
-        if any(getattr(rule, key) is not None for key in PRESET_REFUSED_POLICY):
-            warnings.append(
-                f"{detail.title}: requests titles or writes labels or tags, "
-                "which OvertureDB presets leave to the person adding them"
-            )
         return PortableCollection(
-            **detail.model_dump(include=set(CollectionOptions.model_fields)),
-            policy=CollectionPolicyBase(**rule.model_dump(include=set(_RULE_POLICY))),
+            **detail.model_dump(include=set(_OWN_CONTENT)),
+            order_type=rule.order_type,
+            minimum_items=rule.minimum_items,
             smart=rule.smart,
             limit=rule.limit,
             criteria=criteria,

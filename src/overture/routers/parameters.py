@@ -2,8 +2,8 @@
 
 lazy from typing import Annotated, Any
 
-lazy from fastapi import Cookie, Header, Path, Query
-lazy from pydantic import SecretStr
+lazy from fastapi import Header, Path, Query, Security
+lazy from fastapi.security import APIKeyCookie, APIKeyHeader
 
 lazy from ..domain import MAX_SAFE_INTEGER, ArtType, ImageSize, MediaType
 lazy from ..utils.http_security import API_KEY_HEADER, SESSION_COOKIE
@@ -61,15 +61,23 @@ MediaTypeQuery = Annotated[
     MediaType,
     Query(description="Media type ('movie' or 'show')"),
 ]
-AuthTokenCookie = Annotated[
-    SecretStr | None,
-    Cookie(alias=SESSION_COOKIE, description="Session token"),
-]
+#: Signing in sets this cookie; the schema names it the Session scheme.
+_SESSION = APIKeyCookie(
+    name=SESSION_COOKIE,
+    scheme_name="Session",
+    description="The session cookie that signing in sets.",
+    auto_error=False,
+)
+#: An API key, made under API keys in the menu, reads but never changes.
+_API_KEY = APIKeyHeader(
+    name=API_KEY_HEADER,
+    scheme_name="ApiKey",
+    description="A read-only API key, made under API keys in the menu.",
+    auto_error=False,
+)
+AuthTokenCookie = Annotated[str | None, Security(_SESSION)]
 ForwardedForHeader = Annotated[
     str | None,
     Header(alias="X-Forwarded-For", description="Forwarded client IP address"),
 ]
-ApiKeyHeader = Annotated[
-    SecretStr | None,
-    Header(alias=API_KEY_HEADER, description="Read-only API key"),
-]
+ApiKeyHeader = Annotated[str | None, Security(_API_KEY)]

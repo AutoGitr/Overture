@@ -1,14 +1,17 @@
 """Collection groups: their names, shared policy, set and members."""
 
+lazy import logging
+
 lazy from ...db.models.collection_group import CollectionGroup
 lazy from ...db.models.media_collection import MediaCollection
 lazy from ...domain import (
+    SEPARATED_SORT_TITLE,
     SMART_CUSTOM_ORDER,
     CollectionKind,
     CollectionOrder,
     MediaType,
 )
-lazy from ...jobs.progress_log import JobOutcome, Report
+lazy from ...jobs.progress_log import JobOutcome, LogServer, Report
 lazy from ...repositories.collections import CollectionRepository
 lazy from ...repositories.saved_schedules import SavedScheduleRepository
 lazy from ...schemas.collections import (
@@ -32,6 +35,22 @@ lazy from .rules import generator, group_name
 lazy from .separators import CollectionSeparators
 lazy from .set_runner import CollectionSets
 lazy from .validation import CollectionValidator
+
+logger = logging.getLogger(__name__)
+
+
+async def _logged(
+    outcome: JobOutcome,
+    target: str,
+    reason: str,
+    /,
+    *,
+    count: int = 1,  # noqa: ARG001 -- each value is one collection
+    finished: bool = True,  # noqa: ARG001 -- a save tracks no progress
+    server: LogServer | None = None,  # noqa: ARG001 -- a set's run touches no server
+) -> None:
+    """Log what a set's run outside a sync could not save; the sync reports it again."""
+    logger.warning("%s: %s %s", target, outcome.value, reason)
 
 
 class CollectionGroups:
@@ -186,6 +205,8 @@ class CollectionGroups:
         """Save group defaults without replacing explicit collection overrides.
 
         With *new_set*, the body creates a set, which never replaces another.
+        A set's collections are made or updated in Overture as it is saved,
+        as a collection is; a sync puts them on the servers.
 
         Raises:
             PublicServiceError: 409 when *new_set* names a group that already
@@ -231,6 +252,17 @@ class CollectionGroups:
                     f"{DIMENSIONS[current.dimension].label}; "
                     "edit that set in the group's settings, or name another group",
                 )
+            # A separator heads its group's collections only while they share
+            # its sort title's start, so turning one on gives the group the
+            # sort title that keeps them under it, where it can be changed.
+            if (
+                body.separator
+                and body.sort_title_format is None
+                and not (row is not None and row.separator)
+            ):
+                body = body.model_copy(
+                    update={"sort_title_format": SEPARATED_SORT_TITLE}
+                )
             if row is None:
                 row = CollectionGroup(name=name)
             row.sqlmodel_update(body.model_dump(exclude={"generator"}))
@@ -242,6 +274,8 @@ class CollectionGroups:
             session.add(row)
             await session.flush()
             await self._separators.refuse_taken(session, row)
+        if body.generator is not None:
+            await self._sets.run(row, body.generator, _logged)
         await self._access.needs.apply_collections()
         await self._access.changed()
         return body

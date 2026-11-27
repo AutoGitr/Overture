@@ -17,12 +17,19 @@ in the menu, copy it (it is shown once) and send it as the `X-Api-Key` header.
 A key reads everything a signed-in user can and runs collection previews, but
 cannot change anything. Revoke a key in the same place to stop it at once.
 
+The OpenAPI description names the two ways to sign in as security schemes:
+`Session`, the cookie signing in sets, and `ApiKey`, the `X-Api-Key` header.
+Every operation that needs signing in names both; the few that do not, such as
+`/api/health` and signing in itself, name none. A client generated from the
+description takes the key through its authentication option.
+
 ## Conventions
 
 Required JSON request bodies reject `null`. To stop all bulk asset jobs,
 `POST /api/bulk/assets/stop` accepts an omitted body, `null`, or `{}`.
 
-A failed request answers `{"detail": "..."}` saying why, except a request
+A failed request answers `{"detail": "..."}` saying why, and a 502 from a
+media server repeats what the server answered; except a request
 that does not fit the schema, whose 422 lists each issue with where it is. A
 409 says what stands in the way, such as a setting that is not set (a media
 server, a TMDB token) or OvertureDB being off; 502 and 503 mean a media server

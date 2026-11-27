@@ -27,7 +27,7 @@ describe("CollectionPage", () => {
   it("selects the collection its URL names once its detail has loaded", async () => {
     mockFetchRoutes({
       "/api/collections/defaults": {},
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/library/libraries": [],
       "/api/library/items": { items: [], total: 0 },
       "/api/collections/12": action,
@@ -38,6 +38,29 @@ describe("CollectionPage", () => {
 
     expect(await screen.findByRole("heading", { name: "Action" })).toBeInTheDocument();
     expect(uiState.mobileShowDetail).toBe(true);
+  });
+
+  it("links a set's collection to its group's page", async () => {
+    mockFetchRoutes({
+      "/api/collections/defaults": {},
+      "/api/collection-groups": [],
+      "/api/library/libraries": [],
+      "/api/library/items": { items: [], total: 0 },
+      "/api/collections/12": collection({
+        id: 12,
+        title: "1990s",
+        collection_group: "Decades",
+        generated_value: "1990",
+      }),
+    });
+    await openCollection("12-1990s");
+
+    renderWithQueryClient(CollectionPage);
+
+    expect(await screen.findByRole("link", { name: "Set: Decades" })).toHaveAttribute(
+      "href",
+      "/collections/groups/Decades",
+    );
   });
 
   it("shows a cached sidebar collection and its images before its detail finishes loading", async () => {
@@ -55,7 +78,7 @@ describe("CollectionPage", () => {
     ]);
     mockFetchRoutes({
       "/api/collections/defaults": {},
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/library/libraries": [],
       "/api/library/items": { items: [], total: 0 },
       "/api/collections/12/art/poster/sources": { sources: {} },
@@ -80,7 +103,7 @@ describe("CollectionPage", () => {
   it("selects nothing for a collection the server no longer lists", async () => {
     const { fetchMock } = mockFetchRoutes({
       "/api/collections/defaults": {},
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/library/libraries": [],
       "/api/library/items": { items: [], total: 0 },
       "/api/collections/12": () =>
@@ -98,7 +121,7 @@ describe("CollectionPage", () => {
   it("shows no collection on the collections list", async () => {
     mockFetchRoutes({
       "/api/collections/defaults": {},
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
     });
     uiState.mobileShowDetail = true;
     await navigate("/collections");
@@ -114,7 +137,7 @@ describe("CollectionPage", () => {
     let available = false;
     mockFetchRoutes({
       "/api/collections/defaults": {},
-      "/api/collections/groups": [],
+      "/api/collection-groups": [],
       "/api/library/libraries": [],
       "/api/library/items": { items: [], total: 0 },
       "/api/collections/12": () =>

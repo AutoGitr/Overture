@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import { getSectionView, sectionState } from "../stores/sectionState.svelte";
+  import { getSectionView } from "../stores/sectionState.svelte";
   import Disclosure from "./Disclosure.svelte";
 
   let {
@@ -8,18 +8,15 @@
     description,
     children,
     collapsible = false,
-    expanded = false,
   }: {
     title: string;
     description: string;
     children: Snippet;
     collapsible?: boolean;
-    /** Whether it starts open, until the user opens or closes it. */
-    expanded?: boolean;
   } = $props();
+  // The view owns the choice and decides how it starts, so a remount keeps it.
   const view = getSectionView();
-  // The store owns the choice, so neither a remount nor a new default undoes it.
-  let open = $derived(sectionState.isOpen(view, title, expanded));
+  let open = $derived(view.isOpen(title));
 </script>
 
 <section class="detail-section" aria-label={title}>
@@ -29,7 +26,7 @@
       {title}
       {description}
       {open}
-      ontoggle={(value) => sectionState.setOpen(view, title, value)}
+      ontoggle={(value) => view.setOpen(title, value)}
       --disclosure-padding="var(--section-header-padding, var(--space-3) var(--space-4))"
       --disclosure-body-padding="var(--section-padding, var(--space-4))"
       --disclosure-hover="var(--bg-hover)"
