@@ -21,7 +21,7 @@
         "@docusaurus/module-type-aliases": "3.10.2",
         "@docusaurus/tsconfig": "3.10.2",
         "@docusaurus/types": "3.10.2",
-        "@types/react": "19.3.2",
+        "@types/react": "19.3.3",
         "typescript": "6.0.3",
       },
     },
@@ -857,7 +857,7 @@
 
     "@types/range-parser": ["@types/range-parser@1.2.7", "", {}, "sha512-hKormJbkJqzQGhziax5PItDUTMAM9uE2XXQmM37dyd4hVM+5aVl7oVxMVUiVQn2oCQFN/LKCZdvSM0pFRqbSmQ=="],
 
-    "@types/react": ["@types/react@19.3.2", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-0QJbb58RxWJL3VAa5tvk7QhJamz0S+MpFL2xDuF/+THRR+kldyhPjRZ1iwvK45AEHZ1BVGS3otPsl7QlNVRizQ=="],
+    "@types/react": ["@types/react@19.3.3", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-K8uWpJc4teiuOPdiP1umjeA9rGMgVPiXuoL66fcS1QlwBT1WMqY8PORmub9FadopIs+RCW6siYEs7Lpq+vDlog=="],
 
     "@types/react-router": ["@types/react-router@5.1.20", "", { "dependencies": { "@types/history": "^4.7.11", "@types/react": "*" } }, "sha512-jGjmu/ZqS7FjSH6owMcD5qpq19+1RS9DeVRqfl1FeBMxTDQAGwlMWOcs52NDoXaNKyG3d1cYQFMs9rCrb88o9Q=="],
 
